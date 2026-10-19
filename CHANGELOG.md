@@ -14,6 +14,14 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Added
+
+- The 2FA step of admin login now submits by itself once a 6-digit code is typed, pasted or autofilled. Backup codes still need the Verify button.
+
+### Changed
+
+- AhrefsBot and AhrefsSiteAudit are now trusted crawlers, so they skip the bot challenge. The WAF still inspects every request they make.
+
 ## [2.8.0] - 2026-10-16
 
 ### Added

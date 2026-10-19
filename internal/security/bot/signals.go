@@ -46,6 +46,8 @@ var trustedCrawlers = []string{
 	"whatsapp/",
 	// Archive.org
 	"ia_archiver", "archive.org_bot",
+	// Ahrefs (SEO crawler + site audit)
+	"ahrefsbot", "ahrefssiteaudit",
 }
 
 // knownScanners are attack/audit tools that always get a high score.
