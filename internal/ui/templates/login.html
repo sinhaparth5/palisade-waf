@@ -197,6 +197,18 @@
   </div>
 
   <script>
+    // Submit the 2FA form as soon as a 6-digit code is in (typed, pasted or
+    // autofilled); backup codes are 8 characters, so they still need Verify.
+    (function () {
+      var code = document.getElementById('login-code');
+      if (!code) return;
+      code.addEventListener('input', function () {
+        if (/^\d{6}$/.test(code.value.replace(/\s/g, ''))) {
+          code.readOnly = true;
+          code.form.requestSubmit ? code.form.requestSubmit() : code.form.submit();
+        }
+      });
+    })();
     (function () {
       var pkBtn = document.getElementById('pk-login-btn');
       if (!pkBtn) return;
