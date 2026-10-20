@@ -189,7 +189,10 @@ func (r *Registry) Reload(db *storage.DB) error {
 				// Only GET/HEAD can ever be cached (the VCL passes every
 				// other method), so the rest skip the Varnish round trip
 				// and go straight to the backend the stock director chose.
-				if req.Method != http.MethodGet && req.Method != http.MethodHead {
+				// WebSocket handshakes are GETs, but Varnish drops the
+				// Upgrade header, so the backend would see a plain GET and
+				// 404; any Upgrade request must bypass the cache too.
+				if (req.Method != http.MethodGet && req.Method != http.MethodHead) || req.Header.Get("Upgrade") != "" {
 					return
 				}
 				req.Header.Set("X-Cache-Service", name)

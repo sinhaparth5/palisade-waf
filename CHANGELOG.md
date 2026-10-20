@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Fixed
+
+- WebSocket connections to a service with caching on failed (the backend saw a plain `GET` and answered 404): every `GET` was routed through Varnish, which drops the `Upgrade` header. Requests carrying `Upgrade` now skip the cache and go straight to the backend.
+
 ## [2.8.1] - 2026-10-19
 
 ### Added

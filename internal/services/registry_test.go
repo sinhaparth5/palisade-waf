@@ -95,6 +95,19 @@ func TestVarnishRouting(t *testing.T) {
 		}
 	}
 
+	// A WebSocket handshake is a GET, but Varnish drops the Upgrade header,
+	// so it must bypass the cache and reach the backend directly.
+	rp, _ := reg.Proxy("cached")
+	ws := httptest.NewRequest(http.MethodGet, "http://cdn.example.com/api/signals", nil)
+	ws.Header.Set("Upgrade", "websocket")
+	rp.(*httputil.ReverseProxy).Director(ws) //nolint:staticcheck // SA1019: exercises the Director under test
+	if ws.URL.Host != "10.0.0.5:3000" {
+		t.Errorf("websocket upgrade targeted %s, want the backend 10.0.0.5:3000 (not Varnish)", ws.URL.Host)
+	}
+	if ws.Header.Get("X-Cache-Service") != "" {
+		t.Error("websocket upgrade must not carry cache headers")
+	}
+
 	req = direct("direct", "/index.html")
 	if req.URL.Host != "10.0.0.6:4000" {
 		t.Errorf("non-cache service targeted %s, want its backend 10.0.0.6:4000", req.URL.Host)
