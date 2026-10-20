@@ -14,19 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.8.2] - 2026-10-20
+
 ### Fixed
 
 - WebSocket connections to a service with caching on failed (the backend saw a plain `GET` and answered 404): every `GET` was routed through Varnish, which drops the `Upgrade` header. Requests carrying `Upgrade` now skip the cache and go straight to the backend.
 
-## [2.8.1] - 2026-10-19
-
-### Added
-
-- The 2FA step of admin login now submits by itself once a 6-digit code is typed, pasted or autofilled. Backup codes still need the Verify button.
-
-### Changed
-
-- AhrefsBot and AhrefsSiteAudit are now trusted crawlers, so they skip the bot challenge. The WAF still inspects every request they make.
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.1...main
-[2.8.1]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.0...v2.8.1
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.2...main
+[2.8.2]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.1...v2.8.2
