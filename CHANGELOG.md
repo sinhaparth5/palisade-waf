@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Fixed
+
+- Admin UI and login page were unreadable (cream text on white panels, dark inputs) for anyone whose OS is set to dark mode: the new dark palette followed `prefers-color-scheme`, but several surfaces (e.g. `lg:bg-white`) are not remapped. The UI is now always light; the dark palette is opt-in via `data-theme="dark"` and off by default (#126).
+
 ## [2.8.2] - 2026-10-20
 
 ### Fixed

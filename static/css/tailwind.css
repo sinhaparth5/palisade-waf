@@ -21,7 +21,7 @@
 @source "../js/src";
 
 /* "Field notes" theme. Only the --fn-* variables change between light and
-   dark (system preference); every other token is derived from them, so the
+   dark; every other token is derived from them, so the
    existing slate/red/green/brand utilities in the templates re-theme
    without touching markup. Three pen colours, one meaning each: accent
    green = allowed/passed, stamp red = blocked/error, highlight lime =
@@ -38,8 +38,11 @@
   --fn-side: oklch(24% .025 160);
   --fn-rule: color-mix(in oklab, var(--fn-ink) 16%, transparent);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
+/* Dark palette is opt-in via <html data-theme="dark"> and nothing sets it yet.
+   It must NOT follow prefers-color-scheme: variant utilities such as
+   lg:bg-white are not remapped, so an automatic dark mode leaves white
+   panels under cream text (issue #126). */
+:root[data-theme="dark"] {
     --fn-paper: oklch(19.5% .012 160);
     --fn-paper-2: oklch(23.5% .014 160);
     --fn-card: oklch(22% .013 160);
@@ -49,7 +52,6 @@
     --fn-accent: oklch(80% .12 145);
     --fn-stamp: oklch(72% .16 28);
     --fn-side: oklch(15% .012 160);
-  }
 }
 
 @theme {
@@ -118,7 +120,7 @@
      default cursor; restore the v3 behavior this UI was built on. */
   *, ::before, ::after { border-color: var(--color-line); }
   button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
-  html { color-scheme: light dark; }
+  html { color-scheme: light; }
   h1, h2 { font-family: var(--font-display); font-weight: 400; letter-spacing: -.005em; }
   body { min-width: 320px; }
   a, button, input, select, textarea { touch-action: manipulation; }
