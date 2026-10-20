@@ -48,6 +48,8 @@ var trustedCrawlers = []string{
 	"ia_archiver", "archive.org_bot",
 	// Ahrefs (SEO crawler + site audit)
 	"ahrefsbot", "ahrefssiteaudit",
+	// dev-portal uptime monitor
+	"dev-portal-uptime",
 }
 
 // knownScanners are attack/audit tools that always get a high score.

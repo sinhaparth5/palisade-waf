@@ -19,6 +19,7 @@ func TestAnalyze(t *testing.T) {
 	}{
 		{"trusted crawler", "Mozilla/5.0 (compatible; Googlebot/2.1)", nil, 0, false, true, "trusted_crawler"},
 		{"ahrefs", "Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)", nil, 0, false, true, "trusted_crawler"},
+		{"dev-portal uptime", "dev-portal-uptime", nil, 0, false, true, "trusted_crawler"},
 		{"browser", "Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0", browser, 0, false, false, ""},
 		{"scanner", "sqlmap/1.7", browser, 10, true, false, "scanner_ua"},
 		{"http lib", "curl/8.0.1", browser, 3, false, false, "http_lib_ua"},

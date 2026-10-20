@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Changed
+
+- The `dev-portal-uptime` user agent is now a trusted crawler, so the uptime monitor skips the bot challenge. The WAF still inspects every request it makes.
+
 ## [2.8.3] - 2026-10-20
 
 ### Fixed
