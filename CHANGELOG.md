@@ -14,15 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.8.3] - 2026-10-20
+
 ### Fixed
 
 - Admin UI and login page were unreadable (cream text on white panels, dark inputs) for anyone whose OS is set to dark mode: the new dark palette followed `prefers-color-scheme`, but several surfaces (e.g. `lg:bg-white`) are not remapped. The UI is now always light; the dark palette is opt-in via `data-theme="dark"` and off by default (#126).
 
-## [2.8.2] - 2026-10-20
-
-### Fixed
-
-- WebSocket connections to a service with caching on failed (the backend saw a plain `GET` and answered 404): every `GET` was routed through Varnish, which drops the `Upgrade` header. Requests carrying `Upgrade` now skip the cache and go straight to the backend.
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.2...main
-[2.8.2]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.1...v2.8.2
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.3...main
+[2.8.3]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.2...v2.8.3
