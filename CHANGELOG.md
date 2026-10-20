@@ -14,15 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.8.4] - 2026-10-20
+
 ### Changed
 
 - The `dev-portal-uptime` user agent is now a trusted crawler, so the uptime monitor skips the bot challenge. The WAF still inspects every request it makes.
 
-## [2.8.3] - 2026-10-20
-
-### Fixed
-
-- Admin UI and login page were unreadable (cream text on white panels, dark inputs) for anyone whose OS is set to dark mode: the new dark palette followed `prefers-color-scheme`, but several surfaces (e.g. `lg:bg-white`) are not remapped. The UI is now always light; the dark palette is opt-in via `data-theme="dark"` and off by default (#126).
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.3...main
-[2.8.3]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.2...v2.8.3
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.4...main
+[2.8.4]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.3...v2.8.4
