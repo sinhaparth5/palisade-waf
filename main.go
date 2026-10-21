@@ -441,6 +441,8 @@ func main() {
 
 	e := echo.New()
 	e.HideBanner = true
+	hardenServer(e.Server)
+	hardenServer(e.TLSServer)
 	e.Use(middleware.Recover())
 	e.Use(proxy.SecurityMiddleware())
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
@@ -610,6 +612,7 @@ func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db 
 		httpHandler = am.HTTPHandler(httpHandler)
 	}
 	redirectServer := &http.Server{Addr: cfg.ListenAddr, Handler: httpHandler}
+	hardenServer(redirectServer)
 	go func() {
 		log.Printf("palisade HTTP (ACME/redirect) on %s", cfg.ListenAddr)
 		if err := redirectServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -752,6 +755,16 @@ func http3Gate(registry *services.Registry, next http.Handler) http.Handler {
 	})
 }
 
+// hardenServer bounds how long a client may take to send its headers and hold
+// an idle keep-alive conn, so a Slowloris trickle can't pin connections below
+// the rate limiter. ReadTimeout/WriteTimeout stay unset: uploads, SSE and
+// WebSockets legitimately stream for longer than any fixed bound.
+func hardenServer(s *http.Server) {
+	s.ReadHeaderTimeout = 10 * time.Second
+	s.IdleTimeout = 120 * time.Second
+	s.MaxHeaderBytes = 1 << 20
+}
+
 // shutdowner is the graceful-stop surface *http.Server and *http3.Server share.
 type shutdowner interface {
 	Shutdown(context.Context) error
@@ -781,6 +794,7 @@ func startCacheReturn(db *storage.DB, registry *services.Registry) {
 		return
 	}
 	srv := &http.Server{Addr: vcfg.ReturnAddr, Handler: registry.CacheReturnHandler()}
+	hardenServer(srv)
 	log.Printf("cache-return listener on %s (Varnish miss path)", vcfg.ReturnAddr)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Printf("cache-return listener: %v", err)
