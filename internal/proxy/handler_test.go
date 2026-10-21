@@ -831,11 +831,11 @@ func TestHoneypotOnlyFiresOnBackend404(t *testing.T) {
 	db.SetAutobanFn(func(e storage.RequestLog) { actions <- e.Action })
 
 	for path, want := range map[string]bool{
-		"/xmlrpc.php":                true,
-		"/phpMyAdmin/index.php":      true,
-		"//phpmyadmin/../xmlrpc.php": true,
-		"/wp-login.php":              false, // served, so never a honeypot hit
-		"/missing":                   false, // a 404, but not on the list
+		"/xmlrpc.php":             true,
+		"/phpMyAdmin/index.php":   true,
+		"//phpmyadmin//setup.php": true,  // no "../": CRS blocks traversal itself
+		"/wp-login.php":           false, // served, so never a honeypot hit
+		"/missing":                false, // a 404, but not on the list
 	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("X-Real-IP", "1.2.3.4")
