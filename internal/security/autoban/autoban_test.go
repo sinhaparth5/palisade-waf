@@ -322,3 +322,21 @@ func TestNewStartsAndStops(t *testing.T) {
 		t.Error("default config should be enabled")
 	}
 }
+
+func TestHoneypotBansOnFirstHit(t *testing.T) {
+	db := newFakeStore()
+	now := time.Date(2026, 7, 3, 9, 16, 12, 0, time.UTC)
+	b, _ := testBanner(db, now)
+
+	b.Record(storage.RequestLog{Timestamp: now, RealIP: "203.0.113.30", Action: "honeypot", Status: 404})
+	if db.rules[":203.0.113.30"] != "block" {
+		t.Fatal("one honeypot hit should ban")
+	}
+	if note := db.banNote("203.0.113.30"); !strings.Contains(note, "1 honeypot hit") {
+		t.Errorf("note = %q, want honeypot breakdown", note)
+	}
+	b.Record(storage.RequestLog{Timestamp: now, RealIP: "10.0.0.5", Action: "honeypot", Status: 404})
+	if db.rules[":10.0.0.5"] != "" {
+		t.Fatal("private IPs are never banned, honeypot or not")
+	}
+}

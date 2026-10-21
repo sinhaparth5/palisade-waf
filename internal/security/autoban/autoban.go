@@ -11,6 +11,7 @@
 //	any other WAF rule block                    2 points
 //	rate limited                                1 point
 //	bot-challenge redirect (never solved)       1 point
+//	honeypot path hit (issue #130)              the whole threshold
 //
 // Challenge redirects are logged with Blocked=false (a challenge is not a
 // deny), but a client that keeps hitting the challenge wall without ever
@@ -57,7 +58,7 @@ type event struct {
 	t   time.Time
 	pts int
 	// event class for the ban-reason breakdown
-	critical, waf, rl, chal bool
+	critical, waf, rl, chal, hp bool
 }
 
 // Banner accumulates blocked-event scores per IP and issues bans.
@@ -144,7 +145,10 @@ func (b *Banner) Record(e storage.RequestLog) {
 	// enforcement can also trigger a challenge, logged as
 	// "bot_challenge:adaptive", which must score exactly the same way.
 	challenged := !e.Blocked && strings.HasPrefix(e.Action, "bot_challenge")
-	if !e.Blocked && !challenged {
+	// A honeypot hit is logged unblocked too (the backend answered 404),
+	// and nothing legitimate asks for those paths, so it bans outright.
+	honeypot := e.Action == "honeypot"
+	if !e.Blocked && !challenged && !honeypot {
 		return
 	}
 	// Never score traffic that is already blocked by an IP rule or geo rule:
@@ -155,6 +159,8 @@ func (b *Banner) Record(e storage.RequestLog) {
 
 	ev := event{t: e.Timestamp}
 	switch {
+	case honeypot:
+		ev.hp = true // pts set to the threshold below, under the lock
 	case challenged:
 		ev.pts, ev.chal = ptsChallenged, true
 	case e.RuleID > 0 && criticalRule(e.RuleID):
@@ -174,6 +180,9 @@ func (b *Banner) Record(e storage.RequestLog) {
 	defer b.mu.Unlock()
 	if !b.cfg.Enabled {
 		return
+	}
+	if ev.hp {
+		ev.pts = b.cfg.Threshold
 	}
 	if !bannable(e.RealIP) {
 		return
@@ -297,9 +306,11 @@ func bannable(ip string) bool {
 // banReason summarises what earned the ban, e.g.
 // "12 flagged requests in 10 min (2 critical WAF hits, 1 WAF hit, 3 rate-limited)".
 func banReason(evs []event, windowMin int) string {
-	var crit, waf, rl, chal int
+	var hp, crit, waf, rl, chal int
 	for _, ev := range evs {
 		switch {
+		case ev.hp:
+			hp++
 		case ev.critical:
 			crit++
 		case ev.waf:
@@ -311,6 +322,9 @@ func banReason(evs []event, windowMin int) string {
 		}
 	}
 	var parts []string
+	if hp > 0 {
+		parts = append(parts, fmt.Sprintf("%d honeypot %s", hp, plural(hp, "hit")))
+	}
 	if crit > 0 {
 		parts = append(parts, fmt.Sprintf("%d critical WAF %s", crit, plural(crit, "hit")))
 	}

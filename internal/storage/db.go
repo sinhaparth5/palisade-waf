@@ -559,6 +559,17 @@ func (db *DB) SetAutobanConfig(cfg AutobanConfig) error {
 	return db.setMeta("autoban_window_min", strconv.Itoa(cfg.WindowMinutes))
 }
 
+// GetHoneypotPaths returns the honeypot path list (issue #130); see
+// services.Registry.Honeypot for how an entry matches.
+func (db *DB) GetHoneypotPaths() ([]string, error) {
+	v, err := db.getMeta("honeypot_paths")
+	return strings.Fields(v), err
+}
+
+func (db *DB) SetHoneypotPaths(paths []string) error {
+	return db.setMeta("honeypot_paths", strings.Join(paths, "\n"))
+}
+
 // ── Adaptive enforcement config ──────────────────────────────────────────────
 
 // AdaptiveEnforcementConfig controls threat-score-driven adaptive

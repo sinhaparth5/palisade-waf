@@ -440,7 +440,7 @@ func (h *Handler) Handle(c echo.Context) error {
 	// 6. Proxy to backend.
 	if app == nil {
 		mark("proxy")
-		h.logRequest(r, appName, clientIP, country, http.StatusBadGateway, result, time.Since(start), meta)
+		h.logRequest(r, appName, clientIP, country, http.StatusBadGateway, h.honeypot(r.URL.Path, http.StatusNotFound, result), time.Since(start), meta)
 		return c.JSON(http.StatusBadGateway, map[string]string{
 			"error": fmt.Sprintf("no backend configured for host %q", r.Host),
 		})
@@ -484,8 +484,22 @@ func (h *Handler) Handle(c echo.Context) error {
 			metrics.CacheResultsTotal.WithLabelValues(appName, strings.ToLower(meta.CacheStatus)).Inc()
 		}
 	}
-	h.logRequest(r, appName, clientIP, country, rw.status, result, time.Since(start), meta)
+	h.logRequest(r, appName, clientIP, country, rw.status, h.honeypot(originalPath, rw.status, result), time.Since(start), meta)
 	return nil
+}
+
+// honeypot tags a request for a honeypot path that nothing served (issue
+// #130) with the "honeypot" action, which autoban bans on the first hit.
+// Only a 404 counts, so a path a backend really serves (/wp-login.php on a
+// WordPress site) can never fire however the list is set. An unmatched host
+// has no backend to serve anything, so its caller passes 404.
+func (h *Handler) honeypot(path string, status int, result *waf.Result) *waf.Result {
+	if status != http.StatusNotFound || !h.registry.Honeypot(path) {
+		return result
+	}
+	hit := *result // may be the verdict cache's shared copy
+	hit.Action = "honeypot"
+	return &hit
 }
 
 // ── Logging helpers ───────────────────────────────────────────────────────────

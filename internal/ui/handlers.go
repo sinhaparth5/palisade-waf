@@ -18,6 +18,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -356,6 +357,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.POST("/ip-rules", h.AddIPRule)
 	g.POST("/ip-rules/autoban", h.SaveAutobanSettings)
 	g.POST("/ip-rules/adaptive", h.SaveAdaptiveSettings)
+	g.POST("/ip-rules/honeypots", h.SaveHoneypots)
 	g.DELETE("/ip-rules/:id", h.DeleteIPRule)
 	g.GET("/geo-rules", h.GeoRulesPage)
 	g.POST("/geo-rules", h.AddGeoRule)
@@ -1253,6 +1255,7 @@ func (h *Handler) IPRulesPage(c echo.Context) error {
 	data["AdaptiveHighScale"] = ad.HighRiskRateScale
 	data["AdaptiveLowScale"] = ad.LowRiskRateScale
 	data["AdaptiveForceChallenge"] = ad.ForceChallengeThreshold
+	data["HoneypotPaths"], _ = h.db.GetHoneypotPaths()
 	return h.render(c, "ip_rules", data)
 }
 
@@ -1290,6 +1293,43 @@ func (h *Handler) SaveAutobanSettings(c echo.Context) error {
 		"AutobanWindow":  cfg.WindowMinutes,
 		"AutobanSaveOK":  saveErr == "",
 		"AutobanSaveErr": saveErr,
+	})
+}
+
+// honeypotMax caps the honeypot list; every proxied 404 scans it.
+const honeypotMax = 200
+
+// SaveHoneypots replaces the honeypot path list (issue #130) and swaps it
+// into the registry, which the proxy checks on every 404.
+func (h *Handler) SaveHoneypots(c echo.Context) error {
+	var paths []string
+	saveErr := ""
+	raw := strings.Fields(c.FormValue("honeypot_paths"))
+	for _, p := range raw {
+		switch {
+		case !strings.HasPrefix(p, "/") || p == "/":
+			saveErr = fmt.Sprintf("%q is not a path: start it with / and name something under the root.", p)
+		case !slices.Contains(paths, p):
+			paths = append(paths, p)
+		}
+	}
+	if saveErr == "" && len(paths) > honeypotMax {
+		saveErr = fmt.Sprintf("At most %d paths.", honeypotMax)
+	}
+	if saveErr == "" {
+		if err := h.db.SetHoneypotPaths(paths); err != nil {
+			saveErr = "Could not save: " + err.Error()
+		} else {
+			h.registry.SetHoneypots(paths)
+		}
+	}
+	if saveErr != "" {
+		paths = raw // give the admin their input back to fix
+	}
+	return h.renderPartial(c, "ip_rules", "honeypot-card", map[string]any{
+		"HoneypotPaths":   paths,
+		"HoneypotSaveOK":  saveErr == "",
+		"HoneypotSaveErr": saveErr,
 	})
 }
 

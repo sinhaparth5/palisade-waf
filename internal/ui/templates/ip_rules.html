@@ -62,6 +62,7 @@
   <div class="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3" data-stagger>
     {{template "autoban-card" .}}
     {{template "adaptive-card" .}}
+    {{template "honeypot-card" .}}
 
     <!-- Rules overview -->
     <div class="relative overflow-hidden rounded-xl bg-navy p-5 flex flex-col gap-2 shadow-[0_12px_28px_rgba(16,42,67,.16)]">
@@ -120,6 +121,32 @@
       </div>
     </div>
     <p class="text-[12px] text-slate-500 -mt-1">Scoring inside the window: critical WAF hit = 5, other WAF hit = 2, rate-limited = 1, unsolved bot challenge = 1. Private and allow-listed IPs are never banned.</p>
+
+    <button type="submit" class="btn-primary w-full flex items-center justify-center gap-2">
+      <i class="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-sm"></i>
+      Save &amp; apply
+    </button>
+  </form>
+</div>
+{{end}}
+
+{{define "honeypot-card"}}
+<div class="card p-5" id="honeypot-card">
+  {{template "panel-header" (map "Icon" "hgi-honey-01" "Title" "Honeypot paths" "Tint" "bg-red-50" "Color" "text-red-500" "Mb" "mb-2")}}
+  <p class="text-[12px] text-slate-500 mb-4">Paths only scanners ask for. A client that requests one and gets a <span class="font-semibold text-slate-600">404</span> back is banned on that first hit (when Automatic banning is on). A path your backend really serves answers something else, so it never fires.</p>
+
+  {{if .HoneypotSaveOK}}
+  <div class="rounded-md bg-green-50 border border-green-200 text-green-700 text-[13px] px-4 py-3 mb-4">Saved. Honeypot paths applied.</div>
+  {{end}}
+  {{if .HoneypotSaveErr}}
+  <div class="rounded-md bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3 mb-4">{{.HoneypotSaveErr}}</div>
+  {{end}}
+
+  <form hx-post="/admin/ip-rules/honeypots" hx-target="#honeypot-card" hx-swap="outerHTML" class="flex flex-col gap-4">
+    <textarea name="honeypot_paths" rows="6" placeholder="/wp-login.php&#10;/xmlrpc.php&#10;/phpmyadmin/"
+      class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white resize-y">{{range .HoneypotPaths}}{{.}}
+{{end}}</textarea>
+    <p class="text-[12px] text-slate-500 -mt-1">One path per line, case-insensitive. A path ending in <span class="font-mono">/</span> covers everything under it. Hits show up in Logs as <span class="font-mono">honeypot</span>.</p>
 
     <button type="submit" class="btn-primary w-full flex items-center justify-center gap-2">
       <i class="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-sm"></i>

@@ -116,6 +116,7 @@ type Registry struct {
 	autoHosts map[string]bool               // host (lowercase) -> true if tls_mode == "auto"
 	hosts     map[string]int                // host or alias (lowercase) -> index into list
 	stopCheck chan struct{}                 // closed on Reload to stop the previous active health checks
+	honeypots []string                      // see Honeypot
 
 	healthMu sync.RWMutex
 	health   map[string]*backendHealth // service name + "\x00" + backend URL
@@ -143,6 +144,11 @@ func (r *Registry) Reload(db *storage.DB) error {
 	if err != nil {
 		return err
 	}
+	honeypots, err := db.GetHoneypotPaths()
+	if err != nil {
+		return err
+	}
+	r.SetHoneypots(honeypots)
 
 	proxies := make(map[string]http.Handler, len(list))
 	direct := make(map[string]http.Handler, len(list))
