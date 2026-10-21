@@ -435,7 +435,11 @@ func main() {
 		if !enabled {
 			return nil
 		}
-		return challenge.New(secret, ttl, threshold)
+		cc, err := db.GetCaptchaConfig()
+		if err != nil {
+			log.Printf("captcha config: %v", err)
+		}
+		return challenge.New(secret, ttl, threshold).WithCaptcha(cc.Provider, cc.SiteKey, cc.Secret)
 	}
 
 	var ch *challenge.Challenger

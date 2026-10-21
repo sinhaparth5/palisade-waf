@@ -51,6 +51,7 @@ var secretMetaKeys = []string{
 	"db_conn_password",
 	"db_conn_dsn",
 	"typesafe_api_key",
+	"captcha_secret",
 }
 
 // EnableSecretEncryption switches the DB into secrets-at-rest mode with a

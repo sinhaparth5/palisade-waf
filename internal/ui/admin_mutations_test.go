@@ -498,6 +498,30 @@ func TestSettingsCards(t *testing.T) {
 		t.Errorf("bot = %v %d %d reloads=%d", en, th, ttl, env.count("bot"))
 	}
 
+	// CAPTCHA fallback: bad provider and missing secret are refused, a blank
+	// secret on re-save keeps the stored one, and it is never echoed back.
+	for _, tc := range []struct {
+		f       []string
+		wantErr string
+	}{
+		{[]string{"captcha_provider", "recaptcha", "captcha_site_key", "s", "captcha_secret", "k"}, "Unknown CAPTCHA provider"},
+		{[]string{"captcha_provider", "turnstile", "captcha_site_key", "s"}, "needs both"},
+		{[]string{"captcha_provider", "turnstile", "captcha_site_key", "s", "captcha_secret", "top-secret"}, ""},
+		{[]string{"captcha_provider", "hcaptcha", "captcha_site_key", "s2"}, ""},
+	} {
+		rec := env.do("POST", "/admin/settings/bot", form(append([]string{"bot_enabled", "1"}, tc.f...)...))
+		body := rec.Body.String()
+		if tc.wantErr != "" && !strings.Contains(body, tc.wantErr) || tc.wantErr == "" && strings.Contains(body, "bg-red-50") {
+			t.Errorf("captcha %v: %s", tc.f, body)
+		}
+		if strings.Contains(body, "top-secret") {
+			t.Error("captcha secret echoed back")
+		}
+	}
+	if cc, _ := env.db.GetCaptchaConfig(); cc != (storage.CaptchaConfig{Provider: "hcaptcha", SiteKey: "s2", Secret: "top-secret"}) {
+		t.Errorf("captcha = %+v", cc)
+	}
+
 	// Varnish: non-loopback rejected, loopback saved.
 	for addr, wantErr := range map[string]string{"bad": "host:port", "10.0.0.1:6081": "loopback", "": ""} {
 		rec := env.do("POST", "/admin/settings/varnish", form("varnish_enabled", "1", "varnish_addr", addr))
