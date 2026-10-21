@@ -788,7 +788,7 @@
 
     <div class="flex flex-col sm:flex-row gap-3">
       <label class="flex-1 flex items-start gap-3 rounded-md border p-4 cursor-pointer transition-colors
-                    {{if ne .RLBackend "redis"}}border-brand bg-[#F0FBF4]{{else}}border-line bg-white hover:bg-surface{{end}}">
+                    {{if ne .RLBackend "redis"}}border-brand bg-green-50{{else}}border-line bg-white hover:bg-surface{{end}}">
         <input type="radio" name="rl_backend" value="memory" class="mt-0.5 accent-brand"
                {{if ne .RLBackend "redis"}}checked{{end}}>
         <div>
@@ -797,7 +797,7 @@
         </div>
       </label>
       <label class="flex-1 flex items-start gap-3 rounded-md border p-4 cursor-pointer transition-colors
-                    {{if eq .RLBackend "redis"}}border-brand bg-[#F0FBF4]{{else}}border-line bg-white hover:bg-surface{{end}}">
+                    {{if eq .RLBackend "redis"}}border-brand bg-green-50{{else}}border-line bg-white hover:bg-surface{{end}}">
         <input type="radio" name="rl_backend" value="redis" class="mt-0.5 accent-brand"
                {{if eq .RLBackend "redis"}}checked{{end}}>
         <div>

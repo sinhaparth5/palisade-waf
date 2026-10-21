@@ -109,6 +109,71 @@
   --color-green-800: color-mix(in oklab, var(--fn-accent) 70%, var(--fn-ink));
   --color-green-900: color-mix(in oklab, var(--fn-accent) 55%, var(--fn-ink));
 
+  /* amber/purple/violet = highlighter ("look here": warnings, auto bans,
+     stricter modes); blue/sky/cyan = pencil (informational). Mapped here
+     rather than in markup so they keep to the three pens and flip with
+     dark mode like slate/red/green (issue #135). */
+  --color-amber-50: color-mix(in oklab, var(--fn-highlight) 16%, var(--fn-paper));
+  --color-amber-100: color-mix(in oklab, var(--fn-highlight) 28%, var(--fn-paper));
+  --color-amber-200: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-paper));
+  --color-amber-300: color-mix(in oklab, var(--fn-highlight) 65%, var(--fn-paper));
+  --color-amber-400: color-mix(in oklab, var(--fn-highlight) 85%, var(--fn-paper));
+  --color-amber-500: color-mix(in oklab, var(--fn-highlight) 70%, var(--fn-ink));
+  --color-amber-600: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-ink));
+  --color-amber-700: color-mix(in oklab, var(--fn-highlight) 30%, var(--fn-ink));
+  --color-amber-800: color-mix(in oklab, var(--fn-highlight) 20%, var(--fn-ink));
+  --color-amber-900: color-mix(in oklab, var(--fn-highlight) 12%, var(--fn-ink));
+  --color-purple-50: color-mix(in oklab, var(--fn-highlight) 16%, var(--fn-paper));
+  --color-purple-100: color-mix(in oklab, var(--fn-highlight) 28%, var(--fn-paper));
+  --color-purple-200: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-paper));
+  --color-purple-300: color-mix(in oklab, var(--fn-highlight) 65%, var(--fn-paper));
+  --color-purple-400: color-mix(in oklab, var(--fn-highlight) 85%, var(--fn-paper));
+  --color-purple-500: color-mix(in oklab, var(--fn-highlight) 70%, var(--fn-ink));
+  --color-purple-600: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-ink));
+  --color-purple-700: color-mix(in oklab, var(--fn-highlight) 30%, var(--fn-ink));
+  --color-purple-800: color-mix(in oklab, var(--fn-highlight) 20%, var(--fn-ink));
+  --color-purple-900: color-mix(in oklab, var(--fn-highlight) 12%, var(--fn-ink));
+  --color-violet-50: color-mix(in oklab, var(--fn-highlight) 16%, var(--fn-paper));
+  --color-violet-100: color-mix(in oklab, var(--fn-highlight) 28%, var(--fn-paper));
+  --color-violet-200: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-paper));
+  --color-violet-300: color-mix(in oklab, var(--fn-highlight) 65%, var(--fn-paper));
+  --color-violet-400: color-mix(in oklab, var(--fn-highlight) 85%, var(--fn-paper));
+  --color-violet-500: color-mix(in oklab, var(--fn-highlight) 70%, var(--fn-ink));
+  --color-violet-600: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-ink));
+  --color-violet-700: color-mix(in oklab, var(--fn-highlight) 30%, var(--fn-ink));
+  --color-violet-800: color-mix(in oklab, var(--fn-highlight) 20%, var(--fn-ink));
+  --color-violet-900: color-mix(in oklab, var(--fn-highlight) 12%, var(--fn-ink));
+  --color-blue-50: color-mix(in oklab, var(--fn-ink-soft) 6%, var(--fn-paper));
+  --color-blue-100: color-mix(in oklab, var(--fn-ink-soft) 11%, var(--fn-paper));
+  --color-blue-200: color-mix(in oklab, var(--fn-ink-soft) 20%, var(--fn-paper));
+  --color-blue-300: color-mix(in oklab, var(--fn-ink-soft) 35%, var(--fn-paper));
+  --color-blue-400: color-mix(in oklab, var(--fn-ink-soft) 55%, var(--fn-paper));
+  --color-blue-500: var(--fn-ink-soft);
+  --color-blue-600: var(--fn-ink-soft);
+  --color-blue-700: color-mix(in oklab, var(--fn-ink-soft) 80%, var(--fn-ink));
+  --color-blue-800: var(--fn-ink);
+  --color-blue-900: var(--fn-ink);
+  --color-sky-50: color-mix(in oklab, var(--fn-ink-soft) 6%, var(--fn-paper));
+  --color-sky-100: color-mix(in oklab, var(--fn-ink-soft) 11%, var(--fn-paper));
+  --color-sky-200: color-mix(in oklab, var(--fn-ink-soft) 20%, var(--fn-paper));
+  --color-sky-300: color-mix(in oklab, var(--fn-ink-soft) 35%, var(--fn-paper));
+  --color-sky-400: color-mix(in oklab, var(--fn-ink-soft) 55%, var(--fn-paper));
+  --color-sky-500: var(--fn-ink-soft);
+  --color-sky-600: var(--fn-ink-soft);
+  --color-sky-700: color-mix(in oklab, var(--fn-ink-soft) 80%, var(--fn-ink));
+  --color-sky-800: var(--fn-ink);
+  --color-sky-900: var(--fn-ink);
+  --color-cyan-50: color-mix(in oklab, var(--fn-ink-soft) 6%, var(--fn-paper));
+  --color-cyan-100: color-mix(in oklab, var(--fn-ink-soft) 11%, var(--fn-paper));
+  --color-cyan-200: color-mix(in oklab, var(--fn-ink-soft) 20%, var(--fn-paper));
+  --color-cyan-300: color-mix(in oklab, var(--fn-ink-soft) 35%, var(--fn-paper));
+  --color-cyan-400: color-mix(in oklab, var(--fn-ink-soft) 55%, var(--fn-paper));
+  --color-cyan-500: var(--fn-ink-soft);
+  --color-cyan-600: var(--fn-ink-soft);
+  --color-cyan-700: color-mix(in oklab, var(--fn-ink-soft) 80%, var(--fn-ink));
+  --color-cyan-800: var(--fn-ink);
+  --color-cyan-900: var(--fn-ink);
+
   --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --font-display: 'Calistoga', Georgia, serif;

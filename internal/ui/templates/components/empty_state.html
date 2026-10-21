@@ -1,6 +1,8 @@
 {{define "empty-state"}}
-<div class="flex flex-col items-center justify-center p-10 text-slate-500 text-center">
-  <i class="hgi hgi-stroke hgi-rounded {{.Icon}} text-[32px] block mx-auto mb-2 opacity-30"></i>
-  {{.Message}}
+<div class="hatch m-4 flex items-center justify-center rounded-md px-6 py-10">
+  <div class="taped card max-w-sm px-6 pt-6 pb-5 text-center text-slate-500 shadow-xs">
+    <i class="hgi hgi-stroke hgi-rounded {{.Icon}} text-[32px] block mx-auto mb-2 opacity-30"></i>
+    {{.Message}}
+  </div>
 </div>
 {{end}}
