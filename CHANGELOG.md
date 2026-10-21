@@ -16,6 +16,10 @@ rather than growing this file forever.
 
 ### Added
 
+- Dark-mode toggle in the admin sidebar, next to Sign out (#134). The choice is saved in the browser and applied before the page first paints, so reloads don't flash light. If browser storage is blocked, the toggle still works for the current page.
+
+### Added
+
 - CAPTCHA fallback for the bot challenge (#133). Choose Cloudflare Turnstile or hCaptcha under Settings → Bot Protection and enter its site and secret keys. When a browser can't finish the proof-of-work, for example over plain HTTP where `crypto.subtle` is missing, the challenge page shows the CAPTCHA instead. Palisade checks the token with the provider before issuing the bypass cookie. The provider's script loads only when the fallback is used, and the secret key is encrypted at rest along with the other stored secrets.
 
 ## [2.9.0] - 2026-10-21

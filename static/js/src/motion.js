@@ -3,6 +3,21 @@
 (function () {
   var reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Dark-mode toggle (issue #134). base.html's head script applies the saved
+  // choice before first paint; storage can throw (private mode, blocked site
+  // data), in which case the toggle still works for this page view.
+  var themeBtn = document.getElementById('theme-toggle');
+  if (themeBtn) {
+    var root = document.documentElement;
+    themeBtn.setAttribute('aria-pressed', root.dataset.theme === 'dark' ? 'true' : 'false');
+    themeBtn.addEventListener('click', function () {
+      var dark = root.dataset.theme !== 'dark';
+      if (dark) root.dataset.theme = 'dark'; else delete root.dataset.theme;
+      themeBtn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+      try { localStorage.setItem('cz-theme', dark ? 'dark' : 'light'); } catch (e) {}
+    });
+  }
+
   // Mobile navigation is an off-canvas version of the desktop sidebar.
   // Keep the same links and destinations; only its responsive presentation
   // changes. Escape and backdrop clicks always return focus to the opener.
