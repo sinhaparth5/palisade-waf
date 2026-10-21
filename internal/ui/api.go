@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -87,6 +88,7 @@ func (h *Handler) apiKeyAuth(next echo.HandlerFunc) echo.HandlerFunc {
 
 		c.Set("api_key_id", key.ID)
 		c.Set("api_key_read_only", key.ReadOnly)
+		c.Set("audit_actor", fmt.Sprintf("api key %s (%s)", key.Name, key.Prefix))
 		return next(c)
 	}
 }
@@ -111,7 +113,7 @@ func (h *Handler) requireWrite(next echo.HandlerFunc) echo.HandlerFunc {
 // domain (see hostGuard in handlers.go).
 func (h *Handler) RegisterAPI(e *echo.Echo) {
 	api := e.Group(h.cfg.Admin.Path + "/api/v1")
-	api.Use(h.hostGuard, middleware.BodyLimit("1M"), h.apiKeyAuth)
+	api.Use(h.hostGuard, middleware.BodyLimit("1M"), h.apiKeyAuth, h.auditLog)
 
 	api.GET("/services", h.APIListServices)
 	api.POST("/services", h.APICreateService, h.requireWrite)

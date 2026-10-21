@@ -327,6 +327,19 @@ func (db *DB) schemaStatements() []string {
 			created_at    %s NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			last_used_at  TEXT NOT NULL DEFAULT ''
 		)`, pk, ts),
+
+		// Admin audit trail (issue #129): who changed what, from the admin
+		// UI or the REST API. Never holds secret values; see ui.auditLog.
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS audit_log (
+			id      %s,
+			ts      %s NOT NULL,
+			actor   TEXT NOT NULL,
+			ip      TEXT NOT NULL DEFAULT '',
+			action  TEXT NOT NULL,
+			target  TEXT NOT NULL DEFAULT '',
+			summary TEXT NOT NULL DEFAULT ''
+		)`, pk, ts),
+		d.createIndexIfNotExists("idx_audit_log_ts", "audit_log", "ts"),
 	}
 
 	if d.name == "mysql" {

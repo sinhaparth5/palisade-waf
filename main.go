@@ -905,14 +905,22 @@ func runPruneOnly(args []string) {
 	}
 }
 
-// pruneOnce deletes expired sessions and request logs older than retention
-// days (<= 0 keeps logs forever). Shared by the prune subcommand and the
+// pruneOnce deletes expired sessions, request logs older than retention days
+// and audit entries older than max(retention, a year) (<= 0 keeps both
+// forever). Shared by the prune subcommand and the
 // in-process --prune-interval loop.
 func pruneOnce(db *storage.DB, retention int) error {
 	if n, err := db.PruneExpiredSessions(); err != nil {
 		log.Printf("session prune failed: %v", err)
 	} else {
 		log.Printf("session prune: deleted %d expired sessions", n)
+	}
+	if retention > 0 {
+		if n, err := db.PruneAudit(max(retention, storage.AuditRetentionDays)); err != nil {
+			log.Printf("audit prune failed: %v", err)
+		} else {
+			log.Printf("audit prune: deleted %d entries", n)
+		}
 	}
 	if retention <= 0 {
 		log.Printf("log retention: disabled (retention <= 0), nothing to prune")

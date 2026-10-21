@@ -76,6 +76,14 @@ echo "your-password" | ./palisade setup --admin-email you@example.com
 
 `make run` builds and runs in one step. Run `setup` first, at least once, so you can log in. The project uses Go only; the SQLite driver is `modernc.org/sqlite`, with no CGO. See the flags in `main.go`, or the flag table in `CLAUDE.md`, for every bootstrap option (`--listen-tls`, `--listen-h3`, `--waf-rules`, `--geo-db`, `--retention`, `--tls-cert`/`--tls-key`, `--trusted-proxies`).
 
+Search-engine and link-preview crawlers skip the bot challenge only when their source checks out (reverse DNS or network), never on user agent alone. To let your own monitor through, pin it to the IP it connects from:
+
+```bash
+./palisade --trusted-crawlers "dev-portal-uptime=x.x.x.x"   # ua=cidr[,cidr];ua2=ip
+```
+
+The pin lives in your service's flags, not the repo. It skips only the challenge; the WAF, rate limits and IP rules still apply.
+
 ### Option C: cross-compiled release binaries
 
 ```bash

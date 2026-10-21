@@ -333,7 +333,7 @@ func (h *Handler) Register(e *echo.Echo) {
 
 	g := admin.Group("")
 	// bodyLimit must run ahead of csrfProtect, which parses the form body.
-	g.Use(bodyLimit, h.sessionAuth, h.csrfProtect)
+	g.Use(bodyLimit, h.sessionAuth, h.csrfProtect, h.auditLog)
 	g.POST("/logout", h.Logout)
 
 	g.GET("/metrics", echo.WrapHandler(metrics.Handler()))
@@ -2213,6 +2213,7 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 	ec, _ := h.db.GetEmailConfig()
 	tc, _ := h.db.GetTypeSafeConfig()
 	vc, _ := h.db.GetVarnishConfig()
+	audit, _ := h.db.ListAudit(auditPageSize)
 	apiKeys, _ := h.db.ListAPIKeys()
 	totpEnabled, _ := h.db.TOTPEnabled()
 	dbConnCfg, _ := h.db.GetDBConnConfig()
@@ -2258,6 +2259,7 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 		"VarnishAddr":            vc.Addr,
 		"APIKeys":                apiKeys,
 		"Devices":                h.deviceRows(sessionCookieValue(c)),
+		"Audit":                  audit,
 	}))
 }
 
@@ -3468,6 +3470,7 @@ func (h *Handler) render(c echo.Context, page string, data map[string]any) error
 	if !ok {
 		return fmt.Errorf("template %q not found", page)
 	}
+	markAuditFailure(c, data)
 	if data == nil {
 		data = map[string]any{}
 	}
@@ -3522,6 +3525,7 @@ func (h *Handler) renderPartial(c echo.Context, page, tmplName string, data any)
 	if !ok {
 		return fmt.Errorf("template %q not found", page)
 	}
+	markAuditFailure(c, data)
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	return t.ExecuteTemplate(c.Response().Writer, tmplName, data)
 }
