@@ -40,6 +40,7 @@ import (
 	"palisade/internal/security/asn"
 	"palisade/internal/security/autoban"
 	"palisade/internal/security/blocklist"
+	"palisade/internal/security/bot"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
 	ja3pkg "palisade/internal/security/ja3"
@@ -94,6 +95,7 @@ func main() {
 	listenTLS := fs.String("listen-tls", "", "HTTPS listen address (empty = HTTP only)")
 	listenH3 := fs.String("listen-h3", "", "HTTP/3 (QUIC) UDP listen address, e.g. :443; needs --listen-tls; services opt in individually (empty = off)")
 	trustedProxies := fs.String("trusted-proxies", "", "comma-separated trusted proxy CIDRs for X-Forwarded-For/X-Real-IP")
+	trustedCrawlers := fs.String("trusted-crawlers", "", "extra crawlers that skip the bot challenge, pinned by source: ua=cidr[,cidr];ua2=ip (empty = none)")
 	dbPath := fs.String("db", "waf.db", "database path (sqlite) or DSN (mysql/postgres)")
 	dbDriver := fs.String("db-driver", "sqlite", "database driver: sqlite, mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)")
 	certsDir := fs.String("certs", "./certs", "TLS certificate cache directory")
@@ -118,6 +120,9 @@ func main() {
 		log.Fatalf("--listen-h3 needs --listen-tls: browsers only discover HTTP/3 from an HTTPS response")
 	}
 	cfg.TrustedProxies = splitCSV(*trustedProxies)
+	if err := bot.AddPinnedCrawlers(*trustedCrawlers); err != nil {
+		log.Fatalf("--trusted-crawlers: %v", err)
+	}
 	cfg.DB.Path = *dbPath
 	cfg.DB.Driver = *dbDriver
 	cfg.TLS.CacheDir = *certsDir
