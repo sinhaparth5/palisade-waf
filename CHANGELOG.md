@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Security
+
+- Every HTTP server now sets a 10s header-read timeout, a 120s idle timeout and a 1 MiB header cap, so a client trickling headers (Slowloris) can no longer hold connections open indefinitely. Uploads, SSE and WebSockets are unaffected, since no read or write timeout is set (#127).
+
 ## [2.8.4] - 2026-10-20
 
 ### Changed
