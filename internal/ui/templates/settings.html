@@ -63,6 +63,7 @@
   {{template "passkeys-card" .}}
   {{template "devices-card" .}}
   {{template "api-keys-card" .}}
+  {{template "audit-card" .}}
 
   <!-- ── Database backup ───────────────────────────────────────────────────── -->
   <div class="card p-5">
@@ -482,6 +483,39 @@
 {{else}}
 {{template "empty-state" (map "Icon" "hgi-key-01" "Message" "No API keys yet")}}
 {{end}}
+{{end}}
+
+{{define "audit-card"}}
+<div class="card p-5" id="audit-card">
+  <h2 class="text-[15px] font-bold text-slate-800 mb-1">Audit log</h2>
+  <p class="text-[13px] text-slate-500 mb-5">Every change made from this dashboard or the REST API: who made it, from where, and to what. Read-only; the newest 100 are shown, and entries are kept for at least a year. Secret values are never recorded.</p>
+  {{if .Audit}}
+  <div class="overflow-x-auto">
+    <table class="w-full text-[12px]">
+      <thead>
+        <tr class="text-left text-slate-500 border-b border-line">
+          <th class="py-2 pr-3 font-medium whitespace-nowrap">Time</th>
+          <th class="py-2 pr-3 font-medium">Actor</th>
+          <th class="py-2 pr-3 font-medium">Action</th>
+          <th class="py-2 font-medium">Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Audit}}
+        <tr class="border-b border-canvas align-top">
+          <td class="py-2 pr-3 whitespace-nowrap text-slate-500">{{fmtTimeFull .TS}}</td>
+          <td class="py-2 pr-3 text-slate-700">{{.Actor}}<div class="font-mono text-slate-400">{{.IP}}</div></td>
+          <td class="py-2 pr-3 font-mono text-slate-800 whitespace-nowrap">{{.Action}}</td>
+          <td class="py-2 font-mono text-slate-600 break-all">{{.Target}}{{if and .Target .Summary}} · {{end}}{{.Summary}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  {{template "empty-state" (map "Icon" "hgi-task-01" "Message" "No changes recorded yet")}}
+  {{end}}
+</div>
 {{end}}
 
 {{define "dbconn-card"}}

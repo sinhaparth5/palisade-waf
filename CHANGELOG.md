@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Added
+
+- Admin audit log: every change made from the admin dashboard or the REST API is recorded with time, who made it (the admin session or the named API key), source IP, the action and its target. It's shown read-only on the Settings page and kept for at least a year (or your `--retention`, if longer) by the existing `prune`. Rejected requests aren't logged, and secret values never are: only an allowlist of identifying fields such as names, IPs and rule IDs is copied (#129).
+
 ### Security
 
 - Trusted crawlers are now verified by where they connect from, not just their user agent, so sending `User-Agent: Googlebot` no longer skips the bot challenge. Search-engine and SEO crawlers are checked by forward-confirmed reverse DNS, link-preview bots (Meta, X, LinkedIn, Telegram) and the Internet Archive by ASN, and a failed check falls back to normal scoring. Slackbot, Discordbot and DuckDuckBot publish no way to verify them and are no longer trusted. `dev-portal-uptime` is no longer trusted by default either; trust your own monitors with the new `--trusted-crawlers` flag, e.g. `--trusted-crawlers "my-monitor=203.0.113.5"` (#128).
