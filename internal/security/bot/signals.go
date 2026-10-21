@@ -5,53 +5,6 @@ import (
 	"strings"
 )
 
-// trustedCrawlers are legitimate bots from search engines, social platforms,
-// and analytics tools that should never be challenged. Matched case-insensitively
-// against the User-Agent substring.
-//
-// NOTE: UA strings are trivially spoofable. The JS challenge is a thin
-// pre-filter; the Coraza WAF inspects every request regardless and will catch
-// actual attack payloads even from clients impersonating Googlebot.
-var trustedCrawlers = []string{
-	// Google
-	"googlebot", "google-inspectiontool", "googleother",
-	"adsbot-google", "google-read-aloud", "mediapartners-google",
-	// Bing / Microsoft
-	"bingbot", "bingpreview", "msnbot", "adidxbot",
-	// Apple
-	"applebot",
-	// DuckDuckGo
-	"duckduckbot", "duckduckgo-favicons-bot",
-	// Yahoo
-	"slurp",
-	// Yandex
-	"yandexbot", "yandexmobilebot",
-	// Baidu
-	"baiduspider",
-	// Facebook / Meta (link preview)
-	"facebookexternalhit", "facebot",
-	// Twitter / X (link preview)
-	"twitterbot",
-	// LinkedIn (link preview)
-	"linkedinbot",
-	// Pinterest
-	"pinterest/",
-	// Telegram (link preview)
-	"telegrambot",
-	// Slack (link preview)
-	"slackbot",
-	// Discord (link preview)
-	"discordbot",
-	// WhatsApp (link preview)
-	"whatsapp/",
-	// Archive.org
-	"ia_archiver", "archive.org_bot",
-	// Ahrefs (SEO crawler + site audit)
-	"ahrefsbot", "ahrefssiteaudit",
-	// dev-portal uptime monitor
-	"dev-portal-uptime",
-}
-
 // knownScanners are attack/audit tools that always get a high score.
 var knownScanners = []string{
 	"nikto", "nuclei", "sqlmap", "nmap/", "masscan", "zgrab",
@@ -73,24 +26,28 @@ type Analysis struct {
 	Score            int
 	Signals          []string
 	IsBot            bool // true if a confirmed attack/scanner tool was detected
-	IsTrustedCrawler bool // true if UA matches a known-good SEO/social crawler
+	IsTrustedCrawler bool // true if UA and source IP match a known-good SEO/social crawler
 }
 
-// Analyze scores r for bot-like characteristics. It is designed to be fast
-// (only reads headers already parsed by net/http) and called on every request.
-func Analyze(r *http.Request) Analysis {
+// Analyze scores r for bot-like characteristics. It only reads headers
+// already parsed by net/http, except when the UA claims to be a trusted
+// crawler: that claim is checked against ip/asnNum (see verifyCrawler), which
+// can cost one cached DNS round-trip.
+func Analyze(r *http.Request, ip string, asnNum uint) Analysis {
 	var a Analysis
 	ua := r.Header.Get("User-Agent")
 	uaLow := strings.ToLower(ua)
 
-	// Trusted crawlers bypass all scoring and are never challenged.
-	// They still pass through the Coraza WAF for payload inspection.
-	for _, s := range trustedCrawlers {
-		if strings.Contains(uaLow, s) {
+	// Verified crawlers bypass all scoring and are never challenged. They
+	// still pass through the Coraza WAF for payload inspection. A UA that
+	// claims to be one but fails verification is scored like anyone else.
+	if c := matchCrawler(uaLow); c != nil {
+		if verifyCrawler(c, ip, asnNum) {
 			a.IsTrustedCrawler = true
 			a.Signals = append(a.Signals, "trusted_crawler")
 			return a
 		}
+		a.Signals = append(a.Signals, "unverified_crawler")
 	}
 
 	switch ua {

@@ -16,6 +16,7 @@ rather than growing this file forever.
 
 ### Security
 
+- Trusted crawlers are now verified by where they connect from, not just their user agent, so sending `User-Agent: Googlebot` no longer skips the bot challenge. Search-engine and SEO crawlers are checked by forward-confirmed reverse DNS, link-preview bots (Meta, X, LinkedIn, Telegram) and the Internet Archive by ASN, and a failed check falls back to normal scoring. Slackbot, Discordbot and DuckDuckBot publish no way to verify them and are no longer trusted. `dev-portal-uptime` is no longer trusted by default either; trust your own monitors with the new `--trusted-crawlers` flag, e.g. `--trusted-crawlers "my-monitor=203.0.113.5"` (#128).
 - Every HTTP server now sets a 10s header-read timeout, a 120s idle timeout and a 1 MiB header cap, so a client trickling headers (Slowloris) can no longer hold connections open indefinitely. Uploads, SSE and WebSockets are unaffected, since no read or write timeout is set (#127).
 
 ## [2.8.4] - 2026-10-20

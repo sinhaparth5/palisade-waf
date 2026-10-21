@@ -238,8 +238,9 @@ func (h *Handler) Handle(c echo.Context) error {
 	asnNum, org := h.asnLookup.LookupForConn(r.RemoteAddr, clientIP)
 	tlsVer, tlsCipher, tlsSNI := tlsInfo(r)
 
-	// Bot signal analysis + TLS fingerprints (both O(1), no I/O).
-	botAnalysis := bot.Analyze(r)
+	// Bot signal analysis + TLS fingerprints. Analyze is header-only unless
+	// the UA claims a trusted crawler, which it verifies against the source.
+	botAnalysis := bot.Analyze(r, clientIP, asnNum)
 	// JA4 (primary) and JA3 (legacy): prefer the Cloudflare headers (only set
 	// when RemoteAddr is a CF IP), then fall back to the per-connection store
 	// populated at TLS handshake time.
