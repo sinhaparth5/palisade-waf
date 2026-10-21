@@ -14,6 +14,13 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Changed
+
+- Finished the field-notes theme in the admin UI (#135):
+  - Empty states now show a taped note on the hatched wall.
+  - Amber, purple and violet badges use the highlighter colour, and blue, sky and cyan badges use pencil grey, so every badge follows the theme's three pens and switches with dark mode.
+  - Fixed dark-mode spots that stayed light or became unreadable: the sidebar links, the card header gradient, the Bot Shield tile and the selected rate-limit backend card.
+
 ### Added
 
 - Dark-mode toggle in the admin sidebar, next to Sign out (#134). The choice is saved in the browser and applied before the page first paints, so reloads don't flash light. If browser storage is blocked, the toggle still works for the current page.

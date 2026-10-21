@@ -82,49 +82,49 @@
     <div id="brand-logo" class="relative w-10 h-10 shrink-0 cursor-pointer select-none rounded-xl bg-white/10 p-1">
       <img src="{{.AdminPath}}/static/imgs/logo.svg" alt="Palisade logo" class="w-full h-full block"/>
     </div>
-    <div class="min-w-0"><span class="block font-bold text-[15px] text-white truncate">Palisade</span><span class="block text-[10px] uppercase tracking-[.14em] text-slate-400">Security console</span></div>
-    <button id="mobile-nav-close" type="button" aria-label="Close navigation" class="ml-auto flex h-11 w-11 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 lg:hidden"><i class="hgi hgi-stroke hgi-rounded hgi-cancel-01 text-lg"></i></button>
+    <div class="min-w-0"><span class="block font-bold text-[15px] text-white truncate">Palisade</span><span class="block text-[10px] uppercase tracking-[.14em] text-white/50">Security console</span></div>
+    <button id="mobile-nav-close" type="button" aria-label="Close navigation" class="ml-auto flex h-11 w-11 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 lg:hidden"><i class="hgi hgi-stroke hgi-rounded hgi-cancel-01 text-lg"></i></button>
   </div>
 
   <!-- Nav links -->
   <nav class="flex-1 flex flex-col gap-1 px-3 pt-1 overflow-y-auto">
-    <a href="/admin" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "dashboard"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-slate-300 hover:bg-white/[.06] hover:text-white{{end}}">
+    <a href="/admin" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "dashboard"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-dashboard-square-01 text-base"></i>
       Dashboard
     </a>
-    <a href="/admin/logs" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "logs"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-slate-300 hover:bg-white/[.06] hover:text-white{{end}}">
+    <a href="/admin/logs" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "logs"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-activity-01 text-base"></i>
       Live Logs
     </a>
-    <a href="/admin/ip-rules" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "ip_rules"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-slate-300 hover:bg-white/[.06] hover:text-white{{end}}">
+    <a href="/admin/ip-rules" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "ip_rules"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-cancel-circle text-base"></i>
       IP Rules
     </a>
-    <a href="/admin/geo-rules" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "geo_rules"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-slate-300 hover:bg-white/[.06] hover:text-white{{end}}">
+    <a href="/admin/geo-rules" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "geo_rules"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-earth text-base"></i>
       Geo Rules
     </a>
-    <a href="/admin/services" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "services"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-slate-300 hover:bg-white/[.06] hover:text-white{{end}}">
+    <a href="/admin/services" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "services"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-settings-01 text-base"></i>
       Services
     </a>
-    <a href="/admin/certificates" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "certificates"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-slate-300 hover:bg-white/[.06] hover:text-white{{end}}">
+    <a href="/admin/certificates" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "certificates"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-certificate-01 text-base"></i>
       Certificates
     </a>
-    <a href="/admin/waf-rules" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "waf_rules"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-slate-300 hover:bg-white/[.06] hover:text-white{{end}}">
+    <a href="/admin/waf-rules" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "waf_rules"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-security-block text-base"></i>
       WAF Rules
     </a>
-    <a href="/admin/threat-intel" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "threat_intel"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-slate-300 hover:bg-white/[.06] hover:text-white{{end}}">
+    <a href="/admin/threat-intel" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "threat_intel"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-database-01 text-base"></i>
       Threat Intel
     </a>
-    <a href="/admin/ai-usage" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "ai_usage"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-slate-300 hover:bg-white/[.06] hover:text-white{{end}}">
+    <a href="/admin/ai-usage" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "ai_usage"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-artificial-intelligence-04 text-base"></i>
       AI Usage
     </a>
-    <a href="/admin/settings" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "settings"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-slate-300 hover:bg-white/[.06] hover:text-white{{end}}">
+    <a href="/admin/settings" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "settings"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-user-account text-base"></i>
       Settings
     </a>
@@ -146,12 +146,12 @@
       <form action="{{.AdminPath}}/logout" method="POST" class="contents">
         <input type="hidden" name="_csrf" value="{{.CSRF}}">
         <button type="submit" title="Sign out"
-                class="w-11 h-11 lg:w-9 lg:h-9 rounded-lg bg-white/[.06] border border-white/10 flex items-center justify-center text-slate-300 hover:bg-red-500/20 hover:text-red-200 hover:border-red-300/30 transition-colors cursor-pointer">
+                class="w-11 h-11 lg:w-9 lg:h-9 rounded-lg bg-white/[.06] border border-white/10 flex items-center justify-center text-white/70 hover:bg-red-500/20 hover:text-red-200 hover:border-red-300/30 transition-colors cursor-pointer">
           <i class="hgi hgi-stroke hgi-rounded hgi-logout-02 text-[14px]"></i>
         </button>
       </form>
       <div class="relative shrink-0">
-        <button id="notif-btn" aria-label="Open notifications" class="w-11 h-11 lg:w-9 lg:h-9 rounded-lg bg-white/[.06] border border-white/10 flex items-center justify-center text-slate-300 cursor-pointer relative hover:bg-white/10">
+        <button id="notif-btn" aria-label="Open notifications" class="w-11 h-11 lg:w-9 lg:h-9 rounded-lg bg-white/[.06] border border-white/10 flex items-center justify-center text-white/70 cursor-pointer relative hover:bg-white/10">
           <i class="hgi hgi-stroke hgi-rounded hgi-notification-03 text-[14px]"></i>
           {{if gt .AlertCount 0}}
           <span id="notif-badge" class="absolute -top-[3px] -right-[3px] bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[17px] h-[17px] flex items-center justify-center px-[3px] border-2 border-white">{{if gt .AlertCount 9}}9+{{else}}{{.AlertCount}}{{end}}</span>
