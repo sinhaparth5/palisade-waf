@@ -338,18 +338,24 @@ func (h *Handler) Handle(c echo.Context) error {
 	// construction — currently the credential-less web app manifest fetch,
 	// which would otherwise 307 on every Android page load and autoban the
 	// visitor's own IP (issue #57). Every later stage still applies.
+	// A login path (issue #132) is always challenged, even with the
+	// service's bot mode off.
+	login := services.IsLoginPath(app, r.URL.Path)
 	if ch != nil && !botAnalysis.IsTrustedCrawler && !challenge.Exempt(r.Method, r.URL.Path) {
 		svcMode := "inherit"
 		if app != nil && app.BotMode != "" {
 			svcMode = app.BotMode
 		}
-		if svcMode != "off" && !ch.PassedChallenge(r) {
+		if (svcMode != "off" || login) && !ch.PassedChallenge(r) {
 			byService := svcMode == "always"
-			byBotScore := botAnalysis.Score >= ch.Threshold()
-			if byService || byBotScore || adaptiveDecision.ForceChallenge {
+			byBotScore := svcMode != "off" && botAnalysis.Score >= ch.Threshold()
+			byAdaptive := svcMode != "off" && adaptiveDecision.ForceChallenge
+			if byService || byBotScore || byAdaptive || login {
 				metrics.BotChallengedTotal.WithLabelValues(appName).Inc()
 				reason := "bot_challenge"
-				if !byService && !byBotScore {
+				if login && !byService && !byBotScore {
+					reason = "bot_challenge:login"
+				} else if !byService && !byBotScore {
 					// The only reason this fired is the adaptive policy —
 					// tag it distinctly so it's visible in the logs, same
 					// Action-string convention as every other decision here.
@@ -402,6 +408,23 @@ func (h *Handler) Handle(c echo.Context) error {
 			metrics.RateLimitedTotal.WithLabelValues(appName).Inc()
 			h.logBlocked(r, appName, clientIP, country, http.StatusTooManyRequests, 0, "rate_limited", time.Since(start), meta)
 			secs := int(svRes.RetryAfter.Seconds())
+			if secs < 1 {
+				secs = 1
+			}
+			c.Response().Header().Set("Retry-After", strconv.Itoa(secs))
+			return deny(c, http.StatusTooManyRequests, "rate_limited", reqID, map[string]any{"error": "too many requests"})
+		}
+	}
+	// 4.6 Login protection (issue #132): a strict limit on submissions only,
+	// so loading or reloading the login page is never what trips it.
+	if login && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		lRes := h.registry.AllowLogin(app.Name, rlKey)
+		if !lRes.Allowed {
+			mark("ratelimit")
+			setRateLimitHeaders(c.Response().Header(), lRes)
+			metrics.RateLimitedTotal.WithLabelValues(appName).Inc()
+			h.logBlocked(r, appName, clientIP, country, http.StatusTooManyRequests, 0, "rate_limited:login", time.Since(start), meta)
+			secs := int(lRes.RetryAfter.Seconds())
 			if secs < 1 {
 				secs = 1
 			}

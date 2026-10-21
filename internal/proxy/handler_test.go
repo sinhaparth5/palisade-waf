@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -850,5 +851,60 @@ func TestHoneypotOnlyFiresOnBackend404(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			t.Fatalf("%s: no log entry", path)
 		}
+	}
+}
+
+func TestLoginProtection(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+	h, db, reg := newTestHandlerDB(t, backend)
+	svc := reg.List()[0]
+	if err := db.SetServiceBotMode(svc.ID, "off"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetServiceLoginPaths(svc.ID, []string{"/login"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Reload(db); err != nil {
+		t.Fatal(err)
+	}
+	e := echo.New()
+	do := func(method, path, ip string) int {
+		req := httptest.NewRequest(method, path, nil)
+		req.RemoteAddr = ip + ":1234"
+		rec := httptest.NewRecorder()
+		_ = h.Handle(e.NewContext(req, rec))
+		return rec.Code
+	}
+
+	// Submissions are limited per client, IPv6 per /64; page loads aren't.
+	for i := 0; i < services.LoginBurst; i++ {
+		if code := do(http.MethodPost, "/login", "2001:db8:1:2::"+strconv.Itoa(i+1)); code != http.StatusOK {
+			t.Fatalf("submission %d: %d, want 200", i+1, code)
+		}
+	}
+	if code := do(http.MethodPost, "/Login/", "2001:db8:1:2::99"); code != http.StatusTooManyRequests {
+		t.Fatalf("over the burst: %d, want 429", code)
+	}
+	if code := do(http.MethodGet, "/login", "2001:db8:1:2::99"); code != http.StatusOK {
+		t.Fatalf("page load: %d, want 200", code)
+	}
+	if code := do(http.MethodPost, "/login", "203.0.113.70"); code != http.StatusOK {
+		t.Fatalf("another client: %d, want 200", code)
+	}
+	if code := do(http.MethodPost, "/other", "2001:db8:1:2::99"); code != http.StatusOK {
+		t.Fatalf("non-login path: %d, want 200", code)
+	}
+
+	// The challenge is forced on login paths even with the service's bot
+	// mode off, and only there.
+	h.ReloadBotProtection(challenge.New("test-secret", 3600, 1000))
+	if code := do(http.MethodGet, "/login", "203.0.113.71"); code != http.StatusTemporaryRedirect {
+		t.Fatalf("login page without bypass cookie: %d, want 307", code)
+	}
+	if code := do(http.MethodGet, "/other", "203.0.113.71"); code != http.StatusOK {
+		t.Fatalf("other page: %d, want 200", code)
 	}
 }

@@ -340,6 +340,7 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"services", "host_aliases TEXT NOT NULL DEFAULT ''"},
 	{"services", "canonical_host TEXT NOT NULL DEFAULT ''"},
 	{"services", "redis_mode TEXT NOT NULL DEFAULT ''"},
+	{"services", "login_paths TEXT NOT NULL DEFAULT ''"},
 }
 
 func (db *DB) migrate() error {
@@ -811,6 +812,9 @@ type Service struct {
 	HostAliases   []string
 	CanonicalHost string // "" = serve every name as-is; else Host or one alias, which the others 301 to
 	RedisMode     string // "" = no Redis namespace; "acl" | "prefix", see services.ProvisionRedis
+	// LoginPaths get the login protection preset (issue #132): a forced bot
+	// challenge and a strict per-client limit on submissions. Empty = off.
+	LoginPaths []string
 }
 
 // DefaultHealthInterval is the active health check interval used when a
@@ -829,6 +833,12 @@ func (s Service) Hosts() []string {
 		return nil
 	}
 	return append([]string{s.Host}, s.HostAliases...)
+}
+
+// SetServiceLoginPaths replaces a service's login-protected paths.
+func (db *DB) SetServiceLoginPaths(id int, paths []string) error {
+	_, err := db.exec(`UPDATE services SET login_paths = ? WHERE id = ?`, strings.Join(paths, "\n"), id)
+	return err
 }
 
 // SetServiceHosts replaces a service's host aliases and canonical host.
@@ -1117,17 +1127,20 @@ func (db *DB) SetBotSettings(enabled bool, threshold, ttl int) error {
 
 // serviceColumns is shared by ListServices/GetService so their SELECT list
 // and Scan args can't drift out of sync as columns are added.
-const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, redis_mode`
+const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, redis_mode, login_paths`
 
 func (db *DB) scanService(row interface{ Scan(...any) error }) (Service, error) {
 	var s Service
-	var extra, aliases string
-	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &s.RedisMode)
+	var extra, aliases, login string
+	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &s.RedisMode, &login)
 	if extra != "" {
 		s.ExtraBackends = strings.Split(extra, "\n")
 	}
 	if aliases != "" {
 		s.HostAliases = strings.Split(aliases, "\n")
+	}
+	if login != "" {
+		s.LoginPaths = strings.Split(login, "\n")
 	}
 	return s, err
 }

@@ -18,6 +18,7 @@ rather than growing this file forever.
 
 - Admin audit log: every change made from the admin dashboard or the REST API is recorded with time, who made it (the admin session or the named API key), source IP, the action and its target. It's shown read-only on the Settings page and kept for at least a year (or your `--retention`, if longer) by the existing `prune`. Rejected requests aren't logged, and secret values never are: only an allowlist of identifying fields such as names, IPs and rule IDs is copied (#129).
 - Honeypot paths: list paths only scanners ask for (e.g. `/wp-login.php` on a site that isn't WordPress, `/xmlrpc.php`, `/phpmyadmin/`) in the new card on the IP Rules page. A client that requests one and gets a 404 is banned by Automatic banning on that first hit, and the request is logged with the `honeypot` action. A path your backend really serves never answers 404, so it can't fire for real visitors. `/.env` and `/.git/` don't need listing: the OWASP rules already block them (#130).
+- Login protection per service: list a service's login paths (e.g. `/login`, `/wp-login.php`) on its Bot tab. Every client must solve the bot challenge before reaching them, even if bot protection is off for that service, and each client (IPv6 per /64) can submit to them 5 times at once, then once every 12 seconds. Loading the page doesn't count toward the limit. A challenge forced this way is logged as `bot_challenge:login` and a limited submission as `rate_limited:login`, and Automatic banning scores both (#132).
 
 ### Security
 

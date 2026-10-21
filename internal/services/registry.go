@@ -362,6 +362,9 @@ func (r *Registry) Reload(db *storage.DB) error {
 			}
 			newLimiters[s.Name] = ratelimit.NewWithParams(s.RateLimitRPS, burst)
 		}
+		if len(s.LoginPaths) > 0 {
+			newLimiters[s.Name+loginLimiterSuffix] = ratelimit.NewWithParams(LoginRate, LoginBurst)
+		}
 	}
 
 	r.mu.Lock()

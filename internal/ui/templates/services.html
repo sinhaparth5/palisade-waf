@@ -256,6 +256,16 @@
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
       <div id="bot-error" class="text-[12px] text-red-500 mt-[10px]"></div>
+
+      <form id="svc-login-form" hx-post="{{.AdminPath}}/services/login/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-canvas pt-5">
+        <p class="text-[13px] font-semibold text-slate-800 mb-1">Login protection</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Against credential stuffing. Every client must solve the bot challenge before reaching these paths, even with bot protection disabled for this service, and each client may submit to them 5 times at once, then once every 12 seconds. Loading the page doesn't count. The challenge needs bot protection turned on in <a href="{{.AdminPath}}/settings" class="text-brand underline">Settings</a>; the limit always applies.</p>
+        <label for="svc-login-paths" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Login paths, one per line (empty = off)</label>
+        <textarea id="svc-login-paths" name="login_paths" rows="3" placeholder="/login&#10;/wp-login.php"
+          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] font-mono outline-hidden text-slate-800 bg-white mb-4"></textarea>
+        <button type="submit" class="btn-primary w-full">Save</button>
+      </form>
+      <div id="svc-login-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
     </div>
 
     <!-- ── Uploads tab ── -->
@@ -622,6 +632,9 @@
     {{if .CompressEnabled}}
     <span class="text-[11px] font-semibold bg-sky-100 text-sky-600 px-2 py-[2px] rounded-sm">Compressed</span>
     {{end}}
+    {{if .LoginPaths}}
+    <span class="text-[11px] font-semibold bg-green-100 text-green-700 px-2 py-[2px] rounded-sm">Login protected</span>
+    {{end}}
     {{if .AllowLargeJSUploads}}
     <span class="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-[2px] rounded-sm">Large JS uploads</span>
     {{end}}
@@ -632,6 +645,7 @@
     <button type="button" class="svc-edit-btn inline-flex items-center gap-[5px] text-[12px] font-medium text-slate-600 bg-white border border-line rounded-md px-4 py-[6px] cursor-pointer font-sans hover:border-slate-400 transition-colors duration-150 ml-1"
       data-id="{{.ID}}" data-name="{{.Name}}" data-has-host="{{if .Host}}1{{else}}0{{end}}" data-host="{{.Host}}"
       data-aliases="{{range $i, $a := .HostAliases}}{{if $i}}&#10;{{end}}{{$a}}{{end}}" data-canonical="{{.CanonicalHost}}"
+      data-login-paths="{{range $i, $p := .LoginPaths}}{{if $i}}&#10;{{end}}{{$p}}{{end}}"
       data-rps="{{.RateLimitRPS}}" data-burst="{{.RateLimitBurst}}" data-mode="{{.BotMode}}" data-cache="{{if .CacheEnabled}}1{{else}}0{{end}}"
       data-session-cache="{{if .CacheBySession}}1{{else}}0{{end}}" data-session-cookie="{{.SessionCookieName}}"
       data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
