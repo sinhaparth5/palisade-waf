@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"palisade/internal/config"
 	"palisade/internal/proxy"
@@ -25,6 +26,13 @@ import (
 // newTestHandler builds a fully wired Handler backed by a temp SQLite DB and
 // a real Coraza/CRS WAF engine. backend is used as the single proxied service.
 func newTestHandler(t testing.TB, backend *httptest.Server) *proxy.Handler {
+	t.Helper()
+	h, _, _ := newTestHandlerDB(t, backend)
+	return h
+}
+
+// newTestHandlerDB is newTestHandler that also hands back the DB and registry.
+func newTestHandlerDB(t testing.TB, backend *httptest.Server) (*proxy.Handler, *storage.DB, *services.Registry) {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -67,7 +75,7 @@ func newTestHandler(t testing.TB, backend *httptest.Server) *proxy.Handler {
 	rl := ratelimit.New(config.RateLimitConfig{Enabled: false})
 	t.Cleanup(func() { rl.Stop() })
 
-	return proxy.NewHandler(reg, engine, nil, db, ipbl, geoBl, rl, nil, nil, nil, nil)
+	return proxy.NewHandler(reg, engine, nil, db, ipbl, geoBl, rl, nil, nil, nil, nil), db, reg
 }
 
 func TestNormalRequestProxied(t *testing.T) {
@@ -804,5 +812,43 @@ func TestAdaptiveEnforcementForcesChallengeForHighRiskIP(t *testing.T) {
 	_ = h.Handle(e.NewContext(req, rec))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("normal-risk IP: expected 200 (proxied, no challenge), got %d", rec.Code)
+	}
+}
+
+func TestHoneypotOnlyFiresOnBackend404(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/wp-login.php" {
+			return // a WordPress site really serves it
+		}
+		http.NotFound(w, r)
+	}))
+	defer backend.Close()
+
+	h, db, reg := newTestHandlerDB(t, backend)
+	// Paths CRS lets through; /.env and /.git/ are already CRS 930130 blocks.
+	reg.SetHoneypots([]string{"/xmlrpc.php", "/wp-login.php", "/phpmyadmin/"})
+	actions := make(chan string, 10)
+	db.SetAutobanFn(func(e storage.RequestLog) { actions <- e.Action })
+
+	for path, want := range map[string]bool{
+		"/xmlrpc.php":                true,
+		"/phpMyAdmin/index.php":      true,
+		"//phpmyadmin/../xmlrpc.php": true,
+		"/wp-login.php":              false, // served, so never a honeypot hit
+		"/missing":                   false, // a 404, but not on the list
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("X-Real-IP", "1.2.3.4")
+		if err := h.Handle(echo.New().NewContext(req, httptest.NewRecorder())); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case got := <-actions:
+			if (got == "honeypot") != want {
+				t.Errorf("%s logged with action %q, want honeypot=%v", path, got, want)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s: no log entry", path)
+		}
 	}
 }

@@ -788,3 +788,28 @@ func TestPasskeyLogin(t *testing.T) {
 		t.Errorf("finish after lockout = %d", rec.Code)
 	}
 }
+
+func TestSaveHoneypots(t *testing.T) {
+	env := newAdminEnv(t)
+	rec := env.do("POST", "/admin/ip-rules/honeypots", form("honeypot_paths", "/xmlrpc.php\r\n/phpmyadmin/\n/xmlrpc.php\n"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if got, _ := env.db.GetHoneypotPaths(); strings.Join(got, ",") != "/xmlrpc.php,/phpmyadmin/" {
+		t.Errorf("stored = %v", got)
+	}
+	if !env.h.registry.Honeypot("/phpMyAdmin/setup.php") {
+		t.Error("registry not updated without a reload")
+	}
+	// A bad entry (or "/", which would ban on every 404) keeps the old list.
+	for _, bad := range []string{"xmlrpc.php", "/"} {
+		rec = env.do("POST", "/admin/ip-rules/honeypots", form("honeypot_paths", "/a.php\n"+bad))
+		if !strings.Contains(rec.Body.String(), "is not a path") || !strings.Contains(rec.Body.String(), "/a.php") {
+			t.Errorf("%q: no inline error / input lost: %s", bad, rec.Body)
+		}
+	}
+	if got, _ := env.db.GetHoneypotPaths(); len(got) != 2 {
+		t.Errorf("rejected save changed the list: %v", got)
+	}
+	if !strings.Contains(env.do("GET", "/admin/ip-rules", nil).Body.String(), "/phpmyadmin/") {
+		t.Error("ip rules page does not show the saved list")
+	}
+}
