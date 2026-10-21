@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-10-21
+
 ### Added
 
 - Admin audit log: every change made from the admin dashboard or the REST API is recorded with time, who made it (the admin session or the named API key), source IP, the action and its target. It's shown read-only on the Settings page and kept for at least a year (or your `--retention`, if longer) by the existing `prune`. Rejected requests aren't logged, and secret values never are: only an allowlist of identifying fields such as names, IPs and rule IDs is copied (#129).
@@ -27,11 +29,5 @@ rather than growing this file forever.
 - Trusted crawlers are now verified by where they connect from, not just their user agent, so sending `User-Agent: Googlebot` no longer skips the bot challenge. Search-engine and SEO crawlers are checked by forward-confirmed reverse DNS, link-preview bots (Meta, X, LinkedIn, Telegram) and the Internet Archive by ASN, and a failed check falls back to normal scoring. Slackbot, Discordbot and DuckDuckBot publish no way to verify them and are no longer trusted. `dev-portal-uptime` is no longer trusted by default either; trust your own monitors with the new `--trusted-crawlers` flag, e.g. `--trusted-crawlers "my-monitor=203.0.113.5"` (#128).
 - Every HTTP server now sets a 10s header-read timeout, a 120s idle timeout and a 1 MiB header cap, so a client trickling headers (Slowloris) can no longer hold connections open indefinitely. Uploads, SSE and WebSockets are unaffected, since no read or write timeout is set (#127).
 
-## [2.8.4] - 2026-10-20
-
-### Changed
-
-- The `dev-portal-uptime` user agent is now a trusted crawler, so the uptime monitor skips the bot challenge. The WAF still inspects every request it makes.
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.4...main
-[2.8.4]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.3...v2.8.4
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.9.0...main
+[2.9.0]: https://github.com/sinhaparth5/palisade-waf/compare/v2.8.4...v2.9.0
