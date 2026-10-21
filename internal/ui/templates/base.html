@@ -6,6 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Palisade · {{.Heading}}</title>
   <link rel="icon" type="image/svg+xml" href="{{.AdminPath}}/static/imgs/logo.svg"/>
+  <!-- Saved theme (issue #134), applied before first paint so a dark-mode
+       user never sees a light flash. The toggle lives in motion.js. -->
+  <script>try { if (localStorage.getItem('cz-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}</script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Calistoga&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Caveat:wght@500;600&display=swap" rel="stylesheet"/>
@@ -57,6 +60,7 @@
     @keyframes shield-nudge { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-7deg); } 60% { transform: rotate(5deg); } }
     #brand-logo:hover img { animation: shield-nudge .45s var(--ease-out); }
     @keyframes shield-guard { 0% { transform: scale(1); } 35% { transform: scale(1.18); } 100% { transform: scale(1); } }
+    :root[data-theme="dark"] .theme-icon-dark, :root:not([data-theme="dark"]) .theme-icon-light { display: none; }
     #brand-logo.guard { animation: shield-guard .5s var(--ease-out); }
     #brand-logo.guard::after { content: ""; position: absolute; inset: -4px; border-radius: 10px; border: 2px solid var(--fn-highlight); opacity: 0; animation: guard-ring .5s var(--ease-out); }
     @keyframes guard-ring { 0% { opacity: .8; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.35); } }
@@ -132,6 +136,12 @@
       <div class="w-8 h-8 rounded-full bg-navy flex items-center justify-center text-white text-[12px] font-bold shrink-0">A</div>
       <span class="text-[13px] font-semibold text-white flex-1 truncate">Admin</span>
       <div class="flex items-center gap-1 shrink-0">
+      <!-- Theme -->
+      <button id="theme-toggle" type="button" title="Toggle dark mode" aria-label="Dark mode" aria-pressed="false"
+              class="w-11 h-11 lg:w-9 lg:h-9 rounded-lg bg-white/[.06] border border-white/10 flex items-center justify-center text-slate-300 hover:bg-white/10 transition-colors cursor-pointer">
+        <i class="theme-icon-dark hgi hgi-stroke hgi-rounded hgi-moon-02 text-[14px]"></i>
+        <i class="theme-icon-light hgi hgi-stroke hgi-rounded hgi-sun-03 text-[14px]"></i>
+      </button>
       <!-- Logout -->
       <form action="{{.AdminPath}}/logout" method="POST" class="contents">
         <input type="hidden" name="_csrf" value="{{.CSRF}}">

@@ -38,7 +38,8 @@
   --fn-side: oklch(24% .025 160);
   --fn-rule: color-mix(in oklab, var(--fn-ink) 16%, transparent);
 }
-/* Dark palette is opt-in via <html data-theme="dark"> and nothing sets it yet.
+/* Dark palette is opt-in via <html data-theme="dark">, set by the sidebar
+   toggle (issue #134; base.html, motion.js).
    It must NOT follow prefers-color-scheme: variant utilities such as
    lg:bg-white are not remapped, so an automatic dark mode leaves white
    panels under cream text (issue #126). */
