@@ -377,6 +377,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.POST("/services/bot/:id", h.SetServiceBotMode)
 	g.POST("/services/uploads/:id", h.SetServiceLargeJSUploads)
 	g.POST("/services/http3/:id", h.SetServiceHTTP3)
+	g.POST("/services/login/:id", h.SetServiceLoginPaths)
 	g.POST("/services/compress/:id", h.SetServiceCompress)
 	g.POST("/services/backends/:id", h.SetServiceBackends)
 	g.POST("/services/hosts/:id", h.SetServiceHosts)
@@ -2575,6 +2576,43 @@ func (h *Handler) SetServiceHosts(c echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "hosts-saved")
+	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+}
+
+// loginPathsMax caps a service's login protection list.
+const loginPathsMax = 20
+
+// SetServiceLoginPaths saves the paths that get the login protection preset
+// (issue #132). An empty list turns it off.
+func (h *Handler) SetServiceLoginPaths(c echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-login-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	var paths []string
+	for _, p := range strings.Fields(c.FormValue("login_paths")) {
+		if !strings.HasPrefix(p, "/") || p == "/" {
+			return fail(fmt.Sprintf("%q is not a path: start it with / and name the login page, e.g. /login.", p))
+		}
+		if !slices.Contains(paths, p) {
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) > loginPathsMax {
+		return fail(fmt.Sprintf("At most %d login paths.", loginPathsMax))
+	}
+	if err := h.db.SetServiceLoginPaths(id, paths); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return fail(err.Error())
+	}
+	c.Response().Header().Set("HX-Trigger", "login-saved")
 	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
 }
 

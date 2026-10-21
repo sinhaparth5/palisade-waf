@@ -813,3 +813,40 @@ func TestSaveHoneypots(t *testing.T) {
 		t.Error("ip rules page does not show the saved list")
 	}
 }
+
+func TestSetServiceLoginPaths(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("shop", "shop.example.com")
+	path := "/admin/services/login/" + itoa(svc.ID)
+
+	rec := env.do("POST", path, form("login_paths", "/login\r\n/wp-login.php\n/login\n"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if rec.Header().Get("HX-Trigger") != "login-saved" {
+		t.Fatalf("no login-saved trigger: %s", rec.Body)
+	}
+	got, _ := env.db.GetService(svc.ID)
+	if strings.Join(got.LoginPaths, ",") != "/login,/wp-login.php" {
+		t.Errorf("stored = %v", got.LoginPaths)
+	}
+	if !strings.Contains(rec.Body.String(), "Login protected") {
+		t.Error("row badge missing")
+	}
+
+	// Bad entries are refused inline and keep the old list.
+	for _, bad := range []string{"login", "/"} {
+		rec = env.do("POST", path, form("login_paths", "/signin\n"+bad))
+		if rec.Header().Get("HX-Retarget") != "#svc-login-error" || !strings.Contains(rec.Body.String(), "is not a path") {
+			t.Fatalf("%q: want inline error, got %s", bad, rec.Body)
+		}
+	}
+	if got, _ = env.db.GetService(svc.ID); len(got.LoginPaths) != 2 {
+		t.Errorf("rejected save changed the list: %v", got.LoginPaths)
+	}
+
+	// Empty turns it off.
+	env.do("POST", path, form("login_paths", ""))
+	if got, _ = env.db.GetService(svc.ID); got.LoginPaths != nil {
+		t.Errorf("not cleared: %v", got.LoginPaths)
+	}
+	wantCode(t, "bad id", env.do("POST", "/admin/services/login/x", nil).Code, 200, "")
+}

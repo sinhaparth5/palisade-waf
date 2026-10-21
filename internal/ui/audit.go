@@ -34,7 +34,7 @@ var auditSkip = map[string]bool{
 // with credentials in it) stays out until someone decides it's safe.
 var auditFields = []string{
 	"aliases", "app_name", "bot_mode", "canonical", "canonical_host", "cert_id",
-	"country_code", "enabled", "honeypot_paths", "host", "host_aliases", "ip", "label", "lb_policy",
+	"country_code", "enabled", "honeypot_paths", "host", "host_aliases", "ip", "label", "lb_policy", "login_paths",
 	"match_type", "mode", "name", "note", "path", "prefix", "read_only", "reason",
 	"rule_id", "rule_type", "service", "service_id",
 }
