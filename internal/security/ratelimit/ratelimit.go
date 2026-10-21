@@ -9,11 +9,25 @@
 package ratelimit
 
 import (
+	"net/netip"
 	"sync"
 	"time"
 
 	"palisade/internal/config"
 )
+
+// ClientKey is the per-client key for rate limiting, autoban scoring and the
+// threat score (issue #131): an IPv6 address becomes its /64, since one
+// customer is routinely handed a whole /64 and can rotate through it at will.
+// IPv4 (including IPv4-mapped IPv6) and anything unparseable come back as-is.
+func ClientKey(ip string) string {
+	a, err := netip.ParseAddr(ip)
+	if err != nil || a.Is4() || a.Is4In6() {
+		return ip
+	}
+	p, _ := a.Prefix(64) // can't fail: 64 is in range for IPv6
+	return p.String()
+}
 
 // Backend is the common interface for the global rate limiter. Both the
 // in-process Limiter and RedisBackend satisfy it.

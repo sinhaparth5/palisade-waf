@@ -399,3 +399,19 @@ func TestEvictIdleDropsStaleScores(t *testing.T) {
 		t.Errorf("after evict: old=%d new=%d", s.CurrentScore("old"), s.CurrentScore("new"))
 	}
 }
+
+// TestCurrentScoreSharedAcrossIPv6Prefix checks a client rotating addresses
+// inside its /64 keeps its score (issue #131), while the stored row stays
+// per exact address.
+func TestCurrentScoreSharedAcrossIPv6Prefix(t *testing.T) {
+	db := newFakeStore()
+	s := testScorer(db, func(string) int { return 10 })
+	s.Record(storage.RequestLog{RealIP: "2001:db8:1:2::1", BotScore: 5})
+
+	if got := s.CurrentScore("2001:db8:1:2:ffff::9"); got != 15 {
+		t.Errorf("CurrentScore for another address in the /64 = %d, want 15", got)
+	}
+	if got := s.CurrentScore("2001:db8:1:3::1"); got != 0 {
+		t.Errorf("CurrentScore for the next /64 = %d, want 0", got)
+	}
+}

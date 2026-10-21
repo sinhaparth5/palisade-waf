@@ -43,6 +43,7 @@ import (
 	"sync"
 	"time"
 
+	"palisade/internal/security/ratelimit"
 	"palisade/internal/storage"
 )
 
@@ -133,7 +134,7 @@ func (s *Scorer) CurrentScore(ip string) int {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.scores[ip]
+	return s.scores[ratelimit.ClientKey(ip)]
 }
 
 func (s *Scorer) janitor() {
@@ -234,8 +235,9 @@ func (s *Scorer) Record(e storage.RequestLog) {
 	// succeeds — CurrentScore should reflect the freshest computed value for
 	// live enforcement decisions even if SQLite hiccups.
 	s.mu.Lock()
-	s.scores[e.RealIP] = total
-	s.lastSeen[e.RealIP] = s.now()
+	key := ratelimit.ClientKey(e.RealIP) // one score per IPv6 /64 (issue #131)
+	s.scores[key] = total
+	s.lastSeen[key] = s.now()
 	s.mu.Unlock()
 
 	err := s.db.UpsertIPThreatScore(storage.IPThreatScore{
