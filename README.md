@@ -36,7 +36,7 @@
 curl -fsSL https://waf-install.astrareconslabs.com/palisade-waf/install.sh | sudo bash
 ```
 
-This downloads the release binary for your architecture (amd64/arm64), verifies its SHA256 checksum, creates a dedicated non-root system user, installs a systemd unit, and starts the service. The user is named `palisade` and is granted only `CAP_NET_BIND_SERVICE`, so it can bind ports 80/443 without running as root. The installer prompts for an admin email and password, or generates credentials, then seeds them into the database with `palisade setup`.
+This downloads the release binary for your architecture (amd64/arm64), verifies its SHA256 checksum (and, when `cosign` is installed, the signature on `checksums.txt`), creates a dedicated non-root system user, installs a systemd unit, and starts the service. The user is named `palisade` and is granted only `CAP_NET_BIND_SERVICE`, so it can bind ports 80/443 without running as root. The installer prompts for an admin email and password, or generates credentials, then seeds them into the database with `palisade setup`.
 
 Check it's running:
 

@@ -314,6 +314,22 @@ else
 	trap 'rm -rf "$WORKDIR"' EXIT
 
 	curl_get "${DOWNLOAD_BASE}/checksums.txt" -o "${WORKDIR}/checksums.txt"
+
+	# The signature covers checksums.txt, which covers the binary. Optional
+	# because cosign is rarely installed, and older releases have no bundle.
+	if command -v cosign >/dev/null 2>&1; then
+		if curl_get "${DOWNLOAD_BASE}/checksums.txt.sigstore.json" -o "${WORKDIR}/checksums.txt.sigstore.json" 2>/dev/null; then
+			step "Verifying checksums.txt signature (cosign)"
+			cosign verify-blob "${WORKDIR}/checksums.txt" \
+				--bundle "${WORKDIR}/checksums.txt.sigstore.json" \
+				--certificate-identity "https://github.com/${GITHUB_REPO}/.github/workflows/ci.yml@refs/tags/${PALISADE_VERSION}" \
+				--certificate-oidc-issuer https://token.actions.githubusercontent.com ||
+				{ err "checksums.txt signature does not verify, refusing to install"; exit 1; }
+		else
+			warn "${PALISADE_VERSION} has no signature bundle, skipping the cosign check"
+		fi
+	fi
+
 	step "Downloading ${ASSET}"
 	curl_get "${DOWNLOAD_BASE}/${ASSET}" -o "${WORKDIR}/${ASSET}"
 

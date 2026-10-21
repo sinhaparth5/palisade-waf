@@ -186,6 +186,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
+      id-token: write # keyless cosign signing via GitHub OIDC
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -202,6 +203,26 @@ jobs:
         run: |
           make dist VERSION="${GITHUB_REF_NAME}"
           make checksums
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/${{ env.PACKAGE_NAME }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      # checksums.txt lists every binary's SHA256, so its signature covers the
+      # binaries too. The certificate in each bundle names this workflow and tag.
+      - name: Sign checksums and SBOM
+        run: |
+          for f in checksums.txt ${PACKAGE_NAME}.spdx.json; do
+            cosign sign-blob --yes --bundle "dist/$f.sigstore.json" "dist/$f"
+          done
 
       - name: Build release notes
         run: |
@@ -280,6 +301,14 @@ jobs:
           sha256sum --check checksums.txt
           \`\`\`
 
+          \`checksums.txt\` and the SBOM are signed with cosign (keyless, GitHub OIDC). The installer checks the signature when \`cosign\` is installed, or check it yourself:
+
+          \`\`\`bash
+          cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \\
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/ci.yml@${GITHUB_REF}" \\
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          \`\`\`
+
           ## What's inside the binary
 
           Everything is embedded, so no external files are needed at runtime:
@@ -302,6 +331,9 @@ jobs:
             dist/${{ env.PACKAGE_NAME }}-linux-arm64
             dist/${{ env.PACKAGE_NAME }}-windows-amd64.exe
             dist/checksums.txt
+            dist/checksums.txt.sigstore.json
+            dist/${{ env.PACKAGE_NAME }}.spdx.json
+            dist/${{ env.PACKAGE_NAME }}.spdx.json.sigstore.json
 
   docker:
     name: Docker image

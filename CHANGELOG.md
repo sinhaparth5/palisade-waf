@@ -14,22 +14,16 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
-### Changed
-
-- Finished the field-notes theme in the admin UI (#135):
-  - Empty states now show a taped note on the hatched wall.
-  - Amber, purple and violet badges use the highlighter colour, and blue, sky and cyan badges use pencil grey, so every badge follows the theme's three pens and switches with dark mode.
-  - Fixed dark-mode spots that stayed light or became unreadable: the sidebar links, the card header gradient, the Bot Shield tile and the selected rate-limit backend card.
-
-### Fixed
-
-- The database connection builder (Settings → Database connection and `palisade build-dsn`) no longer produces a connection string that its own driver can't read back (#136). It now rejects a port that isn't a number from 1 to 65535, a host that isn't a hostname or IP address, a MySQL username containing `:`, a MySQL password with no username, and extra parameter names other than letters, digits and `_`. Before, these were saved silently and failed only at connect time, or connected with the wrong user or database.
-
 ### Added
 
-- Dark-mode toggle in the admin sidebar, next to Sign out (#134). The choice is saved in the browser and applied before the page first paints, so reloads don't flash light. If browser storage is blocked, the toggle still works for the current page.
-- Fuzz tests for the parsing and validation code (#136): custom WAF rule validation, `BuildDSN`, the User-Agent browser/OS matcher and the access-log escaper. Their seed inputs run with the normal `go test`. To fuzz one, run for example `go test ./internal/storage/ -run '^$' -fuzz FuzzBuildDSN -fuzztime 1m`.
-- CAPTCHA fallback for the bot challenge (#133). Choose Cloudflare Turnstile or hCaptcha under Settings → Bot Protection and enter its site and secret keys. When a browser can't finish the proof-of-work, for example over plain HTTP where `crypto.subtle` is missing, the challenge page shows the CAPTCHA instead. Palisade checks the token with the provider before issuing the bypass cookie. The provider's script loads only when the fallback is used, and the secret key is encrypted at rest along with the other stored secrets.
+- (#133) Turnstile / hCaptcha as challenge fallback
+- (#134) UI: manual dark-mode toggle
+- (#136) Fuzz tests for parsers
+- (#137) Release supply chain: SBOM and signed binaries
+
+### Changed
+
+- (#135) UI: finish the field-notes theme (hatch, tape, badge colours)
 
 ## [2.9.0] - 2026-10-21
 
