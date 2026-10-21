@@ -83,6 +83,7 @@
       max-width: 380px;
       margin-bottom: 28px;
     }
+    .widget[hidden] { display: none; }
     .widget .state { width: 28px; height: 28px; position: relative; flex-shrink: 0; }
     .spinner {
       width: 28px; height: 28px;
@@ -111,6 +112,7 @@
       .widget[data-state="ok"] .check { animation: none; }
       .wordmark, h1, .sub, .widget, .hint { animation: none; }
     }
+    .captcha { margin-top: 20px; min-height: 65px; }
     .hint {
       font-size: 14px;
       color: var(--muted);
@@ -269,28 +271,71 @@
     }
   }
 
-  Promise.all([solve(cfg.nonce), getVisitorId()])
-    .then(function (results) {
-      return fetch('/_cz/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nonce: cfg.nonce, exp: cfg.exp, sig: cfg.sig, solution: results[0], visitor_id: results[1], automation: detectAutomation() })
-      });
-    })
-    .then(function (resp) {
-      if (resp.ok) {
-        setState('ok', 'Verification successful');
-        hint.textContent = 'Redirecting…';
-        setTimeout(function () { window.location.href = safeRedirectUrl(cfg.redirect); }, 400);
-      } else {
-        setState('fail', 'Verification failed');
-        hint.textContent = 'Your browser could not be verified. Refresh the page to try again.';
-      }
-    })
-    .catch(function () {
+  function verify(body) {
+    body.nonce = cfg.nonce;
+    body.exp = cfg.exp;
+    body.sig = cfg.sig;
+    body.automation = detectAutomation();
+    return fetch('/_cz/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (resp) { if (!resp.ok) throw resp; });
+  }
+
+  function passed() {
+    widget.hidden = false;
+    setState('ok', 'Verification successful');
+    hint.textContent = 'Redirecting…';
+    setTimeout(function () { window.location.href = safeRedirectUrl(cfg.redirect); }, 400);
+  }
+
+  var fellBack = false;
+  function failed(err) {
+    if (cfg.captcha && !fellBack) return captchaFallback();
+    widget.hidden = false;
+    if (err instanceof Response) {
+      setState('fail', 'Verification failed');
+      hint.textContent = 'Your browser could not be verified. Refresh the page to try again.';
+    } else {
       setState('fail', 'Something went wrong');
       hint.textContent = 'The check could not be completed. Refresh the page to try again.';
-    });
+    }
+  }
+
+  // CAPTCHA fallback (Turnstile or hCaptcha, when configured): offered once
+  // the proof-of-work can't complete, e.g. no crypto.subtle on plain HTTP.
+  // The provider's script is only fetched on this path.
+  function captchaFallback() {
+    fellBack = true;
+    var c = cfg.captcha;
+    var box = document.createElement('div');
+    box.className = 'captcha';
+    hint.after(box);
+    widget.hidden = true;
+    hint.textContent = 'Complete the check below to continue.';
+    window.czCaptchaReady = function () {
+      window[c.provider].render(box, {
+        sitekey: c.sitekey,
+        callback: function (token) {
+          box.remove();
+          widget.hidden = false;
+          setState('wait', 'Verifying…');
+          hint.textContent = '';
+          verify({ captcha_token: token }).then(passed, failed);
+        }
+      });
+    };
+    var s = document.createElement('script');
+    s.src = c.script + '?onload=czCaptchaReady&render=explicit';
+    s.async = true;
+    s.onerror = failed;
+    document.head.appendChild(s);
+  }
+
+  Promise.all([solve(cfg.nonce), getVisitorId()])
+    .then(function (results) { return verify({ solution: results[0], visitor_id: results[1] }); })
+    .then(passed, failed);
 })();
 </script>
 </body>

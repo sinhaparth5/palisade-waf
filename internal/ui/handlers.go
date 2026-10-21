@@ -2254,6 +2254,7 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 	ec, _ := h.db.GetEmailConfig()
 	tc, _ := h.db.GetTypeSafeConfig()
 	vc, _ := h.db.GetVarnishConfig()
+	captcha, _ := h.db.GetCaptchaConfig()
 	audit, _ := h.db.ListAudit(auditPageSize)
 	apiKeys, _ := h.db.ListAPIKeys()
 	totpEnabled, _ := h.db.TOTPEnabled()
@@ -2279,6 +2280,9 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 		"BotEnabled":             botEnabled,
 		"BotThreshold":           botThreshold,
 		"BotTTL":                 botTTL,
+		"CaptchaProvider":        captcha.Provider,
+		"CaptchaSiteKey":         captcha.SiteKey,
+		"CaptchaSecretSet":       captcha.Secret != "",
 		"RLBackend":              rlBackend,
 		"RedisAddr":              redisAddr,
 		"RedisPasswordSet":       redisPwd != "",
@@ -2430,7 +2434,43 @@ func (h *Handler) SaveBotSettings(c echo.Context) error {
 		ttl = 3600
 	}
 
+	// CAPTCHA fallback. A blank secret keeps the stored one, like the email
+	// token, and the secret is never echoed back into the page.
+	stored, _ := h.db.GetCaptchaConfig()
+	cc := storage.CaptchaConfig{
+		Provider: c.FormValue("captcha_provider"),
+		SiteKey:  strings.TrimSpace(c.FormValue("captcha_site_key")),
+		Secret:   strings.TrimSpace(c.FormValue("captcha_secret")),
+	}
+	if cc.Secret == "" {
+		cc.Secret = stored.Secret
+	}
+	botErr := ""
+	switch {
+	case cc.Provider == "":
+	case !challenge.ValidCaptchaProvider(cc.Provider):
+		botErr = "Unknown CAPTCHA provider."
+	case cc.SiteKey == "" || cc.Secret == "":
+		botErr = "The CAPTCHA fallback needs both a site key and a secret key."
+	}
+
+	data := map[string]any{
+		"AdminPath":        h.cfg.Admin.Path,
+		"BotEnabled":       enabled,
+		"BotThreshold":     threshold,
+		"BotTTL":           ttl,
+		"CaptchaProvider":  cc.Provider,
+		"CaptchaSiteKey":   cc.SiteKey,
+		"CaptchaSecretSet": cc.Secret != "",
+	}
+	if botErr != "" {
+		data["BotError"] = botErr
+		return h.renderPartial(c, "settings", "bot-card", data)
+	}
 	if err := h.db.SetBotSettings(enabled, threshold, ttl); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if err := h.db.SetCaptchaConfig(cc); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
@@ -2438,13 +2478,8 @@ func (h *Handler) SaveBotSettings(c echo.Context) error {
 		h.reloadBot(h.buildChallenger(enabled, threshold, ttl))
 	}
 
-	return h.renderPartial(c, "settings", "bot-card", map[string]any{
-		"AdminPath":    h.cfg.Admin.Path,
-		"BotEnabled":   enabled,
-		"BotThreshold": threshold,
-		"BotTTL":       ttl,
-		"BotSaveOK":    true,
-	})
+	data["BotSaveOK"] = true
+	return h.renderPartial(c, "settings", "bot-card", data)
 }
 
 // SetServiceBotMode sets the per-service bot protection override (inherit / always / off).

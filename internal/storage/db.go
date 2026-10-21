@@ -1125,6 +1125,37 @@ func (db *DB) SetBotSettings(enabled bool, threshold, ttl int) error {
 	return db.setMeta("bot_ttl", strconv.Itoa(ttl))
 }
 
+// CaptchaConfig is the optional CAPTCHA fallback on the bot challenge page
+// (issue #133). Provider is "" (off), "turnstile" or "hcaptcha".
+type CaptchaConfig struct {
+	Provider, SiteKey, Secret string
+}
+
+func (db *DB) GetCaptchaConfig() (CaptchaConfig, error) {
+	var c CaptchaConfig
+	var err error
+	if c.Provider, err = db.getMeta("captcha_provider"); err != nil {
+		return CaptchaConfig{}, err
+	}
+	if c.SiteKey, err = db.getMeta("captcha_site_key"); err != nil {
+		return CaptchaConfig{}, err
+	}
+	if c.Secret, err = db.getSecretMeta("captcha_secret"); err != nil {
+		return CaptchaConfig{}, err
+	}
+	return c, nil
+}
+
+func (db *DB) SetCaptchaConfig(c CaptchaConfig) error {
+	if err := db.setMeta("captcha_provider", c.Provider); err != nil {
+		return err
+	}
+	if err := db.setMeta("captcha_site_key", c.SiteKey); err != nil {
+		return err
+	}
+	return db.setSecretMeta("captcha_secret", c.Secret)
+}
+
 // serviceColumns is shared by ListServices/GetService so their SELECT list
 // and Scan args can't drift out of sync as columns are added.
 const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, redis_mode, login_paths`

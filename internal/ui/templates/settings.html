@@ -115,6 +115,9 @@
   {{if .BotSaveOK}}
   <div class="rounded-md bg-green-50 border border-green-200 text-green-700 text-[13px] px-4 py-3 mb-4">Settings saved and applied. No restart needed.</div>
   {{end}}
+  {{if .BotError}}
+  <div class="rounded-md bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3 mb-4">{{.BotError}}</div>
+  {{end}}
 
   <form hx-post="{{.AdminPath}}/settings/bot" hx-target="#bot-card" hx-swap="outerHTML" class="flex flex-col gap-4">
 
@@ -141,6 +144,29 @@
           <input id="bot_ttl" name="bot_ttl" type="number" min="60" value="{{.BotTTL}}"
                  class="w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] px-3 py-2 outline-hidden focus-green focus:border-brand transition"/>
           <p class="text-[11px] text-slate-400 mt-1">How long a solved challenge stays valid. 3600 = 1 hour.</p>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-[13px] font-semibold text-slate-700 mb-1" for="captcha_provider">CAPTCHA fallback</label>
+        <select id="captcha_provider" name="captcha_provider"
+                class="w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] px-3 py-2 outline-hidden focus-green focus:border-brand transition">
+          <option value="" {{if eq .CaptchaProvider ""}}selected{{end}}>Off</option>
+          <option value="turnstile" {{if eq .CaptchaProvider "turnstile"}}selected{{end}}>Cloudflare Turnstile</option>
+          <option value="hcaptcha" {{if eq .CaptchaProvider "hcaptcha"}}selected{{end}}>hCaptcha</option>
+        </select>
+        <p class="text-[11px] text-slate-400 mt-1">Shown when a browser can't run the proof-of-work, e.g. over plain HTTP or with locked-down JavaScript. The token is verified with the provider before the bypass cookie is issued.</p>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-4">
+        <div class="flex-1">
+          <label class="block text-[13px] font-semibold text-slate-700 mb-1" for="captcha_site_key">Site key</label>
+          <input id="captcha_site_key" name="captcha_site_key" type="text" autocomplete="off" value="{{.CaptchaSiteKey}}"
+                 class="w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] px-3 py-2 outline-hidden focus-green focus:border-brand transition"/>
+        </div>
+        <div class="flex-1">
+          <label class="block text-[13px] font-semibold text-slate-700 mb-1" for="captcha_secret">Secret key{{if .CaptchaSecretSet}} <span class="font-normal text-slate-400">(saved; leave blank to keep)</span>{{end}}</label>
+          <input id="captcha_secret" name="captcha_secret" type="password" autocomplete="off" placeholder="{{if .CaptchaSecretSet}}••••••••••••••••{{end}}"
+                 class="w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] px-3 py-2 outline-hidden focus-green focus:border-brand transition"/>
         </div>
       </div>
     </div>

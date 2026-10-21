@@ -67,6 +67,9 @@ type Challenger struct {
 
 	mu   sync.Mutex
 	used map[string]int64 // redeemed nonce → its exp; enforces single use
+
+	// CAPTCHA fallback, set by WithCaptcha; captchaProvider "" = off.
+	captchaProvider, captchaSiteKey, captchaSecret string
 }
 
 // New creates a Challenger.
@@ -185,12 +188,20 @@ func (c *Challenger) ServePage(w http.ResponseWriter, r *http.Request) {
 
 	// Embed all values as a single JSON object so html/template handles
 	// escaping uniformly rather than per-field.
-	cfg, _ := json.Marshal(map[string]any{
+	page := map[string]any{
 		"nonce":    nonce,
 		"exp":      expiry,
 		"sig":      sig,
 		"redirect": redir,
-	})
+	}
+	if c.captchaProvider != "" {
+		page["captcha"] = map[string]string{
+			"provider": c.captchaProvider,
+			"script":   captchaScripts[c.captchaProvider],
+			"sitekey":  c.captchaSiteKey,
+		}
+	}
+	cfg, _ := json.Marshal(page)
 
 	// Reference ID shown in the page footer (like Cloudflare's Ray ID):
 	// the nonce prefix is enough to find the solve attempt in support cases.
@@ -226,6 +237,9 @@ type verifyRequest struct {
 	// browser reports none of these; any recognized signal means we refuse
 	// the bypass cookie so the client stays challenged. See knownAutomationSignals.
 	Automation []string `json:"automation"`
+	// CaptchaToken is a Turnstile/hCaptcha response token, sent instead of
+	// a PoW solution when the page fell back to the CAPTCHA widget.
+	CaptchaToken string `json:"captcha_token"`
 }
 
 // knownAutomationSignals is the set of leakage tokens the challenge page can
@@ -264,11 +278,13 @@ func firstAutomationSignal(sigs []string) string {
 }
 
 // ServeVerify handles POST /_cz/verify: authenticates the token, checks the
-// PoW solution, and issues a bypass cookie on success.
+// PoW solution (or the CAPTCHA token, when the page fell back to one), and
+// issues a bypass cookie on success.
 func (c *Challenger) ServeVerify(w http.ResponseWriter, r *http.Request) {
 	// This endpoint is reachable unauthenticated — cap the body so a giant
-	// JSON string can't balloon memory. A real verify payload is <1 KiB.
-	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	// JSON string can't balloon memory. A PoW payload is <1 KiB; a CAPTCHA
+	// token adds a few KiB.
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	var req verifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -282,7 +298,12 @@ func (c *Challenger) ServeVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid signature", http.StatusForbidden)
 		return
 	}
-	if !verifyPoW(req.Nonce, req.Solution) {
+	if req.CaptchaToken != "" {
+		if c.captchaProvider == "" || !c.verifyCaptcha(req.CaptchaToken) {
+			http.Error(w, "captcha failed", http.StatusForbidden)
+			return
+		}
+	} else if !verifyPoW(req.Nonce, req.Solution) {
 		http.Error(w, "incorrect solution", http.StatusForbidden)
 		return
 	}
