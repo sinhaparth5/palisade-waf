@@ -369,9 +369,10 @@ func (h *Handler) Handle(c echo.Context) error {
 	h.ratelimitMu.RLock()
 	rlBackend := h.ratelimit
 	h.ratelimitMu.RUnlock()
+	rlKey := ratelimit.ClientKey(clientIP)
 	var rlRes ratelimit.Result
 	if rlBackend != nil {
-		rlRes = rlBackend.AllowScaled(clientIP, adaptiveDecision.RateScale)
+		rlRes = rlBackend.AllowScaled(rlKey, adaptiveDecision.RateScale)
 	} else {
 		rlRes = ratelimit.Result{Allowed: true}
 	}
@@ -394,7 +395,7 @@ func (h *Handler) Handle(c echo.Context) error {
 
 	// 4.5 Per-service rate limit — only if the matched service has its own limit.
 	if app != nil {
-		svRes := h.registry.AllowService(app.Name, clientIP)
+		svRes := h.registry.AllowService(app.Name, rlKey)
 		setRateLimitHeaders(c.Response().Header(), svRes)
 		if !svRes.Allowed {
 			mark("ratelimit")

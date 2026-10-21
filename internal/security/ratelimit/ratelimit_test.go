@@ -212,3 +212,20 @@ func TestJanitorEvictsIdleBuckets(t *testing.T) {
 		t.Fatalf("expected 0 buckets after eviction, got %d", l.TrackedIPs())
 	}
 }
+
+func TestClientKey(t *testing.T) {
+	for in, want := range map[string]string{
+		"203.0.113.5":             "203.0.113.5",
+		"::ffff:203.0.113.5":      "::ffff:203.0.113.5",
+		"2001:db8:1:2:aaaa::1":    "2001:db8:1:2::/64",
+		"2001:DB8:1:2:ffff::ffff": "2001:db8:1:2::/64",
+		"2001:db8:1:3::1":         "2001:db8:1:3::/64",
+		"fe80::1%eth0":            "fe80::/64",
+		"not-an-ip":               "not-an-ip",
+		"":                        "",
+	} {
+		if got := ClientKey(in); got != want {
+			t.Errorf("ClientKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

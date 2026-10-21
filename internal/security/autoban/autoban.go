@@ -23,6 +23,10 @@
 // IPs keep producing blocked log rows forever and must not re-trigger bans or
 // emails. Private, loopback, and link-local addresses are never banned, and
 // an existing admin rule for the IP (allow or block) always wins.
+//
+// IPv6 clients are scored and banned by /64 (ratelimit.ClientKey, issue
+// #131): the ban rule is the /64 CIDR, so rotating addresses inside it
+// neither resets the score nor escapes the ban.
 package autoban
 
 import (
@@ -33,6 +37,7 @@ import (
 	"sync"
 	"time"
 
+	"palisade/internal/security/ratelimit"
 	"palisade/internal/storage"
 )
 
@@ -124,7 +129,7 @@ func (b *Banner) Score(ip string) int {
 	defer b.mu.Unlock()
 	cutoff := b.now().Add(-time.Duration(b.cfg.WindowMinutes) * time.Minute)
 	score := 0
-	for _, ev := range b.hist[ip] {
+	for _, ev := range b.hist[ratelimit.ClientKey(ip)] {
 		if ev.t.After(cutoff) {
 			score += ev.pts
 		}
@@ -187,14 +192,15 @@ func (b *Banner) Record(e storage.RequestLog) {
 	if !bannable(e.RealIP) {
 		return
 	}
-	if _, dup := b.banned[e.RealIP]; dup {
+	key := ratelimit.ClientKey(e.RealIP)
+	if _, dup := b.banned[key]; dup {
 		return
 	}
 
 	window := time.Duration(b.cfg.WindowMinutes) * time.Minute
 	cutoff := b.now().Add(-window)
-	recent := append(pruneEvents(b.hist[e.RealIP], cutoff), ev)
-	b.hist[e.RealIP] = recent
+	recent := append(pruneEvents(b.hist[key], cutoff), ev)
+	b.hist[key] = recent
 
 	score := 0
 	for _, r := range recent {
@@ -206,11 +212,10 @@ func (b *Banner) Record(e storage.RequestLog) {
 
 	// Threshold crossed: mark synchronously so queued events for the same IP
 	// can't trigger a second ban, then do the slow work off this goroutine.
-	b.banned[e.RealIP] = b.now()
-	delete(b.hist, e.RealIP)
+	b.banned[key] = b.now()
+	delete(b.hist, key)
 	reason := banReason(recent, b.cfg.WindowMinutes)
-	ip := e.RealIP
-	b.spawn(func() { b.ban(ip, reason) })
+	b.spawn(func() { b.ban(key, reason) })
 }
 
 // ban writes the block rule, reloads the blocklist, and sends the alert.

@@ -1,6 +1,7 @@
 package autoban
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -340,3 +341,30 @@ func TestHoneypotBansOnFirstHit(t *testing.T) {
 		t.Fatal("private IPs are never banned, honeypot or not")
 	}
 }
+
+func TestIPv6ScoredAndBannedByPrefix(t *testing.T) {
+	db := newFakeStore()
+	now := time.Date(2026, 7, 3, 9, 16, 12, 0, time.UTC)
+	b, notified := testBanner(db, now)
+
+	// Ten rate-limited requests from ten addresses in one /64: one client.
+	for i := 0; i < 10; i++ {
+		ip := "2001:db8:1:2::" + itoa(i+1)
+		if i == 5 && b.Score("2001:db8:1:2:ffff::9") != 5 {
+			t.Fatalf("Score of another address in the /64 = %d, want 5", b.Score("2001:db8:1:2:ffff::9"))
+		}
+		b.Record(blockedEvent(ip, "rate_limited", 0, now.Add(time.Duration(i)*time.Second)))
+	}
+	if db.rules[":2001:db8:1:2::/64"] != "block" {
+		t.Fatalf("rules = %v, want the /64 banned", db.rules)
+	}
+	if len(*notified) != 1 {
+		t.Errorf("notified = %v, want one alert", *notified)
+	}
+	// A neighbouring /64 is a different client.
+	if b.Score("2001:db8:1:3::1") != 0 {
+		t.Error("score leaked into the next /64")
+	}
+}
+
+func itoa(i int) string { return strconv.Itoa(i) }
