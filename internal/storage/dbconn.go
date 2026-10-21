@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,6 +49,10 @@ func BuildDSN(f DBConnFields) (string, error) {
 		return "", err
 	}
 
+	if d.name != "sqlite" && !validDBHost(f.Host) {
+		return "", fmt.Errorf("host %q is not a hostname or IP address", f.Host)
+	}
+
 	switch d.name {
 	case "sqlite":
 		// sqlite has no host/port/credentials — Host doubles as the file
@@ -58,11 +63,24 @@ func BuildDSN(f DBConnFields) (string, error) {
 		return f.Host, nil
 
 	case "mysql":
+		port, err := portOrDefault(f.Port, "3306")
+		if err != nil {
+			return "", err
+		}
+		// The driver writes the user unescaped and splits user:password at
+		// the first colon, so a colon in the user can't round-trip, and it
+		// drops a password that has no user.
+		if strings.Contains(f.Username, ":") {
+			return "", fmt.Errorf("mysql username cannot contain ':'")
+		}
+		if f.Username == "" && f.Password != "" {
+			return "", fmt.Errorf("mysql password needs a username")
+		}
 		cfg := mysql.NewConfig()
 		cfg.User = f.Username
 		cfg.Passwd = f.Password
 		cfg.Net = "tcp"
-		cfg.Addr = net.JoinHostPort(f.Host, portOrDefault(f.Port, "3306"))
+		cfg.Addr = net.JoinHostPort(f.Host, port)
 		cfg.DBName = f.DBName
 		cfg.ParseTime = true
 		if f.SSLMode != "" {
@@ -76,10 +94,14 @@ func BuildDSN(f DBConnFields) (string, error) {
 		return cfg.FormatDSN(), nil
 
 	case "postgres":
+		port, err := portOrDefault(f.Port, "5432")
+		if err != nil {
+			return "", err
+		}
 		u := &url.URL{
 			Scheme: "postgres",
 			User:   url.UserPassword(f.Username, f.Password),
-			Host:   net.JoinHostPort(f.Host, portOrDefault(f.Port, "5432")),
+			Host:   net.JoinHostPort(f.Host, port),
 			Path:   "/" + f.DBName,
 		}
 		q := url.Values{}
@@ -101,11 +123,27 @@ func BuildDSN(f DBConnFields) (string, error) {
 	}
 }
 
-func portOrDefault(port, def string) string {
-	if strings.TrimSpace(port) == "" {
-		return def
+// validDBHost reports whether host is an IP address or uses only hostname
+// characters. Anything else, such as a space or one of "/?#@", ends up in a
+// DSN its own driver can't parse back.
+func validDBHost(host string) bool {
+	if strings.Contains(host, ":") {
+		return net.ParseIP(host) != nil
 	}
-	return port
+	return !strings.ContainsFunc(host, func(r rune) bool {
+		return !strings.ContainsRune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_", r)
+	})
+}
+
+func portOrDefault(port, def string) (string, error) {
+	if strings.TrimSpace(port) == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return "", fmt.Errorf("port %q must be a number from 1 to 65535", port)
+	}
+	return strconv.Itoa(n), nil // Atoi accepts "+1", which a URL port does not
 }
 
 // parseExtraParams parses a "key=value&key2=value2" string (the admin
@@ -124,6 +162,13 @@ func parseExtraParams(extra string) (map[string]string, error) {
 	}
 	out := make(map[string]string, len(vals))
 	for k, v := range vals {
+		// The mysql driver writes keys unescaped, so a "/" or ")" in one
+		// corrupts the DSN. Real driver options are identifiers.
+		if k == "" || strings.ContainsFunc(k, func(r rune) bool {
+			return !strings.ContainsRune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_", r)
+		}) {
+			return nil, fmt.Errorf("parameter name %q must be letters, digits or '_'", k)
+		}
 		if len(v) > 0 {
 			out[k] = v[0]
 		}
