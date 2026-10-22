@@ -14,22 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.9.51] - 2026-10-22
+
 ### Added
 
 - Open crawler files (robots.txt, sitemap, llms.txt) to every client
 
-## [2.9.5] - 2026-10-21
-
-### Added
-
-- (#133) Turnstile / hCaptcha as challenge fallback
-- (#134) UI: manual dark-mode toggle
-- (#136) Fuzz tests for parsers
-- (#137) Release supply chain: SBOM and signed binaries
-
-### Changed
-
-- (#135) UI: finish the field-notes theme (hatch, tape, badge colours)
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.9.5...main
-[2.9.5]: https://github.com/sinhaparth5/palisade-waf/compare/v2.9.0...v2.9.5
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.9.51...main
+[2.9.51]: https://github.com/sinhaparth5/palisade-waf/compare/v2.9.5...v2.9.51
