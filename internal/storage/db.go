@@ -594,6 +594,17 @@ func (db *DB) SetHoneypotPaths(paths []string) error {
 	return db.setMeta("honeypot_paths", strings.Join(paths, "\n"))
 }
 
+// GetTrustedIPs returns the IPs and CIDRs that skip every blocking stage
+// (issue #179); see services.Registry.Trusted.
+func (db *DB) GetTrustedIPs() ([]string, error) {
+	v, err := db.getMeta("trusted_ips")
+	return strings.Fields(v), err
+}
+
+func (db *DB) SetTrustedIPs(entries []string) error {
+	return db.setMeta("trusted_ips", strings.Join(entries, "\n"))
+}
+
 // ── Adaptive enforcement config ──────────────────────────────────────────────
 
 // AdaptiveEnforcementConfig controls threat-score-driven adaptive

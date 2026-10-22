@@ -296,8 +296,10 @@ func (h *Handler) Handle(c echo.Context) error {
 
 	// Crawler files (robots.txt, sitemap, llms.txt) skip the IP, geo,
 	// challenge and rate-limit stages so any client can read them. The WAF
-	// still inspects them (issue #157).
-	open := openPath(r)
+	// still inspects them (issue #157). A trusted IP (issue #179) skips those
+	// stages and the WAF on every path, and never trips a honeypot.
+	trusted := h.registry.Trusted(clientIP)
+	open := trusted || openPath(r)
 
 	// 1. IP blocklist — an explicit admin/autoban decision, and 2. geo
 	// blocklist below, both checked before the bot-challenge gate. An IP
@@ -412,7 +414,7 @@ func (h *Handler) Handle(c echo.Context) error {
 	}
 	// 4.6 Login protection (issue #132): a strict limit on submissions only,
 	// so loading or reloading the login page is never what trips it.
-	if login && r.Method != http.MethodGet && r.Method != http.MethodHead {
+	if login && !trusted && r.Method != http.MethodGet && r.Method != http.MethodHead {
 		lRes := h.registry.AllowLogin(app.Name, rlKey)
 		if !lRes.Allowed {
 			mark("ratelimit")
@@ -437,7 +439,11 @@ func (h *Handler) Handle(c echo.Context) error {
 	if app != nil {
 		checkOpts.AllowLargeJavaScriptUploads = app.AllowLargeJSUploads
 	}
-	result, err := engine.CheckWithOptions(r, clientIP, checkOpts)
+	result := &waf.Result{}
+	var err error
+	if !trusted {
+		result, err = engine.CheckWithOptions(r, clientIP, checkOpts)
+	}
 	if err != nil {
 		mark("waf")
 		log.Printf("waf error: %v", err)
@@ -459,7 +465,7 @@ func (h *Handler) Handle(c echo.Context) error {
 	// 6. Proxy to backend.
 	if app == nil {
 		mark("proxy")
-		h.logRequest(r, appName, clientIP, country, http.StatusBadGateway, h.honeypot(r.URL.Path, http.StatusNotFound, result), time.Since(start), meta)
+		h.logRequest(r, appName, clientIP, country, http.StatusBadGateway, h.honeypot(clientIP, r.URL.Path, http.StatusNotFound, result), time.Since(start), meta)
 		return c.JSON(http.StatusBadGateway, map[string]string{
 			"error": fmt.Sprintf("no backend configured for host %q", r.Host),
 		})
@@ -503,7 +509,7 @@ func (h *Handler) Handle(c echo.Context) error {
 			metrics.CacheResultsTotal.WithLabelValues(appName, strings.ToLower(meta.CacheStatus)).Inc()
 		}
 	}
-	h.logRequest(r, appName, clientIP, country, rw.status, h.honeypot(originalPath, rw.status, result), time.Since(start), meta)
+	h.logRequest(r, appName, clientIP, country, rw.status, h.honeypot(clientIP, originalPath, rw.status, result), time.Since(start), meta)
 	return nil
 }
 
@@ -529,9 +535,10 @@ func openPath(r *http.Request) bool {
 // #130) with the "honeypot" action, which autoban bans on the first hit.
 // Only a 404 counts, so a path a backend really serves (/wp-login.php on a
 // WordPress site) can never fire however the list is set. An unmatched host
-// has no backend to serve anything, so its caller passes 404.
-func (h *Handler) honeypot(path string, status int, result *waf.Result) *waf.Result {
-	if status != http.StatusNotFound || !h.registry.Honeypot(path) {
+// has no backend to serve anything, so its caller passes 404. A trusted IP
+// never fires one.
+func (h *Handler) honeypot(clientIP, path string, status int, result *waf.Result) *waf.Result {
+	if status != http.StatusNotFound || !h.registry.Honeypot(path) || h.registry.Trusted(clientIP) {
 		return result
 	}
 	hit := *result // may be the verdict cache's shared copy

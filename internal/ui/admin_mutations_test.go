@@ -838,6 +838,32 @@ func TestSaveHoneypots(t *testing.T) {
 	}
 }
 
+func TestSaveTrustedIPs(t *testing.T) {
+	env := newAdminEnv(t)
+	rec := env.do("POST", "/admin/settings/trusted-ips", form("trusted_ips", "203.0.113.10\r\n198.51.100.0/24\n203.0.113.10\n"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if got, _ := env.db.GetTrustedIPs(); strings.Join(got, ",") != "203.0.113.10,198.51.100.0/24" {
+		t.Errorf("stored = %v", got)
+	}
+	for ip, want := range map[string]bool{"203.0.113.10": true, "198.51.100.77": true, "203.0.113.11": false} {
+		if env.h.registry.Trusted(ip) != want {
+			t.Errorf("Trusted(%s) != %v without a reload", ip, want)
+		}
+	}
+	for _, bad := range []string{"not-an-ip", "10.0.0.0/33"} {
+		rec = env.do("POST", "/admin/settings/trusted-ips", form("trusted_ips", "192.0.2.1\n"+bad))
+		if !strings.Contains(rec.Body.String(), "is not an IP address") || !strings.Contains(rec.Body.String(), "192.0.2.1") {
+			t.Errorf("%q: no inline error / input lost: %s", bad, rec.Body)
+		}
+	}
+	if got, _ := env.db.GetTrustedIPs(); len(got) != 2 {
+		t.Errorf("rejected save changed the list: %v", got)
+	}
+	if !strings.Contains(env.do("GET", "/admin/settings", nil).Body.String(), "198.51.100.0/24") {
+		t.Error("settings page does not show the saved list")
+	}
+}
+
 func TestSetServiceLoginPaths(t *testing.T) {
 	env := newAdminEnv(t)
 	svc := env.seedService("shop", "shop.example.com")
