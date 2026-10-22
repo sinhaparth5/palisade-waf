@@ -756,15 +756,29 @@ var hopByHop = map[string]bool{
 	"Upgrade":             true,
 }
 
+// credentialHeaders are logged with their value masked: request logs are
+// readable from the admin UI and copied into backups, so they must never
+// hold a live session or token (issue #153).
+var credentialHeaders = map[string]bool{
+	"Authorization": true,
+	"Cookie":        true,
+	"X-Api-Key":     true,
+	"X-Auth-Token":  true,
+}
+
 // captureHeaders serialises all non-hop-by-hop request headers to a compact
 // JSON object. Multiple values for the same header are joined with ", ".
 func captureHeaders(r *http.Request) string {
 	m := make(map[string]string, len(r.Header))
 	for k, v := range r.Header {
-		if hopByHop[k] {
+		switch {
+		case hopByHop[k]:
 			continue
+		case credentialHeaders[k]:
+			m[k] = "[redacted]"
+		default:
+			m[k] = strings.Join(v, ", ")
 		}
-		m[k] = strings.Join(v, ", ")
 	}
 	b, _ := json.Marshal(m)
 	return string(b)
