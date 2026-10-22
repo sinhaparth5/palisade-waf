@@ -68,6 +68,10 @@ KEY_FILE="${VAR_DIR}/certs/self-signed.key"
 # directory (or a waf.db backup) alone must not also hand over the key that
 # decrypts the secrets stored inside it.
 DB_KEY_FILE="/etc/${BINARY_NAME}/db.key"
+# Extra server flags (--trusted-proxies, --warehouse-url, ...) live here, read
+# by the unit as $PALISADE_FLAGS. Created once and never rewritten, so flags
+# added by hand survive the unit being regenerated on every upgrade (#163).
+FLAGS_FILE="/etc/${BINARY_NAME}/${BINARY_NAME}.env"
 
 if [ "$DRY_RUN" = "1" ]; then
 	printf '%s%sDRY RUN%s — no files will be written and no commands executed.\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
@@ -462,6 +466,22 @@ fi
 
 step "Installing systemd units"
 
+if [ -f "${FLAGS_FILE}" ]; then
+	detail "Keeping extra flags in ${FLAGS_FILE}"
+else
+	run mkdir -p "$(dirname "${FLAGS_FILE}")"
+	write_file "${FLAGS_FILE}" <<'FLAGS'
+# Extra flags for the palisade server, appended to the unit's ExecStart.
+# This file is never overwritten by install.sh, so it survives upgrades.
+# Edit, then: sudo systemctl restart palisade
+#
+# Example:
+# PALISADE_FLAGS=--trusted-proxies 10.0.0.0/8,192.168.0.0/16 --prune-interval 24h
+PALISADE_FLAGS=
+FLAGS
+	run chmod 600 "${FLAGS_FILE}"
+fi
+
 write_file "${UNIT_PATH}" <<UNIT
 [Unit]
 Description=Palisade (WAF + reverse proxy)
@@ -473,7 +493,8 @@ Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_USER}
 WorkingDirectory=${VAR_DIR}
-ExecStart=${INSTALL_PATH} ${TLS_FLAGS} --db-driver ${DB_DRIVER} --db '${DB_DSN}' --certs ${VAR_DIR}/certs --retention 30 --db-key-file ${DB_KEY_FILE} --access-log ${ACCESS_LOG_PATH}
+ExecStart=${INSTALL_PATH} ${TLS_FLAGS} --db-driver ${DB_DRIVER} --db '${DB_DSN}' --certs ${VAR_DIR}/certs --retention 30 --db-key-file ${DB_KEY_FILE} --access-log ${ACCESS_LOG_PATH} \$PALISADE_FLAGS
+EnvironmentFile=-${FLAGS_FILE}
 LogsDirectory=palisade
 Restart=on-failure
 RestartSec=5s
@@ -904,6 +925,7 @@ ROWS+=(
 	"$(row 'Service' "sudo systemctl status ${BINARY_NAME}")"
 	"$(row 'Logs' "sudo journalctl -u ${BINARY_NAME} -f")"
 	"$(row 'Access log' "${ACCESS_LOG_PATH}")"
+	"$(row 'Flags' "${FLAGS_FILE}")"
 )
 
 CONTENT_W=${#BOX_TITLE}

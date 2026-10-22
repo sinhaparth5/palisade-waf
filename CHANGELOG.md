@@ -16,6 +16,7 @@ rather than growing this file forever.
 
 ### Fixed
 
+- (#163) Installer upgrade overwrites custom flags in the systemd unit
 - (#152) WAF verdict cache key does not cover request headers
 
 ## [2.9.51] - 2026-10-22
