@@ -334,3 +334,43 @@ func drain(ch chan storage.RequestLog) chan storage.RequestLog {
 	}
 	return ch
 }
+
+// TestLoginReplacesSameBrowserRow checks that logging in again from the same
+// IP and browser replaces its "Registered devices" row even when the device
+// cookie is gone and the browser version changed, while another browser on
+// that IP keeps its own row.
+func TestLoginReplacesSameBrowserRow(t *testing.T) {
+	env := newAdminEnv(t)
+	const ip = "127.0.0.1"
+	oldLinux := "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+	newLinux := "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+	windows := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+	if _, err := env.db.CreateSession(ip, oldLinux, strings.Repeat("a", 32)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.db.CreateSession(ip, windows, strings.Repeat("b", 32)); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("POST", "/admin/login", strings.NewReader(form("email", testAdminEmail, "password", testAdminPassword).Encode()))
+	req.RemoteAddr = ip + ":12345"
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", newLinux)
+	rec := httptest.NewRecorder()
+	env.e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("login: %d", rec.Code)
+	}
+
+	sessions, err := env.db.ListSessions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := map[string]int{}
+	for _, s := range sessions {
+		count[browserOS(s.UserAgent)]++
+	}
+	if count["Chrome on Linux"] != 1 || count["Chrome on Windows"] != 1 {
+		t.Errorf("device rows = %v, want one Chrome on Linux and one Chrome on Windows", count)
+	}
+}
