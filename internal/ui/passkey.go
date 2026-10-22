@@ -147,7 +147,7 @@ func (h *Handler) BeginPasskeyLogin(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "No passkeys are registered."})
 	}
-	entry.waSession = session
+	entry.setSession(session)
 	return c.JSON(http.StatusOK, assertion)
 }
 
@@ -160,12 +160,15 @@ func (h *Handler) FinishPasskeyLogin(c echo.Context) error {
 		return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "Too many failed attempts. Try again later."})
 	}
 	token, entry := h.pendingEntry(c)
-	if entry == nil || entry.waSession == nil {
+	var session *webauthn.SessionData
+	if entry != nil {
+		session = entry.takeSession()
+	}
+	if session == nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Sign-in expired. Enter your password again."})
 	}
 
-	if err := h.passkeys.FinishLogin(c.Request(), *entry.waSession); err != nil {
-		entry.waSession = nil
+	if err := h.passkeys.FinishLogin(c.Request(), *session); err != nil {
 		if h.loginLimiter.fail(ip) {
 			log.Printf("admin login: %s locked out after %d failed attempts", ip, maxLoginFailures)
 			return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "Too many failed attempts. Try again later."})

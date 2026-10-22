@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"palisade/internal/security/totp"
 	"palisade/internal/storage"
 
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/labstack/echo/v4"
 )
 
@@ -355,5 +358,44 @@ func TestTOTPEnrollmentHandlers(t *testing.T) {
 	}
 	if enabled, _ := db.TOTPEnabled(); enabled {
 		t.Fatal("valid code did not disable 2FA")
+	}
+}
+
+// TestTwoFAEntryConcurrentUse hits one pending entry from many goroutines,
+// as parallel requests carrying the same cz_2fa cookie would (issue #161).
+// Run with -race; each one-shot value must also be handed out exactly once.
+func TestTwoFAEntryConcurrentUse(t *testing.T) {
+	tests := []struct {
+		name string
+		prep func(*twoFAEntry)
+		take func(*twoFAEntry) bool
+	}{
+		{"email code", func(e *twoFAEntry) { e.setEmailCode("123456") },
+			func(e *twoFAEntry) bool { return e.takeEmailCode("123456") }},
+		{"email resend", func(*twoFAEntry) {},
+			func(e *twoFAEntry) bool { return e.setEmailCode("123456") == 0 }},
+		{"passkey session", func(e *twoFAEntry) { e.setSession(&webauthn.SessionData{}) },
+			func(e *twoFAEntry) bool { return e.takeSession() != nil }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &twoFAEntry{expires: time.Now().Add(time.Minute)}
+			tt.prep(e)
+			var wins atomic.Int32
+			var wg sync.WaitGroup
+			for range 32 {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					if tt.take(e) {
+						wins.Add(1)
+					}
+				}()
+			}
+			wg.Wait()
+			if got := wins.Load(); got != 1 {
+				t.Fatalf("succeeded %d times, want exactly 1", got)
+			}
+		})
 	}
 }

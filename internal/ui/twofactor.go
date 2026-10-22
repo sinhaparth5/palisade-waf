@@ -42,8 +42,12 @@ const (
 )
 
 // twoFAEntry is one password-verified login waiting for its second factor.
+// Concurrent requests share one entry, so every field but expires (set once
+// at create) is read and written under mu, only through the methods below
+// (issue #161).
 type twoFAEntry struct {
 	expires          time.Time
+	mu               sync.Mutex
 	emailCode        string // emailed recovery code, "" until requested
 	emailCodeExpires time.Time
 	emailSentAt      time.Time
@@ -56,6 +60,54 @@ type twoFAEntry struct {
 type twoFAStore struct {
 	mu sync.Mutex
 	m  map[string]*twoFAEntry
+}
+
+// takeEmailCode reports whether code matches the live emailed code, and
+// clears it on a match so it is single use.
+func (e *twoFAEntry) takeEmailCode(code string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.emailCode == "" || !time.Now().Before(e.emailCodeExpires) ||
+		subtle.ConstantTimeCompare([]byte(e.emailCode), []byte(code)) != 1 {
+		return false
+	}
+	e.emailCode = ""
+	return true
+}
+
+// setEmailCode stores a freshly sent code, or returns how long until another
+// may be sent.
+func (e *twoFAEntry) setEmailCode(code string) time.Duration {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if since := time.Since(e.emailSentAt); since < emailCodeResendWait {
+		return emailCodeResendWait - since
+	}
+	now := time.Now()
+	e.emailCode, e.emailCodeExpires, e.emailSentAt = code, now.Add(emailCodeTTL), now
+	return 0
+}
+
+func (e *twoFAEntry) clearEmailCode() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.emailCode = ""
+}
+
+func (e *twoFAEntry) setSession(s *webauthn.SessionData) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.waSession = s
+}
+
+// takeSession returns the passkey ceremony session and clears it, so one
+// ceremony is finished at most once.
+func (e *twoFAEntry) takeSession() *webauthn.SessionData {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	s := e.waSession
+	e.waSession = nil
+	return s
 }
 
 func newTwoFAStore() *twoFAStore { return &twoFAStore{m: make(map[string]*twoFAEntry)} }
@@ -207,12 +259,7 @@ func (h *Handler) verifySecondFactor(entry *twoFAEntry, code string) bool {
 		return true
 	}
 
-	if entry.emailCode != "" && time.Now().Before(entry.emailCodeExpires) &&
-		subtle.ConstantTimeCompare([]byte(entry.emailCode), []byte(strings.TrimSpace(code))) == 1 {
-		entry.emailCode = "" // single use
-		return true
-	}
-	return false
+	return entry.takeEmailCode(strings.TrimSpace(code))
 }
 
 // LoginTOTPEmail emails a one-time recovery code for the pending login via
@@ -231,20 +278,15 @@ func (h *Handler) LoginTOTPEmail(c echo.Context) error {
 	if h.sendLoginCode == nil || !h.emailRecoveryAvailable() {
 		return h.renderLoginTOTP(c, http.StatusOK, "Email recovery is not configured.", "")
 	}
-	if since := time.Since(entry.emailSentAt); since < emailCodeResendWait {
-		wait := (emailCodeResendWait - since).Round(time.Second)
-		return h.renderLoginTOTP(c, http.StatusOK, "", fmt.Sprintf("A code was already sent. You can request another in %s.", wait))
-	}
-
 	code, err := randomDigits(6)
 	if err != nil {
 		return h.renderLoginTOTP(c, http.StatusOK, "Internal error. Please try again.", "")
 	}
-	entry.emailCode = code
-	entry.emailCodeExpires = time.Now().Add(emailCodeTTL)
-	entry.emailSentAt = time.Now()
+	if wait := entry.setEmailCode(code); wait > 0 {
+		return h.renderLoginTOTP(c, http.StatusOK, "", fmt.Sprintf("A code was already sent. You can request another in %s.", wait.Round(time.Second)))
+	}
 	if err := h.sendLoginCode(code); err != nil {
-		entry.emailCode = ""
+		entry.clearEmailCode()
 		log.Printf("admin login: sending 2FA recovery code failed: %v", err)
 		return h.renderLoginTOTP(c, http.StatusOK, "Sending the code failed. Check the email settings.", "")
 	}
