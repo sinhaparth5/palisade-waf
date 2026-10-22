@@ -319,7 +319,7 @@ func migrateAPIKeysTable(source, target *DB, overriding bool) (int, error) {
 	// key_hash is deliberately included here (unlike ListAPIKeys, which
 	// never selects it for display purposes) — without it a migrated key
 	// would be a useless row that can never authenticate again.
-	rows, err := source.query(`SELECT id, name, key_prefix, key_hash, created_at, last_used_at FROM api_keys`)
+	rows, err := source.query(`SELECT id, name, key_prefix, key_hash, read_only, created_at, last_used_at FROM api_keys`)
 	if err != nil {
 		return 0, err
 	}
@@ -329,14 +329,15 @@ func migrateAPIKeysTable(source, target *DB, overriding bool) (int, error) {
 	for rows.Next() {
 		var id int
 		var name, prefix, hash string
+		var readOnly bool
 		var createdAt time.Time
 		var lastUsed sql.NullTime
-		if err := rows.Scan(&id, &name, &prefix, &hash, &createdAt, &lastUsed); err != nil {
+		if err := rows.Scan(&id, &name, &prefix, &hash, &readOnly, &createdAt, &lastUsed); err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO api_keys (id, name, key_prefix, key_hash, created_at, last_used_at)%s VALUES (%s)`,
-			overridingClause(overriding), placeholders(6))
-		if _, err := target.exec(q, id, name, prefix, hash, createdAt, lastUsed); err != nil {
+		q := fmt.Sprintf(`INSERT INTO api_keys (id, name, key_prefix, key_hash, read_only, created_at, last_used_at)%s VALUES (%s)`,
+			overridingClause(overriding), placeholders(7))
+		if _, err := target.exec(q, id, name, prefix, hash, boolToInt(readOnly), createdAt, lastUsed); err != nil {
 			return n, err
 		}
 		n++
