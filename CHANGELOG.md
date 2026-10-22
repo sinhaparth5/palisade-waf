@@ -16,6 +16,7 @@ rather than growing this file forever.
 
 ### Fixed
 
+- (#154) Client IP taken from the leftmost X-Forwarded-For entry
 - (#163) Installer upgrade overwrites custom flags in the systemd unit
 - (#152) WAF verdict cache key does not cover request headers
 

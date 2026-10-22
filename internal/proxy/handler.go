@@ -189,7 +189,7 @@ func NewHandler(registry *services.Registry, engine *waf.Engine, wafByService ma
 		challenger:     ch,
 		scorer:         scorer,
 		adaptive:       adaptivePolicy,
-		trustedProxies: parseTrustedProxyCIDRs(trustedProxyCIDRs),
+		trustedProxies: ParseTrustedProxyCIDRs(trustedProxyCIDRs),
 	}
 }
 
@@ -824,7 +824,9 @@ func isCloudflareIP(ip string) bool {
 	return false
 }
 
-func parseTrustedProxyCIDRs(cidrs []string) []*net.IPNet {
+// ParseTrustedProxyCIDRs parses --trusted-proxies, logging and skipping
+// invalid entries.
+func ParseTrustedProxyCIDRs(cidrs []string) []*net.IPNet {
 	trusted := make([]*net.IPNet, 0, len(cidrs))
 	for _, cidr := range cidrs {
 		cidr = strings.TrimSpace(cidr)
@@ -842,31 +844,70 @@ func parseTrustedProxyCIDRs(cidrs []string) []*net.IPNet {
 }
 
 func (h *Handler) realIP(r *http.Request) string {
-	remoteIP := socketPeerIP(r.RemoteAddr)
+	return ClientIP(r, h.trustedProxies)
+}
 
-	// Only trust CF-Connecting-IP when the connection actually came from Cloudflare.
-	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" && isCloudflareIP(remoteIP) {
-		return normalizeIP(strings.TrimSpace(ip))
-	}
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" && h.isTrustedProxy(remoteIP) {
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return normalizeIP(strings.TrimSpace(xff[:idx]))
+// ClientIP resolves the real client address of r. CF-Connecting-IP is
+// trusted only from a Cloudflare peer, and X-Forwarded-For/X-Real-IP only
+// from a peer inside trusted. Every forwarded value must parse as an IP;
+// anything else falls back to the socket peer. Shared with the admin UI's
+// login throttling so both resolve the same address.
+func ClientIP(r *http.Request, trusted []*net.IPNet) string {
+	remoteIP := socketPeerIP(r.RemoteAddr)
+	if isCloudflareIP(remoteIP) {
+		if ip := validIP(r.Header.Get("CF-Connecting-IP")); ip != "" {
+			return ip
 		}
-		return normalizeIP(strings.TrimSpace(xff))
 	}
-	if ip := r.Header.Get("X-Real-IP"); ip != "" && h.isTrustedProxy(remoteIP) {
-		return normalizeIP(strings.TrimSpace(ip))
+	if inNets(remoteIP, trusted) {
+		if ip := forwardedFor(r.Header, trusted); ip != "" {
+			return ip
+		}
+		if ip := validIP(r.Header.Get("X-Real-IP")); ip != "" {
+			return ip
+		}
 	}
 	return normalizeIP(remoteIP)
 }
 
-func (h *Handler) isTrustedProxy(remoteIP string) bool {
-	parsed := net.ParseIP(remoteIP)
+// forwardedFor returns the client X-Forwarded-For names (issue #154). Each
+// proxy appends the address it received from, so only the right end of the
+// chain was written by trusted proxies; everything left of the first
+// untrusted address is whatever the client sent. Walking from the right and
+// stopping there means a client can't choose its own address by sending
+// the header itself. A chain of only trusted hops yields its leftmost.
+func forwardedFor(h http.Header, trusted []*net.IPNet) string {
+	hops := strings.Split(strings.Join(h.Values("X-Forwarded-For"), ","), ",")
+	last := ""
+	for i := len(hops) - 1; i >= 0; i-- {
+		ip := validIP(hops[i])
+		if ip == "" {
+			break
+		}
+		last = ip
+		if !inNets(ip, trusted) {
+			break
+		}
+	}
+	return last
+}
+
+// validIP returns s trimmed and normalized when it is an IP address, else "".
+func validIP(s string) string {
+	s = strings.TrimSpace(s)
+	if net.ParseIP(s) == nil {
+		return ""
+	}
+	return normalizeIP(s)
+}
+
+func inNets(ip string, nets []*net.IPNet) bool {
+	parsed := net.ParseIP(ip)
 	if parsed == nil {
 		return false
 	}
-	for _, cidr := range h.trustedProxies {
-		if cidr.Contains(parsed) {
+	for _, n := range nets {
+		if n.Contains(parsed) {
 			return true
 		}
 	}

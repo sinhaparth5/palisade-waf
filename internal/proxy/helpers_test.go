@@ -27,7 +27,7 @@ func TestTLSInfo(t *testing.T) {
 }
 
 func TestIPHelpers(t *testing.T) {
-	if got := parseTrustedProxyCIDRs([]string{" 10.0.0.0/8 ", "", "bogus", "::1/128"}); len(got) != 2 {
+	if got := ParseTrustedProxyCIDRs([]string{" 10.0.0.0/8 ", "", "bogus", "::1/128"}); len(got) != 2 {
 		t.Errorf("trusted CIDRs = %v", got)
 	}
 	for in, want := range map[string]string{"1.2.3.4:80": "1.2.3.4", "no-port": "no-port", "[::1]:80": "::1"} {
@@ -40,9 +40,42 @@ func TestIPHelpers(t *testing.T) {
 			t.Errorf("normalizeIP(%q) = %q", in, got)
 		}
 	}
-	h := &Handler{}
-	if h.isTrustedProxy("not-an-ip") {
+	if inNets("not-an-ip", ParseTrustedProxyCIDRs([]string{"0.0.0.0/0"})) {
 		t.Error("unparseable peer trusted")
+	}
+}
+
+// TestClientIP pins issue #154: forwarded addresses come from the right end
+// of the chain, which only trusted proxies wrote, and must be real IPs.
+func TestClientIP(t *testing.T) {
+	trusted := ParseTrustedProxyCIDRs([]string{"192.0.2.0/24"})
+	cases := []struct {
+		name, peer string
+		hdr        map[string][]string
+		want       string
+	}{
+		{"untrusted peer ignores headers", "203.0.113.7:1", map[string][]string{"X-Forwarded-For": {"10.0.0.1"}, "X-Real-Ip": {"10.0.0.2"}}, "203.0.113.7"},
+		{"single hop", "192.0.2.10:1", map[string][]string{"X-Forwarded-For": {"203.0.113.7"}}, "203.0.113.7"},
+		{"client-sent entry left of real one", "192.0.2.10:1", map[string][]string{"X-Forwarded-For": {"1.1.1.1, 203.0.113.7"}}, "203.0.113.7"},
+		{"trusted hops skipped", "192.0.2.10:1", map[string][]string{"X-Forwarded-For": {"1.1.1.1, 203.0.113.7, 192.0.2.20"}}, "203.0.113.7"},
+		{"split across header lines", "192.0.2.10:1", map[string][]string{"X-Forwarded-For": {"1.1.1.1", "203.0.113.7"}}, "203.0.113.7"},
+		{"all hops trusted", "192.0.2.10:1", map[string][]string{"X-Forwarded-For": {"192.0.2.30, 192.0.2.20"}}, "192.0.2.30"},
+		{"garbage stops the walk", "192.0.2.10:1", map[string][]string{"X-Forwarded-For": {"evil"}}, "192.0.2.10"},
+		{"garbage X-Real-IP ignored", "192.0.2.10:1", map[string][]string{"X-Real-Ip": {"evil"}}, "192.0.2.10"},
+		{"X-Real-IP from trusted peer", "192.0.2.10:1", map[string][]string{"X-Real-Ip": {"203.0.113.7"}}, "203.0.113.7"},
+		{"mapped IPv4 normalized", "192.0.2.10:1", map[string][]string{"X-Forwarded-For": {"::ffff:203.0.113.7"}}, "203.0.113.7"},
+		{"CF header from Cloudflare", "173.245.48.1:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.7"}}, "203.0.113.7"},
+		{"CF header from elsewhere", "203.0.113.9:1", map[string][]string{"Cf-Connecting-Ip": {"1.1.1.1"}}, "203.0.113.9"},
+	}
+	for _, tc := range cases {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = tc.peer
+		for k, v := range tc.hdr {
+			r.Header[k] = v
+		}
+		if got := ClientIP(r, trusted); got != tc.want {
+			t.Errorf("%s: ClientIP = %q, want %q", tc.name, got, tc.want)
+		}
 	}
 }
 

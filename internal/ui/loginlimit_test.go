@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"palisade/internal/proxy"
 )
 
 // fixedClock lets tests advance the limiter's notion of time.
@@ -101,7 +103,7 @@ func TestClientIPIgnoresSpoofedHeaders(t *testing.T) {
 }
 
 func TestClientIPHonorsTrustedProxy(t *testing.T) {
-	h := &Handler{trustedNets: parseTrustedNets([]string{"192.0.2.0/24"})}
+	h := &Handler{trustedNets: proxy.ParseTrustedProxyCIDRs([]string{"192.0.2.0/24"})}
 
 	req := httptest.NewRequest("POST", "/admin/login", nil)
 	req.RemoteAddr = "192.0.2.10:4711"
