@@ -41,7 +41,7 @@ func TestMigrateConfigTo(t *testing.T) {
 	if err := source.AddGeoRule("", "ZZ", "block"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := source.CreateAPIKey("key1", "cwaf_abc", "somehash", false); err != nil {
+	if _, err := source.CreateAPIKey("key1", "cwaf_abc", "somehash", true); err != nil {
 		t.Fatal(err)
 	}
 	if err := source.DisableWAFRule(942100, "false positive"); err != nil {
@@ -100,7 +100,7 @@ func TestMigrateConfigTo(t *testing.T) {
 		t.Errorf("target ip_rules = %+v, %v", rules, err)
 	}
 	keys, err := target.ListAPIKeys()
-	if err != nil || len(keys) != 1 || keys[0].Name != "key1" {
+	if err != nil || len(keys) != 1 || keys[0].Name != "key1" || !keys[0].ReadOnly {
 		t.Errorf("target api_keys = %+v, %v", keys, err)
 	}
 	wh, err := target.GetWebhookConfig()

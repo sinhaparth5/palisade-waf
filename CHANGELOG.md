@@ -16,6 +16,7 @@ rather than growing this file forever.
 
 ### Fixed
 
+- (#158) Backend migration drops the API key read-only flag
 - (#170) Registered devices lists the same browser twice after re-login
 - (#157) Crawler open paths skip WAF header inspection
 - (#156) Autoban bans are permanent and can be triggered by cross-site subresource requests
