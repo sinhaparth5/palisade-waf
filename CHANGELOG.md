@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-10-22
+
 ### Fixed
 
 - (#176) Challenge page reads its config back from the DOM
@@ -30,11 +32,5 @@ rather than growing this file forever.
 - (#163) Installer upgrade overwrites custom flags in the systemd unit
 - (#152) WAF verdict cache key does not cover request headers
 
-## [2.9.51] - 2026-10-22
-
-### Added
-
-- Open crawler files (robots.txt, sitemap, llms.txt) to every client
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.9.51...main
-[2.9.51]: https://github.com/sinhaparth5/palisade-waf/compare/v2.9.5...v2.9.51
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.0...main
+[2.10.0]: https://github.com/sinhaparth5/palisade-waf/compare/v2.9.51...v2.10.0
