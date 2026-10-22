@@ -519,7 +519,19 @@ func (h *Handler) startSession(c echo.Context, ip string) error {
 		rand.Read(b) //nolint — never errors on modern platforms
 		deviceID = hex.EncodeToString(b)
 	}
-	token, err := h.db.CreateSession(ip, c.Request().UserAgent(), deviceID)
+	// A lost device cookie (cleared cookies, another hostname, private
+	// window) mints a new ID, so also replace rows that look like this
+	// browser: same IP and same "Browser on OS" label. The label ignores the
+	// version, so a browser update doesn't count as a new device either.
+	ua := c.Request().UserAgent()
+	if sessions, err := h.db.ListSessions(); err == nil {
+		for _, s := range sessions {
+			if s.IP == ip && browserOS(s.UserAgent) == browserOS(ua) {
+				h.db.DeleteSession(s.Token) //nolint — best effort, a leftover row is only cosmetic
+			}
+		}
+	}
+	token, err := h.db.CreateSession(ip, ua, deviceID)
 	if err != nil {
 		return err
 	}
