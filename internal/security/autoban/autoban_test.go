@@ -16,6 +16,8 @@ type fakeStore struct {
 	cfg   storage.AutobanConfig
 	rules map[string]string // "app:ip" → rule_type
 	notes map[string]string // ip → note
+
+	expiredBefore time.Time // last ExpireAutobans cutoff
 }
 
 func newFakeStore() *fakeStore {
@@ -38,6 +40,13 @@ func (f *fakeStore) AddIPRuleWithNote(appName, ip, ruleType, note string) error 
 	f.rules[appName+":"+ip] = ruleType
 	f.notes[ip] = note
 	return nil
+}
+
+func (f *fakeStore) ExpireAutobans(cutoff time.Time) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.expiredBefore = cutoff
+	return 1, nil
 }
 
 func (f *fakeStore) banNote(ip string) string {
@@ -368,3 +377,53 @@ func TestIPv6ScoredAndBannedByPrefix(t *testing.T) {
 }
 
 func itoa(i int) string { return strconv.Itoa(i) }
+
+// TestCrossSiteSubresourceDoesNotScore pins issue #156: a third-party page
+// making a visitor's browser fetch payload URLs must not get them banned,
+// while a top-level navigation still scores.
+func TestCrossSiteSubresourceDoesNotScore(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name    string
+		headers string
+		banned  bool
+	}{
+		{"no fetch metadata", `{"Accept":"*/*"}`, true},
+		{"cross-site image", `{"Sec-Fetch-Site":"cross-site","Sec-Fetch-Mode":"no-cors","Sec-Fetch-Dest":"image"}`, false},
+		{"cross-site iframe", `{"Sec-Fetch-Site":"cross-site","Sec-Fetch-Mode":"navigate","Sec-Fetch-Dest":"iframe"}`, false},
+		{"cross-site top-level navigation", `{"Sec-Fetch-Site":"cross-site","Sec-Fetch-Mode":"navigate","Sec-Fetch-Dest":"document"}`, true},
+		{"same-origin fetch", `{"Sec-Fetch-Site":"same-origin","Sec-Fetch-Mode":"cors","Sec-Fetch-Dest":"empty"}`, true},
+	}
+	for _, tc := range cases {
+		db := newFakeStore()
+		b, _ := testBanner(db, now)
+		for i := 0; i < 2; i++ {
+			e := blockedEvent("203.0.113.7", "deny", 942100, now.Add(time.Duration(i)*time.Second))
+			e.HeadersJSON = tc.headers
+			b.Record(e)
+		}
+		if got := db.rules[":203.0.113.7"] == "block"; got != tc.banned {
+			t.Errorf("%s: banned = %v, want %v", tc.name, got, tc.banned)
+		}
+	}
+}
+
+func TestBansExpire(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	db := newFakeStore()
+	b, _ := testBanner(db, now)
+	reloaded := false
+	b.reload = func() { reloaded = true }
+	b.expire()
+	if !db.expiredBefore.Equal(now.Add(-24*time.Hour)) || !reloaded {
+		t.Errorf("cutoff = %v reloaded = %v, want 24h before now and a reload", db.expiredBefore, reloaded)
+	}
+
+	db = newFakeStore()
+	db.cfg.BanHours = 0
+	b, _ = testBanner(db, now)
+	b.expire()
+	if !db.expiredBefore.IsZero() {
+		t.Error("BanHours 0 must keep bans forever")
+	}
+}

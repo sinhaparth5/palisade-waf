@@ -1,5 +1,5 @@
-// Package autoban turns repeat offenders and severe attackers into permanent
-// IP block rules. It watches the stream of logged requests (fed from the
+// Package autoban turns repeat offenders and severe attackers into IP block
+// rules that expire after the configured ban duration (issue #156). It watches the stream of logged requests (fed from the
 // storage log worker via DB.SetAutobanFn), scores each blocked event per
 // client IP over a sliding window, and when the configured threshold is
 // crossed it writes a global block rule (visible on the IP Rules page),
@@ -24,12 +24,18 @@
 // emails. Private, loopback, and link-local addresses are never banned, and
 // an existing admin rule for the IP (allow or block) always wins.
 //
+// Cross-site subresource requests (Sec-Fetch-Site: cross-site on anything
+// but a top-level navigation) never score either: a third-party page can
+// make a visitor's browser fetch payload URLs from a protected site through
+// <img>/<iframe>/fetch, and that must not get the visitor banned.
+//
 // IPv6 clients are scored and banned by /64 (ratelimit.ClientKey, issue
 // #131): the ban rule is the /64 CIDR, so rotating addresses inside it
 // neither resets the score nor escapes the ban.
 package autoban
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -57,6 +63,7 @@ type store interface {
 	GetAutobanConfig() (storage.AutobanConfig, error)
 	GetIPRuleType(appName, ip string) (string, error)
 	AddIPRuleWithNote(appName, ip, ruleType, note string) error
+	ExpireAutobans(cutoff time.Time) (int64, error)
 }
 
 type event struct {
@@ -161,6 +168,9 @@ func (b *Banner) Record(e storage.RequestLog) {
 	if strings.HasPrefix(e.Action, "ip_blocked") || strings.HasPrefix(e.Action, "geo_blocked") {
 		return
 	}
+	if crossSiteSubresource(e.HeadersJSON) {
+		return
+	}
 
 	ev := event{t: e.Timestamp}
 	switch {
@@ -252,6 +262,7 @@ func (b *Banner) janitor() {
 		select {
 		case <-ticker.C:
 			b.sweep()
+			b.expire()
 		case <-b.stop:
 			return
 		}
@@ -277,6 +288,46 @@ func (b *Banner) sweep() {
 			delete(b.banned, ip)
 		}
 	}
+}
+
+// expire removes bans older than the configured duration and reloads the
+// blocklist when any went. The DB call runs outside the lock.
+func (b *Banner) expire() {
+	b.mu.Lock()
+	hours := b.cfg.BanHours
+	b.mu.Unlock()
+	if hours <= 0 {
+		return
+	}
+	n, err := b.db.ExpireAutobans(b.now().Add(-time.Duration(hours) * time.Hour))
+	if err != nil {
+		log.Printf("autoban: expire bans: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("autoban: %d ban(s) expired", n)
+		if b.reload != nil {
+			b.reload()
+		}
+	}
+}
+
+// crossSiteSubresource reports whether a logged request was made by a
+// browser on behalf of another site's page rather than as a top-level
+// navigation. Sec-Fetch-* are forbidden header names a page script cannot
+// set, so a browser's values are honest.
+// ponytail: a non-browser client can send the same headers to avoid scoring;
+// it still gets blocked per request, it just isn't banned.
+func crossSiteSubresource(headersJSON string) bool {
+	if !strings.Contains(headersJSON, "Sec-Fetch-Site") {
+		return false
+	}
+	var h map[string]string
+	if json.Unmarshal([]byte(headersJSON), &h) != nil {
+		return false
+	}
+	return h["Sec-Fetch-Site"] == "cross-site" &&
+		(h["Sec-Fetch-Mode"] != "navigate" || h["Sec-Fetch-Dest"] != "document")
 }
 
 func pruneEvents(evs []event, cutoff time.Time) []event {

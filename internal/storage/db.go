@@ -515,15 +515,16 @@ func (db *DB) CountIPRulesByType() (blockCount, allowCount int, err error) {
 // the meta table and managed from the IP Rules page.
 type AutobanConfig struct {
 	Enabled       bool
-	Threshold     int // points within the window that trigger a permanent ban
+	Threshold     int // points within the window that trigger a ban
 	WindowMinutes int // sliding window size
+	BanHours      int // how long a ban lasts; 0 = never expires (issue #156)
 }
 
-// DefaultAutobanConfig is used when nothing is stored yet: enabled, ban at 10
-// points in 10 minutes (≈2 critical WAF hits, 4 generic WAF hits, or 10
-// rate-limited requests — see autoban's scoring).
+// DefaultAutobanConfig is used when nothing is stored yet: enabled, ban for
+// 24 hours at 10 points in 10 minutes (≈2 critical WAF hits, 4 generic WAF
+// hits, or 10 rate-limited requests — see autoban's scoring).
 func DefaultAutobanConfig() AutobanConfig {
-	return AutobanConfig{Enabled: true, Threshold: 10, WindowMinutes: 10}
+	return AutobanConfig{Enabled: true, Threshold: 10, WindowMinutes: 10, BanHours: 24}
 }
 
 func (db *DB) GetAutobanConfig() (AutobanConfig, error) {
@@ -543,6 +544,11 @@ func (db *DB) GetAutobanConfig() (AutobanConfig, error) {
 			cfg.WindowMinutes = n
 		}
 	}
+	if v, _ := db.getMeta("autoban_ban_hours"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.BanHours = n
+		}
+	}
 	return cfg, nil
 }
 
@@ -557,7 +563,24 @@ func (db *DB) SetAutobanConfig(cfg AutobanConfig) error {
 	if err := db.setMeta("autoban_threshold", strconv.Itoa(cfg.Threshold)); err != nil {
 		return err
 	}
-	return db.setMeta("autoban_window_min", strconv.Itoa(cfg.WindowMinutes))
+	if err := db.setMeta("autoban_window_min", strconv.Itoa(cfg.WindowMinutes)); err != nil {
+		return err
+	}
+	return db.setMeta("autoban_ban_hours", strconv.Itoa(cfg.BanHours))
+}
+
+// ExpireAutobans deletes automatic ban rules created before cutoff and
+// returns how many were removed. Only autoban's own global rules match, so
+// admin and API rules never expire.
+func (db *DB) ExpireAutobans(cutoff time.Time) (int64, error) {
+	res, err := db.exec(
+		`DELETE FROM ip_rules WHERE app_name = '' AND rule_type = 'block' AND note LIKE 'Auto-banned%' AND created_at < ?`,
+		cutoff.UTC(),
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 // GetHoneypotPaths returns the honeypot path list (issue #130); see
