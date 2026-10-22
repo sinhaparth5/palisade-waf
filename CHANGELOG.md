@@ -16,6 +16,7 @@ rather than growing this file forever.
 
 ### Fixed
 
+- (#160) Cloudflare fingerprint headers trusted from any peer
 - (#159) Login path protection matches exact paths only
 - (#158) Backend migration drops the API key read-only flag
 - (#170) Registered devices lists the same browser twice after re-login

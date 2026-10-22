@@ -241,17 +241,7 @@ func (h *Handler) Handle(c echo.Context) error {
 	// Bot signal analysis + TLS fingerprints. Analyze is header-only unless
 	// the UA claims a trusted crawler, which it verifies against the source.
 	botAnalysis := bot.Analyze(r, clientIP, asnNum)
-	// JA4 (primary) and JA3 (legacy): prefer the Cloudflare headers (only set
-	// when RemoteAddr is a CF IP), then fall back to the per-connection store
-	// populated at TLS handshake time.
-	ja3Hash := r.Header.Get("Cf-Ja3-Fp")
-	if ja3Hash == "" {
-		ja3Hash = ja3pkg.Get(r.RemoteAddr)
-	}
-	ja4Fp := r.Header.Get("Cf-Ja4")
-	if ja4Fp == "" {
-		ja4Fp = ja4pkg.Get(r.RemoteAddr)
-	}
+	ja3Hash, ja4Fp := tlsFingerprints(r)
 
 	// challengerMu guards live hot-reloads from the Settings page. Fetched
 	// before meta so the FingerprintJS visitor ID (bound into the bypass
@@ -820,6 +810,24 @@ func init() {
 			cfCIDRs = append(cfCIDRs, network)
 		}
 	}
+}
+
+// tlsFingerprints returns the client's JA3 (legacy) and JA4 (primary) TLS
+// fingerprints. Cloudflare's Cf-Ja3-Fp/Cf-Ja4 headers win, but only when the
+// socket peer is a Cloudflare IP, like CF-Connecting-IP (issue #160); anyone
+// else could send them. Otherwise the per-connection store populated at TLS
+// handshake time is used.
+func tlsFingerprints(r *http.Request) (ja3Hash, ja4Fp string) {
+	if isCloudflareIP(socketPeerIP(r.RemoteAddr)) {
+		ja3Hash, ja4Fp = r.Header.Get("Cf-Ja3-Fp"), r.Header.Get("Cf-Ja4")
+	}
+	if ja3Hash == "" {
+		ja3Hash = ja3pkg.Get(r.RemoteAddr)
+	}
+	if ja4Fp == "" {
+		ja4Fp = ja4pkg.Get(r.RemoteAddr)
+	}
+	return ja3Hash, ja4Fp
 }
 
 func isCloudflareIP(ip string) bool {
