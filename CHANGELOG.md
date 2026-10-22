@@ -14,16 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.10.2] - 2026-10-22
+
 ### Fixed
 
 - (#182) --trusted-proxies rejects single IP addresses
 
-## [2.10.1] - 2026-10-22
-
-### Fixed
-
-- (#178) Settings page audit log grows without limit and layout breaks on mobile
-- (#179) IP that can't be blocked
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.1...main
-[2.10.1]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.0...v2.10.1
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.2...main
+[2.10.2]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.1...v2.10.2
