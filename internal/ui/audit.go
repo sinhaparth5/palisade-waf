@@ -41,8 +41,10 @@ var auditFields = []string{
 
 const auditValueMax = 120
 
-// auditPageSize is how many of the newest entries the Settings card shows.
-const auditPageSize = 100
+// auditPageSize is how many entries one page of the Settings card shows.
+// The whole log is kept for a year, so the card pages through it rather
+// than growing the Settings page with every change.
+const auditPageSize = 10
 
 // auditLog records every successful (status < 400) non-GET request on the
 // group it wraps. It runs after authentication, so the actor is known: the
@@ -159,4 +161,38 @@ func markAuditFailure(c echo.Context, data any) {
 func auditFailed(c echo.Context) bool {
 	failed, _ := c.Get(auditFailedKey).(bool)
 	return failed || c.Response().Header().Get("HX-Retarget") != ""
+}
+
+// auditRowsData fetches one page of the audit log for the audit-rows
+// partial, clamping page into range like ipRulesRowsData.
+func (h *Handler) auditRowsData(page int) (map[string]any, error) {
+	page = max(page, 1)
+	entries, total, err := h.db.ListAudit(auditPageSize, (page-1)*auditPageSize)
+	if err != nil {
+		return nil, err
+	}
+	totalPages := max(1, (total+auditPageSize-1)/auditPageSize)
+	if page > totalPages {
+		page = totalPages
+		if entries, _, err = h.db.ListAudit(auditPageSize, (page-1)*auditPageSize); err != nil {
+			return nil, err
+		}
+	}
+	return map[string]any{
+		"AdminPath":  h.cfg.Admin.Path,
+		"Entries":    entries,
+		"CurPage":    page,
+		"TotalPages": totalPages,
+		"Total":      total,
+	}, nil
+}
+
+// AuditRows renders one page of the audit card for its Prev/Next buttons.
+func (h *Handler) AuditRows(c echo.Context) error {
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	data, err := h.auditRowsData(page)
+	if err != nil {
+		return err
+	}
+	return h.renderPartial(c, "settings", "audit-rows", data)
 }
