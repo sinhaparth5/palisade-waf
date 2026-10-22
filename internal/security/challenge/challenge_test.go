@@ -365,3 +365,26 @@ func TestServePageDropsForeignRedirect(t *testing.T) {
 		t.Fatalf("status %d, page still carries attacker redirect or lacks fallback", rec.Code)
 	}
 }
+
+// The config is embedded straight into the page script (issue #176), so a
+// redirect path must not be able to close that script or break out of its
+// string.
+func TestServePageEscapesRedirectInScript(t *testing.T) {
+	for _, r := range []string{
+		"/a</script><script>alert(1)</script>",
+		`/a"};alert(1);//`,
+		"/a<!--",
+	} {
+		c := New("secret", 3600, 5)
+		rec := httptest.NewRecorder()
+		c.ServePage(rec, httptest.NewRequest(http.MethodGet, c.ChallengeURL(r), nil))
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%q: status %d", r, rec.Code)
+		}
+		if strings.Count(body, "</script>") != strings.Count(pageHTML, "</script>") ||
+			strings.Contains(body, `/a"};`) || strings.Contains(body, "<!--") {
+			t.Errorf("%q: redirect escaped its script context", r)
+		}
+	}
+}
