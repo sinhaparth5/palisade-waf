@@ -851,13 +851,20 @@ func isCloudflareIP(ip string) bool {
 }
 
 // ParseTrustedProxyCIDRs parses --trusted-proxies, logging and skipping
-// invalid entries.
+// invalid entries. A bare IP is a single-address range.
 func ParseTrustedProxyCIDRs(cidrs []string) []*net.IPNet {
 	trusted := make([]*net.IPNet, 0, len(cidrs))
 	for _, cidr := range cidrs {
 		cidr = strings.TrimSpace(cidr)
 		if cidr == "" {
 			continue
+		}
+		if ip := net.ParseIP(cidr); ip != nil {
+			if ip.To4() != nil {
+				cidr += "/32"
+			} else {
+				cidr += "/128"
+			}
 		}
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {

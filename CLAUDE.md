@@ -47,7 +47,7 @@ Run a single test: `go test ./internal/proxy/ -run TestName -v` (substitute the 
 --listen          HTTP listen address (default :8080)
 --listen-tls      HTTPS listen address (empty = HTTP only)
 --listen-h3       HTTP/3 (QUIC) UDP listen address, e.g. :443 (empty = off; needs --listen-tls; services opt in per-Host)
---trusted-proxies comma-separated CIDRs for X-Forwarded-For/X-Real-IP trust
+--trusted-proxies comma-separated IPs or CIDRs for X-Forwarded-For/X-Real-IP trust
 --trusted-crawlers extra crawlers that skip the bot challenge, pinned by source: ua=cidr[,cidr];ua2=ip (empty = none)
 --db              SQLite DB path, or a DSN when --db-driver is mysql/postgres (default waf.db)
 --db-driver       database driver: sqlite (default), mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)

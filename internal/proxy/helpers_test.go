@@ -28,7 +28,8 @@ func TestTLSInfo(t *testing.T) {
 }
 
 func TestIPHelpers(t *testing.T) {
-	if got := ParseTrustedProxyCIDRs([]string{" 10.0.0.0/8 ", "", "bogus", "::1/128"}); len(got) != 2 {
+	got := ParseTrustedProxyCIDRs([]string{" 10.0.0.0/8 ", "", "bogus", "::1/128", "203.0.113.7", "2001:db8::1"})
+	if len(got) != 4 || !inNets("203.0.113.7", got) || inNets("203.0.113.8", got) || !inNets("2001:db8::1", got) {
 		t.Errorf("trusted CIDRs = %v", got)
 	}
 	for in, want := range map[string]string{"1.2.3.4:80": "1.2.3.4", "no-port": "no-port", "[::1]:80": "::1"} {

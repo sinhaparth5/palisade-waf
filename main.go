@@ -94,7 +94,7 @@ func main() {
 	listen := fs.String("listen", ":8080", "HTTP listen address")
 	listenTLS := fs.String("listen-tls", "", "HTTPS listen address (empty = HTTP only)")
 	listenH3 := fs.String("listen-h3", "", "HTTP/3 (QUIC) UDP listen address, e.g. :443; needs --listen-tls; services opt in individually (empty = off)")
-	trustedProxies := fs.String("trusted-proxies", "", "comma-separated trusted proxy CIDRs for X-Forwarded-For/X-Real-IP")
+	trustedProxies := fs.String("trusted-proxies", "", "comma-separated trusted proxy IPs or CIDRs for X-Forwarded-For/X-Real-IP")
 	trustedCrawlers := fs.String("trusted-crawlers", "", "extra crawlers that skip the bot challenge, pinned by source: ua=cidr[,cidr];ua2=ip (empty = none)")
 	dbPath := fs.String("db", "waf.db", "database path (sqlite) or DSN (mysql/postgres)")
 	dbDriver := fs.String("db-driver", "sqlite", "database driver: sqlite, mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)")

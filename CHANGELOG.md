@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Fixed
+
+- (#182) --trusted-proxies rejects single IP addresses
+
 ## [2.10.1] - 2026-10-22
 
 ### Fixed
