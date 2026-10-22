@@ -364,7 +364,7 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 	// key two different uploads to the same verdict.
 	var cacheKey string
 	if buffered && fingerprintEligible(r) {
-		cacheKey = fingerprint(r, body)
+		cacheKey = fingerprint(r, clientIP, body)
 		if cached, ok := e.cache.get(cacheKey); ok {
 			result := cached
 			if schemaViolation && !result.Blocked {

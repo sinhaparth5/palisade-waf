@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
-	"path"
+	"sort"
 	"sync"
 	"time"
 )
@@ -103,20 +103,35 @@ func fingerprintEligible(r *http.Request) bool {
 	return r.Header.Get("Authorization") == "" && r.Header.Get("Cookie") == ""
 }
 
-// fingerprint computes the cache key for r: method + host + normalized path
-// + query + a hash of body. body is expected to be the same fully-buffered
-// slice Check already read for Coraza's own inspection, so hashing it here
-// costs no extra I/O.
-func fingerprint(r *http.Request, body []byte) string {
+// fingerprint computes the cache key for r: client IP + method + host + raw
+// path + query + every request header + a hash of body. Anything Coraza can
+// inspect must be in the key, or a request differing only there would reuse
+// another request's verdict: headers are how CRS sees header-borne payloads
+// (issue #152), the raw path keeps "/a/../b" from sharing "/b"'s verdict, and
+// the client IP covers rules that match REMOTE_ADDR. body is expected to be
+// the same fully-buffered slice Check already read for Coraza's own
+// inspection, so hashing it here costs no extra I/O.
+func fingerprint(r *http.Request, clientIP string, body []byte) string {
 	h := sha256.New()
-	h.Write([]byte(r.Method))
-	h.Write([]byte{0})
-	h.Write([]byte(r.Host))
-	h.Write([]byte{0})
-	h.Write([]byte(path.Clean(r.URL.Path)))
-	h.Write([]byte{0})
-	h.Write([]byte(r.URL.RawQuery))
-	h.Write([]byte{0})
+	for _, s := range []string{clientIP, r.Method, r.Host, r.URL.EscapedPath(), r.URL.RawQuery} {
+		h.Write([]byte(s))
+		h.Write([]byte{0})
+	}
+	// Header names and values can't contain NUL or \x01 (net/http rejects
+	// them), so these separators are unambiguous.
+	names := make([]string, 0, len(r.Header))
+	for k := range r.Header {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, k := range names {
+		h.Write([]byte(k))
+		for _, v := range r.Header[k] {
+			h.Write([]byte{1})
+			h.Write([]byte(v))
+		}
+		h.Write([]byte{0})
+	}
 	h.Write(body)
 	return hex.EncodeToString(h.Sum(nil))
 }
