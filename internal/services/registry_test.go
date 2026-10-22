@@ -65,6 +65,8 @@ func TestVarnishRouting(t *testing.T) {
 		req.Header.Set("X-Original-URL", "/admin")
 		req.Header.Set("X-Cache-Service", "spoofed")
 		req.Header.Set("X-Waf-Backend", "6.6.6.6:666")
+		req.Header.Set("X-Cache-TTL-Floor", "31536000")
+		req.Header.Set("X-Cache-Session", "shared")
 		target, isProxy := rp.(*httputil.ReverseProxy)
 		if !isProxy {
 			target = rp.(*pool).ups[0].rp // uncached: the first backend's proxy
@@ -89,7 +91,7 @@ func TestVarnishRouting(t *testing.T) {
 	if got := req.Header.Get("X-Waf-Backend"); got != "10.0.0.5:3000" {
 		t.Errorf("X-Waf-Backend = %q, want 10.0.0.5:3000", got)
 	}
-	for _, hn := range []string{"X-Forwarded-Host", "X-Original-URL"} {
+	for _, hn := range []string{"X-Forwarded-Host", "X-Original-URL", "X-Cache-TTL-Floor", "X-Cache-Session"} {
 		if v := req.Header.Get(hn); v != "" {
 			t.Errorf("%s = %q, want scrubbed before the cache layer", hn, v)
 		}

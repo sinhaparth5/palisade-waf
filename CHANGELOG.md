@@ -16,6 +16,7 @@ rather than growing this file forever.
 
 ### Fixed
 
+- (#155) Cache Director forwards client-supplied X-Cache-* headers to Varnish
 - (#153) Request logs keep credential headers
 - (#154) Client IP taken from the leftmost X-Forwarded-For entry
 - (#163) Installer upgrade overwrites custom flags in the systemd unit

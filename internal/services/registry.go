@@ -192,6 +192,15 @@ func (r *Registry) Reload(db *storage.DB) error {
 				for _, hn := range spoofableHostHeaders {
 					req.Header.Del(hn)
 				}
+				// The X-Cache-* headers are the WAF↔Varnish contract, set
+				// below only when configured; a client copy left in place
+				// would pick the TTL, session partition or purge target
+				// (issue #155).
+				for hn := range req.Header {
+					if strings.HasPrefix(hn, "X-Cache-") {
+						req.Header.Del(hn)
+					}
+				}
 				// Only GET/HEAD can ever be cached (the VCL passes every
 				// other method), so the rest skip the Varnish round trip
 				// and go straight to the backend the stock director chose.
