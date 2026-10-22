@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -75,6 +76,26 @@ func TestClientIP(t *testing.T) {
 		}
 		if got := ClientIP(r, trusted); got != tc.want {
 			t.Errorf("%s: ClientIP = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestCaptureHeadersMasksCredentials pins issue #153: credential values never
+// reach the request log, while ordinary headers are kept as sent.
+func TestCaptureHeadersMasksCredentials(t *testing.T) {
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer secret")
+	r.Header.Set("Cookie", "session=secret")
+	r.Header.Set("X-Api-Key", "secret")
+	r.Header.Set("Proxy-Authorization", "Basic secret")
+	r.Header.Set("Accept", "text/html")
+	got := captureHeaders(r)
+	if strings.Contains(got, "secret") {
+		t.Errorf("credential value logged: %s", got)
+	}
+	for _, want := range []string{`"Authorization":"[redacted]"`, `"Cookie":"[redacted]"`, `"Accept":"text/html"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("captureHeaders = %s, missing %s", got, want)
 		}
 	}
 }

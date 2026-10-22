@@ -117,7 +117,7 @@ type RequestLog struct {
 	Action      string
 	UserAgent   string
 	Duration    int64  // milliseconds
-	HeadersJSON string // JSON-encoded map[string]string of request headers
+	HeadersJSON string `json:"-"` // JSON-encoded map[string]string of request headers; kept out of webhook payloads
 	RequestID   string // random hex per-request correlation ID
 	Proto       string // HTTP/1.1, HTTP/2.0, etc.
 	TLSVersion  string // "TLS 1.3", "TLS 1.2", "" for plaintext
