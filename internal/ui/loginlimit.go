@@ -1,11 +1,11 @@
 package ui
 
 import (
-	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
+
+	"palisade/internal/proxy"
 
 	"github.com/labstack/echo/v4"
 )
@@ -94,50 +94,13 @@ func (l *loginLimiter) sweep(now time.Time) {
 	}
 }
 
-// parseTrustedNets converts the config's trusted-proxy CIDR strings; invalid
-// entries are skipped (the proxy package already logs them at startup).
-func parseTrustedNets(cidrs []string) []*net.IPNet {
-	var nets []*net.IPNet
-	for _, cidr := range cidrs {
-		if _, network, err := net.ParseCIDR(cidr); err == nil {
-			nets = append(nets, network)
-		}
-	}
-	return nets
-}
-
-// clientIP resolves the real client IP for login throttling. Forwarding
-// headers are honored only when the connection itself comes from a configured
-// trusted proxy. Echo's c.RealIP() trusts X-Forwarded-For unconditionally,
-// which would let an attacker rotate fake IPs to dodge the lockout.
+// clientIP resolves the real client IP for login throttling, through the
+// same proxy.ClientIP the request pipeline uses: forwarding headers count
+// only from a configured trusted proxy (issue #154). Echo's c.RealIP()
+// trusts X-Forwarded-For unconditionally, which would let an attacker rotate
+// fake IPs to dodge the lockout.
 func (h *Handler) clientIP(r *http.Request) string {
-	remote := r.RemoteAddr
-	if host, _, err := net.SplitHostPort(remote); err == nil {
-		remote = host
-	}
-
-	parsed := net.ParseIP(remote)
-	trusted := false
-	for _, n := range h.trustedNets {
-		if parsed != nil && n.Contains(parsed) {
-			trusted = true
-			break
-		}
-	}
-	if !trusted {
-		return remote
-	}
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		first := xff
-		if idx := strings.Index(xff, ","); idx != -1 {
-			first = xff[:idx]
-		}
-		return strings.TrimSpace(first)
-	}
-	if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
-		return ip
-	}
-	return remote
+	return proxy.ClientIP(r, h.trustedNets)
 }
 
 // secureCookie reports whether session cookies should carry the Secure flag.
