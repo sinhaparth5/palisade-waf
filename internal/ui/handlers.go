@@ -394,6 +394,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.POST("/settings/acme-email", h.SaveAcmeEmail)
 	g.POST("/settings/bot", h.SaveBotSettings)
 	g.POST("/settings/ratelimit", h.SaveRateLimitConfig)
+	g.POST("/settings/trusted-ips", h.SaveTrustedIPs)
 	g.POST("/settings/redis", h.SaveRedisConfig)
 	g.POST("/settings/redis/test", h.TestRedisConnection)
 	g.POST("/settings/webhook", h.SaveWebhookConfig)
@@ -1353,6 +1354,40 @@ func (h *Handler) SaveHoneypots(c echo.Context) error {
 	})
 }
 
+// trustedIPsMax caps the trusted list; every proxied request scans it.
+const trustedIPsMax = 200
+
+// SaveTrustedIPs replaces the trusted IP list (issue #179) and swaps it into
+// the registry, so its requests skip every blocking stage straight away.
+func (h *Handler) SaveTrustedIPs(c echo.Context) error {
+	var entries []string
+	for _, e := range strings.Fields(c.FormValue("trusted_ips")) {
+		if !slices.Contains(entries, e) {
+			entries = append(entries, e)
+		}
+	}
+	nets, err := services.ParseTrustedIPs(entries)
+	saveErr := ""
+	switch {
+	case err != nil:
+		saveErr = err.Error() + "."
+	case len(entries) > trustedIPsMax:
+		saveErr = fmt.Sprintf("At most %d entries.", trustedIPsMax)
+	default:
+		if err := h.db.SetTrustedIPs(entries); err != nil {
+			saveErr = "Could not save: " + err.Error()
+		} else {
+			h.registry.SetTrustedIPs(nets)
+		}
+	}
+	return h.renderPartial(c, "settings", "trusted-ips-card", map[string]any{
+		"AdminPath":      h.cfg.Admin.Path,
+		"TrustedIPs":     entries,
+		"TrustedSaveOK":  saveErr == "",
+		"TrustedSaveErr": saveErr,
+	})
+}
+
 // SaveAdaptiveSettings persists the adaptive-enforcement knobs shown on the
 // IP Rules page and hot-reloads the policy so they apply immediately.
 func (h *Handler) SaveAdaptiveSettings(c echo.Context) error {
@@ -2291,6 +2326,7 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 		}
 	}
 	passkeyRows, _ := h.db.ListWebAuthnCredentials()
+	trustedIPs, _ := h.db.GetTrustedIPs()
 	return h.render(c, "settings", h.dbConnCardData(dbConnCfg, false, "", map[string]any{
 		"AdminEmail":             email,
 		"TOTPEnabled":            totpEnabled,
@@ -2308,6 +2344,7 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 		"RLEnabled":              rlEnabled,
 		"RLRPS":                  rlRPS,
 		"RLBurst":                rlBurst,
+		"TrustedIPs":             trustedIPs,
 		"WebhookURL":             wh.URL,
 		"WebhookSecret":          wh.Secret,
 		"WebhookEnabled":         wh.Enabled,

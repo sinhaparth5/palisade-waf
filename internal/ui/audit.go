@@ -36,7 +36,7 @@ var auditFields = []string{
 	"aliases", "app_name", "bot_mode", "canonical", "canonical_host", "captcha_provider", "cert_id",
 	"country_code", "enabled", "honeypot_paths", "host", "host_aliases", "ip", "label", "lb_policy", "login_paths",
 	"match_type", "mode", "name", "note", "path", "prefix", "read_only", "reason",
-	"rule_id", "rule_type", "service", "service_id",
+	"rule_id", "rule_type", "service", "service_id", "trusted_ips",
 }
 
 const auditValueMax = 120

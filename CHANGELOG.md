@@ -17,6 +17,7 @@ rather than growing this file forever.
 ### Fixed
 
 - (#178) Settings page audit log grows without limit and layout breaks on mobile
+- (#179) IP that can't be blocked
 
 ## [2.10.0] - 2026-10-22
 

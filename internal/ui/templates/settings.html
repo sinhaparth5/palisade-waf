@@ -78,11 +78,12 @@
 
   <!-- ── Protection ───────────────────────────────────────────────────────── -->
   <section id="settings-protection" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-protection-title">
-    {{template "settings-section-title" (map "ID" "settings-protection-title" "Title" "Protection" "Copy" "Global bot and rate-limit defaults; services can override both.")}}
+    {{template "settings-section-title" (map "ID" "settings-protection-title" "Title" "Protection" "Copy" "Global bot and rate-limit defaults, and IPs that are never blocked.")}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {{template "bot-card" .}}
       {{template "ratelimit-card" .}}
     </div>
+    {{template "trusted-ips-card" .}}
   </section>
 
   <!-- ── Infrastructure ───────────────────────────────────────────────────── -->
@@ -786,6 +787,34 @@
         Test connection
       </button>
       <span id="redis-test-result" class="text-[13px]"></span>
+    </div>
+  </form>
+</div>
+{{end}}
+
+{{define "trusted-ips-card"}}
+<div class="card p-5" id="trusted-ips-card">
+  <h3 class="text-[15px] font-bold text-slate-800 mb-1">Trusted IPs</h3>
+  <p class="text-[13px] text-slate-500 mb-5">Requests from these addresses are never blocked: they skip IP and geo rules, the bot challenge, rate limits, the WAF and automatic banning. They are still proxied and logged. Only add addresses you control, such as your office, a monitor, or your own servers.</p>
+
+  {{if .TrustedSaveOK}}
+  <div class="rounded-md bg-green-50 border border-green-200 text-green-700 text-[13px] px-4 py-3 mb-4">Saved. Trusted IPs applied.</div>
+  {{end}}
+  {{if .TrustedSaveErr}}
+  <div class="rounded-md bg-red-50 border border-red-200 text-red-700 text-[13px] px-4 py-3 mb-4">{{.TrustedSaveErr}}</div>
+  {{end}}
+
+  <form hx-post="{{.AdminPath}}/settings/trusted-ips" hx-target="#trusted-ips-card" hx-swap="outerHTML" class="flex flex-col gap-4">
+    <label class="sr-only" for="trusted_ips">Trusted IPs</label>
+    <textarea id="trusted_ips" name="trusted_ips" rows="4" placeholder="203.0.113.10&#10;198.51.100.0/24&#10;2001:db8::/64"
+      class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white resize-y">{{range .TrustedIPs}}{{.}}
+{{end}}</textarea>
+    <p class="text-[12px] text-slate-500 -mt-1">One IP address or CIDR range per line, IPv4 or IPv6.</p>
+    <div class="flex flex-wrap items-center gap-3">
+      <button type="submit" class="btn-primary flex items-center justify-center gap-2">
+        <i class="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-sm"></i>
+        Save &amp; apply
+      </button>
     </div>
   </form>
 </div>

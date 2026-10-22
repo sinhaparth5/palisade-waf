@@ -909,6 +909,54 @@ func TestHoneypotOnlyFiresOnBackend404(t *testing.T) {
 	}
 }
 
+func TestTrustedIPSkipsPipeline(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer backend.Close()
+
+	h, db, reg := newTestHandlerDB(t, backend)
+	reg.SetHoneypots([]string{"/xmlrpc.php"})
+	trusted, err := services.ParseTrustedIPs([]string{"203.0.113.0/24", "2001:db8::1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg.SetTrustedIPs(trusted)
+	actions := make(chan string, 10)
+	db.SetAutobanFn(func(e storage.RequestLog) { actions <- e.Action })
+
+	sqli := "/?id=1%27%20OR%20%271%27=%271"
+	for _, tc := range []struct {
+		ip, path   string
+		wantCode   int
+		wantAction string
+	}{
+		{"198.51.100.7", sqli, http.StatusForbidden, ""},
+		{"203.0.113.9", sqli, http.StatusNotFound, ""},
+		{"[2001:db8::1]", sqli, http.StatusNotFound, ""},
+		{"198.51.100.7", "/xmlrpc.php", http.StatusNotFound, "honeypot"},
+		{"203.0.113.9", "/xmlrpc.php", http.StatusNotFound, ""},
+	} {
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		req.RemoteAddr = tc.ip + ":1234"
+		rec := httptest.NewRecorder()
+		if err := h.Handle(echo.New().NewContext(req, rec)); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != tc.wantCode {
+			t.Errorf("%s %s: status %d, want %d", tc.ip, tc.path, rec.Code, tc.wantCode)
+		}
+		select {
+		case got := <-actions:
+			if tc.wantAction != "" && got != tc.wantAction || tc.wantAction == "" && got == "honeypot" {
+				t.Errorf("%s %s: action %q, want %q", tc.ip, tc.path, got, tc.wantAction)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s %s: no log entry", tc.ip, tc.path)
+		}
+	}
+}
+
 func TestLoginProtection(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -117,6 +118,7 @@ type Registry struct {
 	hosts     map[string]int                // host or alias (lowercase) -> index into list
 	stopCheck chan struct{}                 // closed on Reload to stop the previous active health checks
 	honeypots []string                      // see Honeypot
+	trusted   []netip.Prefix                // see Trusted
 
 	healthMu sync.RWMutex
 	health   map[string]*backendHealth // service name + "\x00" + backend URL
@@ -149,6 +151,15 @@ func (r *Registry) Reload(db *storage.DB) error {
 		return err
 	}
 	r.SetHoneypots(honeypots)
+	trustedIPs, err := db.GetTrustedIPs()
+	if err != nil {
+		return err
+	}
+	trusted, err := ParseTrustedIPs(trustedIPs)
+	if err != nil {
+		log.Printf("trusted IPs: skipping %v", err)
+	}
+	r.SetTrustedIPs(trusted)
 
 	proxies := make(map[string]http.Handler, len(list))
 	direct := make(map[string]http.Handler, len(list))
