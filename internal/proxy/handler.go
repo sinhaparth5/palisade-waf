@@ -304,8 +304,9 @@ func (h *Handler) Handle(c echo.Context) error {
 	// logging every other outcome (blocked or not) further down.
 	blockedByGeo, geoReason, country := h.geoBl.Check(r.RemoteAddr, clientIP, appName)
 
-	// Crawler files (robots.txt, sitemap, llms.txt) skip every protection
-	// stage so any client can read them.
+	// Crawler files (robots.txt, sitemap, llms.txt) skip the IP, geo,
+	// challenge and rate-limit stages so any client can read them. The WAF
+	// still inspects them (issue #157).
 	open := openPath(r)
 
 	// 1. IP blocklist — an explicit admin/autoban decision, and 2. geo
@@ -446,16 +447,12 @@ func (h *Handler) Handle(c echo.Context) error {
 	if app != nil {
 		checkOpts.AllowLargeJavaScriptUploads = app.AllowLargeJSUploads
 	}
-	result := &waf.Result{}
-	if !open {
-		var err error
-		result, err = engine.CheckWithOptions(r, clientIP, checkOpts)
-		if err != nil {
-			mark("waf")
-			log.Printf("waf error: %v", err)
-			metrics.RecordRequest(appName, strconv.Itoa(http.StatusInternalServerError), time.Since(start).Seconds())
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
-		}
+	result, err := engine.CheckWithOptions(r, clientIP, checkOpts)
+	if err != nil {
+		mark("waf")
+		log.Printf("waf error: %v", err)
+		metrics.RecordRequest(appName, strconv.Itoa(http.StatusInternalServerError), time.Since(start).Seconds())
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
 	}
 	if result.Blocked {
 		mark("waf")
@@ -529,9 +526,9 @@ var openPaths = map[string]bool{
 	"/llms.txt":          true,
 }
 
-// openPath reports whether r is a plain fetch of one of openPaths. Only a bodiless GET/HEAD with no
-// query qualifies, so nothing the WAF would have inspected reaches the
-// backend unread; anything else at that path takes the normal pipeline.
+// openPath reports whether r is a plain fetch of one of openPaths. Only a
+// bodiless GET/HEAD with no query qualifies; anything else at that path takes
+// the normal pipeline. The WAF inspects open paths too.
 func openPath(r *http.Request) bool {
 	return (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
 		openPaths[r.URL.Path] && r.URL.RawQuery == "" &&
