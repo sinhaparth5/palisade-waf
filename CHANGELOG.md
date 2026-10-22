@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Added
+
+- Open crawler files (robots.txt, sitemap, llms.txt) to every client
+
 ## [2.9.5] - 2026-10-21
 
 ### Added
