@@ -20,20 +20,44 @@ const (
 	loginLimiterSuffix = "\x00login"
 )
 
-// IsLoginPath reports whether p (the client-facing path) is one of s's login
-// paths: compared cleaned, case-insensitively and ignoring a trailing slash,
-// so "/Login/" or "//login" can't step around "/login".
+// IsLoginPath reports whether p (the client-facing path) is covered by one of
+// s's login paths (issue #159). Paths are compared cleaned, case-insensitively,
+// ignoring a trailing slash and ";param" path parameters, so "/Login/",
+// "//login" or "/login;jsessionid=x" can't step around "/login". A login path
+// also covers what a backend may route to the same handler on a segment
+// boundary: sub-paths ("/login/submit") and the path mounted deeper
+// ("/api/login"), but never "/login2" or "/mylogin".
 func IsLoginPath(s *storage.Service, p string) bool {
 	if s == nil || len(s.LoginPaths) == 0 {
 		return false
 	}
-	p = path.Clean("/" + p)
+	p = strings.ToLower(path.Clean("/" + stripPathParams(p)))
 	for _, l := range s.LoginPaths {
-		if strings.EqualFold(p, path.Clean(l)) {
+		l = strings.ToLower(path.Clean("/" + l))
+		if l == "/" {
+			if p == "/" {
+				return true
+			}
+			continue
+		}
+		if p == l || strings.HasPrefix(p, l+"/") || strings.HasSuffix(p, l) {
 			return true
 		}
 	}
 	return false
+}
+
+// stripPathParams drops the ";param" part of every segment, which servlet
+// containers and some frameworks ignore when routing.
+func stripPathParams(p string) string {
+	if !strings.Contains(p, ";") {
+		return p
+	}
+	segs := strings.Split(p, "/")
+	for i, seg := range segs {
+		segs[i], _, _ = strings.Cut(seg, ";")
+	}
+	return strings.Join(segs, "/")
 }
 
 // AllowLogin checks the service's login limiter. Allowed when the service
