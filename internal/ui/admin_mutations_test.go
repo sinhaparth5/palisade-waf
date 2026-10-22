@@ -67,17 +67,17 @@ func TestIPRuleHandlers(t *testing.T) {
 
 func TestAutobanAndAdaptiveSettings(t *testing.T) {
 	env := newAdminEnv(t)
-	rec := env.do("POST", "/admin/ip-rules/autoban", form("autoban_enabled", "1", "autoban_threshold", "25", "autoban_window", "60"))
+	rec := env.do("POST", "/admin/ip-rules/autoban", form("autoban_enabled", "1", "autoban_threshold", "25", "autoban_window", "60", "autoban_ban_hours", "0"))
 	wantCode(t, "autoban", rec.Code, 200, rec.Body.String())
 	ab, _ := env.db.GetAutobanConfig()
-	if !ab.Enabled || ab.Threshold != 25 || ab.WindowMinutes != 60 || env.count("autoban") != 1 {
+	if !ab.Enabled || ab.Threshold != 25 || ab.WindowMinutes != 60 || ab.BanHours != 0 || env.count("autoban") != 1 {
 		t.Errorf("autoban = %+v reloads=%d", ab, env.count("autoban"))
 	}
 	// Out-of-range values fall back to defaults instead of being stored.
-	env.do("POST", "/admin/ip-rules/autoban", form("autoban_threshold", "0", "autoban_window", "99999"))
+	env.do("POST", "/admin/ip-rules/autoban", form("autoban_threshold", "0", "autoban_window", "99999", "autoban_ban_hours", "-1"))
 	ab, _ = env.db.GetAutobanConfig()
 	def := storage.DefaultAutobanConfig()
-	if ab.Enabled || ab.Threshold != def.Threshold || ab.WindowMinutes != def.WindowMinutes {
+	if ab.Enabled || ab.Threshold != def.Threshold || ab.WindowMinutes != def.WindowMinutes || ab.BanHours != def.BanHours {
 		t.Errorf("autoban out-of-range = %+v", ab)
 	}
 

@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 // TestIPRuleNoteRoundtrip exercises the note column added for auto-bans:
@@ -156,11 +157,40 @@ func TestAutobanConfigRoundtrip(t *testing.T) {
 		t.Errorf("unset config = %+v, want defaults %+v", cfg, DefaultAutobanConfig())
 	}
 
-	want := AutobanConfig{Enabled: false, Threshold: 25, WindowMinutes: 30}
+	want := AutobanConfig{Enabled: false, Threshold: 25, WindowMinutes: 30, BanHours: 0}
 	if err := db.SetAutobanConfig(want); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := db.GetAutobanConfig(); got != want {
 		t.Errorf("roundtrip = %+v, want %+v", got, want)
+	}
+}
+
+// TestExpireAutobans pins issue #156: only autoban's own rules expire, and
+// only once they are older than the cutoff.
+func TestExpireAutobans(t *testing.T) {
+	db := openTestDB(t)
+	for ip, note := range map[string]string{
+		"203.0.113.1": "Auto-banned — 10 flagged requests",
+		"203.0.113.2": "Banned via API — abuse",
+		"203.0.113.3": "",
+	} {
+		if err := db.AddIPRuleWithNote("", ip, "block", note); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := db.ExpireAutobans(time.Now().Add(-time.Hour)); err != nil || n != 0 {
+		t.Fatalf("fresh ban expired: n=%d err=%v", n, err)
+	}
+	if n, err := db.ExpireAutobans(time.Now().Add(time.Hour)); err != nil || n != 1 {
+		t.Fatalf("ExpireAutobans = %d, %v; want 1", n, err)
+	}
+	if rt, _ := db.GetIPRuleType("", "203.0.113.1"); rt != "" {
+		t.Error("expired auto-ban still present")
+	}
+	for _, ip := range []string{"203.0.113.2", "203.0.113.3"} {
+		if rt, _ := db.GetIPRuleType("", ip); rt != "block" {
+			t.Errorf("%s rule removed, want kept", ip)
+		}
 	}
 }

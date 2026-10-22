@@ -42,6 +42,7 @@ func TestIPRulesTemplateRendersAutobanAndNotes(t *testing.T) {
 		"AutobanEnabled":         true,
 		"AutobanThresh":          10,
 		"AutobanWindow":          10,
+		"AutobanBanHours":        24,
 		"AdaptiveEnabled":        false,
 		"AdaptiveHighThresh":     70,
 		"AdaptiveLowThresh":      10,

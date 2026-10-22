@@ -1251,6 +1251,7 @@ func (h *Handler) IPRulesPage(c echo.Context) error {
 	data["AutobanEnabled"] = ab.Enabled
 	data["AutobanThresh"] = ab.Threshold
 	data["AutobanWindow"] = ab.WindowMinutes
+	data["AutobanBanHours"] = ab.BanHours
 	data["AdaptiveEnabled"] = ad.Enabled
 	data["AdaptiveHighThresh"] = ad.HighRiskThreshold
 	data["AdaptiveLowThresh"] = ad.LowRiskThreshold
@@ -1283,6 +1284,9 @@ func (h *Handler) SaveAutobanSettings(c echo.Context) error {
 	if n, err := strconv.Atoi(c.FormValue("autoban_window")); err == nil && n >= 1 && n <= 1440 {
 		cfg.WindowMinutes = n
 	}
+	if n, err := strconv.Atoi(c.FormValue("autoban_ban_hours")); err == nil && n >= 0 && n <= 8760 {
+		cfg.BanHours = n
+	}
 	saveErr := ""
 	if err := h.db.SetAutobanConfig(cfg); err != nil {
 		saveErr = "Could not save: " + err.Error()
@@ -1290,11 +1294,12 @@ func (h *Handler) SaveAutobanSettings(c echo.Context) error {
 		h.reloadAutoban()
 	}
 	return h.renderPartial(c, "ip_rules", "autoban-card", map[string]any{
-		"AutobanEnabled": cfg.Enabled,
-		"AutobanThresh":  cfg.Threshold,
-		"AutobanWindow":  cfg.WindowMinutes,
-		"AutobanSaveOK":  saveErr == "",
-		"AutobanSaveErr": saveErr,
+		"AutobanEnabled":  cfg.Enabled,
+		"AutobanThresh":   cfg.Threshold,
+		"AutobanWindow":   cfg.WindowMinutes,
+		"AutobanBanHours": cfg.BanHours,
+		"AutobanSaveOK":   saveErr == "",
+		"AutobanSaveErr":  saveErr,
 	})
 }
 
