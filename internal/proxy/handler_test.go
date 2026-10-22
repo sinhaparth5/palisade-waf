@@ -255,6 +255,53 @@ func TestIPBlocklistBlocks(t *testing.T) {
 	}
 }
 
+// TestRobotsTxtOpenToBannedIP checks that a plain GET of a crawler file skips
+// every protection stage, while other paths and a /robots.txt with a query do not.
+func TestRobotsTxtOpenToBannedIP(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+
+	dir := t.TempDir()
+	db, _ := storage.Open(filepath.Join(dir, "robots.db"))
+	defer db.Close()
+	_ = db.AddService("svc", "", "/", backend.URL, 0, 0)
+	_ = db.AddIPRule("", "10.0.0.1", "block")
+
+	ipbl, _ := blocklist.NewIPBlocklist(db)
+	geoBl, _ := geo.New("", db)
+	defer geoBl.Close()
+	reg, _ := services.New(db)
+	engine, _ := waf.New(config.WAFConfig{Enabled: false}, nil)
+	rl := ratelimit.New(config.RateLimitConfig{Enabled: false})
+	defer rl.Stop()
+	h := proxy.NewHandler(reg, engine, nil, db, ipbl, geoBl, rl, nil, nil, nil, nil)
+	e := echo.New()
+
+	for _, tc := range []struct {
+		method, target string
+		want           int
+	}{
+		{http.MethodGet, "/robots.txt", http.StatusOK},
+		{http.MethodHead, "/robots.txt", http.StatusOK},
+		{http.MethodGet, "/sitemap.xml", http.StatusOK},
+		{http.MethodGet, "/sitemap_index.xml", http.StatusOK},
+		{http.MethodGet, "/llms.txt", http.StatusOK},
+		{http.MethodGet, "/robots.txt?x=1", http.StatusForbidden},
+		{http.MethodPost, "/robots.txt", http.StatusForbidden},
+		{http.MethodGet, "/", http.StatusForbidden},
+	} {
+		req := httptest.NewRequest(tc.method, tc.target, nil)
+		req.RemoteAddr = "10.0.0.1:12345"
+		rec := httptest.NewRecorder()
+		_ = h.Handle(e.NewContext(req, rec))
+		if rec.Code != tc.want {
+			t.Errorf("%s %s: got %d, want %d", tc.method, tc.target, rec.Code, tc.want)
+		}
+	}
+}
+
 // TestBannedIPBlockedDespiteActiveChallenge reproduces a reported bug: with
 // bot protection enabled, a banned IP with no bypass cookie kept getting
 // redirected to the JS challenge (307) instead of the expected 403 —

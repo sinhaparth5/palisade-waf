@@ -304,6 +304,10 @@ func (h *Handler) Handle(c echo.Context) error {
 	// logging every other outcome (blocked or not) further down.
 	blockedByGeo, geoReason, country := h.geoBl.Check(r.RemoteAddr, clientIP, appName)
 
+	// Crawler files (robots.txt, sitemap, llms.txt) skip every protection
+	// stage so any client can read them.
+	open := openPath(r)
+
 	// 1. IP blocklist — an explicit admin/autoban decision, and 2. geo
 	// blocklist below, both checked before the bot-challenge gate. An IP
 	// (or country) that's already been decisively blocked has nothing left
@@ -318,13 +322,13 @@ func (h *Handler) Handle(c echo.Context) error {
 	// attacker with no block rule yet needs to accumulate unsolved-challenge
 	// points before autoban ever creates one.
 	blockedByIP, ipReason := h.ipbl.Check(clientIP, appName)
-	if blockedByIP {
+	if blockedByIP && !open {
 		mark("blocklist")
 		metrics.IPBlockedTotal.WithLabelValues(appName).Inc()
 		h.logBlocked(r, appName, clientIP, country, http.StatusForbidden, 0, ipReason, time.Since(start), meta)
 		return deny(c, http.StatusForbidden, "ip_blocked", reqID, map[string]any{"error": "access denied"})
 	}
-	if blockedByGeo {
+	if blockedByGeo && !open {
 		mark("blocklist")
 		metrics.GeoBlockedTotal.WithLabelValues(appName, country).Inc()
 		h.logBlocked(r, appName, clientIP, country, http.StatusForbidden, 0, geoReason, time.Since(start), meta)
@@ -341,7 +345,7 @@ func (h *Handler) Handle(c echo.Context) error {
 	// A login path (issue #132) is always challenged, even with the
 	// service's bot mode off.
 	login := services.IsLoginPath(app, r.URL.Path)
-	if ch != nil && !botAnalysis.IsTrustedCrawler && !challenge.Exempt(r.Method, r.URL.Path) {
+	if ch != nil && !open && !botAnalysis.IsTrustedCrawler && !challenge.Exempt(r.Method, r.URL.Path) {
 		svcMode := "inherit"
 		if app != nil && app.BotMode != "" {
 			svcMode = app.BotMode
@@ -377,7 +381,7 @@ func (h *Handler) Handle(c echo.Context) error {
 	h.ratelimitMu.RUnlock()
 	rlKey := ratelimit.ClientKey(clientIP)
 	var rlRes ratelimit.Result
-	if rlBackend != nil {
+	if rlBackend != nil && !open {
 		rlRes = rlBackend.AllowScaled(rlKey, adaptiveDecision.RateScale)
 	} else {
 		rlRes = ratelimit.Result{Allowed: true}
@@ -400,7 +404,7 @@ func (h *Handler) Handle(c echo.Context) error {
 	}
 
 	// 4.5 Per-service rate limit — only if the matched service has its own limit.
-	if app != nil {
+	if app != nil && !open {
 		svRes := h.registry.AllowService(app.Name, rlKey)
 		setRateLimitHeaders(c.Response().Header(), svRes)
 		if !svRes.Allowed {
@@ -442,12 +446,16 @@ func (h *Handler) Handle(c echo.Context) error {
 	if app != nil {
 		checkOpts.AllowLargeJavaScriptUploads = app.AllowLargeJSUploads
 	}
-	result, err := engine.CheckWithOptions(r, clientIP, checkOpts)
-	if err != nil {
-		mark("waf")
-		log.Printf("waf error: %v", err)
-		metrics.RecordRequest(appName, strconv.Itoa(http.StatusInternalServerError), time.Since(start).Seconds())
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
+	result := &waf.Result{}
+	if !open {
+		var err error
+		result, err = engine.CheckWithOptions(r, clientIP, checkOpts)
+		if err != nil {
+			mark("waf")
+			log.Printf("waf error: %v", err)
+			metrics.RecordRequest(appName, strconv.Itoa(http.StatusInternalServerError), time.Since(start).Seconds())
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		}
 	}
 	if result.Blocked {
 		mark("waf")
@@ -510,6 +518,24 @@ func (h *Handler) Handle(c echo.Context) error {
 	}
 	h.logRequest(r, appName, clientIP, country, rw.status, h.honeypot(originalPath, rw.status, result), time.Since(start), meta)
 	return nil
+}
+
+// openPaths are the files crawlers and AI agents read to learn about a site,
+// so they must be readable by every client, banned or not.
+var openPaths = map[string]bool{
+	"/robots.txt":        true,
+	"/sitemap.xml":       true,
+	"/sitemap_index.xml": true,
+	"/llms.txt":          true,
+}
+
+// openPath reports whether r is a plain fetch of one of openPaths. Only a bodiless GET/HEAD with no
+// query qualifies, so nothing the WAF would have inspected reaches the
+// backend unread; anything else at that path takes the normal pipeline.
+func openPath(r *http.Request) bool {
+	return (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
+		openPaths[r.URL.Path] && r.URL.RawQuery == "" &&
+		r.ContentLength == 0
 }
 
 // honeypot tags a request for a honeypot path that nothing served (issue
