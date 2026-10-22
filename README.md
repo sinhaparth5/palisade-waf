@@ -45,7 +45,7 @@ sudo systemctl status palisade
 sudo journalctl -u palisade -f
 ```
 
-There is no config file to edit. Installer settings are either flags in the systemd unit (`sudo systemctl cat palisade`) or database values managed from the dashboard. Data, certs, and `waf.db` live under `/var/lib/palisade/`.
+There is no config file to edit. Installer settings are either flags in the systemd unit (`sudo systemctl cat palisade`) or database values managed from the dashboard. The installer rewrites the unit on every upgrade, so put any extra flags (e.g. `--trusted-proxies`) on the `PALISADE_FLAGS=` line of `/etc/palisade/palisade.env`, which it never overwrites, then `sudo systemctl restart palisade`. Data, certs, and `waf.db` live under `/var/lib/palisade/`.
 
 #### Upgrading
 
@@ -131,7 +131,7 @@ sudo cp GeoLite2-Country.mmdb /var/lib/palisade/
 ./palisade --geo-db /var/lib/palisade/GeoLite2-Country.mmdb
 ```
 
-(For a systemd install, add `--geo-db ...` to the `ExecStart=` line in the unit and `sudo systemctl daemon-reload && sudo systemctl restart palisade`.)
+(For a systemd install, add `--geo-db ...` to `PALISADE_FLAGS=` in `/etc/palisade/palisade.env` and `sudo systemctl restart palisade`.)
 
 Leave `--geo-db` unset to use the bundled database. GeoLite users must keep the database updated; MaxMind requires old database versions to be replaced or destroyed within 30 days of a new release, so release builds should refresh the bundled `.mmdb` regularly.
 
