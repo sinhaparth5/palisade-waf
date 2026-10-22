@@ -14,28 +14,12 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.10.1] - 2026-10-22
+
 ### Fixed
 
 - (#178) Settings page audit log grows without limit and layout breaks on mobile
 - (#179) IP that can't be blocked
 
-## [2.10.0] - 2026-10-22
-
-### Fixed
-
-- (#176) Challenge page reads its config back from the DOM
-- (#161) Data race on the pending 2FA login entry
-- (#160) Cloudflare fingerprint headers trusted from any peer
-- (#159) Login path protection matches exact paths only
-- (#158) Backend migration drops the API key read-only flag
-- (#170) Registered devices lists the same browser twice after re-login
-- (#157) Crawler open paths skip WAF header inspection
-- (#156) Autoban bans are permanent and can be triggered by cross-site subresource requests
-- (#155) Cache Director forwards client-supplied X-Cache-* headers to Varnish
-- (#153) Request logs keep credential headers
-- (#154) Client IP taken from the leftmost X-Forwarded-For entry
-- (#163) Installer upgrade overwrites custom flags in the systemd unit
-- (#152) WAF verdict cache key does not cover request headers
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.0...main
-[2.10.0]: https://github.com/sinhaparth5/palisade-waf/compare/v2.9.51...v2.10.0
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.1...main
+[2.10.1]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.0...v2.10.1
