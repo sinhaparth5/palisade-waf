@@ -1,0 +1,21 @@
+{{define "pager"}}
+{{if gt .TotalPages 1}}
+<div class="flex items-center justify-between sm:justify-center gap-3 mt-2 pt-3 border-t border-line">
+  <button type="button"
+          {{if gt .CurPage 1}}
+          hx-get="{{.URL}}?page={{sub .CurPage 1}}" hx-target="{{.Target}}" hx-swap="innerHTML"
+          class="min-h-10 shrink-0 whitespace-nowrap text-[13px] font-medium rounded-md px-4 py-2 border border-line text-slate-600 hover:bg-surface transition-colors duration-150 cursor-pointer"
+          {{else}}
+          disabled class="min-h-10 shrink-0 whitespace-nowrap text-[13px] font-medium rounded-md px-4 py-2 border border-line text-slate-300 cursor-not-allowed"
+          {{end}}>← Prev</button>
+  <span class="text-[13px] text-slate-500 text-center">Page {{.CurPage}} of {{.TotalPages}} · {{.Total}} {{.Noun}}</span>
+  <button type="button"
+          {{if lt .CurPage .TotalPages}}
+          hx-get="{{.URL}}?page={{add .CurPage 1}}" hx-target="{{.Target}}" hx-swap="innerHTML"
+          class="min-h-10 shrink-0 whitespace-nowrap text-[13px] font-medium rounded-md px-4 py-2 border border-line text-slate-600 hover:bg-surface transition-colors duration-150 cursor-pointer"
+          {{else}}
+          disabled class="min-h-10 shrink-0 whitespace-nowrap text-[13px] font-medium rounded-md px-4 py-2 border border-line text-slate-300 cursor-not-allowed"
+          {{end}}>Next →</button>
+</div>
+{{end}}
+{{end}}

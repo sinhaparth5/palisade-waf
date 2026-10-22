@@ -12,7 +12,7 @@ func TestAuditLog(t *testing.T) {
 	env := newAdminEnv(t)
 	audit := func() []storage.AuditEntry {
 		t.Helper()
-		got, err := env.db.ListAudit(50)
+		got, _, err := env.db.ListAudit(50, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -85,6 +85,35 @@ func TestAuditValue(t *testing.T) {
 	} {
 		if got := auditValue(in); got != want {
 			t.Errorf("auditValue(%.20q) = %.30q, want %.30q", in, got, want)
+		}
+	}
+}
+
+func TestAuditRowsPagination(t *testing.T) {
+	env := newAdminEnv(t)
+	for range 25 {
+		if err := env.db.InsertAudit(storage.AuditEntry{Actor: "admin", Action: "POST /ip-rules"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		path      string
+		wantLabel string
+		wantRows  int
+	}{
+		{"/admin/settings", "Page 1 of 3 · 25 entries", auditPageSize},
+		{"/admin/settings/audit?page=2", "Page 2 of 3 · 25 entries", auditPageSize},
+		{"/admin/settings/audit?page=3", "Page 3 of 3 · 25 entries", 5},
+		{"/admin/settings/audit?page=99", "Page 3 of 3 · 25 entries", 5},
+		{"/admin/settings/audit?page=junk", "Page 1 of 3 · 25 entries", auditPageSize},
+	} {
+		rec := env.do(http.MethodGet, tc.path, nil)
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK || !strings.Contains(body, tc.wantLabel) {
+			t.Errorf("%s: status %d, missing %q", tc.path, rec.Code, tc.wantLabel)
+		}
+		if n := strings.Count(body, "POST /ip-rules</span>"); n != tc.wantRows {
+			t.Errorf("%s: %d rows, want %d", tc.path, n, tc.wantRows)
 		}
 	}
 }

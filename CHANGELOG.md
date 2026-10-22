@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Fixed
+
+- (#178) Settings page audit log grows without limit and layout breaks on mobile
+
 ## [2.10.0] - 2026-10-22
 
 ### Fixed

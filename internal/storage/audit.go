@@ -27,24 +27,28 @@ func (db *DB) InsertAudit(e AuditEntry) error {
 	return err
 }
 
-// ListAudit returns the newest limit entries, newest first.
-func (db *DB) ListAudit(limit int) ([]AuditEntry, error) {
+// ListAudit returns one page of entries, newest first, plus the total count.
+func (db *DB) ListAudit(limit, offset int) ([]AuditEntry, int, error) {
+	var total int
+	if err := db.queryRow(`SELECT COUNT(*) FROM audit_log`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
 	rows, err := db.query(
-		`SELECT id, ts, actor, ip, action, target, summary FROM audit_log ORDER BY ts DESC, id DESC LIMIT ?`, limit,
+		`SELECT id, ts, actor, ip, action, target, summary FROM audit_log ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?`, limit, offset,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	var out []AuditEntry
 	for rows.Next() {
 		var e AuditEntry
 		if err := rows.Scan(&e.ID, &e.TS, &e.Actor, &e.IP, &e.Action, &e.Target, &e.Summary); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		out = append(out, e)
 	}
-	return out, rows.Err()
+	return out, total, rows.Err()
 }
 
 // PruneAudit deletes audit rows older than days and returns how many went.
