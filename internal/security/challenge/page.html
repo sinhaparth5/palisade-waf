@@ -177,10 +177,9 @@
 </div>
 
 <script src="/_cz/fp.js"></script>
-<script type="application/json" id="cz-config">{{.ConfigJSON}}</script>
 <script>
 (function () {
-  var cfg = JSON.parse(document.getElementById('cz-config').textContent);
+  var cfg = {{.Config}};
   var widget = document.getElementById('widget');
   var msg = document.getElementById('widget-msg');
   var hint = document.getElementById('hint');

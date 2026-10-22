@@ -16,6 +16,7 @@ rather than growing this file forever.
 
 ### Fixed
 
+- (#176) Challenge page reads its config back from the DOM
 - (#161) Data race on the pending 2FA login entry
 - (#160) Cloudflare fingerprint headers trusted from any peer
 - (#159) Login path protection matches exact paths only

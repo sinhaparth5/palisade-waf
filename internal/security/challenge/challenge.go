@@ -186,8 +186,9 @@ func (c *Challenger) ServePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Embed all values as a single JSON object so html/template handles
-	// escaping uniformly rather than per-field.
+	// Embedded straight into the page script: html/template JSON-encodes it
+	// for the JS context, so the page never reads its config back out of the
+	// DOM.
 	page := map[string]any{
 		"nonce":    nonce,
 		"exp":      expiry,
@@ -201,7 +202,6 @@ func (c *Challenger) ServePage(w http.ResponseWriter, r *http.Request) {
 			"sitekey":  c.captchaSiteKey,
 		}
 	}
-	cfg, _ := json.Marshal(page)
 
 	// Reference ID shown in the page footer (like Cloudflare's Ray ID):
 	// the nonce prefix is enough to find the solve attempt in support cases.
@@ -213,9 +213,9 @@ func (c *Challenger) ServePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if err := pageTmpl.Execute(w, map[string]any{
-		"ConfigJSON": template.JS(cfg),
-		"Host":       r.Host,
-		"RefID":      refID,
+		"Config": page,
+		"Host":   r.Host,
+		"RefID":  refID,
 	}); err != nil {
 		log.Printf("challenge: render page: %v", err)
 	}
