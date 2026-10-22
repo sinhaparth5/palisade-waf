@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Fixed
+
+- (#152) WAF verdict cache key does not cover request headers
+
 ## [2.9.51] - 2026-10-22
 
 ### Added

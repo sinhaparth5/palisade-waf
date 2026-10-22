@@ -1,6 +1,7 @@
 package waf
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -65,16 +66,46 @@ func TestFingerprintEligible(t *testing.T) {
 func TestFingerprintDeterministicAndDistinguishesRequests(t *testing.T) {
 	r1 := httptest.NewRequest("GET", "http://example.com/search?q=a", nil)
 	r2 := httptest.NewRequest("GET", "http://example.com/search?q=a", nil)
-	if fingerprint(r1, nil) != fingerprint(r2, nil) {
+	if fingerprint(r1, "ip", nil) != fingerprint(r2, "ip", nil) {
 		t.Fatalf("identical requests should fingerprint identically")
 	}
 
 	r3 := httptest.NewRequest("GET", "http://example.com/search?q=b", nil)
-	if fingerprint(r1, nil) == fingerprint(r3, nil) {
+	if fingerprint(r1, "ip", nil) == fingerprint(r3, "ip", nil) {
 		t.Fatalf("requests with different queries should not collide")
 	}
 
-	if fingerprint(r1, []byte("body1")) == fingerprint(r1, []byte("body2")) {
+	if fingerprint(r1, "ip", []byte("body1")) == fingerprint(r1, "ip", []byte("body2")) {
 		t.Fatalf("requests with different bodies should not collide")
+	}
+}
+
+// Everything Coraza can inspect must change the key (issue #152).
+func TestFingerprintCoversInspectedInputs(t *testing.T) {
+	base := func() *http.Request {
+		r := httptest.NewRequest("GET", "http://example.com/a/b", nil)
+		r.Header.Set("User-Agent", "Mozilla/5.0")
+		return r
+	}
+	want := fingerprint(base(), "203.0.113.1", nil)
+	cases := []struct {
+		name string
+		mod  func(r *http.Request) string // returns the client IP to use
+	}{
+		{"header value", func(r *http.Request) string { r.Header.Set("User-Agent", "evil"); return "203.0.113.1" }},
+		{"extra header", func(r *http.Request) string { r.Header.Set("X-Api-Version", "1"); return "203.0.113.1" }},
+		{"header split differently", func(r *http.Request) string {
+			r.Header["User-Agent"] = []string{"Mozilla/", "5.0"}
+			return "203.0.113.1"
+		}},
+		{"unclean path", func(r *http.Request) string { r.URL.Path = "/a/x/../b"; return "203.0.113.1" }},
+		{"client IP", func(r *http.Request) string { return "203.0.113.2" }},
+	}
+	for _, tc := range cases {
+		r := base()
+		ip := tc.mod(r)
+		if fingerprint(r, ip, nil) == want {
+			t.Errorf("%s: fingerprint unchanged", tc.name)
+		}
 	}
 }
