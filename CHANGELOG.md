@@ -14,15 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.10.3] - 2026-10-23
+
 ### Removed
 
 - (#184) Remove Redis support
 
-## [2.10.2] - 2026-10-22
-
-### Fixed
-
-- (#182) --trusted-proxies rejects single IP addresses
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.2...main
-[2.10.2]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.1...v2.10.2
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.3...main
+[2.10.3]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.2...v2.10.3
