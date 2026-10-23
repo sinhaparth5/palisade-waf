@@ -43,18 +43,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    services:
-      # Backs the Redis rate-limit backend and blocklist cluster-sync tests,
-      # which skip themselves when TEST_REDIS_ADDR is unset (local runs).
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -69,8 +57,6 @@ jobs:
         run: go generate ./...
 
       - name: Run tests
-        env:
-          TEST_REDIS_ADDR: 127.0.0.1:6379
         # -coverpkg credits code to its own package wherever it runs, e.g.
         # storage queries exercised by the admin UI tests.
         # gotestsum wraps go test to also write JUnit XML for Codecov Test Analytics.

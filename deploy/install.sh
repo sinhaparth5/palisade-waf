@@ -392,7 +392,7 @@ run chown -R "${SERVICE_USER}:${SERVICE_USER}" "${VAR_DIR}"
 
 # ── DB secrets encryption key ─────────────────────────────────────────────────
 # Passed to the server as --db-key-file: stored secrets in waf.db (TOTP
-# secrets, Cloudflare email token, webhook/Redis credentials, challenge HMAC
+# secrets, Cloudflare email token, webhook credentials, challenge HMAC
 # key) get sealed with AES-256-GCM, so a stolen DB file or backup doesn't
 # yield live credentials. Never regenerated on upgrade — a new key would
 # orphan every secret encrypted under the old one.

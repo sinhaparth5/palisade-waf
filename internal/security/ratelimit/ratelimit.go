@@ -1,11 +1,6 @@
-// Package ratelimit implements per-IP token-bucket limiting with two backends:
-//   - Limiter: in-process memory with optional SQLite write-back persistence
-//     (survives restarts, single-node only)
-//   - RedisBackend: Redis-backed token bucket for multi-node deployments
-//
-// Both satisfy the Backend interface so callers don't need to know which is
-// in use. The global limiter in main.go uses whichever is configured; per-service
-// limiters always use the in-process Limiter (they don't need distribution).
+// Package ratelimit implements per-IP token-bucket limiting in process memory,
+// with optional SQLite write-back persistence so bucket state survives
+// restarts. The global limiter and every per-service limiter use it.
 package ratelimit
 
 import (
@@ -27,20 +22,6 @@ func ClientKey(ip string) string {
 	}
 	p, _ := a.Prefix(64) // can't fail: 64 is in range for IPv6
 	return p.String()
-}
-
-// Backend is the common interface for the global rate limiter. Both the
-// in-process Limiter and RedisBackend satisfy it.
-type Backend interface {
-	Allow(ip string) Result
-	// AllowScaled behaves like Allow but with rate and burst multiplied by
-	// scale (1.0 = identical to Allow). Used by threat-score-driven adaptive
-	// enforcement (issue #16) to tighten or relax the limit for a specific
-	// client without touching the global config. scale <= 0 is treated as
-	// 1.0 — a bad scale must never fully lock out traffic.
-	AllowScaled(ip string, scale float64) Result
-	TrackedIPs() int
-	Stop()
 }
 
 // BucketState is a serialisable snapshot of a single IP's token bucket,
@@ -132,7 +113,7 @@ func (l *Limiter) Allow(ip string) Result {
 }
 
 // AllowScaled behaves like Allow but against rate/burst multiplied by scale.
-// Satisfies Backend. Recomputing the effective rate/burst on every call is
+// Recomputing the effective rate/burst on every call is
 // correct token-bucket math even when scale changes between calls for the
 // same IP — the bucket itself (tokens/lastRefill) doesn't need to know about
 // scaling at all.

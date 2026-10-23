@@ -1,7 +1,7 @@
 // Package config defines the runtime configuration for Palisade.
 // Bootstrap settings (listen addresses, DB path, TLS cache dir) are supplied
 // via CLI flags when the binary starts. All other runtime knobs (WAF rules
-// toggles, bot protection, Redis config, per-service overrides) are stored in
+// toggles, bot protection, per-service overrides) are stored in
 // the SQLite meta table and managed from the admin UI — no config file needed.
 package config
 

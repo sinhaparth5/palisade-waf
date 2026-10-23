@@ -21,7 +21,6 @@ import (
 var auditSkip = map[string]bool{
 	"POST /logout":                 true, // the sessions table already records it
 	"POST /api/notifications/seen": true,
-	"POST /settings/redis/test":    true,
 	"POST /settings/webhook/test":  true,
 	"POST /settings/email/test":    true,
 	"POST /settings/dbconn/test":   true,

@@ -51,7 +51,7 @@ type Handler struct {
 	challengerMu sync.RWMutex
 	challenger   *challenge.Challenger // nil = bot protection disabled
 	ratelimitMu  sync.RWMutex
-	ratelimit    ratelimit.Backend
+	ratelimit    *ratelimit.Limiter
 	db           *storage.DB
 	ipbl         *blocklist.IPBlocklist
 	geoBl        *geo.Blocker
@@ -148,8 +148,8 @@ func (h *Handler) ServeFingerprintJS(w http.ResponseWriter, r *http.Request) {
 
 // ReloadRateLimit swaps in a new rate-limit backend without dropping in-flight
 // requests. The old backend is stopped after the swap. Pass nil to disable
-// rate limiting (the Allow call becomes a no-op for nil Backend).
-func (h *Handler) ReloadRateLimit(backend ratelimit.Backend) {
+// rate limiting (the Allow call is skipped for a nil limiter).
+func (h *Handler) ReloadRateLimit(backend *ratelimit.Limiter) {
 	h.ratelimitMu.Lock()
 	old := h.ratelimit
 	h.ratelimit = backend
@@ -176,7 +176,7 @@ func (h *Handler) StopRateLimit() {
 
 // NewHandler builds the proxy pipeline. Pass nil for ch to disable bot
 // protection / JS challenge (the default when bot_protection.enabled = false).
-func NewHandler(registry *services.Registry, engine *waf.Engine, wafByService map[string]*waf.Engine, db *storage.DB, ipbl *blocklist.IPBlocklist, geoBl *geo.Blocker, rl ratelimit.Backend, asnLookup *asn.Lookup, ch *challenge.Challenger, scorer *threatscore.Scorer, adaptivePolicy *adaptive.Policy, trustedProxyCIDRs ...string) *Handler {
+func NewHandler(registry *services.Registry, engine *waf.Engine, wafByService map[string]*waf.Engine, db *storage.DB, ipbl *blocklist.IPBlocklist, geoBl *geo.Blocker, rl *ratelimit.Limiter, asnLookup *asn.Lookup, ch *challenge.Challenger, scorer *threatscore.Scorer, adaptivePolicy *adaptive.Policy, trustedProxyCIDRs ...string) *Handler {
 	return &Handler{
 		wafDefault:     engine,
 		wafByService:   wafByService,

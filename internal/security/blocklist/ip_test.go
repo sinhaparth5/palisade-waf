@@ -1,11 +1,8 @@
 package blocklist
 
 import (
-	"context"
-	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"palisade/internal/storage"
 )
@@ -46,7 +43,6 @@ func TestCheckPriority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer bl.Close()
 
 	tests := []struct {
 		ip, app    string
@@ -107,64 +103,4 @@ func TestReloadErrorsOnClosedDB(t *testing.T) {
 	if _, err := NewIPBlocklist(db); err == nil {
 		t.Error("NewIPBlocklist on closed DB should error")
 	}
-}
-
-func TestEnableClusterSyncUnreachable(t *testing.T) {
-	db := openDB(t)
-	bl, _ := NewIPBlocklist(db)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := bl.EnableClusterSync(ctx, "127.0.0.1:1", "", db); err == nil {
-		t.Fatal("expected error for unreachable redis")
-	}
-}
-
-// TestClusterSync needs a real Redis; CI provides one via TEST_REDIS_ADDR.
-func TestClusterSync(t *testing.T) {
-	addr := os.Getenv("TEST_REDIS_ADDR")
-	if addr == "" {
-		t.Skip("TEST_REDIS_ADDR not set")
-	}
-	db := openDB(t)
-	a, _ := NewIPBlocklist(db)
-	b, _ := NewIPBlocklist(db)
-	ctx := context.Background()
-	for _, bl := range []*IPBlocklist{a, b} {
-		if err := bl.EnableClusterSync(ctx, addr, "", db); err != nil {
-			t.Fatal(err)
-		}
-		defer bl.Close()
-	}
-
-	_ = db.AddIPRule("", "5.5.5.5", "block")
-	if err := a.Reload(db); err != nil { // broadcasts to b
-		t.Fatal(err)
-	}
-	srcs := mustSource(t, db)
-	_ = db.ReplaceThreatIntelIPs(srcs, []string{"6.6.6.6"})
-	if err := a.ReloadIntel(db); err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		r1, _ := b.Check("5.5.5.5", "")
-		r2, _ := b.Check("6.6.6.6", "")
-		if r1 && r2 {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatal("peer never picked up broadcast reload")
-}
-
-func mustSource(t *testing.T, db *storage.DB) int64 {
-	t.Helper()
-	if err := db.AddThreatIntelSource("feed", "http://example.invalid", 24); err != nil {
-		t.Fatal(err)
-	}
-	srcs, err := db.ListThreatIntelSources()
-	if err != nil || len(srcs) == 0 {
-		t.Fatal(err)
-	}
-	return srcs[0].ID
 }

@@ -4,8 +4,6 @@ import (
 	"net"
 	"sync"
 
-	"github.com/redis/go-redis/v9"
-
 	"palisade/internal/storage"
 )
 
@@ -28,14 +26,6 @@ type IPBlocklist struct {
 	// threat-intel blocks (lowest priority — user rules always win)
 	intelExact map[string]struct{}
 	intelCIDRs []cidrRule
-
-	// Cluster sync (issue #77): when set via EnableClusterSync, Reload and
-	// ReloadIntel also broadcast to every other node sharing this Redis
-	// instance, so an IP rule written by one node's autoban/UI/threat-intel
-	// takes effect on every other node immediately instead of only on the
-	// node that wrote it.
-	clusterPub *redis.Client
-	clusterSub *redis.PubSub
 }
 
 func NewIPBlocklist(db *storage.DB) (*IPBlocklist, error) {
@@ -50,19 +40,8 @@ func NewIPBlocklist(db *storage.DB) (*IPBlocklist, error) {
 }
 
 // Reload re-reads all rules from the DB. Call after adding/removing rules via
-// the UI. Also broadcasts to every other cluster node (see EnableClusterSync)
-// so a rule written on this node takes effect everywhere, not just here.
+// the UI.
 func (bl *IPBlocklist) Reload(db *storage.DB) error {
-	if err := bl.reloadLocal(db); err != nil {
-		return err
-	}
-	bl.publish("rules")
-	return nil
-}
-
-// reloadLocal is Reload without the cluster broadcast — used internally by
-// the cluster subscriber so an incoming broadcast doesn't re-broadcast.
-func (bl *IPBlocklist) reloadLocal(db *storage.DB) error {
 	rows, err := db.ListIPRules()
 	if err != nil {
 		return err
@@ -95,17 +74,8 @@ func (bl *IPBlocklist) reloadLocal(db *storage.DB) error {
 
 // ReloadIntel re-reads all threat-intel IPs from the DB and swaps the
 // in-memory intel block set. Called by the threatintel.Worker after each
-// sync, and broadcasts to every other cluster node like Reload does.
+// sync.
 func (bl *IPBlocklist) ReloadIntel(db *storage.DB) error {
-	if err := bl.reloadIntelLocal(db); err != nil {
-		return err
-	}
-	bl.publish("intel")
-	return nil
-}
-
-// reloadIntelLocal is ReloadIntel without the cluster broadcast — see reloadLocal.
-func (bl *IPBlocklist) reloadIntelLocal(db *storage.DB) error {
 	ips, err := db.ListThreatIntelIPs()
 	if err != nil {
 		return err

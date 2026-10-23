@@ -94,8 +94,6 @@ func TestBaseTemplateCarriesCSRF(t *testing.T) {
 		"BotEnabled":     false,
 		"BotThreshold":   5,
 		"BotTTL":         3600,
-		"RLBackend":      "memory",
-		"RLRedisAddr":    "",
 		"WebhookURL":     "",
 		"WebhookSecret":  "",
 		"WebhookEnabled": false,

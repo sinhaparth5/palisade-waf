@@ -19,9 +19,6 @@ func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	if err := db.SetEmailConfig(EmailConfig{Enabled: true, Token: "cf-token", To: "a@b.c"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.SetRedisConfig("127.0.0.1:6379", "redis-pw"); err != nil {
-		t.Fatal(err)
-	}
 	if err := db.SetWebhookConfig(WebhookConfig{URL: "https://x", Secret: "hook-secret", Enabled: true, Events: "blocked"}); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +36,7 @@ func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	}
 
 	// Migration must have sealed every stored secret...
-	for _, metaKey := range []string{"email_token", "redis_password", "challenge_secret"} {
+	for _, metaKey := range []string{"email_token", "challenge_secret"} {
 		raw, err := db.getMeta(metaKey)
 		if err != nil {
 			t.Fatal(err)
@@ -59,9 +56,6 @@ func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	// ...while the getters still return the original plaintext.
 	if cfg, err := db.GetEmailConfig(); err != nil || cfg.Token != "cf-token" {
 		t.Errorf("GetEmailConfig = %+v, %v; want Token=cf-token", cfg, err)
-	}
-	if _, pw, err := db.GetRedisConfig(); err != nil || pw != "redis-pw" {
-		t.Errorf("GetRedisConfig password = %q, %v; want redis-pw", pw, err)
 	}
 	if cfg, err := db.GetWebhookConfig(); err != nil || cfg.Secret != "hook-secret" {
 		t.Errorf("GetWebhookConfig = %+v, %v; want Secret=hook-secret", cfg, err)

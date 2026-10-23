@@ -1,7 +1,6 @@
 package ratelimit
 
 import (
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -70,61 +69,4 @@ func TestStartPersistenceSavesOnStop(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("final save on Stop never happened")
-}
-
-func TestRedisBackendUnreachable(t *testing.T) {
-	if _, err := NewRedisBackend("", "", 1, 1); err == nil {
-		t.Error("empty addr should error")
-	}
-	if _, err := NewRedisBackend("127.0.0.1:1", "", 1, 1); err == nil {
-		t.Error("unreachable addr should error")
-	}
-	if err := PingRedis("127.0.0.1:1", ""); err == nil {
-		t.Error("PingRedis to unreachable addr should error")
-	}
-}
-
-// TestRedisBackend needs a real Redis; CI provides one via TEST_REDIS_ADDR.
-func TestRedisBackend(t *testing.T) {
-	addr := os.Getenv("TEST_REDIS_ADDR")
-	if addr == "" {
-		t.Skip("TEST_REDIS_ADDR not set")
-	}
-	if err := PingRedis(addr, ""); err != nil {
-		t.Fatal(err)
-	}
-	r, err := NewRedisBackend(addr, "", 1, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer r.Stop()
-	if err := r.Ping(); err != nil {
-		t.Fatal(err)
-	}
-
-	ip := "redis-test-" + time.Now().Format("150405.000000000")
-	for i := range 2 {
-		if !r.Allow(ip).Allowed {
-			t.Fatalf("request %d within burst of 2 should be allowed", i+1)
-		}
-	}
-	res := r.Allow(ip)
-	if res.Allowed || res.RetryAfter <= 0 {
-		t.Fatalf("third request should be blocked: %+v", res)
-	}
-	if res := r.AllowScaled(ip+"-scaled", 0); !res.Allowed || res.Burst != 2 {
-		t.Fatalf("scale<=0 must behave like 1.0: %+v", res)
-	}
-	if res := r.AllowScaled(ip+"-tiny", 0.01); !res.Allowed || res.Burst != 1 {
-		t.Fatalf("tiny scale must floor burst at 1: %+v", res)
-	}
-	if r.TrackedIPs() < 1 {
-		t.Error("TrackedIPs should count stored keys")
-	}
-
-	// A dead connection fails open.
-	r.Stop()
-	if !r.Allow(ip).Allowed {
-		t.Error("closed client should fail open")
-	}
 }

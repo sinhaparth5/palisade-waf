@@ -17,7 +17,7 @@ import (
 // value. Most of the DB is fine that way — request logs, IP rules, service
 // routes — but a handful of values are live, directly usable credentials:
 // the challenge-cookie HMAC secret (forge bot-bypass cookies), the TOTP
-// secrets (defeat admin 2FA), the Cloudflare email token, the Redis password,
+// secrets (defeat admin 2FA), the Cloudflare email token,
 // and the webhook X-WAF-Secret header value. Those, and only those, are
 // sealed with AES-256-GCM when a key is configured. Values already safe at
 // rest stay as they are: the admin password is bcrypt-hashed, API keys and
@@ -45,8 +45,6 @@ var secretMetaKeys = []string{
 	"challenge_secret",
 	"admin_totp_secret",
 	"admin_totp_pending_secret",
-	"redis_password",
-	"redis_ns_key",
 	"email_token",
 	"db_conn_password",
 	"db_conn_dsn",

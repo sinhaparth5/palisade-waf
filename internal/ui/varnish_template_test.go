@@ -116,13 +116,11 @@ func TestRateLimitCardRenders(t *testing.T) {
 
 	var buf bytes.Buffer
 	err := h.tmpls["settings"].ExecuteTemplate(&buf, "ratelimit-card", map[string]any{
-		"AdminPath":   "/admin",
-		"RLBackend":   "memory",
-		"RLRedisAddr": "",
-		"RLEnabled":   true,
-		"RLRPS":       2.5,
-		"RLBurst":     40,
-		"RLSaveOK":    true,
+		"AdminPath": "/admin",
+		"RLEnabled": true,
+		"RLRPS":     2.5,
+		"RLBurst":   40,
+		"RLSaveOK":  true,
 	})
 	if err != nil {
 		t.Fatalf("execute ratelimit-card: %v", err)

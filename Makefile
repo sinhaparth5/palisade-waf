@@ -83,11 +83,12 @@ clean:
 # Cross-compiled, stripped release binaries (no CGO, so this works without
 # any target toolchain installed). -s -w drop debug symbols/DWARF — smaller
 # download, and end users never need to attach a debugger to this binary.
+# -trimpath keeps build-machine paths out of the binary (reproducible builds).
 dist: generate
 	mkdir -p $(DIST)
-	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-linux-amd64 .
-	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-linux-arm64 .
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-windows-amd64.exe .
+	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-linux-amd64 .
+	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-linux-arm64 .
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-windows-amd64.exe .
 
 # Run after `make dist`. Produces dist/checksums.txt for users to verify
 # their download with `sha256sum --check checksums.txt`.

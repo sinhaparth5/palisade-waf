@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Removed
+
+- (#184) Remove Redis support
+
 ## [2.10.2] - 2026-10-22
 
 ### Fixed

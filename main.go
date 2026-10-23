@@ -88,7 +88,7 @@ func main() {
 	}
 
 	// CLI flags for bootstrap settings. All runtime knobs (WAF rules, bot
-	// protection, Redis, ACME email, per-service overrides) live in the SQLite
+	// protection, ACME email, per-service overrides) live in the SQLite
 	// meta table and are managed from the admin UI — no config file needed.
 	fs := flag.NewFlagSet("palisade", flag.ExitOnError)
 	listen := fs.String("listen", ":8080", "HTTP listen address")
@@ -142,7 +142,7 @@ func main() {
 	defer db.Close()
 
 	// Must happen before anything reads secret config (the challenge secret,
-	// TOTP secrets, email/webhook/Redis credentials) — EnableSecretEncryption
+	// TOTP secrets, email/webhook credentials) — EnableSecretEncryption
 	// also migrates any still-plaintext secrets, so first boot with a key
 	// needs no manual step.
 	if *dbKeyFile != "" {
@@ -276,27 +276,7 @@ func main() {
 	}
 	defer geoBl.Close()
 
-	// Choose rate-limit backend: Redis (multi-node) or in-process Limiter
-	// with SQLite write-back persistence (single-node, survives restarts).
-	redisAddr, redisPwd, _ := db.RateLimitRedis()
-	rl := buildRateLimit(db, redisAddr, redisPwd)
-
-	// A configured Redis instance is this project's existing signal for a
-	// multi-node deployment (issue #77) — reuse it to also sync the IP
-	// blocklist across nodes, instead of adding a second toggle. Without
-	// this, a ban written by one node's autoban never reached any other
-	// node's in-memory blocklist.
-	if redisAddr != "" {
-		if strings.EqualFold(cfg.DB.Driver, "") || strings.EqualFold(cfg.DB.Driver, "sqlite") {
-			log.Printf("WARNING: redis is configured (multi-node mode) but --db-driver is sqlite — SQLite's single-writer model does not support multiple app-server processes writing to the same file; use --db-driver mysql or postgres for a real cluster")
-		}
-		if err := ipbl.EnableClusterSync(context.Background(), redisAddr, redisPwd, db); err != nil {
-			log.Printf("ip blocklist: cluster sync disabled, redis connect failed: %v", err)
-		} else {
-			log.Printf("ip blocklist: cluster sync enabled via redis at %s — bans and rule changes now propagate to every node", redisAddr)
-		}
-	}
-	defer ipbl.Close()
+	rl := buildRateLimit(db)
 
 	asnLookup, err := asn.New()
 	if err != nil {
@@ -316,9 +296,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("services registry: %v", err)
 	}
-	// Per-service Redis ACL users live only in Redis memory; re-create any a
-	// Redis restart dropped. A no-op without acl-mode services.
-	go services.RunRedisReconcile(db, time.Minute)
 
 	// Cache-return listener: the single static backend the Varnish VCL points
 	// at. Varnish fetches cache misses here and the registry routes them to
@@ -493,12 +470,10 @@ func main() {
 	}
 
 	// reloadRateLimit is called from the Settings page when the rate-limit
-	// backend config changes. Reads the current DB config and hot-swaps
-	// the backend in the proxy handler — no restart needed.
+	// config changes. Reads the current DB config and hot-swaps the limiter
+	// in the proxy handler — no restart needed.
 	reloadRateLimit := func() {
-		addr, pwd, _ := db.RateLimitRedis()
-		newBackend := buildRateLimit(db, addr, pwd)
-		h.ReloadRateLimit(newBackend)
+		h.ReloadRateLimit(buildRateLimit(db))
 	}
 
 	uiHandler, err := ui.NewHandler(cfg, db, ipbl, geoBl, registry, broadcaster, staticJS, staticCSS, staticImgs, reloadBot, buildChallenger, reloadRateLimit, reloadWAF, intelWorker.SyncSource, emailReporter.SendNow, webhookPusher.SendTest, emailReporter.SendLoginCode, banner.ReloadConfig, scorer, adaptivePolicy.ReloadConfig, h.Handle)
@@ -1188,27 +1163,16 @@ func httpsRedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target, http.StatusMovedPermanently)
 }
 
-// buildRateLimit creates the appropriate rate-limit backend from the global
-// settings stored in the DB (enabled/rps/burst, managed via the Settings
-// page). When global limiting is disabled it returns a no-op Limiter that
-// allows everything — for both backend choices, so behavior never depends on
-// memory vs Redis. When redisAddr is non-empty, it tries Redis (multi-node);
-// on failure or when empty, it falls back to the in-process Limiter with
-// SQLite write-back persistence so token-bucket state survives restarts.
-func buildRateLimit(db *storage.DB, redisAddr, redisPwd string) ratelimit.Backend {
+// buildRateLimit creates the global limiter from the settings stored in the
+// DB (enabled/rps/burst, managed via the Settings page). When global limiting
+// is disabled it returns a no-op Limiter that allows everything; otherwise an
+// in-process Limiter with SQLite write-back persistence, so token-bucket
+// state survives restarts.
+func buildRateLimit(db *storage.DB) *ratelimit.Limiter {
 	enabled, rps, burst, _ := db.GetRateLimitSettings()
 	if !enabled {
 		log.Printf("rate limit: global limiter disabled (enable from the Settings page)")
 		return ratelimit.New(config.RateLimitConfig{})
-	}
-	if redisAddr != "" {
-		rb, err := ratelimit.NewRedisBackend(redisAddr, redisPwd, rps, burst)
-		if err != nil {
-			log.Printf("rate limit: redis connect failed (%v), falling back to in-memory+SQLite", err)
-		} else {
-			log.Printf("rate limit: using Redis backend at %s (%.2g rps, burst %d)", redisAddr, rps, burst)
-			return rb
-		}
 	}
 	l := ratelimit.New(config.RateLimitConfig{Enabled: true, RequestsPerSecond: rps, Burst: burst})
 	if states, err := db.LoadRateLimitState(); err == nil && len(states) > 0 {

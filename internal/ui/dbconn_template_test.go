@@ -31,7 +31,7 @@ func TestDBConnCardRenders(t *testing.T) {
 				"DBConnDriver": "sqlite", "DBConnHost": "waf.db",
 			},
 			want: []string{"/admin/settings/dbconn", `value="waf.db"`, "Currently running", "sqlite"},
-			gone: []string{"Redis"}, // sanity: not accidentally sharing the ratelimit card's content
+			gone: []string{"Rate Limiting"}, // sanity: not accidentally sharing the ratelimit card's content
 		},
 		{
 			name: "mysql-fields",
