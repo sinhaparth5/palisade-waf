@@ -14,15 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.10.4] - 2026-10-26
+
 ### Fixed
 
 - (#186) Review: forwarded IP headers, shutdown drain, ACME listener, TypeSafe retries
 
-## [2.10.3] - 2026-10-23
-
-### Removed
-
-- (#184) Remove Redis support
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.3...main
-[2.10.3]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.2...v2.10.3
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.4...main
+[2.10.4]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.3...v2.10.4
