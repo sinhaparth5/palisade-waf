@@ -401,6 +401,14 @@ func TestLogWorkerFansOut(t *testing.T) {
 	mustNoErr(t, db.Ping(context.Background()))
 }
 
+func TestQueueRequestAfterClose(t *testing.T) {
+	db := openTestDB(t)
+	mustNoErr(t, db.Close())
+	// Must neither panic on the closed queue nor fail a second Close.
+	db.QueueRequest(RequestLog{AppName: "a", RealIP: "1.1.1.1", Timestamp: time.Now(), Status: 200})
+	mustNoErr(t, db.Close())
+}
+
 func TestReputationListings(t *testing.T) {
 	db := openTestDB(t)
 	mustNoErr(t, db.UpsertIPThreatScore(IPThreatScore{IP: "1.1.1.1", Total: 50, UpdatedAt: time.Now()}))

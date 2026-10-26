@@ -1,6 +1,8 @@
 package threatscore
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -57,7 +59,7 @@ func testScorer(db *fakeStore, autobanScore func(string) int) *Scorer {
 		scores:        make(map[string]int),
 		lastSeen:      make(map[string]time.Time),
 		asnCache:      make(map[uint]bool),
-		asnInFlight:   make(map[uint]bool),
+		asnRetryAt:    make(map[uint]time.Time),
 		now:           func() time.Time { return time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC) },
 	}
 }
@@ -325,12 +327,13 @@ func TestJanitorEvictsIdleScores(t *testing.T) {
 // fakeClassifier is a hostingClassifier that never makes a network call.
 type fakeClassifier struct {
 	hosting bool
+	err     error
 	calls   int32
 }
 
 func (f *fakeClassifier) judgeHosting(string) (hostingJudgment, error) {
 	atomic.AddInt32(&f.calls, 1)
-	return hostingJudgment{Hosting: f.hosting}, nil
+	return hostingJudgment{Hosting: f.hosting}, f.err
 }
 
 // TestClassifyASNUsesHeuristicUntilTypeSafeJudgmentArrives checks the core
@@ -377,13 +380,56 @@ func TestClassifyASNUsesHeuristicUntilTypeSafeJudgmentArrives(t *testing.T) {
 	}
 }
 
+// TestClassifyASNFailureBackoff checks a failing TypeSafe call is not repeated
+// on every request: a plain error waits typesafeRetryAfter per ASN, and a
+// rejected API key pauses classification entirely.
+func TestClassifyASNFailureBackoff(t *testing.T) {
+	cases := []struct {
+		name        string
+		err         error
+		wantPaused  bool
+		wantCallsAt []int32 // calls seen after classifying at +0, +1m, +11m
+	}{
+		{"transient error", errors.New("typesafe: status 503"), false, []int32{1, 1, 2}},
+		{"rejected key", fmt.Errorf("%w: status 401", errTypeSafeAuth), true, []int32{1, 1, 1}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testScorer(newFakeStore(), nil)
+			fc := &fakeClassifier{err: tc.err}
+			s.classifier = fc
+			base := s.now()
+			var clock atomic.Int64 // judgeASN reads s.now from its own goroutine
+			s.now = func() time.Time { return base.Add(time.Duration(clock.Load())) }
+			for i, offset := range []time.Duration{0, time.Minute, 11 * time.Minute} {
+				clock.Store(int64(offset))
+				s.classifyASN(64512, "Some ISP")
+				deadline := time.Now().Add(2 * time.Second)
+				for atomic.LoadInt32(&fc.calls) < tc.wantCallsAt[i] && time.Now().Before(deadline) {
+					time.Sleep(time.Millisecond)
+				}
+				time.Sleep(20 * time.Millisecond) // let judgeASN finish its bookkeeping
+				if got := atomic.LoadInt32(&fc.calls); got != tc.wantCallsAt[i] {
+					t.Fatalf("at +%v: judgeHosting calls = %d, want %d", offset, got, tc.wantCallsAt[i])
+				}
+			}
+			s.mu.RLock()
+			paused := s.classifier == nil
+			s.mu.RUnlock()
+			if paused != tc.wantPaused {
+				t.Errorf("classifier paused = %v, want %v", paused, tc.wantPaused)
+			}
+		})
+	}
+}
+
 // TestClassifyASNNilClassifierUsesHeuristicOnly checks the disabled-by-default
 // path (s.classifier == nil, e.g. every Scorer built by New before
-// ReloadTypeSafeConfig is ever called) never touches asnCache/asnInFlight —
+// ReloadTypeSafeConfig is ever called) never touches asnCache/asnRetryAt —
 // those maps stay nil-safe-read-only, so a Scorer that never enables
 // TypeSafe never allocates them.
 func TestClassifyASNNilClassifierUsesHeuristicOnly(t *testing.T) {
-	s := &Scorer{now: time.Now} // classifier, asnCache, asnInFlight all zero-value
+	s := &Scorer{now: time.Now} // classifier, asnCache, asnRetryAt all zero-value
 	if s.classifyASN(16509, "Amazon.com, Inc.") != classify(16509, "Amazon.com, Inc.") {
 		t.Fatal("with no classifier configured, classifyASN must equal the plain heuristic")
 	}

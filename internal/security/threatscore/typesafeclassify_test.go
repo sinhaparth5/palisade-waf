@@ -2,6 +2,7 @@ package threatscore
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -70,15 +71,28 @@ func TestJudgeHostingBelowThresholdIsNotHosting(t *testing.T) {
 }
 
 func TestJudgeHostingErrorsOnNon200(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-	}))
-	defer srv.Close()
+	for _, tc := range []struct {
+		status   int
+		wantAuth bool
+	}{
+		{http.StatusUnauthorized, true},
+		{http.StatusForbidden, true},
+		{http.StatusTooManyRequests, false},
+		{http.StatusInternalServerError, false},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(tc.status)
+		}))
+		c := newTypeSafeClient("bad-key")
+		c.baseURL = srv.URL
 
-	c := newTypeSafeClient("bad-key")
-	c.baseURL = srv.URL
-
-	if _, err := c.judgeHosting("Anything"); err == nil {
-		t.Fatal("expected an error on a non-200 response")
+		_, err := c.judgeHosting("Anything")
+		srv.Close()
+		if err == nil {
+			t.Fatalf("status %d: expected an error on a non-200 response", tc.status)
+		}
+		if got := errors.Is(err, errTypeSafeAuth); got != tc.wantAuth {
+			t.Errorf("status %d: errors.Is(err, errTypeSafeAuth) = %v, want %v", tc.status, got, tc.wantAuth)
+		}
 	}
 }

@@ -39,6 +39,7 @@
 package threatscore
 
 import (
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -87,12 +88,13 @@ type Scorer struct {
 
 	// classifier is nil when TypeSafe-backed ASN classification is off
 	// (the default) — classifyASN then falls back to asnclass.go's
-	// heuristic alone. asnCache/asnInFlight cache judgments per ASN, since
-	// an ASN's organization doesn't change request-to-request: see
+	// heuristic alone. asnCache holds judgments per ASN, since an ASN's
+	// organization doesn't change request-to-request; asnRetryAt keeps an
+	// in-flight or failed ASN from being asked again too soon. See
 	// classifyASN.
-	classifier  hostingClassifier
-	asnCache    map[uint]bool
-	asnInFlight map[uint]bool
+	classifier hostingClassifier
+	asnCache   map[uint]bool
+	asnRetryAt map[uint]time.Time
 
 	stop chan struct{}
 	once sync.Once
@@ -112,7 +114,7 @@ func New(db *storage.DB, autobanScore func(ip string) int) *Scorer {
 		scores:        make(map[string]int),
 		lastSeen:      make(map[string]time.Time),
 		asnCache:      make(map[uint]bool),
-		asnInFlight:   make(map[uint]bool),
+		asnRetryAt:    make(map[uint]time.Time),
 		stop:          make(chan struct{}),
 		now:           time.Now,
 	}
@@ -196,7 +198,7 @@ func (s *Scorer) ReloadTypeSafeConfig(enabled bool, apiKey string) {
 		s.classifier = nil
 	}
 	s.asnCache = make(map[uint]bool)
-	s.asnInFlight = make(map[uint]bool)
+	s.asnRetryAt = make(map[uint]time.Time)
 }
 
 // Record computes and persists e's client IP's composite threat score. It
@@ -258,7 +260,8 @@ func (s *Scorer) Record(e storage.RequestLog) {
 // classifyASN reports whether asn/org looks like hosting/VPN infrastructure.
 // With TypeSafe enabled, a never-before-seen ASN is judged once via a
 // background goroutine and cached forever after — an ASN's organization
-// doesn't change request-to-request. Every call, including the one that
+// doesn't change request-to-request. A failed judgment is retried after
+// typesafeRetryAfter, not on the next request. Every call, including the one that
 // triggers that judgment, returns the fast hardcoded heuristic immediately:
 // Record runs on the log-worker goroutine and must never block on network
 // I/O (see the package doc comment).
@@ -266,7 +269,7 @@ func (s *Scorer) classifyASN(asn uint, org string) bool {
 	s.mu.RLock()
 	classifier := s.classifier
 	cached, ok := s.asnCache[asn]
-	inFlight := s.asnInFlight[asn]
+	retryAt := s.asnRetryAt[asn]
 	s.mu.RUnlock()
 
 	if classifier == nil {
@@ -275,9 +278,9 @@ func (s *Scorer) classifyASN(asn uint, org string) bool {
 	if ok {
 		return cached
 	}
-	if !inFlight && org != "" {
+	if now := s.now(); org != "" && !now.Before(retryAt) {
 		s.mu.Lock()
-		s.asnInFlight[asn] = true
+		s.asnRetryAt[asn] = now.Add(typesafeRetryAfter)
 		s.mu.Unlock()
 		go s.judgeASN(classifier, asn, org)
 	}
@@ -285,11 +288,6 @@ func (s *Scorer) classifyASN(asn uint, org string) bool {
 }
 
 func (s *Scorer) judgeASN(c hostingClassifier, asn uint, org string) {
-	defer func() {
-		s.mu.Lock()
-		delete(s.asnInFlight, asn)
-		s.mu.Unlock()
-	}()
 	start := s.now()
 	judgment, err := c.judgeHosting(org)
 	duration := s.now().Sub(start)
@@ -310,13 +308,24 @@ func (s *Scorer) judgeASN(c hostingClassifier, asn uint, org string) {
 		log.Printf("threatscore: log typesafe call for ASN %d: %v", asn, logErr)
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if errors.Is(err, errTypeSafeAuth) {
+		// Every ASN would fail the same way; stop calling until a Settings
+		// save reloads the config. The check skips a reload that already
+		// replaced c while this call was in flight.
+		if s.classifier == c {
+			s.classifier = nil
+			log.Printf("threatscore: typesafe rejected the API key (%v); AI classification paused until the settings are saved again", err)
+		}
+		return
+	}
 	if err != nil {
 		log.Printf("threatscore: typesafe classify ASN %d (%q): %v", asn, org, err)
-		return // uncached; the heuristic keeps being used, and this retries next time
+		return // the heuristic keeps being used until asnRetryAt passes
 	}
-	s.mu.Lock()
 	s.asnCache[asn] = judgment.Hosting
-	s.mu.Unlock()
+	delete(s.asnRetryAt, asn)
 }
 
 func clamp(v, lo, hi int) int {

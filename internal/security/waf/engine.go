@@ -2,9 +2,9 @@ package waf
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +15,10 @@ import (
 	"github.com/corazawaf/coraza/v3"
 	"github.com/kaptinlin/jsonschema"
 )
+
+// ErrBodyRead wraps a failure reading the client's request body: a client
+// that went away mid-upload or sent a malformed body, not a WAF fault.
+var ErrBodyRead = errors.New("waf: reading request body")
 
 type Engine struct {
 	waf     coraza.WAF
@@ -315,7 +319,7 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 		orig := r.Body
 		b, err := io.ReadAll(io.LimitReader(orig, limit+1))
 		if err != nil {
-			return nil, fmt.Errorf("reading request body: %w", err)
+			return nil, fmt.Errorf("%w: %w", ErrBodyRead, err)
 		}
 		body = b
 		switch {
@@ -353,7 +357,6 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 				return &Result{Blocked: true, Status: http.StatusBadRequest, Action: "schema_violation"}, nil
 			}
 			schemaViolation = true
-			log.Printf("waf: request schema violation (log-only) for %s %s", r.Method, r.URL.Path)
 		}
 	}
 

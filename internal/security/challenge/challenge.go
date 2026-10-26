@@ -65,8 +65,9 @@ type Challenger struct {
 	ttl       int // cookie lifetime in seconds
 	threshold int // anomaly score that triggers a challenge
 
-	mu   sync.Mutex
-	used map[string]int64 // redeemed nonce → its exp; enforces single use
+	mu          sync.Mutex
+	used        map[string]int64 // redeemed nonce → its exp; enforces single use
+	usedSweepAt int              // map size that triggers the next sweep
 
 	// CAPTCHA fallback, set by WithCaptcha; captchaProvider "" = off.
 	captchaProvider, captchaSiteKey, captchaSecret string
@@ -89,12 +90,15 @@ func (c *Challenger) markNonceUsed(nonce string, exp int64) bool {
 	now := time.Now().Unix()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if len(c.used) >= usedNonceSweepAt {
+	if len(c.used) >= max(c.usedSweepAt, usedNonceSweepAt) {
 		for n, e := range c.used {
 			if now > e {
 				delete(c.used, n)
 			}
 		}
+		// Wait for the live set to double before sweeping again, so a map
+		// full of unexpired nonces costs amortized O(1) per verify, not O(n).
+		c.usedSweepAt = 2 * len(c.used)
 	}
 	if _, dup := c.used[nonce]; dup {
 		return false

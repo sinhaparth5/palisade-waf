@@ -2,11 +2,13 @@ package waf
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"palisade/internal/config"
 )
@@ -54,6 +56,20 @@ func TestCheckBodyBuffered(t *testing.T) {
 	got, err := io.ReadAll(r.Body)
 	if err != nil || string(got) != payload {
 		t.Errorf("body after check = %q, %v; want %q intact", got, err, payload)
+	}
+}
+
+// TestCheckBodyReadErrorIsClientFault checks a client that drops mid-upload
+// surfaces as ErrBodyRead, so the proxy answers 400 rather than a 500 "waf
+// error".
+func TestCheckBodyReadErrorIsClientFault(t *testing.T) {
+	e := newTestEngine(t)
+	body := io.MultiReader(strings.NewReader("greeting="), iotest.ErrReader(io.ErrUnexpectedEOF))
+	r := httptest.NewRequest("POST", "http://app.example.com/submit", body)
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	if _, err := e.Check(r, "203.0.113.9"); !errors.Is(err, ErrBodyRead) {
+		t.Fatalf("check err = %v, want ErrBodyRead", err)
 	}
 }
 

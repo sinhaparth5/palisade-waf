@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -444,6 +445,11 @@ func (h *Handler) Handle(c echo.Context) error {
 	if !trusted {
 		result, err = engine.CheckWithOptions(r, clientIP, checkOpts)
 	}
+	if errors.Is(err, waf.ErrBodyRead) {
+		mark("waf")
+		metrics.RecordRequest(appName, strconv.Itoa(http.StatusBadRequest), time.Since(start).Seconds())
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "incomplete request body"})
+	}
 	if err != nil {
 		mark("waf")
 		log.Printf("waf error: %v", err)
@@ -498,7 +504,10 @@ func (h *Handler) Handle(c echo.Context) error {
 
 	w.Header().Set("X-WAF-Status", "inspected")
 	rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
-	rp.ServeHTTP(rw, r)
+	// A clone, so the request log keeps the headers the client really sent.
+	out := r.Clone(r.Context())
+	forwardClientIP(out, clientIP)
+	rp.ServeHTTP(rw, out)
 	mark("proxy")
 	r.URL.Path = originalPath
 	if h.registry.Cached(app.Name) {
@@ -901,6 +910,24 @@ func ClientIP(r *http.Request, trusted []*net.IPNet) string {
 		}
 	}
 	return normalizeIP(remoteIP)
+}
+
+// forwardClientIP replaces the client-supplied forwarding headers on r with
+// the address ClientIP resolved, so a backend that trusts them sees the real
+// client instead of whatever the client sent. When clientIP came from a
+// trusted proxy's header, X-Forwarded-For carries it and the ReverseProxy
+// appends the peer; otherwise the ReverseProxy sets it to the peer alone.
+func forwardClientIP(r *http.Request, clientIP string) {
+	peer := normalizeIP(socketPeerIP(r.RemoteAddr))
+	r.Header.Del("X-Forwarded-For")
+	if clientIP != peer {
+		r.Header.Set("X-Forwarded-For", clientIP)
+	}
+	r.Header.Set("X-Real-IP", clientIP)
+	r.Header.Del("CF-Connecting-IP")
+	if isCloudflareIP(peer) {
+		r.Header.Set("CF-Connecting-IP", clientIP)
+	}
 }
 
 // forwardedFor returns the client X-Forwarded-For names (issue #154). Each

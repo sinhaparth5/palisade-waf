@@ -608,6 +608,72 @@ func TestForwardedHeadersUsedFromTrustedProxy(t *testing.T) {
 	}
 }
 
+func TestBackendSeesResolvedClientIP(t *testing.T) {
+	var got http.Header
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+	}))
+	defer backend.Close()
+
+	dir := t.TempDir()
+	db, _ := storage.Open(filepath.Join(dir, "fwd.db"))
+	defer db.Close()
+	_ = db.AddService("svc", "", "/", backend.URL, 0, 0)
+
+	ipbl, _ := blocklist.NewIPBlocklist(db)
+	geoBl, _ := geo.New("", db)
+	defer geoBl.Close()
+	reg, _ := services.New(db)
+	engine, _ := waf.New(config.WAFConfig{Enabled: false}, nil)
+	rl := ratelimit.New(config.RateLimitConfig{Enabled: false})
+	defer rl.Stop()
+
+	h := proxy.NewHandler(reg, engine, nil, db, ipbl, geoBl, rl, nil, nil, nil, nil, "198.51.100.0/24")
+	e := echo.New()
+
+	cases := []struct {
+		name, remote              string
+		headers                   map[string]string
+		wantXFF, wantReal, wantCF string
+	}{
+		{"direct client spoofing every header", "192.0.2.7:1234",
+			map[string]string{"X-Forwarded-For": "6.6.6.6", "X-Real-IP": "6.6.6.6", "CF-Connecting-IP": "6.6.6.6"},
+			"192.0.2.7", "192.0.2.7", ""},
+		{"trusted proxy", "198.51.100.5:1234",
+			map[string]string{"X-Forwarded-For": "6.6.6.6, 203.0.113.10", "X-Real-IP": "6.6.6.6"},
+			"203.0.113.10, 198.51.100.5", "203.0.113.10", ""},
+		{"cloudflare peer", "104.18.0.1:443",
+			map[string]string{"CF-Connecting-IP": "203.0.113.1", "X-Forwarded-For": "6.6.6.6"},
+			"203.0.113.1, 104.18.0.1", "203.0.113.1", "203.0.113.1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got = nil
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.RemoteAddr = tc.remote
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
+			_ = h.Handle(e.NewContext(req, httptest.NewRecorder()))
+			if got == nil {
+				t.Fatal("request never reached the backend")
+			}
+			if v := got.Get("X-Forwarded-For"); v != tc.wantXFF {
+				t.Errorf("X-Forwarded-For = %q, want %q", v, tc.wantXFF)
+			}
+			if v := got.Get("X-Real-IP"); v != tc.wantReal {
+				t.Errorf("X-Real-IP = %q, want %q", v, tc.wantReal)
+			}
+			if v := got.Get("CF-Connecting-IP"); v != tc.wantCF {
+				t.Errorf("CF-Connecting-IP = %q, want %q", v, tc.wantCF)
+			}
+			if v := req.Header.Get("X-Forwarded-For"); v != tc.headers["X-Forwarded-For"] {
+				t.Errorf("inbound X-Forwarded-For changed to %q; the request log must keep what the client sent", v)
+			}
+		})
+	}
+}
+
 func TestRateLimitHeadersPresent(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

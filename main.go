@@ -541,10 +541,11 @@ func main() {
 	}
 	log.Printf("palisade listening on %s (plain HTTP, waf=%v, apps=%d)",
 		cfg.ListenAddr, cfg.WAF.Enabled, appCount)
-	shutdownOnSignal(e)
+	done := shutdownOnSignal(e)
 	if err := e.Start(cfg.ListenAddr); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server: %v", err)
 	}
+	<-done
 }
 
 // startTLS is the single entry point for HTTPS. It reads the ACME contact
@@ -597,9 +598,15 @@ func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db 
 	}
 	redirectServer := &http.Server{Addr: cfg.ListenAddr, Handler: httpHandler}
 	hardenServer(redirectServer)
+	// Bind before serving so a taken port fails startup: without this
+	// listener ACME HTTP-01 renewals fail silently until the certs expire.
+	redirectLn, err := net.Listen("tcp", cfg.ListenAddr)
+	if err != nil {
+		return fmt.Errorf("http (ACME/redirect) listener: %w", err)
+	}
 	go func() {
 		log.Printf("palisade HTTP (ACME/redirect) on %s", cfg.ListenAddr)
-		if err := redirectServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := redirectServer.Serve(redirectLn); err != nil && err != http.ErrServerClosed {
 			log.Printf("http server: %v", err)
 		}
 	}()
@@ -667,8 +674,12 @@ func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db 
 	}
 
 	log.Printf("palisade TLS on %s (waf=%v, apps=%d)", cfg.ListenAddrTLS, cfg.WAF.Enabled, appCount)
-	shutdownOnSignal(e, servers...)
-	return e.StartServer(s)
+	done := shutdownOnSignal(e, servers...)
+	if err := e.StartServer(s); err != http.ErrServerClosed {
+		return err
+	}
+	<-done
+	return nil
 }
 
 // startHTTP3 serves the same Echo app over QUIC on addr (UDP). Only services
@@ -785,8 +796,14 @@ func startCacheReturn(db *storage.DB, registry *services.Registry) {
 	}
 }
 
-func shutdownOnSignal(e *echo.Echo, extraServers ...shutdowner) {
+// shutdownOnSignal drains the servers on SIGINT/SIGTERM. The returned channel
+// closes once the drain is done; main must wait on it, because Serve returns
+// as soon as Shutdown starts and main's deferred db.Close would otherwise
+// close the log queue under requests still in flight.
+func shutdownOnSignal(e *echo.Echo, extraServers ...shutdowner) <-chan struct{} {
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-sigCh
@@ -811,6 +828,7 @@ func shutdownOnSignal(e *echo.Echo, extraServers ...shutdowner) {
 			}
 		}
 	}()
+	return done
 }
 
 func splitCSV(s string) []string {

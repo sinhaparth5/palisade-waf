@@ -58,6 +58,8 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - `Server: Palisade` is forced in both `handler.go` and `services/registry.go`'s `ModifyResponse`.
 - `proxy.responseWriter` must explicitly implement `Hijack` and `Flush` or WebSockets break.
 - Client IP: always `proxy.ClientIP` (CF header only from Cloudflare peers, XFF only from `--trusted-proxies`, walked from the right), **never** echo's `c.RealIP()`.
+- Backends get `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP` rewritten from that resolved IP (`forwardClientIP`, applied to a clone so `captureHeaders` still logs what the client sent). The stock Director keeps client copies, so never forward `r` directly.
+- Trusted IPs (Settings, `services.Registry.Trusted`) skip IP/geo/challenge/rate-limit **and the WAF** on every path, and never trip honeypots.
 - IPv6 clients are keyed by /64 via `ratelimit.ClientKey` for rate limits, autoban, bans and threat-score cache. New per-client counters must use it; logs and manual rules keep the exact address.
 
 ## Services and routing
@@ -79,6 +81,8 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - Rule exceptions and service-scoped custom rules are compiled in, so each affected service gets its own full CRS engine. `buildWAFAll` in `main.go` builds the default + per-service engines lazily, re-run on SIGHUP and UI saves; `ReloadWAF` swaps them atomically. `AllowLargeJSUploads` is a packaged exception (skip JS bodies, except 911100/920420).
 - Custom rules (`waf_custom_rules`): `waf.ValidateCustomRule` — only `SecRule`/`SecAction`, ids in 1000000–1999999, standalone compile, unique ids. `buildWAFAll` skips invalid rows rather than failing startup.
 - Verdict cache (`verdictcache.go`): 5s TTL, 4096 entries, per engine. Fingerprint covers IP, method, host, raw path/query, all headers and body. Requests with `Cookie`/`Authorization` are never cached.
+- Per-service request JSON Schema (`SetRequestSchema`, `off`/`log`/`enforce`): only on a fully buffered JSON-typed body; enforce → 400 `schema_violation`, log mode → action `schema_violation:log` (no stdout line per request).
+- A failed body read returns `waf.ErrBodyRead` (client abort/malformed body) → 400 in the handler, never a 500 "waf error".
 - No paranoia-level tiering: it would need one CRS engine per level per service.
 
 ## Storage
@@ -90,6 +94,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - **Never use SQLite `date()`/`strftime()` on `requests.ts`** — modernc stores Go's `.String()` format and they return NULL. Bucket times in Go with `>=`/`<=` (see `GetHourlyTraffic`). Always scan/insert timestamps as `time.Time`.
 - Bolt-on features get new tables (`CREATE TABLE IF NOT EXISTS`) rather than `ALTER TABLE`, e.g. `waf_service_rule_exceptions`, `ip_threat_scores`, `ja4_reputation`.
 - The live DB connection always comes from CLI flags; the Settings "Database connection" card only prefills, tests and copies config tables (`MigrateConfigTo`). `BackupTo` (`VACUUM INTO`) is SQLite-only.
+- `DB.Close` is idempotent and `QueueRequest` after it is a silent drop (a handler can outlive a timed-out shutdown); keep that guard if you touch the log queue.
 - Pruning is not automatic unless `--prune-interval` is set; `PruneOldRequests` deletes in batches of 2000. `VACUUM` lives only in the one-shot `prune --vacuum`, never in the running server.
 - **Secrets at rest** (`secretenc.go`, `--db-key-file`): AES-256-GCM with an `enc:v1:` prefix. A new secret meta key must go in `secretMetaKeys` and use only `getSecretMeta`/`setSecretMeta`. A sealed value read with a missing/wrong key must error loudly; `GetOrCreateChallengeSecret` must never regenerate on that error.
 
@@ -118,10 +123,12 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - **Bot** (`security/bot`, `challenge`): header scoring; trusted crawlers must verify by FCrDNS, ASN or pinned CIDR — UA alone is `unverified_crawler`. Operator pins come only from `--trusted-crawlers`; never hardcode IPs. JS PoW challenge + FingerprintJS (vendored, `/_cz/fp.js`) + automation detection; optional Turnstile/hCaptcha fallback. `challenge.Exempt` skips the gate for web manifests (path-based, never header-based). Per-service `bot_mode`: `inherit`/`always`/`off`.
 - **TLS fingerprints**: JA4 primary, JA3 deprecated (don't build on it). Cloudflare `Cf-Ja4`/`Cf-Ja3-Fp` win only from Cloudflare peers. Per-connection geo/ASN caches store the client IP and discard on mismatch (pooled proxies multiplex clients).
 - **Autoban** (`security/autoban`): scores events per IP in a window; `ip_blocked*`/`geo_blocked*` never score; cross-site subresource requests never score. Bans are `Auto-banned — ` notes on global block rules; existing admin rules always win; private IPs never banned.
+- **TypeSafe ASN classification** (`threatscore/typesafeclassify.go`, Settings "AI classification", off by default; key is the `typesafe_api_key` secret): judges unknown ASN orgs in a background goroutine, never on the log worker. Successes are cached per ASN until the config is reloaded; failures back off `typesafeRetryAfter` (10m) per ASN; a 401/403 (`errTypeSafeAuth`) pauses classification until the settings are saved again. Every call is a `typesafe_calls` row (capped at `typesafeCallsKeep`).
 - **Threat score** (`security/threatscore`) feeds **adaptive enforcement** (`security/adaptive`, off by default). Adaptive actions log as `...:adaptive`, so anything matching actions must use prefix matches (`LIKE 'bot_challenge%'`, `strings.HasPrefix`), as must `ip_blocked`/`geo_blocked`/`rate_limited`.
 - **Login protection** (`services/login.go`) and **honeypots** (`services/honeypot.go`, fire only on 404 responses).
 - Rate limiter: in-process token bucket, persisted every 10s. Redis support was removed; `migrate()` deletes leftover keys and the `redis_mode` column is unused.
-- Hot reload: `ReloadWAF`, `ReloadBotProtection`, `ReloadRateLimit` swap under RWMutex; SIGHUP rebuilds the WAF; SIGINT/SIGTERM shut down gracefully and drain the log queue.
+- Hot reload: `ReloadWAF`, `ReloadBotProtection`, `ReloadRateLimit` swap under RWMutex; SIGHUP rebuilds the WAF; SIGINT/SIGTERM shut down gracefully (10s) and drain the log queue. `main`/`startTLS` must block on the channel `shutdownOnSignal` returns: `Serve` returns as soon as `Shutdown` starts, and the deferred `db.Close` would otherwise run under in-flight requests.
+- In TLS mode the `:80` ACME/redirect listener is bound before serving, so a taken port fails startup rather than silently breaking cert renewal.
 
 ## Outbound
 

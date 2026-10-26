@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -19,6 +20,14 @@ const typesafeAPIURL = "https://api.typesafe.ai/v1/systemone"
 // classifyASN in threatscore.go), so a slow response only delays that one
 // ASN's cache entry, not any request.
 const typesafeTimeout = 5 * time.Second
+
+// typesafeRetryAfter is how long an ASN whose judgment failed waits before
+// it is sent to TypeSafe again.
+const typesafeRetryAfter = 10 * time.Minute
+
+// errTypeSafeAuth means TypeSafe rejected the API key, so every call will
+// fail the same way until the key changes.
+var errTypeSafeAuth = errors.New("typesafe: API key rejected")
 
 // hostingClassifier is judgeHosting's shape as an interface, so tests can
 // fake it without a network call.
@@ -105,6 +114,9 @@ func (c *typesafeClient) judgeHosting(org string) (hostingJudgment, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return hostingJudgment{}, fmt.Errorf("%w: status %d", errTypeSafeAuth, resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return hostingJudgment{}, fmt.Errorf("typesafe: status %d", resp.StatusCode)
 	}

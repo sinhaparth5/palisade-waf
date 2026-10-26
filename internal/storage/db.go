@@ -37,6 +37,8 @@ type DB struct {
 	dialect       dialect
 	logQueue      chan RequestLog
 	logDone       chan struct{}
+	logMu         sync.RWMutex // guards logClosed against a send on the closed logQueue
+	logClosed     bool
 	broadcastFn   func(RequestLog)
 	webhookFn     func(RequestLog)
 	autobanFn     func(RequestLog)
@@ -215,6 +217,12 @@ func (db *DB) runLogWorker() {
 // completely full (sustained traffic far beyond what this WAF is sized for),
 // the entry is dropped rather than blocking the request that triggered it.
 func (db *DB) QueueRequest(entry RequestLog) {
+	// A handler can outlive a timed-out graceful shutdown and log after Close.
+	db.logMu.RLock()
+	defer db.logMu.RUnlock()
+	if db.logClosed {
+		return
+	}
 	select {
 	case db.logQueue <- entry:
 	default:
@@ -270,7 +278,14 @@ func (db *DB) insertReturningID(query string, args ...any) (int64, error) {
 }
 
 func (db *DB) Close() error {
+	db.logMu.Lock()
+	if db.logClosed {
+		db.logMu.Unlock()
+		return nil
+	}
+	db.logClosed = true
 	close(db.logQueue)
+	db.logMu.Unlock()
 	<-db.logDone
 	db.bg.Wait()
 	return db.conn.Close()

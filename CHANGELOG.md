@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Fixed
+
+- (#186) Review: forwarded IP headers, shutdown drain, ACME listener, TypeSafe retries
+
 ## [2.10.3] - 2026-10-23
 
 ### Removed
