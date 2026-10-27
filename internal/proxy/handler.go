@@ -1045,6 +1045,12 @@ func forwardClientIP(r *http.Request, clientIP string) {
 		r.Header.Set("X-Forwarded-For", clientIP)
 	}
 	r.Header.Set("X-Real-IP", clientIP)
+	// Backends that build absolute URLs (OIDC issuers like Authelia, OAuth
+	// redirects) need to know the client used HTTPS. Without TLS here, a
+	// TLS-terminating proxy in front (Cloudflare) already sent the header.
+	if r.TLS != nil {
+		r.Header.Set("X-Forwarded-Proto", "https")
+	}
 	r.Header.Del("CF-Connecting-IP")
 	if isCloudflareIP(peer) {
 		r.Header.Set("CF-Connecting-IP", clientIP)

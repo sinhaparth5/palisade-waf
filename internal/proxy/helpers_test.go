@@ -154,3 +154,20 @@ func TestResponseWriterPassthrough(t *testing.T) {
 	}
 	plain.Flush() // no-op, must not panic
 }
+
+// TestForwardClientIPProto: a backend behind Palisade's own TLS learns the
+// client used HTTPS (Authelia builds its OIDC issuer from it); over plain
+// HTTP a TLS-terminating proxy's header is left alone.
+func TestForwardClientIPProto(t *testing.T) {
+	r := httptest.NewRequest("GET", "https://auth.example.com/", nil)
+	forwardClientIP(r, "192.0.2.10")
+	if got := r.Header.Get("X-Forwarded-Proto"); got != "https" {
+		t.Errorf("TLS request: X-Forwarded-Proto = %q, want https", got)
+	}
+	r = httptest.NewRequest("GET", "http://auth.example.com/", nil)
+	r.Header.Set("X-Forwarded-Proto", "https")
+	forwardClientIP(r, "192.0.2.10")
+	if got := r.Header.Get("X-Forwarded-Proto"); got != "https" {
+		t.Errorf("plain request from a TLS proxy: X-Forwarded-Proto = %q, want it kept", got)
+	}
+}
