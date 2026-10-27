@@ -7,6 +7,8 @@ toolchain go1.27.3
 require (
 	github.com/corazawaf/coraza-coreruleset/v4 v4.25.0
 	github.com/corazawaf/coraza/v3 v3.8.1
+	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/goccy/go-yaml v1.19.2
@@ -22,6 +24,7 @@ require (
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/tdewolff/minify/v2 v2.24.19
 	golang.org/x/crypto v0.58.0
+	golang.org/x/oauth2 v0.37.0
 	golang.org/x/text v0.43.0
 	modernc.org/sqlite v1.61.0
 )

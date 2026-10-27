@@ -20,6 +20,7 @@ rather than growing this file forever.
 - (#194) Threat intel: CIDR ranges in feeds and CrowdSec LAPI source
 - (#195) Strict Content-Security-Policy for the admin UI
 - (#196) Multiple admin users with roles
+- (#197) OIDC single sign-on for the admin UI
 
 ## [2.10.5] - 2026-10-27
 

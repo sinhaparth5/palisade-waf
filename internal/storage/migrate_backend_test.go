@@ -53,6 +53,12 @@ func TestMigrateConfigTo(t *testing.T) {
 	if err := source.SeedAdmin("owner@example.com", "owner-password"); err != nil {
 		t.Fatal(err)
 	}
+	if err := source.CreateSSOInvite("sso@example.com", RoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	if u, err := source.AcceptSSOInvite("sso@example.com", "https://idp.example", "sub-1"); err != nil || u == nil {
+		t.Fatalf("accept invite = %+v, %v", u, err)
+	}
 	if err := source.DisableWAFRule(942100, "false positive"); err != nil {
 		t.Fatal(err)
 	}
@@ -133,6 +139,9 @@ func TestMigrateConfigTo(t *testing.T) {
 	// didn't desynchronize the target's auto-increment/identity sequence.
 	if err := target.AddGeoRule("", "PM", "block"); err != nil {
 		t.Errorf("normal insert after migration failed (sequence may be broken): %v", err)
+	}
+	if u, _ := target.SSOUser("https://idp.example", "sub-1"); u == nil || u.Email != "sso@example.com" {
+		t.Errorf("SSO identity not migrated: %+v", u)
 	}
 	if _, err := target.CreateAdminUser("second@example.com", "second-password", RoleViewer); err != nil {
 		t.Errorf("new user after migration failed (sequence may be broken): %v", err)

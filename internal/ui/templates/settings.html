@@ -78,7 +78,7 @@
       {{template "devices-card" .}}
       {{if eq .Role "owner"}}{{template "api-keys-card" .}}{{end}}
     </div>
-    {{if eq .Role "owner"}}{{template "users-card" .}}{{end}}
+    {{if eq .Role "owner"}}{{template "users-card" .}}{{template "sso-card" .}}{{end}}
   </section>
 
   {{if ne .Role "viewer"}}
@@ -486,6 +486,53 @@
   </form>
   <p class="text-[11px] text-slate-400 -mt-3 mb-5">Hand the initial password over yourself; the user can change it under Account after signing in.</p>
 
+  {{if .SSOOn}}
+  <form hx-post="{{.AdminPath}}/settings/users/invites" hx-target="#users-card" hx-swap="outerHTML" class="flex flex-wrap items-end gap-3 mb-2">
+    <div class="flex-1 min-w-[200px]">
+      <label class="block text-[12px] text-slate-500 mb-[6px] font-medium" for="invite_email">Invite to sign in with SSO</label>
+      <input id="invite_email" name="email" type="email" placeholder="teammate@example.com" required autocomplete="off"
+        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+    </div>
+    <div class="shrink-0">
+      <label class="block text-[12px] text-slate-500 mb-[6px] font-medium" for="invite_role">Role</label>
+      <select id="invite_role" name="role"
+        class="focus-green border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white">
+        <option value="viewer">Viewer</option>
+        <option value="admin">Admin</option>
+        <option value="owner">Owner</option>
+      </select>
+    </div>
+    <button type="submit" class="btn-primary px-6 shrink-0">Invite</button>
+  </form>
+  <p class="text-[11px] text-slate-400 mb-5">The invite works once, for 7 days: the first single sign-on with this verified email creates the user and ties it to their identity-provider account.</p>
+  {{end}}
+
+  {{if .Invites}}
+  <div class="flex flex-col gap-1 mb-4">
+    {{range .Invites}}
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-3 rounded-lg border border-dashed border-line">
+      <div class="w-10 h-10 rounded-md bg-surface flex items-center justify-center shrink-0">
+        <i class="hgi hgi-stroke hgi-rounded hgi-mail-01 text-base text-slate-500"></i>
+      </div>
+      <div class="flex-1 min-w-[200px]">
+        <div class="text-[14px] font-semibold text-slate-900 wrap-anywhere">{{.Email}}</div>
+        <div class="text-[12px] {{if .Expired}}text-red-500{{else}}text-slate-500{{end}}">SSO invite · {{.Role}} · {{if .Expired}}expired{{else}}expires{{end}} {{fmtTime .ExpiresAt}}</div>
+      </div>
+      <div class="ml-[52px] sm:ml-0 flex flex-wrap items-center gap-2">
+        <button hx-post="{{$.AdminPath}}/settings/users/invites/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML"
+                class="inline-flex items-center gap-[5px] text-[12px] font-medium text-slate-600 bg-transparent border border-line rounded-md px-3 py-[5px] cursor-pointer font-sans transition-colors duration-150 hover:bg-surface shrink-0">
+          Renew
+        </button>
+        <button hx-delete="{{$.AdminPath}}/settings/users/invites/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML"
+                class="inline-flex items-center gap-[5px] text-[12px] font-medium text-red-500 bg-transparent border border-red-200 rounded-md px-3 py-[5px] cursor-pointer font-sans transition-colors duration-150 hover:bg-red-50 shrink-0">
+          Revoke
+        </button>
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+
   <div class="flex flex-col gap-1">
     {{range .Users}}
     <div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-3 rounded-lg hover:bg-surface transition-colors duration-150 border border-line{{if .Disabled}} opacity-60{{end}}">
@@ -498,7 +545,7 @@
           {{if eq .ID $.MyID}}<span class="shrink-0 text-[11px] font-semibold text-brand-dark bg-brand-tint rounded-sm px-[6px] py-[1px]">You</span>{{end}}
           {{if .Disabled}}<span class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-surface border border-line rounded-sm px-1.5 py-[1px]">Disabled</span>{{end}}
         </div>
-        <div class="text-[12px] text-slate-500">{{if .TOTPEnabled}}2FA on{{else}}2FA off{{end}} · added {{fmtTime .CreatedAt}}</div>
+        <div class="text-[12px] text-slate-500">{{if .SSO}}Single sign-on{{else if .TOTPEnabled}}2FA on{{else}}2FA off{{end}} · added {{fmtTime .CreatedAt}}</div>
       </div>
       <div class="ml-[52px] sm:ml-0 flex flex-wrap items-center gap-2">
         <form hx-post="{{$.AdminPath}}/settings/users/{{.ID}}" hx-trigger="change" hx-target="#users-card" hx-swap="outerHTML" class="contents">
@@ -510,6 +557,7 @@
             <option value="owner" {{if eq .Role "owner"}}selected{{end}}>Owner</option>
           </select>
         </form>
+{{if not .SSO}}
         <button hx-post="{{$.AdminPath}}/settings/users/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML"
                 hx-confirm="Turn off two-factor authentication and remove every passkey for {{.Email}}? Their password still works."
                 hx-vals='{"action":"reset-2fa"}'
@@ -517,6 +565,7 @@
           <i class="hgi hgi-stroke hgi-rounded hgi-reset-password text-xs"></i>
           Reset 2FA
         </button>
+        {{end}}
         {{if .Disabled}}
         <button hx-post="{{$.AdminPath}}/settings/users/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML" hx-vals='{"action":"enable"}'
                 class="inline-flex items-center gap-[5px] text-[12px] font-medium text-slate-600 bg-transparent border border-line rounded-md px-3 py-[5px] cursor-pointer font-sans transition-colors duration-150 hover:bg-surface shrink-0">
@@ -539,6 +588,53 @@
     </div>
     {{end}}
   </div>
+</div>
+{{end}}
+
+{{define "sso-card"}}
+<div class="card p-5" id="sso-card">
+  <h3 class="text-[15px] font-bold text-slate-800 mb-1">Single sign-on</h3>
+  <p class="text-[13px] text-slate-500 mb-5">Sign in through your OpenID Connect provider (Google, Entra, Okta, Keycloak, Authentik, Authelia). Invite-only: the provider proves who someone is, an invite under Users decides whether they get in and with which role. SSO users skip Palisade's own 2FA, so enforce MFA at the provider. Password sign-in always stays available.</p>
+
+  {{if .SSOSaved}}
+  <div class="rounded-md bg-green-50 border border-green-200 text-green-700 text-[13px] px-4 py-3 mb-4">{{if .SSOIssuer}}Single sign-on saved.{{else}}Single sign-on turned off.{{end}}</div>
+  {{end}}
+  {{if .SSOSaveErr}}
+  <div class="rounded-md bg-red-50 border border-red-200 text-red-700 text-[13px] px-4 py-3 mb-4">{{.SSOSaveErr}}</div>
+  {{end}}
+
+  <div class="mb-4">
+    <p class="block text-[13px] font-semibold text-slate-700 mb-1">Redirect URI</p>
+    <p class="text-[13px] text-slate-600 bg-surface border border-line rounded-lg px-3 py-2 font-mono wrap-anywhere">{{.SSOCallbackURL}}</p>
+    <p class="text-[11px] text-slate-400 mt-1">Register this with the provider. It is built from the address you are using now, so open Settings on the admin host users sign in at.</p>
+  </div>
+
+  <form hx-post="{{.AdminPath}}/settings/sso" hx-target="#sso-card" hx-swap="outerHTML" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="md:col-span-2">
+      <label class="block text-[13px] font-semibold text-slate-700 mb-1" for="sso_issuer">Issuer URL <span class="font-normal text-slate-400">(empty turns SSO off)</span></label>
+      <input id="sso_issuer" name="issuer" type="url" value="{{.SSOIssuer}}" placeholder="https://auth.example.com" autocomplete="off"
+             class="w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] px-3 py-2 outline-hidden focus-green focus:border-brand transition"/>
+    </div>
+    <div>
+      <label class="block text-[13px] font-semibold text-slate-700 mb-1" for="sso_client_id">Client ID</label>
+      <input id="sso_client_id" name="client_id" type="text" value="{{.SSOClientID}}" autocomplete="off"
+             class="w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] px-3 py-2 outline-hidden focus-green focus:border-brand transition"/>
+    </div>
+    <div>
+      <label class="block text-[13px] font-semibold text-slate-700 mb-1" for="sso_client_secret">Client secret{{if .SSOSecretSet}} <span class="font-normal text-slate-400">(saved; leave blank to keep)</span>{{end}}</label>
+      <input id="sso_client_secret" name="client_secret" type="password" autocomplete="off" placeholder="{{if .SSOSecretSet}}••••••••••••••••{{end}}"
+             class="w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] px-3 py-2 outline-hidden focus-green focus:border-brand transition"/>
+    </div>
+    <div class="md:col-span-2">
+      <label class="block text-[13px] font-semibold text-slate-700 mb-1" for="sso_group">Required group <span class="font-normal text-slate-400">(optional)</span></label>
+      <input id="sso_group" name="group" type="text" value="{{.SSOGroup}}" placeholder="palisade" autocomplete="off"
+             class="w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] px-3 py-2 outline-hidden focus-green focus:border-brand transition"/>
+      <p class="text-[11px] text-slate-400 mt-1">Only users whose <code class="font-mono text-[11px]">groups</code> claim contains this can sign in; removing someone from it signs them out at their next attempt. Roles always come from the invite, never the provider.</p>
+    </div>
+    <div class="md:col-span-2 pt-1">
+      <button type="submit" class="btn-primary px-6">Save</button>
+    </div>
+  </form>
 </div>
 {{end}}
 

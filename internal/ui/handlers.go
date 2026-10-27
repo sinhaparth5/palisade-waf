@@ -364,6 +364,9 @@ func (h *Handler) Register(e *echo.Echo) {
 	// Passkey alternative to the code form above, same pending-login stage.
 	admin.POST("/login/webauthn/begin", h.BeginPasskeyLogin, bodyLimit)
 	admin.POST("/login/webauthn/finish", h.FinishPasskeyLogin, bodyLimit)
+	// OIDC single sign-on: redirect to the IdP, and its redirect back.
+	admin.GET("/login/sso", h.SSOStart)
+	admin.GET("/login/sso/callback", h.SSOCallback)
 	// Static assets are public so the login page can load spirals/JS before auth.
 	admin.StaticFS("/static/js", h.staticJS)
 	admin.StaticFS("/static/css", h.staticCSS)
@@ -486,6 +489,10 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/settings/users", h.CreateUser),
 		g.POST("/settings/users/:id", h.UpdateUser),
 		g.DELETE("/settings/users/:id", h.DeleteUser),
+		g.POST("/settings/users/invites", h.CreateSSOInvite),
+		g.POST("/settings/users/invites/:id", h.RenewSSOInvite),
+		g.DELETE("/settings/users/invites/:id", h.RevokeSSOInvite),
+		g.POST("/settings/sso", h.SaveSSOSettings),
 		g.POST("/settings/webhook", h.SaveWebhookConfig),
 		g.POST("/settings/webhook/test", h.TestWebhook),
 		g.POST("/settings/email", h.SaveEmailSettings),
@@ -666,10 +673,12 @@ func (h *Handler) renderLogin(c echo.Context, errMsg string) error {
 func (h *Handler) renderLoginStatus(c echo.Context, status int, errMsg string) error {
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.Response().WriteHeader(status)
+	sso, _ := h.db.GetSSOConfig()
 	return h.tmpls["login"].ExecuteTemplate(c.Response(), "login", map[string]any{
 		"Error":     errMsg,
 		"AdminPath": h.cfg.Admin.Path,
 		"Asset":     h.assetVer,
+		"SSOName":   ssoProviderName(sso),
 	})
 }
 
@@ -2487,12 +2496,23 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 	passkeyRows, _ := h.db.ListWebAuthnCredentials(me.ID)
 	trustedIPs, _ := h.db.GetTrustedIPs()
 	var users []storage.AdminUser
+	var invites []storage.SSOInvite
+	var sso storage.SSOConfig
 	if me.Role == storage.RoleOwner {
 		users, _ = h.db.ListAdminUsers()
+		invites, _ = h.db.ListSSOInvites()
+		sso, _ = h.db.GetSSOConfig()
 	}
 	return h.render(c, "settings", h.dbConnCardData(dbConnCfg, false, "", map[string]any{
 		"AdminEmail":             me.Email,
 		"Users":                  users,
+		"Invites":                invites,
+		"SSOOn":                  sso.Issuer != "",
+		"SSOIssuer":              sso.Issuer,
+		"SSOClientID":            sso.ClientID,
+		"SSOSecretSet":           sso.ClientSecret != "",
+		"SSOGroup":               sso.Group,
+		"SSOCallbackURL":         h.ssoCallbackURL(c),
 		"MyID":                   me.ID,
 		"TOTPEnabled":            totpEnabled,
 		"Passkeys":               passkeyRows,
