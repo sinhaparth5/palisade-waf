@@ -36,7 +36,11 @@ function showToast(data) {
   // Icon box — tinted per action type
   var iconBox = document.createElement('div');
   iconBox.style.cssText = 'width:38px;height:38px;border-radius:8px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;background:' + cfg.bg + ';';
-  iconBox.innerHTML = '<i class="hgi hgi-stroke hgi-rounded ' + cfg.icon + ' text-base" style="color:' + cfg.color + ';"></i>';
+  // CSSOM, not a style="" attribute: the admin CSP blocks inline styles (issue #195).
+  var icon = document.createElement('i');
+  icon.className = 'hgi hgi-stroke hgi-rounded ' + cfg.icon + ' text-base';
+  icon.style.color = cfg.color;
+  iconBox.appendChild(icon);
 
   // Content
   var content = document.createElement('div');

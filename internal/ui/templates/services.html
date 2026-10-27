@@ -15,7 +15,7 @@
       <div class="wizard-dot flex-1 h-1 rounded-full bg-line" data-dot="4"></div>
     </div>
 
-    <form id="service-form" novalidate hx-post="/admin/services" hx-target="#services-body" hx-swap="innerHTML" hx-on::after-request="this.reset(); window.resetServiceWizard()">
+    <form id="service-form" novalidate hx-post="/admin/services" hx-target="#services-body" hx-swap="innerHTML" data-reset="always">
 
       <!-- Step 1: Name -->
       <div class="wizard-step" data-step="1">

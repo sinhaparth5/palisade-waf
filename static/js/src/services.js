@@ -101,9 +101,10 @@
     }
   });
 
-  window.resetServiceWizard = function () {
-    goToStep(1);
-  };
+  // admin.js resets the fields (data-reset="always"); this rewinds the steps.
+  document.addEventListener('htmx:afterRequest', function (e) {
+    if (e.detail.elt === form) goToStep(1);
+  });
 
   goToStep(1);
 })();

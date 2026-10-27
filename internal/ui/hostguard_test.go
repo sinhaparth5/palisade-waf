@@ -68,6 +68,9 @@ func TestHostGuardBlocksAdminOnServiceDomain(t *testing.T) {
 	if proxyCalls != 1 || proxiedHost != "example-api.com" {
 		t.Fatalf("proxyHandle called %d time(s) for host %q, want exactly once for example-api.com", proxyCalls, proxiedHost)
 	}
+	if csp := rec.Header().Get("Content-Security-Policy"); csp != "" {
+		t.Errorf("proxied response got the admin CSP %q (issue #195)", csp)
+	}
 
 	// The fix must not break the admin UI on a Host nothing claims, e.g.
 	// this server's bare listen IP.
@@ -77,6 +80,9 @@ func TestHostGuardBlocksAdminOnServiceDomain(t *testing.T) {
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /admin/login on the server's own IP = %d, want 200 (admin login page)", rec.Code)
+	}
+	if csp := rec.Header().Get("Content-Security-Policy"); csp != adminCSP {
+		t.Errorf("login page CSP = %q, want adminCSP", csp)
 	}
 	if proxyCalls != 1 {
 		t.Fatalf("proxyHandle called %d time(s) after the second request, want still 1 (unclaimed host must not be proxied)", proxyCalls)
