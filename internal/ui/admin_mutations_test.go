@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"palisade/internal/security/waf"
 	"palisade/internal/storage"
 )
 
@@ -943,5 +944,35 @@ func TestSetServiceBreachCheck(t *testing.T) {
 	env.do("POST", path, form("breach_action", ""))
 	if got, _ = env.db.GetService(svc.ID); got.BreachAction != "" || got.BreachFields != nil {
 		t.Errorf("not cleared: %q %v", got.BreachAction, got.BreachFields)
+	}
+}
+
+func TestVirtualPatchesCard(t *testing.T) {
+	env := newAdminEnv(t)
+	env.seedService("shop", "shop.example.com")
+	p := waf.VPatches[0]
+	env.seedLog(storage.RequestLog{Timestamp: time.Now(), RealIP: "203.0.113.5", Blocked: true, RuleID: p.RuleID, Status: 403})
+	env.seedLog(storage.RequestLog{Timestamp: time.Now(), RealIP: "203.0.113.6", Blocked: true, RuleID: p.RuleID, Status: 403})
+
+	rec := env.do("GET", "/admin/waf-rules", nil)
+	wantCode(t, "page", rec.Code, 200, "")
+	body := rec.Body.String()
+	for _, vp := range waf.VPatches {
+		if !strings.Contains(body, vp.CVE) {
+			t.Errorf("%s not listed", vp.CVE)
+		}
+	}
+	if !strings.Contains(body, `<td class="px-4 py-3 text-right font-semibold text-slate-700">2</td>`) {
+		t.Error("hit count for the patch not shown")
+	}
+
+	// Turning a patch off for one service is a rule exception for its id.
+	rec = env.do("POST", "/admin/waf-rules/disable", form("rule_id", itoa(p.RuleID), "service", "shop", "reason", "Virtual patch "+p.CVE+" turned off"))
+	wantCode(t, "turn off", rec.Code, 200, rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "off: shop") {
+		t.Error("per-service off not shown")
+	}
+	if ids, _ := env.db.GetWAFRuleIDsForService("shop"); len(ids) != 1 || ids[0] != p.RuleID {
+		t.Errorf("exception rows = %v", ids)
 	}
 }

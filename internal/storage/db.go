@@ -3293,6 +3293,28 @@ func parseTS(s string) time.Time {
 	return time.Time{}
 }
 
+// GetRuleHitCounts returns how many logged blocks each rule id in
+// [minID, maxID] caused, for the rules that caused any.
+func (db *DB) GetRuleHitCounts(minID, maxID int) (map[int]int, error) {
+	rows, err := db.query(
+		`SELECT rule_id, COUNT(*) FROM requests WHERE rule_id BETWEEN ? AND ? AND blocked = 1 GROUP BY rule_id`,
+		minID, maxID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	hits := map[int]int{}
+	for rows.Next() {
+		var id, n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		hits[id] = n
+	}
+	return hits, rows.Err()
+}
+
 // GetTopFiringRules returns the most-blocked WAF rule IDs from request history,
 // annotated with whether each rule is currently disabled.
 func (db *DB) GetTopFiringRules(limit int) ([]RuleHit, error) {

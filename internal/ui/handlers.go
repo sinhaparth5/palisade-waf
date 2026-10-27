@@ -1580,7 +1580,12 @@ func (h *Handler) wafRulesContentData() (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	vpatches, err := h.vpatchViews(disabled, serviceExceptions)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{
+		"VPatches":          vpatches,
 		"CustomRules":       customRules,
 		"Disabled":          disabled,
 		"ServiceExceptions": serviceExceptions,
@@ -1590,6 +1595,36 @@ func (h *Handler) wafRulesContentData() (map[string]any, error) {
 		"FeedbackThreshold": feedbackCfg.Threshold,
 		"FeedbackWindow":    feedbackCfg.WindowDays,
 	}, nil
+}
+
+// vpatchView is a virtual patch (issue #189) with its hits and where it is
+// switched off. Off is an ordinary rule exception for its rule id.
+type vpatchView struct {
+	waf.VPatch
+	Hits      int
+	GlobalOff bool
+	OffFor    []string
+}
+
+func (h *Handler) vpatchViews(disabled []storage.DisabledWAFRule, exceptions []storage.WAFServiceException) ([]vpatchView, error) {
+	hits, err := h.db.GetRuleHitCounts(waf.VPatchIDMin, waf.VPatchIDMax)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]vpatchView, len(waf.VPatches))
+	for i, p := range waf.VPatches {
+		v := vpatchView{VPatch: p, Hits: hits[p.RuleID]}
+		for _, d := range disabled {
+			v.GlobalOff = v.GlobalOff || d.RuleID == p.RuleID
+		}
+		for _, e := range exceptions {
+			if e.RuleID == p.RuleID {
+				v.OffFor = append(v.OffFor, e.ServiceName)
+			}
+		}
+		out[i] = v
+	}
+	return out, nil
 }
 
 func (h *Handler) WAFRulesPage(c echo.Context) error {

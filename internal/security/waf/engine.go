@@ -108,7 +108,10 @@ func NewWithDirectives(cfg config.WAFConfig, disabledRuleIDs []int, extra string
 	// anything we set before the includes gets silently clobbered back to
 	// those defaults — every rule still matches and scores, but nothing is
 	// ever actually blocked.
-	directives := fmt.Sprintf(`
+	//
+	// Virtual patches go first: their deny fires on its own rule id before
+	// CRS scoring, and SecRuleRemoveById below can still switch one off.
+	directives := vpatchDirectives() + fmt.Sprintf(`
 Include @coraza.conf-recommended
 Include @crs-setup.conf.example
 Include @owasp_crs/*.conf

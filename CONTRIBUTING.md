@@ -98,6 +98,33 @@ hot-reload pattern, storage dialects and date/time gotchas, Varnish cache,
 etc.) before making non-trivial changes, and [`REVIEW.md`](REVIEW.md) for what
 reviewers check.
 
+## Adding a virtual patch
+
+Virtual patches block an actively exploited CVE until the app behind
+Palisade is updated. Each one is a file in `internal/security/waf/vpatch/`,
+named after the CVE (`CVE-2024-4577.conf`), embedded in the binary and loaded
+into every engine ahead of CRS.
+
+1. Start the file with these header lines; the WAF Rules page shows them:
+   ```
+   # CVE: CVE-2024-4577
+   # Product: <product and affected versions>
+   # Reference: https://nvd.nist.gov/vuln/detail/CVE-2024-4577
+   # Added: <YYYY-MM-DD>
+   ```
+   Follow them with a comment explaining what the exploit looks like.
+2. Write exactly **one** `SecRule` (a chain is fine) with the next free id in
+   2000000–2099999, `deny,status:403,log,severity:'CRITICAL'`, a `msg` naming
+   the CVE and `tag:'vpatch/<CVE>'`. Use phase 1 unless you need body
+   arguments. One id per patch is what lets an operator turn it off with a
+   normal rule exception.
+3. Match the exploit itself, not the product: real traffic to the same app
+   must pass.
+4. Add a case to `vpatchCases` in `internal/security/waf/vpatch_test.go`:
+   one request carrying the exploit (must be blocked by *your* rule id) and one
+   normal request to the same product (must pass with full CRS loaded).
+   `TestVPatchPack` fails until both exist.
+
 ## Security & secret hygiene
 
 Never commit any of the following:
