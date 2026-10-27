@@ -164,6 +164,15 @@
             </button>
 
           </form>
+          {{if .SSOName}}
+          <div class="my-6 flex items-center gap-3 text-slate-400 text-xs" aria-hidden="true">
+            <span class="h-px flex-1 bg-slate-200"></span>or<span class="h-px flex-1 bg-slate-200"></span>
+          </div>
+          <a href="{{.AdminPath}}/login/sso"
+             class="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-700 text-sm font-semibold py-3.5 no-underline hover:bg-slate-50 transition">
+            Sign in with {{.SSOName}}
+          </a>
+          {{end}}
           {{end}}
         </div>
       </div>

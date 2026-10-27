@@ -27,7 +27,7 @@ type MigrationTableResult struct {
 // there is nothing extra to do for "the tables should be created there").
 //
 // Migrated: services, ip_rules, geo_rules, meta (settings, secrets),
-// admin_users (credentials, TOTP), certificates, api_keys, waf_disabled_rules,
+// admin_users (credentials, TOTP), admin_sso_identities, certificates, api_keys, waf_disabled_rules,
 // waf_service_rule_exceptions, waf_custom_rules, threat_intel_sources + their synced
 // threat_intel_ips, webhook_config, ip_threat_scores, ja4_reputation, service_openapi,
 // service_mtls (the CA files it points at stay on disk).
@@ -96,6 +96,7 @@ func (db *DB) MigrateConfigTo(targetDriver, targetDSN string) (MigrationReport, 
 	}{
 		{"meta", migrateMetaTable, false},
 		{"admin_users", migrateAdminUsersTable, true},
+		{"admin_sso_identities", migrateSSOIdentitiesTable, false},
 		{"certificates", migrateCertificatesTable, true},
 		{"services", migrateServicesTable, true},
 		{"service_openapi", migrateServiceOpenAPITable, false},

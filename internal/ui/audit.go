@@ -32,8 +32,8 @@ var auditSkip = map[string]bool{
 // rather than a denylist so a field added later (a password, a token, a URL
 // with credentials in it) stays out until someone decides it's safe.
 var auditFields = []string{
-	"action", "ai_search", "ai_training", "ai_user", "aliases", "app_name", "bot_mode", "breach_action", "breach_fields", "canonical", "canonical_host", "captcha_provider", "cert_id",
-	"country_code", "email", "enabled", "honeypot_paths", "host", "host_aliases", "ip", "label", "lb_policy", "login_paths",
+	"action", "ai_search", "ai_training", "ai_user", "aliases", "app_name", "bot_mode", "breach_action", "breach_fields", "canonical", "canonical_host", "captcha_provider", "cert_id", "client_id",
+	"country_code", "email", "enabled", "group", "honeypot_paths", "host", "host_aliases", "ip", "issuer", "label", "lb_policy", "login_paths",
 	"match_type", "mode", "mtls_mode", "name", "note", "openapi_mode", "path", "prefix", "read_only", "reason", "response_inspect",
 	"role", "rule_id", "rule_type", "service", "service_id", "trusted_ips",
 }

@@ -46,6 +46,7 @@ type AdminUser struct {
 	Role        string
 	Disabled    bool
 	TOTPEnabled bool
+	SSO         bool // bound to an IdP identity (issue #197); has no password
 	CreatedAt   time.Time
 }
 
@@ -53,11 +54,12 @@ type AdminUser struct {
 // is case-insensitive on every dialect (MySQL's collation already was).
 func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
 
-const adminUserColumns = `id, email, role, disabled, totp_secret <> '', created_at`
+const adminUserColumns = `id, email, role, disabled, totp_secret <> '',
+	(SELECT COUNT(*) FROM admin_sso_identities i WHERE i.user_id = admin_users.id) > 0, created_at`
 
 func scanAdminUser(row interface{ Scan(...any) error }) (*AdminUser, error) {
 	var u AdminUser
-	err := row.Scan(&u.ID, &u.Email, &u.Role, &u.Disabled, &u.TOTPEnabled, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.Role, &u.Disabled, &u.TOTPEnabled, &u.SSO, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -253,9 +255,7 @@ func (db *DB) SetAdminUserDisabled(id int64, disabled bool) error {
 	if !disabled {
 		return nil
 	}
-	_, err := db.exec(`UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at = ''`,
-		time.Now().UTC().Format(time.RFC3339), id)
-	return err
+	return db.RevokeUserSessions(id)
 }
 
 // DeleteAdminUser removes a user with its sessions and passkeys.
@@ -266,6 +266,7 @@ func (db *DB) DeleteAdminUser(id int64) error {
 	for _, q := range []string{
 		`DELETE FROM sessions WHERE user_id = ?`,
 		`DELETE FROM webauthn_credentials WHERE user_id = ?`,
+		`DELETE FROM admin_sso_identities WHERE user_id = ?`,
 		`DELETE FROM admin_users WHERE id = ?`,
 	} {
 		if _, err := db.exec(q, id); err != nil {

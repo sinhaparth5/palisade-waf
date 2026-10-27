@@ -183,6 +183,23 @@ func (db *DB) schemaStatements() []string {
 			created_at          %s NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`, pk, ts),
 
+		// OIDC single sign-on (issue #197), see sso.go. Pending invites are
+		// deleted when used or revoked; an identity binds one user to the
+		// IdP's iss+sub.
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS admin_sso_invites (
+			id         %s,
+			email      VARCHAR(255) NOT NULL UNIQUE,
+			role       TEXT NOT NULL,
+			expires_at %s NOT NULL,
+			created_at %s NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`, pk, ts, ts),
+		`CREATE TABLE IF NOT EXISTS admin_sso_identities (
+			user_id INTEGER PRIMARY KEY,
+			issuer  VARCHAR(255) NOT NULL,
+			subject VARCHAR(255) NOT NULL,
+			UNIQUE (issuer, subject)
+		)`,
+
 		// token is 32 random bytes hex-encoded (64 chars, see
 		// DB.CreateSession) — VARCHAR(64) fits exactly.
 		// One row per login. Only one row per user is ever live at a time

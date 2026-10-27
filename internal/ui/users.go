@@ -60,9 +60,13 @@ func (h *Handler) requireRole(next echo.HandlerFunc) echo.HandlerFunc {
 
 func (h *Handler) usersCardData(c echo.Context, errMsg string) map[string]any {
 	users, _ := h.db.ListAdminUsers()
+	invites, _ := h.db.ListSSOInvites()
+	sso, _ := h.db.GetSSOConfig()
 	return map[string]any{
 		"AdminPath": h.cfg.Admin.Path,
 		"Users":     users,
+		"Invites":   invites,
+		"SSOOn":     sso.Issuer != "",
 		"MyID":      currentUID(c),
 		"UserErr":   errMsg,
 	}
