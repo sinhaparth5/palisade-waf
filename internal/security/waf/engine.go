@@ -29,6 +29,8 @@ type Engine struct {
 	// (issue #75) — see SetRequestSchema.
 	schema        *jsonschema.Schema
 	schemaEnforce bool
+
+	openapi *apiSpec // per-service OpenAPI positive model (issue #190) — see SetOpenAPI
 }
 
 type Result struct {
@@ -48,6 +50,10 @@ type CheckOptions struct {
 	// an application that executes or parses the uploaded source may prefer
 	// the normal 128 KiB inspected-body limit.
 	AllowLargeJavaScriptUploads bool
+
+	// Path is the request path as the backend sees it (service prefix
+	// stripped), for OpenAPI route matching. Empty means r.URL.Path.
+	Path string
 }
 
 // requestBodyLimit is the SecRequestBodyLimit value passed to Coraza and the
@@ -353,13 +359,33 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 	// already buffered above, so it's cheap and adds no I/O. Only ever
 	// applies to a full, JSON-declared body — hadBody guards against a
 	// bodyless request that happens to carry a stray JSON Content-Type.
-	schemaViolation := false
-	if hadBody && buffered && e.schema != nil && isJSONMediaType(r.Header.Get("Content-Type")) {
+	//
+	// An OpenAPI spec (issue #190) goes first and wins over the plain schema
+	// for every operation it declares.
+	logAction := ""
+	declared := false
+	if e.openapi != nil {
+		path := opts.Path
+		if path == "" {
+			path = r.URL.Path
+		}
+		var status int
+		status, declared = e.openapi.check(r, path, body, hadBody, buffered)
+		if status != 0 {
+			if e.openapi.enforce {
+				return &Result{Blocked: true, Status: status, Action: "openapi_violation"}, nil
+			}
+			logAction = "openapi_violation:log"
+		}
+	}
+	if !declared && hadBody && buffered && e.schema != nil && isJSONMediaType(r.Header.Get("Content-Type")) {
 		if res := e.schema.ValidateJSON(body); !res.IsValid() {
 			if e.schemaEnforce {
 				return &Result{Blocked: true, Status: http.StatusBadRequest, Action: "schema_violation"}, nil
 			}
-			schemaViolation = true
+			if logAction == "" {
+				logAction = "schema_violation:log"
+			}
 		}
 	}
 
@@ -373,8 +399,8 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 		cacheKey = fingerprint(r, clientIP, body)
 		if cached, ok := e.cache.get(cacheKey); ok {
 			result := cached
-			if schemaViolation && !result.Blocked {
-				result.Action = "schema_violation:log"
+			if logAction != "" && !result.Blocked {
+				result.Action = logAction
 			}
 			return &result, nil
 		}
@@ -384,8 +410,8 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 	if err != nil {
 		return nil, err
 	}
-	if schemaViolation && !result.Blocked {
-		result.Action = "schema_violation:log"
+	if logAction != "" && !result.Blocked {
+		result.Action = logAction
 	}
 	if cacheKey != "" {
 		e.cache.put(cacheKey, *result)

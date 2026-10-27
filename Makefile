@@ -47,11 +47,11 @@ run: build
 test: hooks
 	go test ./...
 
-# Request-pipeline benchmarks (internal/proxy/bench_test.go). Writes bench.txt;
+# Request-pipeline and OpenAPI-check benchmarks. Writes bench.txt;
 # compare two runs with benchstat — see BENCHMARKS.md.
 BENCH_COUNT ?= 6
 bench:
-	go test -run '^$$' -bench . -benchmem -count $(BENCH_COUNT) ./internal/proxy/ | tee bench.txt
+	go test -run '^$$' -bench . -benchmem -count $(BENCH_COUNT) ./internal/proxy/ ./internal/security/waf/ | tee bench.txt
 
 # Requires golangci-lint $(LINT_VERSION) — https://golangci-lint.run/welcome/install/
 # Config lives in .golangci.yml. Same command CI and the pre-commit hook run.

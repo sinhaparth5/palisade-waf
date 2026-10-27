@@ -17,6 +17,7 @@ proxy) against a local test backend:
 | `Handle/waf_blocked` | SQL injection in the query, 403 from CRS |
 | `Handle/large_body` | 64 KiB JSON POST, inspected by CRS |
 | `HandleParallel` | `clean` from every core at once; wall time per request, so 1/x is throughput |
+| `OpenAPICheck` (`internal/security/waf`) | the per-service OpenAPI check alone: a 200-route spec, path and query parameters validated |
 
 ```bash
 make bench                       # 6 runs of each -> bench.txt
@@ -43,11 +44,12 @@ Median of 6 runs.
 | `Handle/waf_blocked` | 1.39 ms | 178 KiB | 3,244 |
 | `Handle/large_body` | 413 ms | 153 MiB | 112,700 |
 | `HandleParallel` | 388 µs (≈2,600 req/s) | 214 KiB | 3,202 |
+| `OpenAPICheck` (2026-10-27) | 2.4 µs | 1.4 KiB | 35 |
 
 Most of a clean request is CRS evaluation: the verdict cache, which skips the
 Coraza transaction, cuts it by about 80%. The 64 KiB JSON body is the outlier
 at roughly 400 ms and 150 MiB allocated per request: CRS runs every rule over
-every JSON value.
+every JSON value. An OpenAPI spec adds about 0.2% to a clean request.
 
 ## Load test
 

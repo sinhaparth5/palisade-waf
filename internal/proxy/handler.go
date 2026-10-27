@@ -469,6 +469,9 @@ func (h *Handler) Handle(c echo.Context) error {
 	checkOpts := waf.CheckOptions{}
 	if app != nil {
 		checkOpts.AllowLargeJavaScriptUploads = app.AllowLargeJSUploads
+		if app.Prefix != "" && services.PrefixMatch(r.URL.Path, app.Prefix) {
+			checkOpts.Path = services.StripPrefix(r.URL.Path, app.Prefix)
+		}
 	}
 	result := &waf.Result{}
 	var err error

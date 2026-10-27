@@ -19,6 +19,7 @@ rather than growing this file forever.
 - (#187) AI crawler policy per service: allow, challenge or block by crawler category
 - (#188) Check login passwords against known breaches (HIBP k-anonymity)
 - (#189) Virtual patching: curated rule pack for actively exploited CVEs
+- (#190) OpenAPI positive security model per service
 
 ## [2.10.4] - 2026-10-26
 

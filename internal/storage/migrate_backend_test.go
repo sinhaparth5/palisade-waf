@@ -35,6 +35,9 @@ func TestMigrateConfigTo(t *testing.T) {
 	if err := source.SetServiceLargeJSUploads(1, true); err != nil {
 		t.Fatal(err)
 	}
+	if err := source.SetServiceOpenAPI(1, "openapi: 3.0.3", "log"); err != nil {
+		t.Fatal(err)
+	}
 	if err := source.AddIPRuleWithNote("", "203.0.113.5", "block", "test note"); err != nil {
 		t.Fatal(err)
 	}

@@ -144,6 +144,9 @@
   var compressToggle = document.getElementById('svc-compress-enabled');
   var schemaForm = document.getElementById('svc-schema-form');
   var schemaText = document.getElementById('svc-schema-text');
+  var openapiForm = document.getElementById('svc-openapi-form');
+  var openapiText = document.getElementById('svc-openapi-text');
+  var openapiFile = document.getElementById('svc-openapi-file');
   var cacheForm = document.getElementById('svc-cache-form');
   var cacheToggle = document.getElementById('svc-cache-enabled');
   var cacheSessionForm = document.getElementById('svc-cache-session-form');
@@ -259,6 +262,19 @@
     var schemaRadio = overlay.querySelector('input[name="mode"][value="' + (d.schemaMode || 'off') + '"]');
     if (schemaRadio) schemaRadio.checked = true;
 
+    openapiForm.setAttribute('hx-post', adminPath + '/services/openapi/' + d.id);
+    htmx.process(openapiForm);
+    document.getElementById('svc-openapi-mode').value = d.openapiMode || 'off';
+    openapiFile.value = '';
+    openapiText.value = '';
+    if (d.openapiMode) {
+      var url = adminPath + '/services/openapi/' + d.id;
+      fetch(url).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
+        // The modal may have been reopened for another service meanwhile.
+        if (openapiForm.getAttribute('hx-post') === url) openapiText.value = t;
+      });
+    }
+
     cacheForm.setAttribute('hx-post', adminPath + '/services/cache/' + d.id);
     htmx.process(cacheForm);
     cacheToggle.checked = d.cache === '1';
@@ -293,7 +309,7 @@
     deleteBtn.setAttribute('hx-confirm', 'Remove service ' + d.name + '?');
     htmx.process(deleteBtn);
 
-    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-schema-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
+    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-schema-error', 'svc-openapi-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.textContent = '';
     });
@@ -345,6 +361,10 @@
   document.body.addEventListener('hosts-saved', closeModal);
   document.body.addEventListener('login-saved', closeModal);
   document.body.addEventListener('breach-saved', closeModal);
+  document.body.addEventListener('openapi-saved', closeModal);
+  openapiFile.addEventListener('change', function () {
+    if (openapiFile.files[0]) openapiFile.files[0].text().then(function (t) { openapiText.value = t; });
+  });
   document.body.addEventListener('htmx:afterRequest', function (e) {
     var elt = e.detail.elt;
     if ((elt === botForm || elt === aiForm || elt === uploadsForm || elt === http3Form || elt === compressForm || elt === schemaForm || elt === cacheForm || elt === cacheSessionForm || elt === cacheTuningForm || elt === deleteBtn) && e.detail.successful) closeModal();

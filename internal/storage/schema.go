@@ -276,6 +276,15 @@ func (db *DB) schemaStatements() []string {
 			last_seen    %s NOT NULL
 		)`, ts),
 
+		// One OpenAPI document per service (issue #190). Its own table, not
+		// a services column, because a real spec easily outgrows MySQL's
+		// 64 KiB TEXT.
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS service_openapi (
+			service_id INTEGER PRIMARY KEY,
+			spec       %s NOT NULL,
+			mode       VARCHAR(16) NOT NULL
+		)`, d.longTextType()),
+
 		// One row per Jev API call the ASN/hosting classifier
 		// (threatscore/typesafeclassify.go) makes, so the admin UI can show
 		// where TypeSafe token usage goes and why. Capped at
