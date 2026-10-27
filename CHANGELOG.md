@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Added
+
+- (#193) Autoban on repeated 4xx responses (scanner detection)
+
 ## [2.10.5] - 2026-10-27
 
 ### Added

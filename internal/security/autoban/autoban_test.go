@@ -450,3 +450,46 @@ func TestLeakedPasswordScores(t *testing.T) {
 		t.Errorf("note = %q, want breached-password breakdown", note)
 	}
 }
+
+// TestBadStatusScores pins issue #193: a run of backend 404s from one IP
+// bans once bad-status scoring is on, and the reason shows the count.
+func TestBadStatusScores(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	probe := func(ip, p string, status int) storage.RequestLog {
+		return storage.RequestLog{Timestamp: now, RealIP: ip, Path: p, Status: status}
+	}
+	crossSite := probe("203.0.113.5", "/wp-admin", 404)
+	crossSite.HeadersJSON = `{"Sec-Fetch-Site":"cross-site","Sec-Fetch-Mode":"no-cors","Sec-Fetch-Dest":"image"}`
+	crawler := probe("203.0.113.6", "/old-page", 404)
+	crawler.Exempt = true
+
+	for _, tc := range []struct {
+		name    string
+		enabled bool
+		req     storage.RequestLog
+		ban     bool
+	}{
+		{"404 probes ban", true, probe("203.0.113.1", "/.env", 404), true},
+		{"off by default", false, probe("203.0.113.2", "/.env", 404), false},
+		{"code not in list", true, probe("203.0.113.3", "/.env", 500), false},
+		{"missing static asset", true, probe("203.0.113.4", "/favicon.ico", 404), false},
+		{"cross-site subresource", true, crossSite, false},
+		{"verified crawler", true, crawler, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := newFakeStore()
+			db.cfg.BadStatusEnabled = tc.enabled
+			b, _ := testBanner(db, now)
+			for i := 0; i < 30; i++ {
+				b.Record(tc.req)
+			}
+			ip := tc.req.RealIP
+			if got := db.rules[":"+ip] == "block"; got != tc.ban {
+				t.Fatalf("banned = %v, want %v", got, tc.ban)
+			}
+			if tc.ban && !strings.Contains(db.banNote(ip), "10 bad responses (404)") {
+				t.Errorf("note = %q, want the bad-response count", db.banNote(ip))
+			}
+		})
+	}
+}

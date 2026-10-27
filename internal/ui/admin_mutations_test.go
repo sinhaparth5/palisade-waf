@@ -68,10 +68,12 @@ func TestIPRuleHandlers(t *testing.T) {
 
 func TestAutobanAndAdaptiveSettings(t *testing.T) {
 	env := newAdminEnv(t)
-	rec := env.do("POST", "/admin/ip-rules/autoban", form("autoban_enabled", "1", "autoban_threshold", "25", "autoban_window", "60", "autoban_ban_hours", "0"))
+	rec := env.do("POST", "/admin/ip-rules/autoban", form("autoban_enabled", "1", "autoban_threshold", "25", "autoban_window", "60", "autoban_ban_hours", "0",
+		"autoban_bad_status", "1", "autoban_bad_codes", "404, 403", "autoban_bad_points", "2"))
 	wantCode(t, "autoban", rec.Code, 200, rec.Body.String())
 	ab, _ := env.db.GetAutobanConfig()
-	if !ab.Enabled || ab.Threshold != 25 || ab.WindowMinutes != 60 || ab.BanHours != 0 || env.count("autoban") != 1 {
+	if !ab.Enabled || ab.Threshold != 25 || ab.WindowMinutes != 60 || ab.BanHours != 0 || env.count("autoban") != 1 ||
+		!ab.BadStatusEnabled || storage.FormatStatusCodes(ab.BadStatusCodes) != "404, 403" || ab.BadStatusPoints != 2 {
 		t.Errorf("autoban = %+v reloads=%d", ab, env.count("autoban"))
 	}
 	// Out-of-range values fall back to defaults instead of being stored.
