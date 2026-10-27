@@ -22,6 +22,9 @@ func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	if err := db.SetWebhookConfig(WebhookConfig{URL: "https://x", Secret: "hook-secret", Enabled: true, Events: "blocked"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.AddCrowdSecSource("cs", "http://lapi:8080", "bouncer-key"); err != nil {
+		t.Fatal(err)
+	}
 	challenge, err := db.GetOrCreateChallengeSecret()
 	if err != nil || challenge == "" {
 		t.Fatalf("challenge secret: %q, %v", challenge, err)
@@ -36,7 +39,7 @@ func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	}
 
 	// Migration must have sealed every stored secret...
-	for _, metaKey := range []string{"email_token", "challenge_secret"} {
+	for _, metaKey := range []string{"email_token", "challenge_secret", "threatintel_api_keys"} {
 		raw, err := db.getMeta(metaKey)
 		if err != nil {
 			t.Fatal(err)
@@ -59,6 +62,16 @@ func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	}
 	if cfg, err := db.GetWebhookConfig(); err != nil || cfg.Secret != "hook-secret" {
 		t.Errorf("GetWebhookConfig = %+v, %v; want Secret=hook-secret", cfg, err)
+	}
+	srcs, _ := db.ListThreatIntelSources()
+	if got, err := db.ThreatIntelKey(srcs[0].ID); err != nil || got != "bouncer-key" {
+		t.Errorf("ThreatIntelKey = %q, %v; want bouncer-key", got, err)
+	}
+	if err := db.DeleteThreatIntelSource(srcs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := db.ThreatIntelKey(srcs[0].ID); got != "" {
+		t.Errorf("key survived source delete: %q", got)
 	}
 	if got, err := db.GetOrCreateChallengeSecret(); err != nil || got != challenge {
 		t.Errorf("challenge secret after migration = %q, %v; want the original %q", got, err, challenge)

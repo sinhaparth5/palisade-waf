@@ -192,6 +192,21 @@ func TestThreatIntelHandlers(t *testing.T) {
 	if srcs, _ := env.db.ListThreatIntelSources(); len(srcs) != 0 {
 		t.Error("source not deleted")
 	}
+
+	// CrowdSec LAPI source (issue #194): the key is required and never rendered.
+	wantCode(t, "crowdsec no key", env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080")).Code, 400, "")
+	rec := env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080/", "api_key", "s3cret-key"))
+	wantCode(t, "crowdsec", rec.Code, 200, rec.Body.String())
+	if strings.Contains(rec.Body.String(), "s3cret-key") {
+		t.Error("bouncer key rendered back")
+	}
+	srcs, _ = env.db.ListThreatIntelSources()
+	if len(srcs) != 1 || srcs[0].URL != "crowdsec+http://lapi:8080" {
+		t.Fatalf("crowdsec source = %+v", srcs)
+	}
+	if key, _ := env.db.ThreatIntelKey(srcs[0].ID); key != "s3cret-key" {
+		t.Errorf("stored key = %q", key)
+	}
 }
 
 func TestAddAndDeleteService(t *testing.T) {
