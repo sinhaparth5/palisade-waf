@@ -75,12 +75,12 @@ func (h *Handler) gate(c echo.Context, app *storage.Service, clientKey string, c
 			subtle.ConstantTimeCompare([]byte(tok), []byte(g.BypassToken)) == 1 {
 			c.SetCookie(&http.Cookie{Name: bypassCookie, Value: tok, Path: "/", MaxAge: 12 * 3600,
 				HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode})
-			// Strip the token before anything logs or proxies the URL.
-			u := *r.URL
-			q := u.Query()
+			// Strip the token before anything logs or proxies the URL. A
+			// query-only Location keeps the browser on this path: echoing the
+			// path would make //evil.example/?palisade_bypass=… an open redirect.
+			q := r.URL.Query()
 			q.Del(bypassParam)
-			u.RawQuery = q.Encode()
-			return "maintenance_bypass", c.Redirect(http.StatusFound, u.RequestURI())
+			return "maintenance_bypass", c.Redirect(http.StatusFound, "?"+q.Encode())
 		}
 		ck, _ := r.Cookie(bypassCookie)
 		if g.BypassToken == "" || ck == nil || subtle.ConstantTimeCompare([]byte(ck.Value), []byte(g.BypassToken)) != 1 {
