@@ -1,11 +1,17 @@
 package proxy_test
 
 import (
+	"crypto/sha1" //nolint:gosec // HIBP range API is SHA-1
+	"encoding/hex"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,6 +20,7 @@ import (
 	"palisade/internal/security/adaptive"
 	"palisade/internal/security/blocklist"
 	"palisade/internal/security/bot"
+	"palisade/internal/security/breach"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
 	"palisade/internal/security/ratelimit"
@@ -1157,5 +1164,121 @@ func TestAICrawlerPolicy(t *testing.T) {
 	}
 	if code, _ := do("/", training, "198.51.100.9"); code != http.StatusOK {
 		t.Fatalf("trusted IP: %d, want 200", code)
+	}
+}
+
+func TestLeakedPasswordCheck(t *testing.T) {
+	var gotHeader atomic.Value
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHeader.Store(r.Header.Get("X-Palisade-Leaked-Password"))
+		body, _ := io.ReadAll(r.Body)
+		w.Header().Set("X-Body", string(body))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+	const leakedPW = "password123"
+	var hibpDown atomic.Bool
+	hibp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hibpDown.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		sum := sha1.Sum([]byte(leakedPW)) //nolint:gosec // HIBP range API is SHA-1
+		h := strings.ToUpper(hex.EncodeToString(sum[:]))
+		if strings.HasSuffix(r.URL.Path, h[:5]) {
+			fmt.Fprintf(w, "%s:9\r\n", h[5:])
+		}
+	}))
+	defer hibp.Close()
+
+	h, db, reg := newTestHandlerDB(t, backend)
+	h.SetBreachChecker(breach.New(hibp.URL + "/"))
+	logs := make(chan storage.RequestLog, 100)
+	db.SetWebhookFn(func(l storage.RequestLog) { logs <- l })
+	svc := reg.List()[0]
+	if err := db.SetServiceBotMode(svc.ID, "off"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetServiceLoginPaths(svc.ID, []string{"/login"}); err != nil {
+		t.Fatal(err)
+	}
+	e := echo.New()
+	ip := 0
+	do := func(path, password, spoof string) *httptest.ResponseRecorder {
+		ip++
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("user=a&password="+password))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "203.0.113." + strconv.Itoa(ip) + ":1234"
+		if spoof != "" {
+			req.Header.Set("X-Palisade-Leaked-Password", spoof)
+		}
+		rec := httptest.NewRecorder()
+		_ = h.Handle(e.NewContext(req, rec))
+		return rec
+	}
+	set := func(action string) {
+		t.Helper()
+		if err := db.SetServiceBreachCheck(svc.ID, action, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := reg.Reload(db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	nextLog := func() storage.RequestLog {
+		t.Helper()
+		select {
+		case l := <-logs:
+			return l
+		case <-time.After(2 * time.Second):
+			t.Fatal("no request logged")
+			return storage.RequestLog{}
+		}
+	}
+
+	tests := []struct {
+		name, action, path, password, spoof string
+		want                                int
+		wantAction, wantHeader              string
+	}{
+		{"off by default", "", "/login", leakedPW, "", http.StatusOK, "", ""},
+		{"log: leaked forwarded with header", "log", "/login", leakedPW, "", http.StatusOK, "leaked_password:log", "1"},
+		{"log: clean password", "log", "/login", "f7Kq-unique-2c9", "", http.StatusOK, "", ""},
+		{"log: client header stripped", "log", "/login", "f7Kq-unique-2c9", "1", http.StatusOK, "", ""},
+		{"not a login path", "block", "/other", leakedPW, "", http.StatusOK, "", ""},
+		{"block", "block", "/login", leakedPW, "", http.StatusForbidden, "leaked_password:block", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			set(tt.action)
+			gotHeader.Store("")
+			rec := do(tt.path, tt.password, tt.spoof)
+			if rec.Code != tt.want {
+				t.Fatalf("status %d, want %d", rec.Code, tt.want)
+			}
+			if tt.want == http.StatusOK {
+				if got := gotHeader.Load(); got != tt.wantHeader {
+					t.Errorf("backend header %q, want %q", got, tt.wantHeader)
+				}
+				if rec.Header().Get("X-Body") != "user=a&password="+tt.password {
+					t.Errorf("backend body %q: must be forwarded intact", rec.Header().Get("X-Body"))
+				}
+			}
+			l := nextLog()
+			if l.Action != tt.wantAction {
+				t.Errorf("logged action %q, want %q", l.Action, tt.wantAction)
+			}
+			if dump := fmt.Sprintf("%+v", l); strings.Contains(dump, tt.password) {
+				t.Errorf("password reached the request log: %s", dump)
+			}
+		})
+	}
+
+	// HIBP down: the login goes through unchecked.
+	set("block")
+	hibpDown.Store(true)
+	h.SetBreachChecker(breach.New(hibp.URL + "/"))
+	if rec := do("/login", leakedPW, ""); rec.Code != http.StatusOK {
+		t.Fatalf("HIBP down: %d, want 200 (fail open)", rec.Code)
 	}
 }

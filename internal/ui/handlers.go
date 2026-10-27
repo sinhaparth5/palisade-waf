@@ -379,6 +379,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.POST("/services/http3/:id", h.SetServiceHTTP3)
 	g.POST("/services/login/:id", h.SetServiceLoginPaths)
 	g.POST("/services/ai/:id", h.SetServiceAICrawlers)
+	g.POST("/services/breach/:id", h.SetServiceBreachCheck)
 	g.POST("/services/compress/:id", h.SetServiceCompress)
 	g.POST("/services/backends/:id", h.SetServiceBackends)
 	g.POST("/services/hosts/:id", h.SetServiceHosts)
@@ -2692,6 +2693,43 @@ func (h *Handler) SetServiceAICrawlers(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
+	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+}
+
+// SetServiceBreachCheck saves a service's leaked-password check (issue #188).
+func (h *Handler) SetServiceBreachCheck(c echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-breach-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	action := c.FormValue("breach_action")
+	if action != "" && action != "log" && action != "block" {
+		return fail("Unknown action.")
+	}
+	var fields []string
+	for _, f := range strings.Fields(strings.ReplaceAll(c.FormValue("breach_fields"), ",", " ")) {
+		if len(f) > 64 {
+			return fail("Field names are at most 64 characters.")
+		}
+		if !slices.Contains(fields, f) {
+			fields = append(fields, f)
+		}
+	}
+	if len(fields) > 10 {
+		return fail("At most 10 field names.")
+	}
+	if err := h.db.SetServiceBreachCheck(id, action, fields); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return fail(err.Error())
+	}
+	c.Response().Header().Set("HX-Trigger", "breach-saved")
 	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
 }
 

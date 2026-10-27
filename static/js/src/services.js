@@ -126,6 +126,7 @@
   var botIdInput = document.getElementById('bot-service-id');
   var loginForm = document.getElementById('svc-login-form');
   var aiForm = document.getElementById('svc-ai-form');
+  var breachForm = document.getElementById('svc-breach-form');
   var loginPathsText = document.getElementById('svc-login-paths');
   var uploadsForm = document.getElementById('svc-uploads-form');
   var largeJSUploadsToggle = document.getElementById('svc-large-js-uploads');
@@ -217,6 +218,11 @@
       s.value = ai[s.dataset.aiCat] || '';
     });
 
+    breachForm.setAttribute('hx-post', adminPath + '/services/breach/' + d.id);
+    htmx.process(breachForm);
+    document.getElementById('svc-breach-action').value = d.breachAction || '';
+    document.getElementById('svc-breach-fields').value = d.breachFields || '';
+
     loginForm.setAttribute('hx-post', adminPath + '/services/login/' + d.id);
     htmx.process(loginForm);
     loginPathsText.value = d.loginPaths || '';
@@ -287,7 +293,7 @@
     deleteBtn.setAttribute('hx-confirm', 'Remove service ' + d.name + '?');
     htmx.process(deleteBtn);
 
-    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-schema-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
+    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-schema-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.textContent = '';
     });
@@ -338,6 +344,7 @@
   document.body.addEventListener('backends-saved', closeModal);
   document.body.addEventListener('hosts-saved', closeModal);
   document.body.addEventListener('login-saved', closeModal);
+  document.body.addEventListener('breach-saved', closeModal);
   document.body.addEventListener('htmx:afterRequest', function (e) {
     var elt = e.detail.elt;
     if ((elt === botForm || elt === aiForm || elt === uploadsForm || elt === http3Form || elt === compressForm || elt === schemaForm || elt === cacheForm || elt === cacheSessionForm || elt === cacheTuningForm || elt === deleteBtn) && e.detail.successful) closeModal();
