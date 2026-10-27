@@ -146,6 +146,7 @@
   var schemaText = document.getElementById('svc-schema-text');
   var openapiForm = document.getElementById('svc-openapi-form');
   var mtlsForm = document.getElementById('svc-mtls-form');
+  var responsesForm = document.getElementById('svc-responses-form');
   var openapiText = document.getElementById('svc-openapi-text');
   var openapiFile = document.getElementById('svc-openapi-file');
   var cacheForm = document.getElementById('svc-cache-form');
@@ -276,6 +277,10 @@
       });
     }
 
+    responsesForm.setAttribute('hx-post', adminPath + '/services/responses/' + d.id);
+    htmx.process(responsesForm);
+    document.getElementById('svc-responses-mode').value = d.responseInspect || '';
+
     mtlsForm.setAttribute('hx-post', adminPath + '/services/mtls/' + d.id);
     htmx.process(mtlsForm);
     document.getElementById('svc-mtls-mode').value = d.mtlsMode || 'off';
@@ -317,7 +322,7 @@
     deleteBtn.setAttribute('hx-confirm', 'Remove service ' + d.name + '?');
     htmx.process(deleteBtn);
 
-    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mtls-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
+    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.textContent = '';
     });
@@ -371,6 +376,7 @@
   document.body.addEventListener('breach-saved', closeModal);
   document.body.addEventListener('openapi-saved', closeModal);
   document.body.addEventListener('mtls-saved', closeModal);
+  document.body.addEventListener('responses-saved', closeModal);
   openapiFile.addEventListener('change', function () {
     if (openapiFile.files[0]) openapiFile.files[0].text().then(function (t) { openapiText.value = t; });
   });

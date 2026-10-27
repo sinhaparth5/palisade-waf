@@ -21,6 +21,7 @@ rather than growing this file forever.
 - (#189) Virtual patching: curated rule pack for actively exploited CVEs
 - (#190) OpenAPI positive security model per service
 - (#191) Client certificate (mTLS) authentication per service
+- (#192) Opt-in response inspection to catch error leaks and data leakage
 
 ## [2.10.4] - 2026-10-26
 

@@ -570,9 +570,32 @@ func (h *Handler) Handle(c echo.Context) error {
 			out.Header.Set(leakedPasswordHeader, "1")
 		}
 	}
+	// Response inspection (issue #192): CRS's outbound rules over the
+	// backend's text response, before any of it reaches the client.
+	leakRule := 0
+	if app.ResponseInspect != "" && !trusted {
+		out = services.WithResponseHook(out, func(resp *http.Response) error {
+			leakRule = engine.CheckResponse(r, clientIP, resp)
+			if leakRule != 0 && app.ResponseInspect == "block" {
+				w.Header().Set("X-WAF-Block-Reason", "response_leak")
+				return services.ErrResponseBlocked
+			}
+			return nil
+		})
+	}
 	rp.ServeHTTP(rw, out)
 	mark("proxy")
 	r.URL.Path = originalPath
+	if leakRule != 0 {
+		if app.ResponseInspect == "block" {
+			metrics.WAFBlockedTotal.WithLabelValues(appName, "response_leak").Inc()
+			h.logBlocked(r, appName, clientIP, country, rw.status, leakRule, "response_leak:block", time.Since(start), meta)
+			return nil
+		}
+		hit := *result // may be the verdict cache's shared copy
+		hit.RuleID, hit.Action = leakRule, "response_leak:log"
+		result = &hit
+	}
 	if h.registry.Cached(app.Name) {
 		// Set by the VCL's vcl_deliver; only trusted on the Varnish path,
 		// where it always overwrites anything the backend sent.

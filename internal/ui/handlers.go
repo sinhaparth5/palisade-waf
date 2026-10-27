@@ -381,6 +381,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.POST("/services/login/:id", h.SetServiceLoginPaths)
 	g.POST("/services/ai/:id", h.SetServiceAICrawlers)
 	g.POST("/services/breach/:id", h.SetServiceBreachCheck)
+	g.POST("/services/responses/:id", h.SetServiceResponseInspect)
 	g.POST("/services/compress/:id", h.SetServiceCompress)
 	g.POST("/services/backends/:id", h.SetServiceBackends)
 	g.POST("/services/hosts/:id", h.SetServiceHosts)
@@ -2968,6 +2969,32 @@ func (h *Handler) SetServiceMTLS(c echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "mtls-saved")
+	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+}
+
+// SetServiceResponseInspect sets a service's response inspection mode
+// (issue #192): "" off, "log" or "block".
+func (h *Handler) SetServiceResponseInspect(c echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-responses-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	mode := c.FormValue("response_inspect")
+	if mode != "" && mode != "log" && mode != "block" {
+		return fail("Unknown mode.")
+	}
+	if err := h.db.SetServiceResponseInspect(id, mode); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return fail(err.Error())
+	}
+	c.Response().Header().Set("HX-Trigger", "responses-saved")
 	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
 }
 
