@@ -71,8 +71,12 @@ func TestMaintenanceMode(t *testing.T) {
 	// The right token sets a cookie and strips itself from the URL.
 	jar := map[string]*http.Cookie{}
 	rec = do("/page?x=1&palisade_bypass=team-token", "198.51.100.2", jar)
-	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/page?x=1" {
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "?x=1" {
 		t.Fatalf("bypass = %d → %q", rec.Code, rec.Header().Get("Location"))
+	}
+	// A path that reads as a host never reaches Location (open redirect).
+	if rec := do("//evil.example/?palisade_bypass=team-token", "198.51.100.3", map[string]*http.Cookie{}); rec.Header().Get("Location") != "?" {
+		t.Errorf("bypass on //evil.example → %q, want a query-only Location", rec.Header().Get("Location"))
 	}
 	if rec := do("/page?x=1", "198.51.100.2", jar); rec.Code != http.StatusOK || *hits != 2 { // robots.txt + this
 		t.Errorf("with bypass cookie = %d (backend hits %d), want the backend", rec.Code, *hits)
