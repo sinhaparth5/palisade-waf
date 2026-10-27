@@ -510,6 +510,28 @@
     </form>
     <div id="svc-http3-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
 
+    <form id="svc-mtls-form" hx-post="{{.AdminPath}}/services/mtls/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-canvas pt-4">
+      <p class="text-[13px] font-semibold text-slate-700 mb-1">Client certificates (mTLS)</p>
+      <p class="text-[12px] text-slate-500 mb-3 leading-[1.5]">Only clients holding a certificate from your CA get through. A request without one gets 403, logged as <code class="font-mono">mtls_required</code>. The backend receives <code class="font-mono">X-Client-Cert-Verified</code>, <code class="font-mono">-Subject</code> and <code class="font-mono">-Fingerprint</code> (SHA-256); clients can't set these themselves. Revocation (CRL/OCSP) is not checked.</p>
+      <p class="text-[12px] text-amber-700 bg-amber-50 border border-amber-100 rounded-md p-3 mb-3 leading-[1.5]">Clients must connect to Palisade directly. Behind Cloudflare's proxy, TLS ends at Cloudflare and no client certificate reaches this server.</p>
+      <label for="svc-mtls-mode" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Mode</label>
+      <select id="svc-mtls-mode" name="mtls_mode"
+        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-3">
+        <option value="off">Off</option>
+        <option value="optional">Optional: forward the result, never block</option>
+        <option value="required">Required: 403 without a valid certificate</option>
+      </select>
+      <label for="svc-mtls-ca" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Client CA certificate(s), PEM</label>
+      <textarea id="svc-mtls-ca" name="mtls_ca" rows="4" placeholder="-----BEGIN CERTIFICATE-----"
+        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white mb-1 resize-y"></textarea>
+      <p id="svc-mtls-ca-note" class="hidden text-[12px] text-slate-500 mb-3">A CA is saved. Leave this empty to keep it.</p>
+      <label for="svc-mtls-allow" class="block text-[12px] text-slate-500 mb-[6px] mt-2 font-medium">Allowlist (optional, one per line)</label>
+      <textarea id="svc-mtls-allow" name="mtls_allow" rows="3" placeholder="subject CN, SAN DNS name or SHA-256 fingerprint"
+        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white mb-3 resize-y"></textarea>
+      <button type="submit" class="btn-primary w-full">Save</button>
+    </form>
+    <div id="svc-mtls-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+
     <form id="tls-clear-form" hx-post="/admin/services/tls/clear" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-canvas pt-4">
       <input type="hidden" name="service_id" class="tls-service-id"/>
       <button type="submit" class="w-full py-[10px] rounded-md border border-red-100 bg-white text-red-500 text-[13px] font-medium cursor-pointer font-sans">Disable TLS for this service</button>
@@ -688,6 +710,9 @@
     {{if and .OpenAPIMode (ne .OpenAPIMode "off")}}
     <span class="text-[11px] font-semibold {{if eq .OpenAPIMode "enforce"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">OpenAPI: {{.OpenAPIMode}}</span>
     {{end}}
+    {{if and .MTLS.Mode (ne .MTLS.Mode "off")}}
+    <span class="text-[11px] font-semibold {{if eq .MTLS.Mode "required"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">mTLS: {{.MTLS.Mode}}</span>
+    {{end}}
     <span class="text-[12px] text-slate-400 whitespace-nowrap ml-1">{{fmtTime .CreatedAt}}</span>
     <button type="button" class="svc-edit-btn inline-flex items-center gap-[5px] text-[12px] font-medium text-slate-600 bg-white border border-line rounded-md px-4 py-[6px] cursor-pointer font-sans hover:border-slate-400 transition-colors duration-150 ml-1"
       data-id="{{.ID}}" data-name="{{.Name}}" data-has-host="{{if .Host}}1{{else}}0{{end}}" data-host="{{.Host}}"
@@ -699,6 +724,7 @@
       data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
       data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}"
       data-schema="{{.RequestSchema}}" data-schema-mode="{{.SchemaMode}}" data-openapi-mode="{{.OpenAPIMode}}"
+      data-mtls-mode="{{.MTLS.Mode}}" data-mtls-ca="{{if .MTLS.CAPath}}1{{else}}0{{end}}" data-mtls-allow="{{.MTLS.Allow}}"
       data-ttl-floor="{{.CacheTTLFloor}}" data-ttl-ceiling="{{.CacheTTLCeiling}}" data-grace="{{.CacheGrace}}" data-keep="{{.CacheKeep}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-settings-01 text-xs"></i>
       Edit

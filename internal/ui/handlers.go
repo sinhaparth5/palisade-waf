@@ -377,6 +377,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.POST("/services/bot/:id", h.SetServiceBotMode)
 	g.POST("/services/uploads/:id", h.SetServiceLargeJSUploads)
 	g.POST("/services/http3/:id", h.SetServiceHTTP3)
+	g.POST("/services/mtls/:id", h.SetServiceMTLS)
 	g.POST("/services/login/:id", h.SetServiceLoginPaths)
 	g.POST("/services/ai/:id", h.SetServiceAICrawlers)
 	g.POST("/services/breach/:id", h.SetServiceBreachCheck)
@@ -1857,6 +1858,7 @@ type ServiceView struct {
 	// spec itself is fetched by the edit modal (ServiceOpenAPI), since this
 	// table is polled.
 	OpenAPIMode string
+	MTLS        storage.ServiceMTLS // zero value when no client CA is stored
 }
 
 func (h *Handler) serviceViews() []ServiceView {
@@ -1868,10 +1870,11 @@ func (h *Handler) serviceViews() []ServiceView {
 		}
 	}
 	modes, _ := h.db.ListServiceOpenAPIModes()
+	mtls, _ := h.db.ListServiceMTLS()
 	out := make([]ServiceView, len(list))
 	for i, s := range list {
 		healthy, known := h.registry.IsHealthy(s.Name)
-		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID]}
+		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID]}
 	}
 	return out
 }
@@ -2914,6 +2917,57 @@ func (h *Handler) SetServiceOpenAPI(c echo.Context) error {
 		h.reloadWAF()
 	}
 	c.Response().Header().Set("HX-Trigger", "openapi-saved")
+	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+}
+
+// SetServiceMTLS saves a service's client-certificate policy (issue #191).
+// An empty CA field keeps the stored bundle; "off" keeps it for later.
+func (h *Handler) SetServiceMTLS(c echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-mtls-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	svc, err := h.db.GetService(id)
+	if err != nil {
+		return fail("service not found")
+	}
+	if svc.Host == "" {
+		return fail("Client certificates need a host-matched service (this one matches by path prefix).")
+	}
+	all, err := h.db.ListServiceMTLS()
+	if err != nil {
+		return fail(err.Error())
+	}
+	m := all[id]
+	m.Mode = c.FormValue("mtls_mode")
+	m.Allow = strings.Join(strings.Fields(c.FormValue("mtls_allow")), "\n")
+	if len(m.Allow) > 64<<10 {
+		return fail("The allowlist is larger than 64 KiB.")
+	}
+	if caPEM := strings.TrimSpace(c.FormValue("mtls_ca")); caPEM != "" {
+		if m.CAPath, err = services.SaveClientCA(svc.Name, []byte(caPEM+"\n")); err != nil {
+			return fail(err.Error())
+		}
+	}
+	if m.CAPath == "" {
+		if m.Mode != "optional" && m.Mode != "required" {
+			c.Response().Header().Set("HX-Trigger", "mtls-saved")
+			return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+		}
+		return fail("Paste the CA certificate(s) that issue your client certificates.")
+	}
+	if err := h.db.SetServiceMTLS(id, m); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return fail(err.Error())
+	}
+	c.Response().Header().Set("HX-Trigger", "mtls-saved")
 	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
 }
 

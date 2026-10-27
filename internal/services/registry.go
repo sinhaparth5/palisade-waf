@@ -117,6 +117,7 @@ type Registry struct {
 	certs     map[string]*tls.Certificate   // host (lowercase) -> uploaded custom cert
 	autoHosts map[string]bool               // host (lowercase) -> true if tls_mode == "auto"
 	hosts     map[string]int                // host or alias (lowercase) -> index into list
+	mtls      map[int]*mtlsPolicy           // index into list -> client-cert policy (issue #191)
 	stopCheck chan struct{}                 // closed on Reload to stop the previous active health checks
 	honeypots []string                      // see Honeypot
 	trusted   []netip.Prefix                // see Trusted
@@ -169,6 +170,11 @@ func (r *Registry) Reload(db *storage.DB) error {
 	r.mu.Lock()
 	r.aiDefault = bot.ParseAIPolicy(aiPolicy)
 	r.mu.Unlock()
+	storedMTLS, err := db.ListServiceMTLS()
+	if err != nil {
+		return err
+	}
+	mtls := loadMTLSPolicies(storedMTLS, list)
 
 	proxies := make(map[string]http.Handler, len(list))
 	direct := make(map[string]http.Handler, len(list))
@@ -408,6 +414,7 @@ func (r *Registry) Reload(db *storage.DB) error {
 	r.certs = certs
 	r.autoHosts = autoHosts
 	r.hosts = hosts
+	r.mtls = mtls
 	r.mu.Unlock()
 
 	// Stop old janitor goroutines after the swap so in-flight checks still work.

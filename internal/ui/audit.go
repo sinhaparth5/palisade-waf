@@ -34,7 +34,7 @@ var auditSkip = map[string]bool{
 var auditFields = []string{
 	"ai_search", "ai_training", "ai_user", "aliases", "app_name", "bot_mode", "breach_action", "breach_fields", "canonical", "canonical_host", "captcha_provider", "cert_id",
 	"country_code", "enabled", "honeypot_paths", "host", "host_aliases", "ip", "label", "lb_policy", "login_paths",
-	"match_type", "mode", "name", "note", "path", "prefix", "read_only", "reason",
+	"match_type", "mode", "mtls_mode", "name", "note", "openapi_mode", "path", "prefix", "read_only", "reason",
 	"rule_id", "rule_type", "service", "service_id", "trusted_ips",
 }
 

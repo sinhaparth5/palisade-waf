@@ -29,7 +29,8 @@ type MigrationTableResult struct {
 // Migrated: services, ip_rules, geo_rules, meta (settings, secrets,
 // credentials), certificates, api_keys, waf_disabled_rules,
 // waf_service_rule_exceptions, waf_custom_rules, threat_intel_sources + their synced
-// threat_intel_ips, webhook_config, ip_threat_scores, ja4_reputation, service_openapi.
+// threat_intel_ips, webhook_config, ip_threat_scores, ja4_reputation, service_openapi,
+// service_mtls (the CA files it points at stay on disk).
 //
 // Deliberately NOT migrated: requests (the access/request log — could be
 // millions of rows on a long-running install; disposable operational
@@ -97,6 +98,7 @@ func (db *DB) MigrateConfigTo(targetDriver, targetDSN string) (MigrationReport, 
 		{"certificates", migrateCertificatesTable, true},
 		{"services", migrateServicesTable, true},
 		{"service_openapi", migrateServiceOpenAPITable, false},
+		{"service_mtls", migrateServiceMTLSTable, false},
 		{"ip_rules", migrateIPRulesTable, true},
 		{"geo_rules", migrateGeoRulesTable, true},
 		{"api_keys", migrateAPIKeysTable, true},
@@ -551,6 +553,21 @@ func migrateServiceOpenAPITable(source, target *DB, _ bool) (int, error) {
 	n := 0
 	for id, o := range specs {
 		if _, err := target.exec(`INSERT INTO service_openapi (service_id, spec, mode) VALUES (?, ?, ?)`, id, o.Spec, o.Mode); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+func migrateServiceMTLSTable(source, target *DB, _ bool) (int, error) {
+	policies, err := source.ListServiceMTLS()
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for id, m := range policies {
+		if err := target.SetServiceMTLS(id, m); err != nil {
 			return n, err
 		}
 		n++

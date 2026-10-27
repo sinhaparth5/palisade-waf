@@ -984,6 +984,56 @@ func TestSetServiceOpenAPI(t *testing.T) {
 	}
 }
 
+func TestSetServiceMTLS(t *testing.T) {
+	t.Chdir(t.TempDir()) // the CA bundle is written relative to the working directory
+	env := newAdminEnv(t)
+	svc := env.seedService("api", "api.example.com")
+	path := "/admin/services/mtls/" + itoa(svc.ID)
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	ca := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "ca"}, IsCA: true, BasicConstraintsValid: true,
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}
+	der, _ := x509.CreateCertificate(rand.Reader, ca, ca, &key.PublicKey, key)
+	caPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	leafPEM, _ := testCertPEM(t, "client")
+
+	rec := env.do("POST", path, form("mtls_mode", "required"))
+	if rec.Header().Get("HX-Retarget") != "#svc-mtls-error" || !strings.Contains(rec.Body.String(), "CA certificate") {
+		t.Fatalf("required without a CA: want inline error, got %s", rec.Body)
+	}
+	rec = env.do("POST", path, form("mtls_mode", "required", "mtls_ca", leafPEM))
+	if !strings.Contains(rec.Body.String(), "not a CA certificate") {
+		t.Fatalf("leaf as CA: want inline error, got %s", rec.Body)
+	}
+
+	rec = env.do("POST", path, form("mtls_mode", "required", "mtls_ca", caPEM, "mtls_allow", " svc-a \n\n svc-b "))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if rec.Header().Get("HX-Trigger") != "mtls-saved" || !strings.Contains(rec.Body.String(), "mTLS: required") {
+		t.Fatalf("save: no trigger or badge: %s", rec.Body)
+	}
+	got, _ := env.db.ListServiceMTLS()
+	if m := got[svc.ID]; m.Mode != "required" || m.Allow != "svc-a\nsvc-b" || m.CAPath == "" {
+		t.Fatalf("stored %+v", m)
+	}
+	if env.h.registry.ClientCAs("api.example.com") == nil {
+		t.Error("registry not reloaded")
+	}
+
+	// Off keeps the CA, and an empty CA field keeps it on the way back.
+	env.do("POST", path, form("mtls_mode", "off"))
+	if env.h.registry.ClientCAs("api.example.com") != nil {
+		t.Error("off still requests client certs")
+	}
+	env.do("POST", path, form("mtls_mode", "optional"))
+	if got, _ = env.db.ListServiceMTLS(); got[svc.ID].Mode != "optional" || got[svc.ID].CAPath == "" {
+		t.Fatalf("re-enable without a CA: %+v", got[svc.ID])
+	}
+
+	env.do("DELETE", "/admin/services/"+itoa(svc.ID), nil)
+	if got, _ = env.db.ListServiceMTLS(); len(got) != 0 {
+		t.Errorf("policy outlived its service: %+v", got)
+	}
+}
+
 func TestVirtualPatchesCard(t *testing.T) {
 	env := newAdminEnv(t)
 	env.seedService("shop", "shop.example.com")

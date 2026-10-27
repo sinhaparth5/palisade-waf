@@ -308,6 +308,16 @@ func (h *Handler) Handle(c echo.Context) error {
 	// challenge and rate-limit stages so any client can read them. The WAF
 	// still inspects them (issue #157). A trusted IP (issue #179) skips those
 	// stages and the WAF on every path, and never trips a honeypot.
+	// Client certificate (issue #191), judged by the Host's policy so an
+	// SNI/Host mismatch can't skip it. It is authentication, not filtering,
+	// so trusted IPs and open paths are checked too. It also sets the
+	// X-Client-Cert-* headers the log and the backend see.
+	if cc, ok := h.registry.CheckClientCert(r); ok && cc.Required && !cc.Verified {
+		mark("blocklist")
+		h.logBlocked(r, appName, clientIP, country, http.StatusForbidden, 0, "mtls_required", time.Since(start), meta)
+		return deny(c, http.StatusForbidden, "mtls_required", reqID, map[string]any{"error": "valid client certificate required"})
+	}
+
 	trusted := h.registry.Trusted(clientIP)
 	open := trusted || openPath(r)
 
