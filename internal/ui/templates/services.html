@@ -130,6 +130,7 @@
       <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="schema">Schema</button>
       <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="cache">Cache</button>
       <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="tls">TLS</button>
+      <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="gate">Availability</button>
     </div>
 
     <!-- ── Rate Limit tab ── -->
@@ -285,6 +286,65 @@
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
       <div id="svc-breach-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+    </div>
+
+    <!-- ── Availability tab (issue #198) ── -->
+    <div class="svc-tab hidden" data-tab="gate">
+      <form id="svc-gate-form" hx-post="{{.AdminPath}}/services/gate/0" hx-target="#services-body" hx-swap="innerHTML">
+        <label class="flex items-center justify-between cursor-pointer py-2 mb-1">
+          <span class="text-[13px] font-semibold text-slate-800">Maintenance mode</span>
+          {{template "toggle-switch" (map "Name" "maintenance" "ID" "svc-maintenance")}}
+        </label>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Visitors get a 503 maintenance page with <code class="font-mono">Retry-After</code> instead of a raw backend error. Trusted IPs and anyone who opened the bypass link still reach the backend, so the team can test the deploy.</p>
+        <label for="svc-maint-message" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Message (empty = a generic one)</label>
+        <textarea id="svc-maint-message" name="maint_message" rows="2" maxlength="500" placeholder="We're upgrading the database and will be back shortly."
+          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4"></textarea>
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label for="svc-maint-start" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Starts (UTC, optional)</label>
+            <input id="svc-maint-start" name="maint_start" type="datetime-local" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white"/>
+          </div>
+          <div>
+            <label for="svc-maint-end" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Ends (UTC, optional)</label>
+            <input id="svc-maint-end" name="maint_end" type="datetime-local" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white"/>
+          </div>
+        </div>
+        <div id="svc-bypass-wrap" class="hidden mb-4">
+          <p class="block text-[12px] text-slate-500 mb-[6px] font-medium">Bypass link (sets a cookie for 12 hours)</p>
+          <p id="svc-bypass-link" class="text-[12px] font-mono text-slate-700 bg-surface border border-line rounded-md px-3 py-2 wrap-anywhere"></p>
+          <label class="flex items-center gap-2 mt-2 text-[12px] text-slate-600 cursor-pointer">
+            <input type="checkbox" name="new_bypass" value="1" class="accent-brand"/> Replace it (links already shared stop working)
+          </label>
+        </div>
+
+        <div class="mt-6 border-t border-canvas pt-5">
+          <label class="flex items-center justify-between cursor-pointer py-2 mb-1">
+            <span class="text-[13px] font-semibold text-slate-800">Waiting room</span>
+            {{template "toggle-switch" (map "Name" "waiting_room" "ID" "svc-waiting-room")}}
+          </label>
+          <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Lets a fixed number of visitors in at a time; the rest wait in line, first come first served, on a page that refreshes itself. Each place is tied to the visitor's browser and network, so it can't be shared. The queue lives in this Palisade's memory: a restart sends waiting visitors to the back.</p>
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div>
+              <label for="svc-wr-max" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Max active visitors</label>
+              <input id="svc-wr-max" name="wr_max" type="number" min="1" placeholder="500" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white"/>
+            </div>
+            <div>
+              <label for="svc-wr-idle" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Session length (minutes idle)</label>
+              <input id="svc-wr-idle" name="wr_idle" type="number" min="1" placeholder="10" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white"/>
+            </div>
+          </div>
+          <label for="svc-wr-message" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Queue page message (empty = a generic one)</label>
+          <textarea id="svc-wr-message" name="wr_message" rows="2" maxlength="500" placeholder="Tickets go on sale at noon. Thanks for waiting!"
+            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4"></textarea>
+          <label for="svc-wr-crawlers" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Verified search crawlers</label>
+          <select id="svc-wr-crawlers" name="wr_crawlers" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4">
+            <option value="bypass">Let them through (never queued)</option>
+            <option value="deny">Answer 503 until the rush is over</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-primary w-full">Save</button>
+      </form>
+      <div id="svc-gate-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
     </div>
 
     <!-- ── Uploads tab ── -->
@@ -727,6 +787,12 @@
     {{if .ResponseInspect}}
     <span class="text-[11px] font-semibold {{if eq .ResponseInspect "block"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">Responses: {{.ResponseInspect}}</span>
     {{end}}
+    {{if .Gate.Maintenance}}
+    <span class="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-[2px] rounded-sm">Maintenance{{if not .Gate.MaintStart.IsZero}} scheduled{{end}}</span>
+    {{end}}
+    {{if .Gate.WaitingRoom}}
+    <span class="text-[11px] font-semibold bg-slate-100 text-slate-500 px-2 py-[2px] rounded-sm">Waiting room: {{.Gate.MaxActive}}</span>
+    {{end}}
     {{if and .MTLS.Mode (ne .MTLS.Mode "off")}}
     <span class="text-[11px] font-semibold {{if eq .MTLS.Mode "required"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">mTLS: {{.MTLS.Mode}}</span>
     {{end}}
@@ -742,6 +808,12 @@
       data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}"
       data-schema="{{.RequestSchema}}" data-schema-mode="{{.SchemaMode}}" data-openapi-mode="{{.OpenAPIMode}}"
       data-response-inspect="{{.ResponseInspect}}" data-mtls-mode="{{.MTLS.Mode}}" data-mtls-ca="{{if .MTLS.CAPath}}1{{else}}0{{end}}" data-mtls-allow="{{.MTLS.Allow}}"
+      data-maintenance="{{if .Gate.Maintenance}}1{{else}}0{{end}}" data-maint-message="{{.Gate.MaintMsg}}"
+      data-maint-start="{{if not .Gate.MaintStart.IsZero}}{{.Gate.MaintStart.UTC.Format "2006-01-02T15:04"}}{{end}}"
+      data-maint-end="{{if not .Gate.MaintEnd.IsZero}}{{.Gate.MaintEnd.UTC.Format "2006-01-02T15:04"}}{{end}}"
+      data-bypass="{{.Gate.BypassToken}}" data-waiting-room="{{if .Gate.WaitingRoom}}1{{else}}0{{end}}"
+      data-wr-max="{{if .Gate.MaxActive}}{{.Gate.MaxActive}}{{end}}" data-wr-idle="{{if .Gate.IdleSecs}}{{.Gate.IdleMins}}{{end}}"
+      data-wr-message="{{.Gate.WaitMsg}}" data-wr-crawlers="{{.Gate.Crawlers}}"
       data-ttl-floor="{{.CacheTTLFloor}}" data-ttl-ceiling="{{.CacheTTLCeiling}}" data-grace="{{.CacheGrace}}" data-keep="{{.CacheKeep}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-settings-01 text-xs"></i>
       Edit

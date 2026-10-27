@@ -68,6 +68,7 @@ type Handler struct {
 	adaptive       *adaptive.Policy
 	trustedProxies []*net.IPNet
 	breach         *breach.Checker
+	gates          gates // maintenance and waiting room state (issue #198)
 }
 
 // ReloadWAF swaps in a freshly built default engine plus any per-service
@@ -472,6 +473,19 @@ func (h *Handler) Handle(c echo.Context) error {
 		}
 	}
 	mark("ratelimit")
+
+	// 4.7 Maintenance mode and waiting room (issue #198): after the
+	// blocklists, challenge and rate limits, so a banned client still gets
+	// 403 and bots never take a queue slot; before the WAF and the backend.
+	if app != nil && !open {
+		if reason, err := h.gate(c, app, rlKey, botAnalysis.IsTrustedCrawler, reqID); reason != "" {
+			mark("gate")
+			// Logged unblocked: a queued browser polls every few seconds,
+			// and blocked rows would count against its JA4 fingerprint.
+			h.logChallenged(r, appName, clientIP, c.Response().Status, reason, time.Since(start), meta)
+			return err
+		}
+	}
 
 	// 5. WAF — deep inspection of headers + body. Per-service override engine
 	// (if this service has its own rule exceptions) takes precedence over

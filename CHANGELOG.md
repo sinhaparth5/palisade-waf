@@ -21,6 +21,7 @@ rather than growing this file forever.
 - (#195) Strict Content-Security-Policy for the admin UI
 - (#196) Multiple admin users with roles
 - (#197) OIDC single sign-on for the admin UI
+- (#198) Maintenance mode and waiting room per service
 
 ## [2.10.5] - 2026-10-27
 

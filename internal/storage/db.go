@@ -942,6 +942,9 @@ type Service struct {
 	// ResponseInspect runs CRS's outbound rules over the backend's text
 	// responses (issue #192): "" off, "log" or "block".
 	ResponseInspect string
+	// Gate is the maintenance mode and waiting room (issue #198), filled
+	// from service_gate by services.Registry.Reload.
+	Gate ServiceGate
 }
 
 // DefaultHealthInterval is the active health check interval used when a
@@ -1039,7 +1042,7 @@ func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
 }
 
 func (db *DB) RemoveService(id int) error {
-	for _, t := range []string{"service_openapi", "service_mtls"} {
+	for _, t := range []string{"service_openapi", "service_mtls", "service_gate"} {
 		if _, err := db.exec(`DELETE FROM `+t+` WHERE service_id = ?`, id); err != nil {
 			return err
 		}

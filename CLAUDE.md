@@ -49,7 +49,9 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 
 ## Request pipeline
 
-`internal/proxy/handler.go` `Handle`, in order: IP blocklist → geo blocklist → bot challenge gate → global rate limit → per-service rate limit → Coraza WAF → reverse proxy.
+`internal/proxy/handler.go` `Handle`, in order: IP blocklist → geo blocklist → bot challenge gate → global rate limit → per-service rate limit → maintenance / waiting room → Coraza WAF → reverse proxy.
+
+- **Maintenance and waiting room** (issue #198, `proxy/gate.go`, `security/waitroom`, table `service_gate`, on `Service.Gate`): skipped for open paths and trusted IPs. Maintenance is a 503 with `Retry-After`; `?palisade_bypass=<token>` sets `cz_bypass` and redirects with the token stripped. Waiting room tickets ride in `cz_wait_<id>`, HMAC'd with the challenge secret over service + ticket + `ratelimit.ClientKey`. Rooms live in `Handler.gates`, outside the registry, so `Reload` doesn't empty the queue. Queue state is bounded (`MaxQueue`, `MaxPerKey`, `QueueTTL`). Both log unblocked (`logChallenged`), so queue polls never touch autoban or JA4 reputation.
 
 - IP/geo run **before** the challenge so a banned IP gets 403, not an endless challenge redirect.
 - WAF runs **after** the challenge on purpose: autoban needs unsolved-challenge points to ban a new attacker before any WAF verdict exists.

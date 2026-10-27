@@ -175,6 +175,13 @@ func (r *Registry) Reload(db *storage.DB) error {
 		return err
 	}
 	mtls := loadMTLSPolicies(storedMTLS, list)
+	gates, err := db.ListServiceGates()
+	if err != nil {
+		return err
+	}
+	for i := range list {
+		list[i].Gate = gates[list[i].ID]
+	}
 
 	proxies := make(map[string]http.Handler, len(list))
 	direct := make(map[string]http.Handler, len(list))

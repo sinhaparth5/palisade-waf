@@ -224,6 +224,23 @@
       s.value = ai[s.dataset.aiCat] || '';
     });
 
+    var gateForm = document.getElementById('svc-gate-form');
+    gateForm.setAttribute('hx-post', adminPath + '/services/gate/' + d.id);
+    htmx.process(gateForm);
+    gateForm.reset();
+    document.getElementById('svc-maintenance').checked = d.maintenance === '1';
+    document.getElementById('svc-maint-message').value = d.maintMessage || '';
+    document.getElementById('svc-maint-start').value = d.maintStart || '';
+    document.getElementById('svc-maint-end').value = d.maintEnd || '';
+    document.getElementById('svc-waiting-room').checked = d.waitingRoom === '1';
+    document.getElementById('svc-wr-max').value = d.wrMax || '';
+    document.getElementById('svc-wr-idle').value = d.wrIdle || '10';
+    document.getElementById('svc-wr-message').value = d.wrMessage || '';
+    document.getElementById('svc-wr-crawlers').value = d.wrCrawlers || 'bypass';
+    var bypassHost = d.host || location.host;
+    document.getElementById('svc-bypass-link').textContent = d.bypass ? 'https://' + bypassHost + '/?palisade_bypass=' + d.bypass : '';
+    document.getElementById('svc-bypass-wrap').classList.toggle('hidden', !d.bypass);
+
     breachForm.setAttribute('hx-post', adminPath + '/services/breach/' + d.id);
     htmx.process(breachForm);
     document.getElementById('svc-breach-action').value = d.breachAction || '';
@@ -323,7 +340,7 @@
     deleteBtn.setAttribute('hx-confirm', 'Remove service ' + d.name + '?');
     htmx.process(deleteBtn);
 
-    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
+    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-gate-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.textContent = '';
     });
@@ -375,6 +392,7 @@
   document.body.addEventListener('hosts-saved', closeModal);
   document.body.addEventListener('login-saved', closeModal);
   document.body.addEventListener('breach-saved', closeModal);
+  document.body.addEventListener('gate-saved', closeModal);
   document.body.addEventListener('openapi-saved', closeModal);
   document.body.addEventListener('mtls-saved', closeModal);
   document.body.addEventListener('responses-saved', closeModal);

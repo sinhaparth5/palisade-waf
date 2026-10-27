@@ -321,6 +321,22 @@ func (db *DB) schemaStatements() []string {
 			allow_list TEXT NOT NULL
 		)`,
 
+		// Maintenance mode and waiting room per service (issue #198).
+		// Schedule bounds are RFC 3339 text, "" for none.
+		`CREATE TABLE IF NOT EXISTS service_gate (
+			service_id    INTEGER PRIMARY KEY,
+			maintenance   INTEGER NOT NULL DEFAULT 0,
+			maint_message TEXT NOT NULL,
+			maint_start   TEXT NOT NULL,
+			maint_end     TEXT NOT NULL,
+			bypass_token  TEXT NOT NULL,
+			waiting_room  INTEGER NOT NULL DEFAULT 0,
+			wr_max        INTEGER NOT NULL DEFAULT 0,
+			wr_idle       INTEGER NOT NULL DEFAULT 0,
+			wr_message    TEXT NOT NULL,
+			wr_crawlers   VARCHAR(16) NOT NULL
+		)`,
+
 		// One OpenAPI document per service (issue #190). Its own table, not
 		// a services column, because a real spec easily outgrows MySQL's
 		// 64 KiB TEXT.

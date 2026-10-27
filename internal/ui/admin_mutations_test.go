@@ -1102,3 +1102,59 @@ func TestSetServiceResponseInspect(t *testing.T) {
 		t.Fatalf("off: stored %q", s.ResponseInspect)
 	}
 }
+
+func TestSetServiceGate(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("shop", "shop.example.com")
+	path := "/admin/services/gate/" + itoa(svc.ID)
+	gate := func() storage.ServiceGate {
+		gates, err := env.db.ListServiceGates()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return gates[svc.ID]
+	}
+
+	for _, bad := range [][]string{
+		{"waiting_room", "1", "wr_max", "0", "wr_idle", "10"},
+		{"waiting_room", "1", "wr_max", "10", "wr_idle", "0"},
+		{"maintenance", "1", "maint_start", "2026-10-28T10:00", "maint_end", "2026-10-28T09:00"},
+		{"maintenance", "1", "maint_end", "tomorrow"},
+	} {
+		if rec := env.do("POST", path, form(bad...)); rec.Header().Get("HX-Retarget") != "#svc-gate-error" {
+			t.Errorf("%v: want inline error, got %s", bad, rec.Body)
+		}
+	}
+
+	rec := env.do("POST", path, form("maintenance", "1", "maint_message", "Back soon", "maint_end", "2030-01-02T03:04",
+		"waiting_room", "1", "wr_max", "500", "wr_idle", "15", "wr_crawlers", "deny"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if rec.Header().Get("HX-Trigger") != "gate-saved" || !strings.Contains(rec.Body.String(), "Waiting room: 500") {
+		t.Fatalf("save: no trigger or badge: %s", rec.Body)
+	}
+	g := gate()
+	if !g.Maintenance || g.MaintMsg != "Back soon" || g.MaintEnd.Format("2006-01-02T15:04") != "2030-01-02T03:04" ||
+		len(g.BypassToken) != 32 || g.MaxActive != 500 || g.IdleSecs != 900 || g.Crawlers != "deny" {
+		t.Fatalf("stored %+v", g)
+	}
+	// The registry carries it to the proxy without a restart.
+	if s := env.h.registry.Match("shop.example.com", "/"); s == nil || !s.Gate.Maintenance {
+		t.Error("registry not reloaded")
+	}
+
+	// Saving again keeps the bypass token unless asked to replace it.
+	token := g.BypassToken
+	env.do("POST", path, form("maintenance", "1"))
+	if gate().BypassToken != token {
+		t.Error("bypass token changed on a plain save")
+	}
+	env.do("POST", path, form("maintenance", "1", "new_bypass", "1"))
+	if gate().BypassToken == token {
+		t.Error("new_bypass kept the old token")
+	}
+
+	env.do("POST", path, form())
+	if g := gate(); g.Maintenance || g.WaitingRoom {
+		t.Errorf("turning both off left %+v", g)
+	}
+}

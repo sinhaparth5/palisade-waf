@@ -33,9 +33,9 @@ var auditSkip = map[string]bool{
 // with credentials in it) stays out until someone decides it's safe.
 var auditFields = []string{
 	"action", "ai_search", "ai_training", "ai_user", "aliases", "app_name", "bot_mode", "breach_action", "breach_fields", "canonical", "canonical_host", "captcha_provider", "cert_id", "client_id",
-	"country_code", "email", "enabled", "group", "honeypot_paths", "host", "host_aliases", "ip", "issuer", "label", "lb_policy", "login_paths",
+	"country_code", "email", "enabled", "group", "honeypot_paths", "host", "host_aliases", "ip", "issuer", "label", "lb_policy", "login_paths", "maintenance",
 	"match_type", "mode", "mtls_mode", "name", "note", "openapi_mode", "path", "prefix", "read_only", "reason", "response_inspect",
-	"role", "rule_id", "rule_type", "service", "service_id", "trusted_ips",
+	"role", "rule_id", "rule_type", "service", "service_id", "trusted_ips", "waiting_room", "wr_crawlers", "wr_max",
 }
 
 const auditValueMax = 120

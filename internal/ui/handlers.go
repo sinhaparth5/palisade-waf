@@ -455,6 +455,7 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/services/ai/:id", h.SetServiceAICrawlers),
 		g.POST("/services/breach/:id", h.SetServiceBreachCheck),
 		g.POST("/services/responses/:id", h.SetServiceResponseInspect),
+		g.POST("/services/gate/:id", h.SetServiceGate),
 		g.POST("/services/compress/:id", h.SetServiceCompress),
 		g.POST("/services/backends/:id", h.SetServiceBackends),
 		g.POST("/services/hosts/:id", h.SetServiceHosts),

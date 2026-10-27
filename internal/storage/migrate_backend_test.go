@@ -32,6 +32,11 @@ func TestMigrateConfigTo(t *testing.T) {
 	if err := source.SetServiceCache(1, true); err != nil {
 		t.Fatal(err)
 	}
+	gateEnd := time.Date(2030, 1, 2, 3, 4, 0, 0, time.UTC)
+	if err := source.SetServiceGate(1, ServiceGate{Maintenance: true, MaintMsg: "back soon", MaintEnd: gateEnd, BypassToken: "tok",
+		WaitingRoom: true, MaxActive: 50, IdleSecs: 600, Crawlers: "bypass"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := source.SetServiceLargeJSUploads(1, true); err != nil {
 		t.Fatal(err)
 	}
@@ -139,6 +144,9 @@ func TestMigrateConfigTo(t *testing.T) {
 	// didn't desynchronize the target's auto-increment/identity sequence.
 	if err := target.AddGeoRule("", "PM", "block"); err != nil {
 		t.Errorf("normal insert after migration failed (sequence may be broken): %v", err)
+	}
+	if gates, _ := target.ListServiceGates(); !gates[1].MaintEnd.Equal(gateEnd) || gates[1].MaxActive != 50 || gates[1].BypassToken != "tok" {
+		t.Errorf("service gate not migrated: %+v", gates[1])
 	}
 	if u, _ := target.SSOUser("https://idp.example", "sub-1"); u == nil || u.Email != "sso@example.com" {
 		t.Errorf("SSO identity not migrated: %+v", u)
