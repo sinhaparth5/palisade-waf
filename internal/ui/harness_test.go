@@ -31,6 +31,7 @@ type adminEnv struct {
 	e       *echo.Echo
 	db      *storage.DB
 	session string
+	uid     int64 // the owner the session belongs to
 	calls   map[string]*atomic.Int32
 	backend *httptest.Server
 }
@@ -91,7 +92,9 @@ func newAdminEnv(t *testing.T) *adminEnv {
 	h.Register(env.e)
 	h.RegisterAPI(env.e)
 
-	env.session, err = db.CreateSession("127.0.0.1", "test", "")
+	owner, _ := db.GetAdminUserByEmail(testAdminEmail)
+	env.uid = owner.ID
+	env.session, err = db.CreateSession(env.uid, "127.0.0.1", "test", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,6 +135,20 @@ func (env *adminEnv) doWith(method, path string, form url.Values, session string
 }
 
 func (env *adminEnv) count(name string) int32 { return env.calls[name].Load() }
+
+// sessionAs creates a user with role and returns a live session for them.
+func (env *adminEnv) sessionAs(role string) string {
+	env.t.Helper()
+	uid, err := env.db.CreateAdminUser("test-"+role+"@example.com", "password-"+role, role)
+	if err != nil {
+		env.t.Fatal(err)
+	}
+	tok, err := env.db.CreateSession(uid, "127.0.0.1", "test", "")
+	if err != nil {
+		env.t.Fatal(err)
+	}
+	return tok
+}
 
 // seedService adds a service pointing at the env's live test backend.
 func (env *adminEnv) seedService(name, host string) storage.Service {

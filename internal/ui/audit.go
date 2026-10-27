@@ -32,10 +32,10 @@ var auditSkip = map[string]bool{
 // rather than a denylist so a field added later (a password, a token, a URL
 // with credentials in it) stays out until someone decides it's safe.
 var auditFields = []string{
-	"ai_search", "ai_training", "ai_user", "aliases", "app_name", "bot_mode", "breach_action", "breach_fields", "canonical", "canonical_host", "captcha_provider", "cert_id",
-	"country_code", "enabled", "honeypot_paths", "host", "host_aliases", "ip", "label", "lb_policy", "login_paths",
+	"action", "ai_search", "ai_training", "ai_user", "aliases", "app_name", "bot_mode", "breach_action", "breach_fields", "canonical", "canonical_host", "captcha_provider", "cert_id",
+	"country_code", "email", "enabled", "honeypot_paths", "host", "host_aliases", "ip", "label", "lb_policy", "login_paths",
 	"match_type", "mode", "mtls_mode", "name", "note", "openapi_mode", "path", "prefix", "read_only", "reason", "response_inspect",
-	"rule_id", "rule_type", "service", "service_id", "trusted_ips",
+	"role", "rule_id", "rule_type", "service", "service_id", "trusted_ips",
 }
 
 const auditValueMax = 120
@@ -47,7 +47,7 @@ const auditPageSize = 10
 
 // auditLog records every successful (status < 400) non-GET request on the
 // group it wraps. It runs after authentication, so the actor is known: the
-// admin session by default, or the API key apiKeyAuth stored in the context.
+// signed-in user's email, or the API key apiKeyAuth stored in the context.
 func (h *Handler) auditLog(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		r := c.Request()
@@ -78,6 +78,9 @@ func (h *Handler) auditLog(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		actor, _ := c.Get("audit_actor").(string)
+		if u := currentUser(c); actor == "" && u != nil {
+			actor = u.Email
+		}
 		if actor == "" {
 			actor = "admin"
 		}

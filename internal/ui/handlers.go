@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"html/template"
@@ -155,6 +155,8 @@ type Handler struct {
 	pkEnroll        *pkEnrollStore
 	trustedNets     []*net.IPNet
 	proxyHandle     echo.HandlerFunc
+	accountLimiter  *loginLimiter     // per-account login throttle, next to the per-IP loginLimiter
+	routeRoles      map[string]string // "METHOD /admin/path" → minimum role, filled by Register
 }
 
 type dashboardCountry struct {
@@ -216,7 +218,7 @@ func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist,
 		sum := sha256.Sum256(b)
 		assetVer = hex.EncodeToString(sum[:])[:12]
 	}
-	h := &Handler{cfg: cfg, db: db, ipbl: ipbl, geoBl: geoBl, registry: registry, broadcaster: bc, staticJS: sub, staticCSS: cssSub, staticImgs: imgsSub, assetVer: assetVer, reloadBot: reloadBot, buildChallenger: buildChallenger, reloadRateLimit: reloadRateLimit, reloadWAF: reloadWAF, syncThreatIntel: syncThreatIntel, sendReportNow: sendReportNow, sendTestWebhook: sendTestWebhook, sendLoginCode: sendLoginCode, reloadAutoban: reloadAutoban, scorer: scorer, reloadAdaptive: reloadAdaptive, loginLimiter: newLoginLimiter(), apiKeyLimiter: newLoginLimiter(), twoFA: newTwoFAStore(), passkeys: passkey.New(db), pkEnroll: newPkEnrollStore(), trustedNets: proxy.ParseTrustedProxyCIDRs(cfg.TrustedProxies), proxyHandle: proxyHandle}
+	h := &Handler{cfg: cfg, db: db, ipbl: ipbl, geoBl: geoBl, registry: registry, broadcaster: bc, staticJS: sub, staticCSS: cssSub, staticImgs: imgsSub, assetVer: assetVer, reloadBot: reloadBot, buildChallenger: buildChallenger, reloadRateLimit: reloadRateLimit, reloadWAF: reloadWAF, syncThreatIntel: syncThreatIntel, sendReportNow: sendReportNow, sendTestWebhook: sendTestWebhook, sendLoginCode: sendLoginCode, reloadAutoban: reloadAutoban, scorer: scorer, reloadAdaptive: reloadAdaptive, loginLimiter: newLoginLimiter(), accountLimiter: newLoginLimiter(), apiKeyLimiter: newLoginLimiter(), twoFA: newTwoFAStore(), passkeys: passkey.New(db), pkEnroll: newPkEnrollStore(), trustedNets: proxy.ParseTrustedProxyCIDRs(cfg.TrustedProxies), proxyHandle: proxyHandle}
 	if err := h.parseTemplates(); err != nil {
 		return nil, err
 	}
@@ -285,6 +287,19 @@ func (h *Handler) sessionAuth(next echo.HandlerFunc) echo.HandlerFunc {
 			}
 			return c.Redirect(http.StatusFound, login)
 		}
+		// A disabled user's sessions are revoked when they're disabled;
+		// checking here too keeps a stale row from ever authenticating.
+		u, err := h.db.GetAdminUser(sess.UserID)
+		if err != nil {
+			return c.Redirect(http.StatusFound, login)
+		}
+		if u == nil || u.Disabled {
+			// Drop the row too: LoginPage would otherwise see a live
+			// session and bounce straight back here.
+			h.db.DeleteSession(sess.Token) //nolint — best effort, it can't authenticate either way
+			return c.Redirect(http.StatusFound, login)
+		}
+		c.Set(ctxUser, u)
 		// Record last-seen off the hot path, throttled like TouchAPIKey so
 		// a busy dashboard doesn't write on every request.
 		if time.Since(sess.LastActiveAt) > sessionTouchThrottle {
@@ -357,110 +372,135 @@ func (h *Handler) Register(e *echo.Echo) {
 
 	g := admin.Group("")
 	// bodyLimit must run ahead of csrfProtect, which parses the form body.
-	g.Use(bodyLimit, h.sessionAuth, h.csrfProtect, h.auditLog)
-	g.POST("/logout", h.Logout)
+	g.Use(bodyLimit, h.sessionAuth, h.requireRole, h.csrfProtect, h.auditLog)
+
+	// as declares the minimum role for routes (issue #196); requireRole
+	// enforces it. Every mutating route is listed under one of the three
+	// roles, which TestRouteRoles checks. GETs default to viewer.
+	h.routeRoles = map[string]string{}
+	as := func(role string, routes ...*echo.Route) {
+		for _, r := range routes {
+			h.routeRoles[r.Method+" "+r.Path] = role
+		}
+	}
 
 	g.GET("/metrics", echo.WrapHandler(metrics.Handler()))
-
 	g.GET("", h.Dashboard)
 	g.GET("/api/notifications", h.NotificationsPanel)
 	g.GET("/api/notifications/stream", h.NotificationsStream)
-	g.POST("/api/notifications/seen", h.MarkNotificationsSeen)
 	g.GET("/api/traffic", h.TrafficSeries)
 	g.GET("/api/threats", h.ThreatsSeries)
 	g.GET("/logs", h.Logs)
-	g.GET("/logs/export", h.ExportLogs)
 	g.GET("/logs/stream", h.LogsStream)
 	g.GET("/logs/stats", h.LogStatsSeed)
 	g.GET("/logs/:id", h.LogDetail)
-	g.POST("/logs/feedback/:id", h.MarkLogFeedback)
-	g.POST("/logs/exception/:id", h.CreateLogException)
 	g.GET("/ip-rules", h.IPRulesPage)
 	g.GET("/ip-rules/rows", h.IPRulesRows)
-	g.POST("/ip-rules", h.AddIPRule)
-	g.POST("/ip-rules/autoban", h.SaveAutobanSettings)
-	g.POST("/ip-rules/adaptive", h.SaveAdaptiveSettings)
-	g.POST("/ip-rules/honeypots", h.SaveHoneypots)
-	g.DELETE("/ip-rules/:id", h.DeleteIPRule)
 	g.GET("/geo-rules", h.GeoRulesPage)
-	g.POST("/geo-rules", h.AddGeoRule)
-	g.DELETE("/geo-rules/:id", h.DeleteGeoRule)
 	g.GET("/services", h.ServicesPage)
 	g.GET("/services/rows", h.ServicesRows)
-	g.POST("/services", h.AddService)
-	g.DELETE("/services/:id", h.DeleteService)
-	g.POST("/services/tls/upload", h.UploadServiceTLS)
-	g.POST("/services/tls/auto", h.EnableServiceAutoTLS)
-	g.POST("/services/tls/pool", h.AssignPoolCert)
-	g.POST("/services/tls/clear", h.ClearServiceTLS)
-	g.GET("/certificates", h.CertificatesPage)
-	g.POST("/certificates", h.AddCertificate)
-	g.DELETE("/certificates/:id", h.DeleteCertificate)
-	g.POST("/services/ratelimit", h.SetServiceRateLimit)
-	g.POST("/services/bot/:id", h.SetServiceBotMode)
-	g.POST("/services/uploads/:id", h.SetServiceLargeJSUploads)
-	g.POST("/services/http3/:id", h.SetServiceHTTP3)
-	g.POST("/services/mtls/:id", h.SetServiceMTLS)
-	g.POST("/services/login/:id", h.SetServiceLoginPaths)
-	g.POST("/services/ai/:id", h.SetServiceAICrawlers)
-	g.POST("/services/breach/:id", h.SetServiceBreachCheck)
-	g.POST("/services/responses/:id", h.SetServiceResponseInspect)
-	g.POST("/services/compress/:id", h.SetServiceCompress)
-	g.POST("/services/backends/:id", h.SetServiceBackends)
-	g.POST("/services/hosts/:id", h.SetServiceHosts)
-	g.POST("/services/schema/:id", h.SetServiceSchema)
 	g.GET("/services/openapi/:id", h.ServiceOpenAPI)
-	g.POST("/services/openapi/:id", h.SetServiceOpenAPI)
-	g.POST("/services/cache/:id", h.SetServiceCache)
-	g.POST("/services/cache-session/:id", h.SetServiceCacheSession)
-	g.POST("/services/cache-tuning/:id", h.SetServiceCacheTuning)
-	g.POST("/services/cache-purge/:id", h.PurgeServiceCache)
 	g.GET("/services/cache-stats", h.ServicesCacheStats)
-	g.POST("/settings/varnish", h.SaveVarnishConfig)
-	g.POST("/settings/acme-email", h.SaveAcmeEmail)
-	g.POST("/settings/bot", h.SaveBotSettings)
-	g.POST("/settings/ratelimit", h.SaveRateLimitConfig)
-	g.POST("/settings/trusted-ips", h.SaveTrustedIPs)
-	g.POST("/settings/webhook", h.SaveWebhookConfig)
-	g.POST("/settings/webhook/test", h.TestWebhook)
-	g.POST("/settings/email", h.SaveEmailSettings)
-	g.POST("/settings/email/test", h.TestEmailReport)
-	g.POST("/settings/typesafe", h.SaveTypeSafeSettings)
-	g.POST("/settings/dbconn", h.SaveDBConnConfig)
-	g.POST("/settings/dbconn/test", h.TestDBConnection)
-	g.POST("/settings/dbconn/migrate", h.MigrateDBConfig)
-	g.POST("/settings/api-keys", h.CreateAPIKey)
-	g.DELETE("/settings/api-keys/:id", h.DeleteAPIKey)
-	g.DELETE("/settings/devices/:token", h.RevokeDevice)
-	g.POST("/settings/devices/revoke-others", h.RevokeOtherDevices)
+	g.GET("/certificates", h.CertificatesPage)
 	g.GET("/waf-rules", h.WAFRulesPage)
-	g.POST("/waf-rules/disable", h.DisableWAFRule)
-	g.POST("/waf-rules/dry-run", h.WAFDryRun)
-	g.POST("/waf-rules/custom", h.SaveCustomRule)
-	g.POST("/waf-rules/custom/:id/toggle", h.ToggleCustomRule)
-	g.DELETE("/waf-rules/custom/:id", h.DeleteCustomRule)
-	g.DELETE("/waf-rules/:id", h.EnableWAFRule)
-	g.DELETE("/waf-rules/service/:id", h.EnableWAFRuleForService)
-	g.POST("/waf-rules/feedback-config", h.SaveWAFFeedbackConfig)
 	g.GET("/ai-usage", h.AIUsagePage)
 	g.GET("/threat-intel", h.ThreatIntelPage)
-	g.POST("/threat-intel", h.AddThreatIntelSource)
-	g.POST("/threat-intel/crowdsec", h.AddCrowdSecSource)
-	g.DELETE("/threat-intel/:id", h.DeleteThreatIntelSource)
-	g.POST("/threat-intel/:id/toggle", h.ToggleThreatIntelSource)
-	g.POST("/threat-intel/:id/sync", h.SyncThreatIntelSource)
 	g.GET("/settings", h.SettingsPage)
 	g.GET("/settings/audit", h.AuditRows)
-	g.POST("/settings/credentials", h.ChangeCredentials)
-	g.POST("/settings/2fa/start", h.StartTOTPEnrollment)
-	g.POST("/settings/2fa/confirm", h.ConfirmTOTPEnrollment)
-	g.POST("/settings/2fa/disable", h.DisableTOTP)
-	g.POST("/settings/passkeys/begin", h.BeginPasskeyEnrollment)
-	g.POST("/settings/passkeys/finish", h.FinishPasskeyEnrollment)
-	g.DELETE("/settings/passkeys/:id", h.DeletePasskey)
-	// POST, not GET: this streams the full DB (admin hash, challenge secret),
-	// so it must never be reachable via cross-site top-level navigation.
-	g.POST("/settings/backup", h.BackupDB)
+
+	// Every role: the user's own session, credentials and second factors.
+	as(storage.RoleViewer,
+		g.POST("/logout", h.Logout),
+		g.POST("/api/notifications/seen", h.MarkNotificationsSeen),
+		g.POST("/settings/credentials", h.ChangeCredentials),
+		g.POST("/settings/2fa/start", h.StartTOTPEnrollment),
+		g.POST("/settings/2fa/confirm", h.ConfirmTOTPEnrollment),
+		g.POST("/settings/2fa/disable", h.DisableTOTP),
+		g.POST("/settings/passkeys/begin", h.BeginPasskeyEnrollment),
+		g.POST("/settings/passkeys/finish", h.FinishPasskeyEnrollment),
+		g.DELETE("/settings/passkeys/:id", h.DeletePasskey),
+		g.DELETE("/settings/devices/:token", h.RevokeDevice),
+		g.POST("/settings/devices/revoke-others", h.RevokeOtherDevices),
+	)
+
+	as(storage.RoleAdmin,
+		// Full request headers leave the UI here, so viewers can't export.
+		g.GET("/logs/export", h.ExportLogs),
+		g.POST("/logs/feedback/:id", h.MarkLogFeedback),
+		g.POST("/logs/exception/:id", h.CreateLogException),
+		g.POST("/ip-rules", h.AddIPRule),
+		g.POST("/ip-rules/autoban", h.SaveAutobanSettings),
+		g.POST("/ip-rules/adaptive", h.SaveAdaptiveSettings),
+		g.POST("/ip-rules/honeypots", h.SaveHoneypots),
+		g.DELETE("/ip-rules/:id", h.DeleteIPRule),
+		g.POST("/geo-rules", h.AddGeoRule),
+		g.DELETE("/geo-rules/:id", h.DeleteGeoRule),
+		g.POST("/services", h.AddService),
+		g.DELETE("/services/:id", h.DeleteService),
+		g.POST("/services/tls/upload", h.UploadServiceTLS),
+		g.POST("/services/tls/auto", h.EnableServiceAutoTLS),
+		g.POST("/services/tls/pool", h.AssignPoolCert),
+		g.POST("/services/tls/clear", h.ClearServiceTLS),
+		g.POST("/certificates", h.AddCertificate),
+		g.DELETE("/certificates/:id", h.DeleteCertificate),
+		g.POST("/services/ratelimit", h.SetServiceRateLimit),
+		g.POST("/services/bot/:id", h.SetServiceBotMode),
+		g.POST("/services/uploads/:id", h.SetServiceLargeJSUploads),
+		g.POST("/services/http3/:id", h.SetServiceHTTP3),
+		g.POST("/services/mtls/:id", h.SetServiceMTLS),
+		g.POST("/services/login/:id", h.SetServiceLoginPaths),
+		g.POST("/services/ai/:id", h.SetServiceAICrawlers),
+		g.POST("/services/breach/:id", h.SetServiceBreachCheck),
+		g.POST("/services/responses/:id", h.SetServiceResponseInspect),
+		g.POST("/services/compress/:id", h.SetServiceCompress),
+		g.POST("/services/backends/:id", h.SetServiceBackends),
+		g.POST("/services/hosts/:id", h.SetServiceHosts),
+		g.POST("/services/schema/:id", h.SetServiceSchema),
+		g.POST("/services/openapi/:id", h.SetServiceOpenAPI),
+		g.POST("/services/cache/:id", h.SetServiceCache),
+		g.POST("/services/cache-session/:id", h.SetServiceCacheSession),
+		g.POST("/services/cache-tuning/:id", h.SetServiceCacheTuning),
+		g.POST("/services/cache-purge/:id", h.PurgeServiceCache),
+		g.POST("/settings/varnish", h.SaveVarnishConfig),
+		g.POST("/settings/acme-email", h.SaveAcmeEmail),
+		g.POST("/settings/bot", h.SaveBotSettings),
+		g.POST("/settings/ratelimit", h.SaveRateLimitConfig),
+		g.POST("/settings/trusted-ips", h.SaveTrustedIPs),
+		g.POST("/waf-rules/disable", h.DisableWAFRule),
+		g.POST("/waf-rules/dry-run", h.WAFDryRun),
+		g.POST("/waf-rules/custom", h.SaveCustomRule),
+		g.POST("/waf-rules/custom/:id/toggle", h.ToggleCustomRule),
+		g.DELETE("/waf-rules/custom/:id", h.DeleteCustomRule),
+		g.DELETE("/waf-rules/:id", h.EnableWAFRule),
+		g.DELETE("/waf-rules/service/:id", h.EnableWAFRuleForService),
+		g.POST("/waf-rules/feedback-config", h.SaveWAFFeedbackConfig),
+		g.POST("/threat-intel", h.AddThreatIntelSource),
+		g.POST("/threat-intel/crowdsec", h.AddCrowdSecSource),
+		g.DELETE("/threat-intel/:id", h.DeleteThreatIntelSource),
+		g.POST("/threat-intel/:id/toggle", h.ToggleThreatIntelSource),
+		g.POST("/threat-intel/:id/sync", h.SyncThreatIntelSource),
+	)
+
+	// Owner: users, the DB connection, secrets and API keys.
+	as(storage.RoleOwner,
+		g.POST("/settings/users", h.CreateUser),
+		g.POST("/settings/users/:id", h.UpdateUser),
+		g.DELETE("/settings/users/:id", h.DeleteUser),
+		g.POST("/settings/webhook", h.SaveWebhookConfig),
+		g.POST("/settings/webhook/test", h.TestWebhook),
+		g.POST("/settings/email", h.SaveEmailSettings),
+		g.POST("/settings/email/test", h.TestEmailReport),
+		g.POST("/settings/typesafe", h.SaveTypeSafeSettings),
+		g.POST("/settings/dbconn", h.SaveDBConnConfig),
+		g.POST("/settings/dbconn/test", h.TestDBConnection),
+		g.POST("/settings/dbconn/migrate", h.MigrateDBConfig),
+		g.POST("/settings/api-keys", h.CreateAPIKey),
+		g.DELETE("/settings/api-keys/:id", h.DeleteAPIKey),
+		// POST, not GET: this streams the full DB (password hashes,
+		// challenge secret), so it must never be reachable via cross-site
+		// top-level navigation.
+		g.POST("/settings/backup", h.BackupDB),
+	)
 }
 
 // ── Login / logout ────────────────────────────────────────────────────────────
@@ -486,17 +526,22 @@ func (h *Handler) LoginPost(c echo.Context) error {
 			"Too many failed attempts. Try again later.")
 	}
 
-	email := strings.TrimSpace(c.FormValue("email"))
+	account := storage.NormalizeEmail(c.FormValue("email"))
 	password := c.FormValue("password")
+	// Per account as well as per IP, so guesses spread over many IPs
+	// still stop. Unknown emails get an entry too, so a lockout can't
+	// reveal which emails exist.
+	if wait, locked := h.accountLimiter.blocked(account); locked {
+		log.Printf("admin login: rejected attempt for locked account from %s (locked out for %s)", ip, wait.Round(time.Second))
+		return h.renderLoginStatus(c, http.StatusTooManyRequests,
+			"Too many failed attempts. Try again later.")
+	}
 
-	adminEmail, _ := h.db.GetAdminEmail()
-	// Always evaluate both checks with the same error message so response
-	// timing and content can't be used to enumerate the admin email.
-	passOK, _ := h.db.CheckAdminPassword(password)
-	emailOK := subtle.ConstantTimeCompare([]byte(email), []byte(adminEmail)) == 1
-	if !emailOK || !passOK {
-		if h.loginLimiter.fail(ip) {
-			log.Printf("admin login: %s locked out after %d failed attempts", ip, maxLoginFailures)
+	// CheckAdminLogin costs one bcrypt compare whether or not the email
+	// exists, so timing can't enumerate accounts either.
+	u, _ := h.db.CheckAdminLogin(account, password)
+	if u == nil {
+		if h.loginFailed(ip, account) {
 			return h.renderLoginStatus(c, http.StatusTooManyRequests,
 				"Too many failed attempts. Try again later.")
 		}
@@ -506,21 +551,37 @@ func (h *Handler) LoginPost(c echo.Context) error {
 	// Password OK. With TOTP or a passkey enrolled, park the login and ask
 	// for a second factor — without resetting the limiter yet (see
 	// beginTOTPStage).
-	totpEnabled, _ := h.db.TOTPEnabled()
-	passkeysEnabled, _ := h.passkeys.Enabled()
+	totpEnabled, _ := h.db.TOTPEnabled(u.ID)
+	passkeysEnabled, _ := h.passkeys.Enabled(u.ID)
 	if totpEnabled || passkeysEnabled {
-		return h.beginTOTPStage(c)
+		return h.beginTOTPStage(c, u)
 	}
 
+	h.loginSucceeded(ip, account)
+	log.Printf("admin login: successful login for %s from %s", u.Email, ip)
+	return h.issueSession(c, u.ID)
+}
+
+// loginFailed counts a failed password or second-factor attempt against
+// both the IP and the account, and reports whether either is now locked.
+func (h *Handler) loginFailed(ip, account string) bool {
+	ipLocked, accountLocked := h.loginLimiter.fail(ip), h.accountLimiter.fail(account)
+	if ipLocked || accountLocked {
+		log.Printf("admin login: locked out after %d failed attempts (ip %s locked=%v, account locked=%v)",
+			maxLoginFailures, ip, ipLocked, accountLocked)
+	}
+	return ipLocked || accountLocked
+}
+
+func (h *Handler) loginSucceeded(ip, account string) {
 	h.loginLimiter.success(ip)
-	log.Printf("admin login: successful login from %s", ip)
-	return h.issueSession(c)
+	h.accountLimiter.success(account)
 }
 
 // issueSession creates the session row, sets the cookie, and lands on the
 // dashboard — the final step of both the password-only and the 2FA flow.
-func (h *Handler) issueSession(c echo.Context) error {
-	if err := h.startSession(c, h.clientIP(c.Request())); err != nil {
+func (h *Handler) issueSession(c echo.Context, uid int64) error {
+	if err := h.startSession(c, h.clientIP(c.Request()), uid); err != nil {
 		return h.renderLogin(c, "Internal error. Please try again.")
 	}
 	return c.Redirect(http.StatusFound, h.cfg.Admin.Path)
@@ -534,7 +595,7 @@ const deviceCookie = "cz_device"
 
 // startSession creates the session row and sets the session and device
 // cookies. Shared by the password/2FA and passkey login flows.
-func (h *Handler) startSession(c echo.Context, ip string) error {
+func (h *Handler) startSession(c echo.Context, ip string, uid int64) error {
 	deviceID := ""
 	if ck, err := c.Cookie(deviceCookie); err == nil && len(ck.Value) == 32 {
 		if _, err := hex.DecodeString(ck.Value); err == nil {
@@ -551,14 +612,14 @@ func (h *Handler) startSession(c echo.Context, ip string) error {
 	// browser: same IP and same "Browser on OS" label. The label ignores the
 	// version, so a browser update doesn't count as a new device either.
 	ua := c.Request().UserAgent()
-	if sessions, err := h.db.ListSessions(); err == nil {
+	if sessions, err := h.db.ListSessions(uid); err == nil {
 		for _, s := range sessions {
 			if s.IP == ip && browserOS(s.UserAgent) == browserOS(ua) {
 				h.db.DeleteSession(s.Token) //nolint — best effort, a leftover row is only cosmetic
 			}
 		}
 	}
-	token, err := h.db.CreateSession(ip, ua, deviceID)
+	token, err := h.db.CreateSession(uid, ip, ua, deviceID)
 	if err != nil {
 		return err
 	}
@@ -2398,7 +2459,7 @@ func (h *Handler) SetServiceRateLimit(c echo.Context) error {
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 func (h *Handler) SettingsPage(c echo.Context) error {
-	email, _ := h.db.GetAdminEmail()
+	me := currentUser(c)
 	botEnabled, botThreshold, botTTL, _ := h.db.GetBotSettings()
 	aiPolicy, _ := h.db.GetAICrawlerPolicy()
 	rlEnabled, rlRPS, rlBurst, _ := h.db.GetRateLimitSettings()
@@ -2409,7 +2470,7 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 	captcha, _ := h.db.GetCaptchaConfig()
 	audit, _ := h.auditRowsData(1)
 	apiKeys, _ := h.db.ListAPIKeys()
-	totpEnabled, _ := h.db.TOTPEnabled()
+	totpEnabled, _ := h.db.TOTPEnabled(me.ID)
 	dbConnCfg, _ := h.db.GetDBConnConfig()
 	if dbConnCfg.Driver == "" {
 		// Never configured through this page yet — default the form to
@@ -2423,10 +2484,16 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 			dbConnCfg.Host = h.cfg.DB.Path
 		}
 	}
-	passkeyRows, _ := h.db.ListWebAuthnCredentials()
+	passkeyRows, _ := h.db.ListWebAuthnCredentials(me.ID)
 	trustedIPs, _ := h.db.GetTrustedIPs()
+	var users []storage.AdminUser
+	if me.Role == storage.RoleOwner {
+		users, _ = h.db.ListAdminUsers()
+	}
 	return h.render(c, "settings", h.dbConnCardData(dbConnCfg, false, "", map[string]any{
-		"AdminEmail":             email,
+		"AdminEmail":             me.Email,
+		"Users":                  users,
+		"MyID":                   me.ID,
 		"TOTPEnabled":            totpEnabled,
 		"Passkeys":               passkeyRows,
 		"SecureContext":          passkey.IsSecureContext(c.Request()),
@@ -2455,7 +2522,7 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 		"VarnishEnabled":         vc.Enabled,
 		"VarnishAddr":            vc.Addr,
 		"APIKeys":                apiKeys,
-		"Devices":                h.deviceRows(sessionCookieValue(c)),
+		"Devices":                h.deviceRows(me.ID, sessionCookieValue(c)),
 		"Audit":                  audit,
 	}))
 }
@@ -2531,7 +2598,7 @@ func (h *Handler) devicesData(c echo.Context) map[string]any {
 	current := sessionCookieValue(c)
 	return map[string]any{
 		"AdminPath": h.cfg.Admin.Path,
-		"Devices":   h.deviceRows(current),
+		"Devices":   h.deviceRows(currentUID(c), current),
 	}
 }
 
@@ -2551,9 +2618,9 @@ func (h *Handler) RevokeDevice(c echo.Context) error {
 		switch {
 		case err != nil:
 			log.Printf("revoke device: %v", err)
-		case sess == nil: // already gone; nothing to do
+		case sess == nil || sess.UserID != currentUID(c): // gone, or not this user's
 		case sess.Live():
-			if err := h.db.RevokeSession(token); err != nil {
+			if err := h.db.RevokeSession(sess.UserID, token); err != nil {
 				log.Printf("revoke device: %v", err)
 			}
 		default:
@@ -2567,7 +2634,7 @@ func (h *Handler) RevokeDevice(c echo.Context) error {
 
 // RevokeOtherDevices signs out every session except the caller's own.
 func (h *Handler) RevokeOtherDevices(c echo.Context) error {
-	if _, err := h.db.RevokeOtherSessions(sessionCookieValue(c)); err != nil {
+	if _, err := h.db.RevokeOtherSessions(currentUID(c), sessionCookieValue(c)); err != nil {
 		log.Printf("revoke other devices: %v", err)
 	}
 	return h.renderPartial(c, "settings", "devices-card", h.devicesData(c))
@@ -3706,16 +3773,16 @@ func (h *Handler) ChangeCredentials(c echo.Context) error {
 	newPassword := c.FormValue("new_password")
 	confirmPassword := c.FormValue("confirm_password")
 
-	email, _ := h.db.GetAdminEmail()
+	me := currentUser(c)
 
 	renderErr := func(msg string) error {
 		return h.render(c, "settings", map[string]any{
-			"AdminEmail":    email,
+			"AdminEmail":    me.Email,
 			"CredentialErr": msg,
 		})
 	}
 
-	ok, _ := h.db.CheckAdminPassword(currentPassword)
+	ok, _ := h.db.CheckAdminPassword(me.ID, currentPassword)
 	if !ok {
 		return renderErr("Current password is incorrect.")
 	}
@@ -3725,13 +3792,13 @@ func (h *Handler) ChangeCredentials(c echo.Context) error {
 	if newPassword != "" && len(newPassword) < 8 {
 		return renderErr("New password must be at least 8 characters.")
 	}
-	if err := h.db.UpdateAdminCredentials(newEmail, newPassword); err != nil {
+	if err := h.db.UpdateAdminCredentials(me.ID, newEmail, newPassword); errors.Is(err, storage.ErrUserExists) {
+		return renderErr("Another user already has that email.")
+	} else if err != nil {
 		return renderErr("Failed to update credentials. Please try again.")
 	}
-	// Credentials changed, force re-login.
-	if cookie, err := c.Cookie(sessionCookie); err == nil {
-		h.db.DeleteSession(cookie.Value) //nolint
-	}
+	// Credentials changed: UpdateAdminCredentials deleted this user's
+	// sessions, so clear the cookie and force a re-login.
 	c.SetCookie(&http.Cookie{Name: sessionCookie, Value: "", HttpOnly: true, Path: "/", MaxAge: -1, Secure: secureCookie(c)})
 	return c.Redirect(http.StatusFound, h.cfg.Admin.Path+"/login")
 }
@@ -3779,6 +3846,12 @@ func (h *Handler) render(c echo.Context, page string, data map[string]any) error
 	}
 	if _, ok := data["AlertCount"]; !ok {
 		data["AlertCount"] = h.unreadAlertCount()
+	}
+	// The signed-in user, for the sidebar and role-gated cards. Always
+	// set, so templates can compare .Role without a nil check.
+	data["UserEmail"], data["Role"] = "", ""
+	if u := currentUser(c); u != nil {
+		data["UserEmail"], data["Role"] = u.Email, u.Role
 	}
 	// CSRF token for this session: picked up by hx-headers on <body> for all
 	// HTMX requests and by hidden _csrf inputs in plain HTML forms.

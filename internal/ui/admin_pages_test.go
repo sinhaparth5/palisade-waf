@@ -28,7 +28,7 @@ func TestAdminRequiresSession(t *testing.T) {
 
 	// A session revoked by a newer login says why.
 	old := env.session
-	if _, err := env.db.CreateSession("10.0.0.9", "other", ""); err != nil {
+	if _, err := env.db.CreateSession(env.uid, "10.0.0.9", "other", ""); err != nil {
 		t.Fatal(err)
 	}
 	rec := env.doWith("GET", "/admin", nil, old)
@@ -345,10 +345,10 @@ func TestLoginReplacesSameBrowserRow(t *testing.T) {
 	oldLinux := "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 	newLinux := "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
 	windows := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
-	if _, err := env.db.CreateSession(ip, oldLinux, strings.Repeat("a", 32)); err != nil {
+	if _, err := env.db.CreateSession(env.uid, ip, oldLinux, strings.Repeat("a", 32)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := env.db.CreateSession(ip, windows, strings.Repeat("b", 32)); err != nil {
+	if _, err := env.db.CreateSession(env.uid, ip, windows, strings.Repeat("b", 32)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -362,7 +362,7 @@ func TestLoginReplacesSameBrowserRow(t *testing.T) {
 		t.Fatalf("login: %d", rec.Code)
 	}
 
-	sessions, err := env.db.ListSessions()
+	sessions, err := env.db.ListSessions(env.uid)
 	if err != nil {
 		t.Fatal(err)
 	}

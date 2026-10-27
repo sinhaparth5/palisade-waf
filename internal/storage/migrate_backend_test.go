@@ -50,6 +50,9 @@ func TestMigrateConfigTo(t *testing.T) {
 	if _, err := source.CreateAPIKey("key1", "cwaf_abc", "somehash", true); err != nil {
 		t.Fatal(err)
 	}
+	if err := source.SeedAdmin("owner@example.com", "owner-password"); err != nil {
+		t.Fatal(err)
+	}
 	if err := source.DisableWAFRule(942100, "false positive"); err != nil {
 		t.Fatal(err)
 	}
@@ -109,6 +112,9 @@ func TestMigrateConfigTo(t *testing.T) {
 	if err != nil || len(keys) != 1 || keys[0].Name != "key1" || !keys[0].ReadOnly {
 		t.Errorf("target api_keys = %+v, %v", keys, err)
 	}
+	if u, err := target.CheckAdminLogin("owner@example.com", "owner-password"); err != nil || u == nil || u.Role != RoleOwner {
+		t.Errorf("target owner login = %+v, %v", u, err)
+	}
 	wh, err := target.GetWebhookConfig()
 	if err != nil || wh.URL != "https://hooks.example.com" || wh.Secret != "whsecret" {
 		t.Errorf("target webhook_config = %+v, %v", wh, err)
@@ -127,5 +133,8 @@ func TestMigrateConfigTo(t *testing.T) {
 	// didn't desynchronize the target's auto-increment/identity sequence.
 	if err := target.AddGeoRule("", "PM", "block"); err != nil {
 		t.Errorf("normal insert after migration failed (sequence may be broken): %v", err)
+	}
+	if _, err := target.CreateAdminUser("second@example.com", "second-password", RoleViewer); err != nil {
+		t.Errorf("new user after migration failed (sequence may be broken): %v", err)
 	}
 }

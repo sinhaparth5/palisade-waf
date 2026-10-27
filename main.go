@@ -262,7 +262,7 @@ func main() {
 	// login would hand over the whole WAF on any deploy that skipped setup.
 	// The WAF/proxy still runs without an admin (login rejects everything);
 	// only the dashboard is unusable until credentials are created.
-	if email, _ := db.GetAdminEmail(); email == "" {
+	if n, _ := db.CountAdminUsers(); n == 0 {
 		log.Printf("no admin credentials configured — admin UI logins will be rejected until you run:")
 		log.Printf("  palisade setup --db %s --admin-email you@example.com  (password read from stdin)", cfg.DB.Path)
 	}

@@ -12,14 +12,18 @@ import (
 	"palisade/internal/storage"
 )
 
-func newManager(t *testing.T) (*Manager, *storage.DB) {
+func newManager(t *testing.T) (*Manager, *storage.DB, int64) {
 	t.Helper()
 	db, err := storage.Open(filepath.Join(t.TempDir(), "waf.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	return New(db), db
+	uid, err := db.CreateAdminUser("owner@example.com", "pw", storage.RoleOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return New(db), db, uid
 }
 
 func TestIsSecureContext(t *testing.T) {
@@ -53,34 +57,35 @@ func TestIsSecureContext(t *testing.T) {
 
 func TestNilManager(t *testing.T) {
 	var m *Manager
+	var uid int64 = 1
 	r := httptest.NewRequest("GET", "/", nil)
-	if ok, err := m.Enabled(); ok || err != nil {
+	if ok, err := m.Enabled(uid); ok || err != nil {
 		t.Errorf("Enabled() = %v, %v", ok, err)
 	}
-	if _, _, err := m.BeginRegistration(r); err == nil {
+	if _, _, err := m.BeginRegistration(r, uid); err == nil {
 		t.Error("BeginRegistration on nil manager should error")
 	}
-	if err := m.FinishRegistration(r, webauthn.SessionData{}, ""); err == nil {
+	if err := m.FinishRegistration(r, uid, webauthn.SessionData{}, ""); err == nil {
 		t.Error("FinishRegistration on nil manager should error")
 	}
-	if _, _, err := m.BeginLogin(r); err == nil {
+	if _, _, err := m.BeginLogin(r, uid); err == nil {
 		t.Error("BeginLogin on nil manager should error")
 	}
-	if err := m.FinishLogin(r, webauthn.SessionData{}); err == nil {
+	if err := m.FinishLogin(r, uid, webauthn.SessionData{}); err == nil {
 		t.Error("FinishLogin on nil manager should error")
 	}
 }
 
 func TestCeremonies(t *testing.T) {
-	m, db := newManager(t)
+	m, db, uid := newManager(t)
 	r := httptest.NewRequest("POST", "/", strings.NewReader("{}"))
 	r.Host = "localhost:8080"
 
-	if ok, err := m.Enabled(); ok || err != nil {
+	if ok, err := m.Enabled(uid); ok || err != nil {
 		t.Fatalf("Enabled() = %v, %v before any passkey", ok, err)
 	}
 
-	creation, session, err := m.BeginRegistration(r)
+	creation, session, err := m.BeginRegistration(r, uid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,52 +93,64 @@ func TestCeremonies(t *testing.T) {
 		t.Fatalf("unexpected creation options: %+v", creation.Response.RelyingParty)
 	}
 	// A bogus browser response must be rejected, never stored.
-	if err := m.FinishRegistration(r, *session, ""); err == nil {
+	if err := m.FinishRegistration(r, uid, *session, ""); err == nil {
 		t.Fatal("FinishRegistration accepted an invalid response")
 	}
 
-	if _, _, err := m.BeginLogin(r); err == nil || !strings.Contains(err.Error(), "no passkeys") {
+	if _, _, err := m.BeginLogin(r, uid); err == nil || !strings.Contains(err.Error(), "no passkeys") {
 		t.Fatalf("BeginLogin with no creds: %v", err)
 	}
 
 	// A corrupt stored row is skipped, so login still reports no usable passkeys.
-	if err := db.AddWebAuthnCredential("corrupt", "Broken", []byte("not json")); err != nil {
+	if err := db.AddWebAuthnCredential(uid, "corrupt", "Broken", []byte("not json")); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := m.BeginLogin(r); err == nil {
+	if _, _, err := m.BeginLogin(r, uid); err == nil {
 		t.Fatal("BeginLogin should ignore unreadable credentials")
 	}
 
-	// A well-formed credential makes login startable.
-	if err := db.AddWebAuthnCredential(credentialID([]byte{1, 2, 3}), "Key", []byte(`{"id":"AQID"}`)); err != nil {
+	// Another user's passkey is never offered for this one.
+	other, err := db.CreateAdminUser("viewer@example.com", "pw", storage.RoleViewer)
+	if err != nil {
 		t.Fatal(err)
 	}
-	assertion, session, err := m.BeginLogin(r)
+	if err := db.AddWebAuthnCredential(other, credentialID([]byte{9}), "Theirs", []byte(`{"id":"CQ"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := m.BeginLogin(r, uid); err == nil {
+		t.Fatal("BeginLogin offered another user's passkey")
+	}
+
+	// A well-formed credential makes login startable.
+	if err := db.AddWebAuthnCredential(uid, credentialID([]byte{1, 2, 3}), "Key", []byte(`{"id":"AQID"}`)); err != nil {
+		t.Fatal(err)
+	}
+	assertion, session, err := m.BeginLogin(r, uid)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(assertion.Response.AllowedCredentials) != 1 {
 		t.Fatalf("allowed credentials = %d", len(assertion.Response.AllowedCredentials))
 	}
-	if err := m.FinishLogin(r, *session); err == nil {
+	if err := m.FinishLogin(r, uid, *session); err == nil {
 		t.Fatal("FinishLogin accepted an invalid assertion")
 	}
 }
 
 func TestBadRPID(t *testing.T) {
-	m, _ := newManager(t)
+	m, _, uid := newManager(t)
 	r := httptest.NewRequest("GET", "/", nil)
 	r.Host = ""
-	if _, _, err := m.BeginRegistration(r); err == nil {
+	if _, _, err := m.BeginRegistration(r, uid); err == nil {
 		t.Error("empty host should fail config")
 	}
-	if err := m.FinishRegistration(r, webauthn.SessionData{}, ""); err == nil {
+	if err := m.FinishRegistration(r, uid, webauthn.SessionData{}, ""); err == nil {
 		t.Error("empty host should fail config")
 	}
-	if _, _, err := m.BeginLogin(r); err == nil {
+	if _, _, err := m.BeginLogin(r, uid); err == nil {
 		t.Error("empty host should fail config")
 	}
-	if err := m.FinishLogin(r, webauthn.SessionData{}); err == nil {
+	if err := m.FinishLogin(r, uid, webauthn.SessionData{}); err == nil {
 		t.Error("empty host should fail config")
 	}
 }

@@ -26,8 +26,8 @@ type MigrationTableResult struct {
 // schema along the way (OpenWithDriver always runs migrate() internally, so
 // there is nothing extra to do for "the tables should be created there").
 //
-// Migrated: services, ip_rules, geo_rules, meta (settings, secrets,
-// credentials), certificates, api_keys, waf_disabled_rules,
+// Migrated: services, ip_rules, geo_rules, meta (settings, secrets),
+// admin_users (credentials, TOTP), certificates, api_keys, waf_disabled_rules,
 // waf_service_rule_exceptions, waf_custom_rules, threat_intel_sources + their synced
 // threat_intel_ips, webhook_config, ip_threat_scores, ja4_reputation, service_openapi,
 // service_mtls (the CA files it points at stay on disk).
@@ -95,6 +95,7 @@ func (db *DB) MigrateConfigTo(targetDriver, targetDSN string) (MigrationReport, 
 		hasIdentitySeq bool
 	}{
 		{"meta", migrateMetaTable, false},
+		{"admin_users", migrateAdminUsersTable, true},
 		{"certificates", migrateCertificatesTable, true},
 		{"services", migrateServicesTable, true},
 		{"service_openapi", migrateServiceOpenAPITable, false},
@@ -312,6 +313,33 @@ func migrateGeoRulesTable(source, target *DB, overriding bool) (int, error) {
 		q := fmt.Sprintf(`INSERT INTO geo_rules (id, app_name, country_code, rule_type, created_at)%s VALUES (%s)`,
 			overridingClause(overriding), placeholders(5))
 		if _, err := target.exec(q, id, appName, countryCode, ruleType, createdAt); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, rows.Err()
+}
+
+func migrateAdminUsersTable(source, target *DB, overriding bool) (int, error) {
+	// Sealed TOTP columns are copied as stored, like meta's secrets.
+	const cols = `id, email, password_hash, role, disabled, totp_secret, totp_pending_secret, totp_backup_codes, totp_last_counter, webauthn_handle, created_at`
+	rows, err := source.query(`SELECT ` + cols + ` FROM admin_users`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	n := 0
+	for rows.Next() {
+		var id int64
+		var email, hash, role, totp, pending, backup, counter, handle string
+		var disabled bool
+		var createdAt time.Time
+		if err := rows.Scan(&id, &email, &hash, &role, &disabled, &totp, &pending, &backup, &counter, &handle, &createdAt); err != nil {
+			return n, err
+		}
+		q := fmt.Sprintf(`INSERT INTO admin_users (%s)%s VALUES (%s)`, cols, overridingClause(overriding), placeholders(11))
+		if _, err := target.exec(q, id, email, hash, role, boolToInt(disabled), totp, pending, backup, counter, handle, createdAt); err != nil {
 			return n, err
 		}
 		n++

@@ -43,8 +43,6 @@ const secretPrefix = "enc:v1:"
 // handled separately in migrateSecrets/Get/SetWebhookConfig.
 var secretMetaKeys = []string{
 	"challenge_secret",
-	"admin_totp_secret",
-	"admin_totp_pending_secret",
 	"email_token",
 	"db_conn_password",
 	"db_conn_dsn",
@@ -157,6 +155,10 @@ func (db *DB) migrateSecrets() error {
 		}
 	}
 
+	if err := db.migrateUserSecrets(); err != nil {
+		return err
+	}
+
 	var secret string
 	err := db.queryRow(`SELECT secret FROM webhook_config WHERE id = 1`).Scan(&secret)
 	if err == sql.ErrNoRows {
@@ -174,4 +176,41 @@ func (db *DB) migrateSecrets() error {
 	}
 	_, err = db.exec(`UPDATE webhook_config SET secret=? WHERE id=1`, sealed)
 	return err
+}
+
+// migrateUserSecrets seals plaintext TOTP secrets in admin_users, the
+// per-user twin of the meta loop in migrateSecrets. Rows are read in full
+// before writing: SQLite may hold a single connection.
+func (db *DB) migrateUserSecrets() error {
+	type field struct {
+		id       int64
+		col, val string
+	}
+	var plain []field
+	for _, col := range secretUserColumns {
+		rows, err := db.query(`SELECT id, ` + col + ` FROM admin_users`)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			f := field{col: col}
+			if err := rows.Scan(&f.id, &f.val); err != nil {
+				rows.Close()
+				return err
+			}
+			if f.val != "" && !strings.HasPrefix(f.val, secretPrefix) {
+				plain = append(plain, f)
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+	for _, f := range plain {
+		if err := db.setSecretUserField(f.id, f.col, f.val); err != nil {
+			return err
+		}
+	}
+	return nil
 }

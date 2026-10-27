@@ -166,59 +166,78 @@ func TestMetaBackedSettings(t *testing.T) {
 
 func TestAdminCredentials(t *testing.T) {
 	db := openTestDB(t)
-	mustNoErr(t, db.SeedAdmin("a@x.test", "first-password"))
+	mustNoErr(t, db.SeedAdmin("A@x.test", "first-password"))
 	mustNoErr(t, db.SeedAdmin("b@x.test", "second-password")) // idempotent: keeps the first
-	if ok, _ := db.CheckAdminPassword("first-password"); !ok {
+	u, _ := db.GetAdminUserByEmail("a@x.test")
+	if u == nil || u.Role != RoleOwner {
+		t.Fatalf("seeded user = %+v, want owner a@x.test (lowercased)", u)
+	}
+	if ok, _ := db.CheckAdminPassword(u.ID, "first-password"); !ok {
 		t.Fatal("seeded password rejected")
 	}
-	if ok, _ := db.CheckAdminPassword("second-password"); ok {
+	if ok, _ := db.CheckAdminPassword(u.ID, "second-password"); ok {
 		t.Fatal("re-seed overwrote the password")
 	}
-	mustNoErr(t, db.UpdateAdminCredentials("", "third-password")) // blank email keeps it
-	if email, _ := db.GetAdminEmail(); email != "a@x.test" {
-		t.Errorf("email = %q", email)
+	mustNoErr(t, db.UpdateAdminCredentials(u.ID, "", "third-password")) // blank email keeps it
+	if got, _ := db.GetAdminUser(u.ID); got.Email != "a@x.test" {
+		t.Errorf("email = %q", got.Email)
 	}
-	mustNoErr(t, db.UpdateAdminCredentials("c@x.test", "")) // blank password keeps it
-	if ok, _ := db.CheckAdminPassword("third-password"); !ok {
+	mustNoErr(t, db.UpdateAdminCredentials(u.ID, "c@x.test", "")) // blank password keeps it
+	if ok, _ := db.CheckAdminPassword(u.ID, "third-password"); !ok {
 		t.Error("password lost on email-only change")
 	}
-	if email, _ := db.GetAdminEmail(); email != "c@x.test" {
-		t.Errorf("email = %q", email)
+	if got, _ := db.GetAdminUser(u.ID); got.Email != "c@x.test" {
+		t.Errorf("email = %q", got.Email)
 	}
 }
 
 func TestWebAuthnCredentials(t *testing.T) {
 	db := openTestDB(t)
-	h1, err := db.GetOrCreateWebAuthnHandle()
+	uid := testUser(t, db)
+	h1, err := db.GetOrCreateWebAuthnHandle(uid)
 	mustNoErr(t, err)
-	h2, _ := db.GetOrCreateWebAuthnHandle()
+	h2, _ := db.GetOrCreateWebAuthnHandle(uid)
 	if len(h1) == 0 || string(h1) != string(h2) {
 		t.Fatal("handle not stable")
 	}
-	if en, _ := db.WebAuthnEnabled(); en {
+	if en, _ := db.WebAuthnEnabled(uid); en {
 		t.Fatal("enabled with no credentials")
 	}
-	mustNoErr(t, db.AddWebAuthnCredential("cred1", "Key", []byte(`{"v":1}`)))
+	mustNoErr(t, db.AddWebAuthnCredential(uid, "cred1", "Key", []byte(`{"v":1}`)))
 	mustNoErr(t, db.TouchWebAuthnCredential("cred1", []byte(`{"v":2}`)))
-	creds, _ := db.ListWebAuthnCredentials()
+	creds, _ := db.ListWebAuthnCredentials(uid)
 	if len(creds) != 1 || string(creds[0].Data) != `{"v":2}` {
 		t.Fatalf("creds = %+v", creds)
 	}
-	if en, _ := db.WebAuthnEnabled(); !en {
+	if en, _ := db.WebAuthnEnabled(uid); !en {
 		t.Fatal("not enabled with a credential")
 	}
-	mustNoErr(t, db.DeleteWebAuthnCredential(creds[0].ID))
-	if en, _ := db.WebAuthnEnabled(); en {
+	// Another user can neither see nor delete it.
+	other, err := db.CreateAdminUser("other@x.test", "pw-other-1", RoleAdmin)
+	mustNoErr(t, err)
+	if en, _ := db.WebAuthnEnabled(other); en {
+		t.Fatal("another user's passkey counts for this one")
+	}
+	mustNoErr(t, db.DeleteWebAuthnCredential(other, creds[0].ID))
+	if en, _ := db.WebAuthnEnabled(uid); !en {
+		t.Fatal("another user deleted the passkey")
+	}
+	mustNoErr(t, db.DeleteWebAuthnCredential(uid, creds[0].ID))
+	if en, _ := db.WebAuthnEnabled(uid); en {
 		t.Error("still enabled after delete")
 	}
 }
 
 func TestSessionLifecycle(t *testing.T) {
 	db := openTestDB(t)
-	tok, err := db.CreateSession("10.0.0.1", "ua", "dev")
+	uid := testUser(t, db)
+	tok, err := db.CreateSession(uid, "10.0.0.1", "ua", "dev")
 	mustNoErr(t, err)
+	if s, _ := db.GetSession(tok); s == nil || s.UserID != uid {
+		t.Fatalf("session = %+v, want user %d", s, uid)
+	}
 	mustNoErr(t, db.TouchSession(tok))
-	mustNoErr(t, db.RevokeSession(tok))
+	mustNoErr(t, db.RevokeSession(uid, tok))
 	if s, _ := db.GetSession(tok); s == nil || !s.Revoked() {
 		t.Fatalf("revoked session = %+v", s)
 	}

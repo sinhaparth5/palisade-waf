@@ -13,9 +13,13 @@
 
   <nav aria-label="Settings sections" class="flex flex-wrap gap-2">
     <a href="#settings-access" class="inline-flex min-h-10 items-center rounded-full border border-line bg-white px-4 text-[13px] font-medium text-slate-600 no-underline transition-colors duration-150 hover:bg-surface hover:text-slate-900">Account &amp; access</a>
+    {{if ne .Role "viewer"}}
     <a href="#settings-protection" class="inline-flex min-h-10 items-center rounded-full border border-line bg-white px-4 text-[13px] font-medium text-slate-600 no-underline transition-colors duration-150 hover:bg-surface hover:text-slate-900">Protection</a>
     <a href="#settings-infrastructure" class="inline-flex min-h-10 items-center rounded-full border border-line bg-white px-4 text-[13px] font-medium text-slate-600 no-underline transition-colors duration-150 hover:bg-surface hover:text-slate-900">Infrastructure</a>
+    {{if eq .Role "owner"}}
     <a href="#settings-alerts" class="inline-flex min-h-10 items-center rounded-full border border-line bg-white px-4 text-[13px] font-medium text-slate-600 no-underline transition-colors duration-150 hover:bg-surface hover:text-slate-900">Alerts &amp; integrations</a>
+    {{end}}
+    {{end}}
     <a href="#settings-activity" class="inline-flex min-h-10 items-center rounded-full border border-line bg-white px-4 text-[13px] font-medium text-slate-600 no-underline transition-colors duration-150 hover:bg-surface hover:text-slate-900">Activity</a>
   </nav>
 
@@ -72,9 +76,12 @@
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {{template "devices-card" .}}
-      {{template "api-keys-card" .}}
+      {{if eq .Role "owner"}}{{template "api-keys-card" .}}{{end}}
     </div>
+    {{if eq .Role "owner"}}{{template "users-card" .}}{{end}}
   </section>
+
+  {{if ne .Role "viewer"}}
 
   <!-- ── Protection ───────────────────────────────────────────────────────── -->
   <section id="settings-protection" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-protection-title">
@@ -91,8 +98,9 @@
     {{template "settings-section-title" (map "ID" "settings-infrastructure-title" "Title" "Infrastructure" "Copy" "Cache, the database and rule reloads.")}}
     {{template "varnish-card" .}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-      {{template "dbconn-card" .}}
+      {{if eq .Role "owner"}}{{template "dbconn-card" .}}{{end}}
       <div class="flex flex-col gap-4 min-w-0">
+      {{if eq .Role "owner"}}
       <!-- ── Database backup ───────────────────────────────────────────────────── -->
         <div class="card p-5">
           <h3 class="text-[15px] font-bold text-slate-800 mb-1">Database backup</h3>
@@ -106,6 +114,7 @@
             </button>
           </form>
         </div>
+      {{end}}
       <!-- ── WAF hot-reload ────────────────────────────────────────────────────── -->
         <div class="card p-5">
           <h3 class="text-[15px] font-bold text-slate-800 mb-1">WAF rules</h3>
@@ -117,6 +126,7 @@
     </div>
   </section>
 
+  {{if eq .Role "owner"}}
   <!-- ── Alerts & integrations ────────────────────────────────────────────── -->
   <section id="settings-alerts" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-alerts-title">
     {{template "settings-section-title" (map "ID" "settings-alerts-title" "Title" "Alerts & integrations" "Copy" "Where security events and reports are sent.")}}
@@ -128,6 +138,8 @@
       </div>
     </div>
   </section>
+  {{end}}
+  {{end}}
 
   <!-- ── Activity ─────────────────────────────────────────────────────────── -->
   <section id="settings-activity" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-activity-title">
@@ -441,6 +453,95 @@
 </div>
 {{end}}
 
+{{define "users-card"}}
+<div class="card p-5" id="users-card">
+  <h3 class="text-[15px] font-bold text-slate-800 mb-1">Users</h3>
+  <p class="text-[13px] text-slate-500 mb-5">Each user signs in with their own password, 2FA and sessions, and the audit log records who made each change. <strong class="font-semibold text-slate-700">Owners</strong> also manage users, the database connection, secrets and API keys; <strong class="font-semibold text-slate-700">admins</strong> change everything else; <strong class="font-semibold text-slate-700">viewers</strong> can look but not change anything.</p>
+
+  {{if .UserErr}}
+  <div class="rounded-md bg-red-50 border border-red-200 text-red-700 text-[13px] px-4 py-3 mb-4">{{.UserErr}}</div>
+  {{end}}
+
+  <form hx-post="{{.AdminPath}}/settings/users" hx-target="#users-card" hx-swap="outerHTML" class="flex flex-wrap items-end gap-3 mb-5">
+    <div class="flex-1 min-w-[200px]">
+      <label class="block text-[12px] text-slate-500 mb-[6px] font-medium" for="user_email">Email</label>
+      <input id="user_email" name="email" type="email" placeholder="teammate@example.com" required autocomplete="off"
+        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+    </div>
+    <div class="flex-1 min-w-[180px]">
+      <label class="block text-[12px] text-slate-500 mb-[6px] font-medium" for="user_password">Initial password</label>
+      <input id="user_password" name="password" type="password" placeholder="Min 8 characters" required minlength="8" autocomplete="new-password"
+        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+    </div>
+    <div class="shrink-0">
+      <label class="block text-[12px] text-slate-500 mb-[6px] font-medium" for="user_role">Role</label>
+      <select id="user_role" name="role"
+        class="focus-green border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white">
+        <option value="viewer">Viewer</option>
+        <option value="admin">Admin</option>
+        <option value="owner">Owner</option>
+      </select>
+    </div>
+    <button type="submit" class="btn-primary px-6 shrink-0">Add user</button>
+  </form>
+  <p class="text-[11px] text-slate-400 -mt-3 mb-5">Hand the initial password over yourself; the user can change it under Account after signing in.</p>
+
+  <div class="flex flex-col gap-1">
+    {{range .Users}}
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-3 rounded-lg hover:bg-surface transition-colors duration-150 border border-line{{if .Disabled}} opacity-60{{end}}">
+      <div class="w-10 h-10 rounded-md bg-brand-tint flex items-center justify-center shrink-0">
+        <i class="hgi hgi-stroke hgi-rounded hgi-user text-base text-brand-dark"></i>
+      </div>
+      <div class="flex-1 min-w-[200px]">
+        <div class="text-[14px] font-semibold text-slate-900 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span class="min-w-0 wrap-anywhere">{{.Email}}</span>
+          {{if eq .ID $.MyID}}<span class="shrink-0 text-[11px] font-semibold text-brand-dark bg-brand-tint rounded-sm px-[6px] py-[1px]">You</span>{{end}}
+          {{if .Disabled}}<span class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-surface border border-line rounded-sm px-1.5 py-[1px]">Disabled</span>{{end}}
+        </div>
+        <div class="text-[12px] text-slate-500">{{if .TOTPEnabled}}2FA on{{else}}2FA off{{end}} · added {{fmtTime .CreatedAt}}</div>
+      </div>
+      <div class="ml-[52px] sm:ml-0 flex flex-wrap items-center gap-2">
+        <form hx-post="{{$.AdminPath}}/settings/users/{{.ID}}" hx-trigger="change" hx-target="#users-card" hx-swap="outerHTML" class="contents">
+          <input type="hidden" name="action" value="role">
+          <select name="role" aria-label="Role for {{.Email}}"
+            class="focus-green border border-line rounded-md px-2 py-[5px] text-[12px] outline-hidden text-slate-700 bg-white">
+            <option value="viewer" {{if eq .Role "viewer"}}selected{{end}}>Viewer</option>
+            <option value="admin" {{if eq .Role "admin"}}selected{{end}}>Admin</option>
+            <option value="owner" {{if eq .Role "owner"}}selected{{end}}>Owner</option>
+          </select>
+        </form>
+        <button hx-post="{{$.AdminPath}}/settings/users/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML"
+                hx-confirm="Turn off two-factor authentication and remove every passkey for {{.Email}}? Their password still works."
+                hx-vals='{"action":"reset-2fa"}'
+                class="inline-flex items-center gap-[5px] text-[12px] font-medium text-slate-600 bg-transparent border border-line rounded-md px-3 py-[5px] cursor-pointer font-sans transition-colors duration-150 hover:bg-surface shrink-0">
+          <i class="hgi hgi-stroke hgi-rounded hgi-reset-password text-xs"></i>
+          Reset 2FA
+        </button>
+        {{if .Disabled}}
+        <button hx-post="{{$.AdminPath}}/settings/users/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML" hx-vals='{"action":"enable"}'
+                class="inline-flex items-center gap-[5px] text-[12px] font-medium text-slate-600 bg-transparent border border-line rounded-md px-3 py-[5px] cursor-pointer font-sans transition-colors duration-150 hover:bg-surface shrink-0">
+          Enable
+        </button>
+        {{else}}
+        <button hx-post="{{$.AdminPath}}/settings/users/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML" hx-vals='{"action":"disable"}'
+                hx-confirm="Disable {{.Email}}? They are signed out now and can't sign in until re-enabled."
+                class="inline-flex items-center gap-[5px] text-[12px] font-medium text-red-500 bg-transparent border border-red-200 rounded-md px-3 py-[5px] cursor-pointer font-sans transition-colors duration-150 hover:bg-red-50 shrink-0">
+          Disable
+        </button>
+        {{end}}
+        <button hx-delete="{{$.AdminPath}}/settings/users/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML"
+                hx-confirm="Remove {{.Email}}? Their sessions and passkeys are deleted; audit entries keep their email."
+                class="inline-flex items-center gap-[5px] text-[12px] font-medium text-red-500 bg-transparent border border-red-200 rounded-md px-3 py-[5px] cursor-pointer font-sans transition-colors duration-150 hover:bg-red-50 shrink-0">
+          <i class="hgi hgi-stroke hgi-rounded hgi-delete-02 text-xs"></i>
+          Remove
+        </button>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
 {{define "devices-card"}}
 <div class="card p-5" id="devices-card">
   <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-1">
@@ -453,7 +554,7 @@
       Log out all other devices
     </button>
   </div>
-  <p class="text-[13px] text-slate-500 mb-5">This account allows one active session at a time — signing in on a new device immediately signs the previous one out. Devices below are kept for 30 days so you can see where the account has been used.</p>
+  <p class="text-[13px] text-slate-500 mb-5">Each account allows one active session at a time — signing in on a new device immediately signs the previous one out. Devices below are kept for 30 days so you can see where the account has been used.</p>
 
   <div id="devices-body" class="flex flex-col gap-1">
     {{template "devices-rows" (map "AdminPath" .AdminPath "Devices" .Devices)}}

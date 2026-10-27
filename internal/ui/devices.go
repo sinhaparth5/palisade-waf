@@ -73,10 +73,10 @@ func uaBrowserOS(ua string) (browser, os string) {
 	return browser, os
 }
 
-// deviceRows renders the session history for the template, marking the row
+// deviceRows renders user uid's session history for the template, marking the row
 // belonging to current (the caller's own session token).
-func (h *Handler) deviceRows(current string) []deviceRow {
-	sessions, err := h.db.ListSessions()
+func (h *Handler) deviceRows(uid int64, current string) []deviceRow {
+	sessions, err := h.db.ListSessions(uid)
 	if err != nil {
 		return nil
 	}

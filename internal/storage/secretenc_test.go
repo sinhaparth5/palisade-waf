@@ -14,6 +14,7 @@ import (
 // land sealed too.
 func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	db := openTestDB(t)
+	uid := testUser(t, db)
 
 	// Plaintext era: write one of each secret kind.
 	if err := db.SetEmailConfig(EmailConfig{Enabled: true, Token: "cf-token", To: "a@b.c"}); err != nil {
@@ -28,6 +29,9 @@ func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	challenge, err := db.GetOrCreateChallengeSecret()
 	if err != nil || challenge == "" {
 		t.Fatalf("challenge secret: %q, %v", challenge, err)
+	}
+	if err := db.SetPendingTOTPSecret(uid, "PLAINPENDING"); err != nil {
+		t.Fatal(err)
 	}
 	if raw, _ := db.getMeta("email_token"); raw != "cf-token" {
 		t.Fatalf("pre-key email_token stored as %q, want plaintext", raw)
@@ -55,6 +59,12 @@ func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	if !strings.HasPrefix(rawHook, secretPrefix) {
 		t.Errorf("webhook secret not sealed after migration: %q", rawHook)
 	}
+	if raw, _ := db.userField(uid, "totp_pending_secret"); !strings.HasPrefix(raw, secretPrefix) {
+		t.Errorf("user TOTP secret not sealed after migration: %q", raw)
+	}
+	if got, err := db.GetPendingTOTPSecret(uid); err != nil || got != "PLAINPENDING" {
+		t.Errorf("GetPendingTOTPSecret = %q, %v after migration", got, err)
+	}
 
 	// ...while the getters still return the original plaintext.
 	if cfg, err := db.GetEmailConfig(); err != nil || cfg.Token != "cf-token" {
@@ -78,19 +88,19 @@ func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	}
 
 	// Writes under an active key: the TOTP enrollment flow end to end.
-	if err := db.SetPendingTOTPSecret("JBSWY3DPEHPK3PXP"); err != nil {
+	if err := db.SetPendingTOTPSecret(uid, "JBSWY3DPEHPK3PXP"); err != nil {
 		t.Fatal(err)
 	}
-	if raw, _ := db.getMeta("admin_totp_pending_secret"); !strings.HasPrefix(raw, secretPrefix) {
+	if raw, _ := db.userField(uid, "totp_pending_secret"); !strings.HasPrefix(raw, secretPrefix) {
 		t.Errorf("pending TOTP secret written plaintext under active key: %q", raw)
 	}
-	if err := db.EnableTOTP([]string{"hash1", "hash2"}); err != nil {
+	if err := db.EnableTOTP(uid, []string{"hash1", "hash2"}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := db.GetTOTPSecret(); err != nil || got != "JBSWY3DPEHPK3PXP" {
+	if got, err := db.GetTOTPSecret(uid); err != nil || got != "JBSWY3DPEHPK3PXP" {
 		t.Errorf("GetTOTPSecret = %q, %v; want the enrolled secret", got, err)
 	}
-	if enabled, err := db.TOTPEnabled(); err != nil || !enabled {
+	if enabled, err := db.TOTPEnabled(uid); err != nil || !enabled {
 		t.Errorf("TOTPEnabled = %v, %v; want true", enabled, err)
 	}
 }
