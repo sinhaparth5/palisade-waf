@@ -44,6 +44,7 @@ import (
 	"time"
 
 	"palisade/internal/security/ratelimit"
+	"palisade/internal/security/waf"
 	"palisade/internal/storage"
 )
 
@@ -348,9 +349,11 @@ func pruneEvents(evs []event, cutoff time.Time) []event {
 
 // criticalRule reports whether a CRS rule ID belongs to an attack-detection
 // class severe enough to fast-track a ban: 930–934 (LFI/RFI/RCE/PHP/Node
-// injection) and 941–944 (XSS, SQLi, session fixation, Java injection).
+// injection) and 941–944 (XSS, SQLi, session fixation, Java injection), plus
+// virtual patches (issue #189): an exploit for a known CVE is never a typo.
 func criticalRule(id int) bool {
-	return (id >= 930000 && id < 935000) || (id >= 941000 && id < 945000)
+	return (id >= 930000 && id < 935000) || (id >= 941000 && id < 945000) ||
+		(id >= waf.VPatchIDMin && id <= waf.VPatchIDMax)
 }
 
 // bannable rejects addresses that must never be auto-banned: unparseable,

@@ -281,14 +281,16 @@ func TestScoreReflectsRecentHistory(t *testing.T) {
 
 func TestCriticalRuleRanges(t *testing.T) {
 	for id, want := range map[int]bool{
-		930100: true,  // LFI
-		932160: true,  // RCE
-		941100: true,  // XSS
-		942100: true,  // SQLi
-		944100: true,  // Java injection
-		920350: false, // protocol enforcement
-		949110: false, // anomaly evaluation
-		913100: false, // scanner detection
+		930100:  true,  // LFI
+		932160:  true,  // RCE
+		941100:  true,  // XSS
+		942100:  true,  // SQLi
+		944100:  true,  // Java injection
+		920350:  false, // protocol enforcement
+		949110:  false, // anomaly evaluation
+		913100:  false, // scanner detection
+		2000010: true,  // virtual patch
+		1000001: false, // operator custom rule
 	} {
 		if got := criticalRule(id); got != want {
 			t.Errorf("criticalRule(%d) = %v, want %v", id, got, want)

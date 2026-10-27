@@ -114,6 +114,67 @@
 {{define "waf-content"}}
 <div class="flex flex-col gap-6">
 
+  <!-- Virtual patches (issue #189) -->
+  <div class="card overflow-hidden">
+    {{template "card-header" (map "Cat" "Shipped with Palisade" "Title" "Virtual Patches" "Badge" (printf "%d CVEs" (len .VPatches)))}}
+    <p class="px-5 pb-3 text-[12px] text-slate-500">Rules for actively exploited CVEs, on for every service and blocking. They load ahead of CRS, so a hit is logged under the patch's own rule id and counts as critical for autoban. Turning one off adds a normal rule exception; re-enable it from the lists below. New patches arrive with Palisade releases.</p>
+    <div class="px-2 pb-2">
+      <div class="table-scroll"><table class="w-full text-[13px]">
+        <thead>
+          <tr class="text-slate-400 text-[11px] font-semibold uppercase tracking-wide bg-surface">
+            <th class="px-4 py-2 text-left">CVE</th>
+            <th class="px-4 py-2 text-left">Product</th>
+            <th class="px-4 py-2 text-right">Hits</th>
+            <th class="px-4 py-2 text-left">Status</th>
+            <th class="px-4 py-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .VPatches}}
+          <tr class="border-t border-canvas hover:bg-surface transition-colors duration-100 align-top">
+            <td class="px-4 py-3 whitespace-nowrap">
+              <a href="{{.Reference}}" target="_blank" rel="noopener noreferrer" class="font-mono font-semibold text-slate-900 hover:text-brand-dark underline">{{.CVE}}</a>
+              <div class="text-[11px] text-slate-400 font-mono">rule {{.RuleID}} · added {{.Added}}</div>
+            </td>
+            <td class="px-4 py-3 text-slate-600 min-w-[220px]">{{.Product}}</td>
+            <td class="px-4 py-3 text-right font-semibold text-slate-700">{{.Hits}}</td>
+            <td class="px-4 py-3">
+              {{if .GlobalOff}}
+              <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-amber-100 text-amber-700">Off everywhere</span>
+              {{else}}
+              <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-green-100 text-green-700">Active</span>
+              {{range .OffFor}}
+              <span class="ml-1 text-[11px] font-semibold px-[8px] py-1 rounded-sm bg-amber-100 text-amber-700">off: {{.}}</span>
+              {{end}}
+              {{end}}
+            </td>
+            <td class="px-4 py-3 text-right">
+              {{if not .GlobalOff}}
+              <form hx-post="/admin/waf-rules/disable" hx-target="#waf-content" hx-swap="innerHTML" class="inline-flex items-center gap-2">
+                <input type="hidden" name="rule_id" value="{{.RuleID}}"/>
+                <input type="hidden" name="reason" value="Virtual patch {{.CVE}} turned off"/>
+                <select name="service" aria-label="Turn off for"
+                  class="focus-green border border-line rounded-lg px-2 py-1 text-[12px] outline-hidden text-slate-700 bg-white">
+                  <option value="">All services</option>
+                  {{range $.Services}}
+                  <option value="{{.Name}}">{{.Name}}</option>
+                  {{end}}
+                </select>
+                <button type="submit"
+                  class="text-[12px] font-medium text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded-lg px-3 py-1 transition-colors cursor-pointer bg-white"
+                  hx-confirm="Turn off the {{.CVE}} patch? The engine reloads immediately.">
+                  Turn off
+                </button>
+              </form>
+              {{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
   <!-- Suggested exceptions (issue #76) -->
   <div class="card overflow-hidden">
     {{template "card-header" (map "Cat" "Feedback" "Title" "Suggested Exceptions" "Badge" (printf "%d suggested" (len .Suggestions)))}}

@@ -35,6 +35,12 @@ func CustomRuleIDs(rule string) []int {
 // SecRuleEngine or SecRuleRemoveById. It is compiled on its own, which is
 // cheap, rather than with the whole CRS.
 func ValidateCustomRule(rule string) ([]int, error) {
+	return validateRules(rule, "custom", CustomRuleIDMin, CustomRuleIDMax)
+}
+
+// validateRules is ValidateCustomRule for any id range; kind names the
+// range in errors.
+func validateRules(rule, kind string, idMin, idMax int) ([]int, error) {
 	joined := strings.NewReplacer("\\\r\n", " ", "\\\n", " ").Replace(rule)
 	for _, line := range strings.Split(joined, "\n") {
 		f := strings.Fields(line)
@@ -47,12 +53,12 @@ func ValidateCustomRule(rule string) ([]int, error) {
 	}
 	ids := CustomRuleIDs(rule)
 	for _, id := range ids {
-		if id < CustomRuleIDMin || id > CustomRuleIDMax {
-			return nil, fmt.Errorf("rule id %d is outside the custom range %d-%d", id, CustomRuleIDMin, CustomRuleIDMax)
+		if id < idMin || id > idMax {
+			return nil, fmt.Errorf("rule id %d is outside the %s range %d-%d", id, kind, idMin, idMax)
 		}
 	}
 	if len(ids) == 0 {
-		return nil, fmt.Errorf("the rule needs an id in the range %d-%d", CustomRuleIDMin, CustomRuleIDMax)
+		return nil, fmt.Errorf("the rule needs an id in the range %d-%d", idMin, idMax)
 	}
 	if _, err := coraza.NewWAF(coraza.NewWAFConfig().WithDirectives(rule)); err != nil {
 		return nil, err
