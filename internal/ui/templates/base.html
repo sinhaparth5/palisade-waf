@@ -6,69 +6,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Palisade · {{.Heading}}</title>
   <link rel="icon" type="image/svg+xml" href="{{.AdminPath}}/static/imgs/logo.svg"/>
-  <!-- Saved theme (issue #134), applied before first paint so a dark-mode
-       user never sees a light flash. The toggle lives in motion.js. -->
-  <script>try { if (localStorage.getItem('cz-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}</script>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Calistoga&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Caveat:wght@500;600&display=swap" rel="stylesheet"/>
+  <!-- Saved theme (issue #134), applied before first paint, so not deferred. -->
+  <script src="{{.AdminPath}}/static/js/theme.min.js?v={{.Asset}}"></script>
+  <!-- Everything is served from the binary: the admin CSP allows no other
+       origin and no inline script or style (issue #195). -->
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false}'/>
+  <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/fonts/fonts.css?v={{.Asset}}"/>
   <!-- Compiled Tailwind (make css), embedded in the binary — theme tokens and
        v3-preflight compat live in static/css/tailwind.css, not here. -->
   <link rel="stylesheet" href="{{.AdminPath}}/static/css/tailwind.min.css?v={{.Asset}}"/>
-  <link rel="stylesheet" href="https://cdn.hugeicons.com/font/hgi-stroke-rounded.css"/>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7/css/flag-icons.min.css"/>
+  <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/hugeicons/hgi-stroke-rounded.css?v={{.Asset}}"/>
+  <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/flag-icons/css/flag-icons.min.css?v={{.Asset}}"/>
   <!-- Deferred so it never blocks first paint; deferred scripts run in
-       document order, so page scripts below still see htmx. SRI pins the
-       exact CDN file. Chart.js loads only on the dashboard. -->
-  <script src="https://unpkg.com/htmx.org@1.9.10/dist/htmx.min.js" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous" defer></script>
+       document order, so page scripts below still see htmx. Chart.js loads
+       only on the dashboard. -->
+  <script src="{{.AdminPath}}/static/vendor/htmx.min.js?v={{.Asset}}" defer></script>
 
-  <style>
-    /* Everything here lives in @layer components so Tailwind utilities
-       (@layer utilities in the compiled stylesheet, which MUST stay linked
-       above this block to establish layer order) still override these custom
-       classes, exactly as they did when the CDN build injected utilities
-       last. Un-layered rules here would silently beat every utility — that's
-       also why there is no manual `* { margin:0; padding:0 }` reset (Tailwind
-       preflight covers it in @layer base). */
-    @layer components {
-    :root { --ease-out: cubic-bezier(.16, 1, .3, 1); --dur-fast: 150ms; --dur-base: 220ms; }
-    .btn-primary { min-height: 44px; background: var(--fn-ink); color: var(--fn-paper); border: none; cursor: pointer; border-radius: 6px; padding: 9px 18px; font-size: 14px; font-weight: 500; font-family: inherit; transition: background-color var(--dur-fast) ease, transform 100ms ease, box-shadow var(--dur-fast) ease; }
-    .btn-primary:hover { background: var(--fn-ink-soft); }
-    .btn-primary:active { transform: scale(.97); }
-    input, select { font-family: inherit; }
-    .focus-green { transition: border-color .15s; }
-    .focus-green:focus { border-color: var(--fn-accent) !important; box-shadow: 0 0 0 3px color-mix(in oklab, var(--fn-accent) 18%, transparent); }
-    @keyframes rise-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-    .anim-in { animation: rise-in var(--dur-base) var(--ease-out) both; }
-    @keyframes modal-pop { from { opacity: 0; transform: scale(.96) translateY(4px); } to { opacity: 1; transform: none; } }
-    .modal-pop { animation: modal-pop 180ms var(--ease-out) both; }
-    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-    .fade-in { animation: fade-in 150ms ease-out both; }
-    @keyframes arc-465 { from { stroke-dasharray: 0 465; } }
-    .donut-arc { animation: arc-465 .8s var(--ease-out); }
-    @keyframes arc-100 { from { stroke-dasharray: 0 100; } }
-    .ring-arc { animation: arc-100 .7s var(--ease-out); }
-    @keyframes spark-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-    .spark-line { stroke-dasharray: 1; animation: spark-draw .9s var(--ease-out); }
-    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-    .bot-icon:hover svg { animation: bob .5s ease-in-out; }
-    .nudge { animation: shield-nudge .45s var(--ease-out); }
-    @keyframes row-flash { from { background-color: var(--fn-highlight); } }
-    @media (prefers-reduced-motion: no-preference) { #log-feed[data-live-stream] > :first-child { animation: row-flash 1.1s ease-out; } }
-    @keyframes dot-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--fn-accent) 50%, transparent); } 70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--fn-accent) 0%, transparent); } 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--fn-accent) 0%, transparent); } }
-    .live-dot { animation: dot-pulse 2.4s ease-out infinite; }
-    @keyframes shield-nudge { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-7deg); } 60% { transform: rotate(5deg); } }
-    #brand-logo:hover img { animation: shield-nudge .45s var(--ease-out); }
-    @keyframes shield-guard { 0% { transform: scale(1); } 35% { transform: scale(1.18); } 100% { transform: scale(1); } }
-    :root[data-theme="dark"] .theme-icon-dark, :root:not([data-theme="dark"]) .theme-icon-light { display: none; }
-    #brand-logo.guard { animation: shield-guard .5s var(--ease-out); }
-    #brand-logo.guard::after { content: ""; position: absolute; inset: -4px; border-radius: 10px; border: 2px solid var(--fn-highlight); opacity: 0; animation: guard-ring .5s var(--ease-out); }
-    @keyframes guard-ring { 0% { opacity: .8; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.35); } }
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0ms !important; }
-    }
-    }
-  </style>
 </head>
 <body class="min-h-dvh bg-canvas text-slate-800 font-sans text-[14px] antialiased" data-admin-path="{{.AdminPath}}" data-csrf="{{.CSRF}}" hx-headers='{"X-CSRF-Token":"{{.CSRF}}"}'>
 
@@ -200,6 +153,7 @@
 <script src="{{.AdminPath}}/static/js/notify.min.js?v={{.Asset}}" defer></script>
 <script src="{{.AdminPath}}/static/js/clipboard.min.js?v={{.Asset}}" defer></script>
 <script src="{{.AdminPath}}/static/js/motion.min.js?v={{.Asset}}" defer></script>
+<script src="{{.AdminPath}}/static/js/admin.min.js?v={{.Asset}}" defer></script>
 {{block "scripts" .}}{{end}}
 <div id="toast-container" class="fixed top-4 left-4 right-4 sm:top-6 sm:left-auto sm:right-6 z-[400] flex flex-col gap-3 sm:w-[340px] pointer-events-none"></div>
 {{template "confirm-modal" .}}

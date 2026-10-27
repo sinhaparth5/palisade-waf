@@ -12,7 +12,7 @@
             hx-post="{{.AdminPath}}/certificates"
             hx-target="#cert-rows"
             hx-swap="innerHTML"
-            hx-on::after-request="if(event.detail.successful) this.reset()"
+            data-reset="success"
             class="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
         <div class="lg:col-span-2">
@@ -102,54 +102,6 @@
 
 </div>
 
-<script>
-(function () {
-  // Strip directory prefix and known cert/key extensions from a filename.
-  function nameFromFile(filename) {
-    return filename
-      .replace(/^.*[/\\]/, '')           // strip path
-      .replace(/\.(pem|crt|cer|key)$/i, '') // strip extension
-      .replace(/[^a-zA-Z0-9._-]+/g, '-')   // safe chars only
-      .replace(/^-+|-+$/g, '');             // trim leading/trailing dashes
-  }
-
-  document.querySelectorAll('input[type="file"][data-fills]').forEach(function (input) {
-    input.addEventListener('change', function () {
-      var file = input.files[0];
-      if (!file) return;
-
-      var reader = new FileReader();
-      reader.onload = function (e) {
-        // Populate the textarea
-        var ta = document.getElementById(input.dataset.fills);
-        if (ta) ta.value = e.target.result;
-
-        // Auto-fill the Name field from the filename if it is empty
-        var nameFieldId = input.dataset.names;
-        if (nameFieldId) {
-          var nameField = document.getElementById(nameFieldId);
-          if (nameField && nameField.value.trim() === '') {
-            nameField.value = nameFromFile(file.name);
-          }
-        }
-
-        // Reset the file input so the same file can be re-selected
-        input.value = '';
-      };
-      reader.readAsText(file);
-    });
-  });
-
-  // Clear the error box whenever the user starts editing the form again
-  var form = document.getElementById('cert-upload-form');
-  if (form) {
-    form.addEventListener('input', function () {
-      var err = document.getElementById('cert-error');
-      if (err) err.textContent = '';
-    });
-  }
-})();
-</script>
 {{end}}
 
 {{define "cert-rows"}}

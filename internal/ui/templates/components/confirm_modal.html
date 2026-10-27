@@ -25,37 +25,4 @@
     </div>
   </div>
 </div>
-<script>
-(function () {
-  var overlay   = document.getElementById('confirm-modal-overlay');
-  var msgEl     = document.getElementById('confirm-modal-message');
-  var btnOk     = document.getElementById('confirm-modal-ok');
-  var btnCancel = document.getElementById('confirm-modal-cancel');
-  var _resolve  = null;
-
-  function show(q) {
-    msgEl.textContent = q;
-    overlay.classList.remove('hidden');
-    btnOk.focus();
-    return new Promise(function (res) { _resolve = res; });
-  }
-
-  function hide()    { overlay.classList.add('hidden'); _resolve = null; }
-  function confirm() { var r = _resolve; hide(); if (r) r(true);  }
-  function cancel()  { var r = _resolve; hide(); if (r) r(false); }
-
-  btnOk.addEventListener('click', confirm);
-  btnCancel.addEventListener('click', cancel);
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) cancel(); });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !overlay.classList.contains('hidden')) cancel();
-  });
-
-  document.addEventListener('htmx:confirm', function (evt) {
-    if (!evt.detail.question) return; // no hx-confirm on this element, let htmx proceed normally
-    evt.preventDefault();
-    show(evt.detail.question).then(function (ok) { if (ok) evt.detail.issueRequest(true); });
-  });
-})();
-</script>
 {{end}}

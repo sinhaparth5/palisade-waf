@@ -608,18 +608,6 @@
     <div>
       <label class="block text-[13px] font-semibold text-slate-700 mb-1" for="dbconn_driver">Driver</label>
       <select id="dbconn_driver" name="dbconn_driver"
-              onchange="
-                var v=this.value;
-                document.getElementById('dbconn-external-fields').classList.toggle('hidden', v==='sqlite');
-                document.getElementById('dbconn-test-row').classList.toggle('hidden', v==='sqlite');
-                document.getElementById('dbconn-host-label').textContent = v==='sqlite' ? 'Database file path' : 'Host';
-                document.getElementById('dbconn_host').placeholder = v==='sqlite' ? 'waf.db' : 'db.example.com, 172.18.0.5, or a Docker service name like db';
-                document.getElementById('dbconn_port').placeholder = v==='mysql' ? '3306' : '5432';
-                document.getElementById('dbconn_sslmode_mysql').classList.toggle('hidden', v!=='mysql');
-                document.getElementById('dbconn_sslmode_mysql').disabled = (v!=='mysql');
-                document.getElementById('dbconn_sslmode_postgres').classList.toggle('hidden', v!=='postgres');
-                document.getElementById('dbconn_sslmode_postgres').disabled = (v!=='postgres');
-              "
               class="w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] px-3 py-2 outline-hidden focus-green focus:border-brand transition">
         <option value="sqlite" {{if eq .DBConnDriver "sqlite"}}selected{{end}}>SQLite (embedded, default)</option>
         <option value="mysql" {{if eq .DBConnDriver "mysql"}}selected{{end}}>MySQL / MariaDB</option>
@@ -640,14 +628,12 @@
       <div class="flex flex-col sm:flex-row gap-3">
         <label class="flex-1 flex items-center gap-2 text-[13px] font-medium text-slate-700 cursor-pointer">
           <input type="radio" name="dbconn_mode" value="fields" class="accent-brand"
-                 {{if ne .DBConnMode "dsn"}}checked{{end}}
-                 onchange="document.getElementById('dbconn-dsn-field').classList.add('hidden'); document.getElementById('dbconn-fields-group').classList.remove('hidden');">
+                 {{if ne .DBConnMode "dsn"}}checked{{end}}>
           Fill in fields separately
         </label>
         <label class="flex-1 flex items-center gap-2 text-[13px] font-medium text-slate-700 cursor-pointer">
           <input type="radio" name="dbconn_mode" value="dsn" class="accent-brand"
-                 {{if eq .DBConnMode "dsn"}}checked{{end}}
-                 onchange="document.getElementById('dbconn-dsn-field').classList.remove('hidden'); document.getElementById('dbconn-fields-group').classList.add('hidden');">
+                 {{if eq .DBConnMode "dsn"}}checked{{end}}>
           Paste a connection string
         </label>
       </div>

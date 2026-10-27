@@ -45,6 +45,28 @@ import (
 //go:embed templates
 var templateFS embed.FS
 
+// vendorFS holds the third-party admin assets (htmx, Chart.js, fonts, icons,
+// flags), served from the binary so the admin CSP can be 'self' only and the
+// UI works air-gapped (issue #195). See THIRD_PARTY_NOTICES.md.
+//
+//go:embed vendor
+var vendorFS embed.FS
+
+// adminCSP is the Content-Security-Policy on every admin response (issue
+// #195). No inline script or style and no external origin: an XSS in a
+// rendered log row can't run script with the admin's session.
+const adminCSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
+	"font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+
+// setCSP adds adminCSP. It runs after hostGuard, so admin paths proxied
+// for a service host keep the backend's own headers.
+func setCSP(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		c.Response().Header().Set("Content-Security-Policy", adminCSP)
+		return next(c)
+	}
+}
+
 var funcs = template.FuncMap{
 	"flagClass":   func(code string) string { return "fi fi-" + strings.ToLower(code) },
 	"fmtTime":     func(t time.Time) string { return t.Format("02 Jan 15:04:05") },
@@ -316,7 +338,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	// admin is the parent group for every route under cfg.Admin.Path.
 	// hostGuard runs first for all of them, public or not; see hostGuard.
 	admin := e.Group(base)
-	admin.Use(h.hostGuard)
+	admin.Use(h.hostGuard, setCSP)
 
 	// Public routes, no session required.
 	admin.GET("/login", h.LoginPage)
@@ -331,6 +353,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	admin.StaticFS("/static/js", h.staticJS)
 	admin.StaticFS("/static/css", h.staticCSS)
 	admin.StaticFS("/static/imgs", h.staticImgs)
+	admin.StaticFS("/static/vendor", echo.MustSubFS(vendorFS, "vendor"))
 
 	g := admin.Group("")
 	// bodyLimit must run ahead of csrfProtect, which parses the form body.

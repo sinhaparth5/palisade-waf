@@ -34,3 +34,15 @@ licensed under the MIT License (the full license text is retained in the
 file's header comment). It is served to visitors at `/_cz/fp.js` by the bot
 challenge page to compute a browser visitor identifier.
 
+
+## Admin UI assets
+
+Served from the binary under `{admin}/static/vendor/` (vendored in
+`internal/ui/vendor/`) so the admin UI's Content-Security-Policy allows no
+external origin:
+
+- **htmx** 1.9.12 ([https://htmx.org](https://htmx.org)), Copyright (c) Big Sky Software, Zero-Clause BSD License.
+- **Chart.js** 4.4.4 ([https://www.chartjs.org](https://www.chartjs.org)), Copyright (c) Chart.js Contributors, MIT License.
+- **flag-icons** 7.5.0 ([https://github.com/lipis/flag-icons](https://github.com/lipis/flag-icons)), Copyright (c) 2013 Panayiotis Lipiridis, MIT License (`internal/ui/vendor/flag-icons/LICENSE`). Only the 4x3 flags are included.
+- **Hugeicons** free stroke-rounded icon font ([https://hugeicons.com](https://hugeicons.com)), MIT License.
+- **Calistoga, DM Sans, JetBrains Mono, Caveat** from Google Fonts, SIL Open Font License 1.1, latin and latin-ext subsets.
