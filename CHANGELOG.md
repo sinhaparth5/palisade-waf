@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.10.5] - 2026-10-27
+
 ### Added
 
 - (#187) AI crawler policy per service: allow, challenge or block by crawler category
@@ -23,11 +25,5 @@ rather than growing this file forever.
 - (#191) Client certificate (mTLS) authentication per service
 - (#192) Opt-in response inspection to catch error leaks and data leakage
 
-## [2.10.4] - 2026-10-26
-
-### Fixed
-
-- (#186) Review: forwarded IP headers, shutdown drain, ACME listener, TypeSafe retries
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.4...main
-[2.10.4]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.3...v2.10.4
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.5...main
+[2.10.5]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.4...v2.10.5
