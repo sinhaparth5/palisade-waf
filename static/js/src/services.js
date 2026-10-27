@@ -125,6 +125,7 @@
   var botForm = document.getElementById('bot-form');
   var botIdInput = document.getElementById('bot-service-id');
   var loginForm = document.getElementById('svc-login-form');
+  var aiForm = document.getElementById('svc-ai-form');
   var loginPathsText = document.getElementById('svc-login-paths');
   var uploadsForm = document.getElementById('svc-uploads-form');
   var largeJSUploadsToggle = document.getElementById('svc-large-js-uploads');
@@ -204,6 +205,17 @@
     htmx.process(botForm);
     var radio = overlay.querySelector('input[name="bot_mode"][value="' + (d.mode || 'inherit') + '"]');
     if (radio) radio.checked = true;
+
+    aiForm.setAttribute('hx-post', adminPath + '/services/ai/' + d.id);
+    htmx.process(aiForm);
+    var ai = {};
+    (d.ai || '').split(',').forEach(function (kv) {
+      var p = kv.split('=');
+      if (p.length === 2) ai[p[0]] = p[1];
+    });
+    aiForm.querySelectorAll('select[data-ai-cat]').forEach(function (s) {
+      s.value = ai[s.dataset.aiCat] || '';
+    });
 
     loginForm.setAttribute('hx-post', adminPath + '/services/login/' + d.id);
     htmx.process(loginForm);
@@ -328,7 +340,7 @@
   document.body.addEventListener('login-saved', closeModal);
   document.body.addEventListener('htmx:afterRequest', function (e) {
     var elt = e.detail.elt;
-    if ((elt === botForm || elt === uploadsForm || elt === http3Form || elt === compressForm || elt === schemaForm || elt === cacheForm || elt === cacheSessionForm || elt === cacheTuningForm || elt === deleteBtn) && e.detail.successful) closeModal();
+    if ((elt === botForm || elt === aiForm || elt === uploadsForm || elt === http3Form || elt === compressForm || elt === schemaForm || elt === cacheForm || elt === cacheSessionForm || elt === cacheTuningForm || elt === deleteBtn) && e.detail.successful) closeModal();
     // Purge intentionally does not close the modal — its status fragment
     // (success or error) renders inline so the admin sees the outcome.
   });

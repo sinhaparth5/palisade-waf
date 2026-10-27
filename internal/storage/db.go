@@ -354,6 +354,7 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"services", "host_aliases TEXT NOT NULL DEFAULT ''"},
 	{"services", "canonical_host TEXT NOT NULL DEFAULT ''"},
 	{"services", "login_paths TEXT NOT NULL DEFAULT ''"},
+	{"services", "ai_crawler_policy TEXT NOT NULL DEFAULT ''"},
 }
 
 func (db *DB) migrate() error {
@@ -866,6 +867,9 @@ type Service struct {
 	// LoginPaths get the login protection preset (issue #132): a forced bot
 	// challenge and a strict per-client limit on submissions. Empty = off.
 	LoginPaths []string
+	// AICrawlerPolicy overrides the global AI crawler policy per category
+	// (issue #187), encoded by bot.AIPolicy; "" inherits every category.
+	AICrawlerPolicy string
 }
 
 // DefaultHealthInterval is the active health check interval used when a
@@ -890,6 +894,22 @@ func (s Service) Hosts() []string {
 func (db *DB) SetServiceLoginPaths(id int, paths []string) error {
 	_, err := db.exec(`UPDATE services SET login_paths = ? WHERE id = ?`, strings.Join(paths, "\n"), id)
 	return err
+}
+
+// SetServiceAICrawlerPolicy replaces a service's AI crawler policy overrides.
+func (db *DB) SetServiceAICrawlerPolicy(id int, policy string) error {
+	_, err := db.exec(`UPDATE services SET ai_crawler_policy = ? WHERE id = ?`, policy, id)
+	return err
+}
+
+// GetAICrawlerPolicy reads the global AI crawler policy ("" = none).
+func (db *DB) GetAICrawlerPolicy() (string, error) {
+	return db.getMeta("ai_crawler_policy")
+}
+
+// SetAICrawlerPolicy persists the global AI crawler policy.
+func (db *DB) SetAICrawlerPolicy(policy string) error {
+	return db.setMeta("ai_crawler_policy", policy)
 }
 
 // SetServiceHosts replaces a service's host aliases and canonical host.
@@ -1209,12 +1229,12 @@ func (db *DB) SetCaptchaConfig(c CaptchaConfig) error {
 
 // serviceColumns is shared by ListServices/GetService so their SELECT list
 // and Scan args can't drift out of sync as columns are added.
-const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths`
+const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy`
 
 func (db *DB) scanService(row interface{ Scan(...any) error }) (Service, error) {
 	var s Service
 	var extra, aliases, login string
-	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login)
+	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy)
 	if extra != "" {
 		s.ExtraBackends = strings.Split(extra, "\n")
 	}

@@ -27,6 +27,7 @@ import (
 	"palisade/internal/notify/metrics"
 	"palisade/internal/proxy"
 	"palisade/internal/security/blocklist"
+	"palisade/internal/security/bot"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
 	"palisade/internal/security/passkey"
@@ -377,6 +378,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.POST("/services/uploads/:id", h.SetServiceLargeJSUploads)
 	g.POST("/services/http3/:id", h.SetServiceHTTP3)
 	g.POST("/services/login/:id", h.SetServiceLoginPaths)
+	g.POST("/services/ai/:id", h.SetServiceAICrawlers)
 	g.POST("/services/compress/:id", h.SetServiceCompress)
 	g.POST("/services/backends/:id", h.SetServiceBackends)
 	g.POST("/services/hosts/:id", h.SetServiceHosts)
@@ -2291,6 +2293,7 @@ func (h *Handler) SetServiceRateLimit(c echo.Context) error {
 func (h *Handler) SettingsPage(c echo.Context) error {
 	email, _ := h.db.GetAdminEmail()
 	botEnabled, botThreshold, botTTL, _ := h.db.GetBotSettings()
+	aiPolicy, _ := h.db.GetAICrawlerPolicy()
 	rlEnabled, rlRPS, rlBurst, _ := h.db.GetRateLimitSettings()
 	wh, _ := h.db.GetWebhookConfig()
 	ec, _ := h.db.GetEmailConfig()
@@ -2323,6 +2326,7 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 		"BotEnabled":             botEnabled,
 		"BotThreshold":           botThreshold,
 		"BotTTL":                 botTTL,
+		"AIPolicy":               bot.ParseAIPolicy(aiPolicy),
 		"CaptchaProvider":        captcha.Provider,
 		"CaptchaSiteKey":         captcha.SiteKey,
 		"CaptchaSecretSet":       captcha.Secret != "",
@@ -2495,11 +2499,14 @@ func (h *Handler) SaveBotSettings(c echo.Context) error {
 		botErr = "The CAPTCHA fallback needs both a site key and a secret key."
 	}
 
+	aiPolicy := aiPolicyForm(c)
+
 	data := map[string]any{
 		"AdminPath":        h.cfg.Admin.Path,
 		"BotEnabled":       enabled,
 		"BotThreshold":     threshold,
 		"BotTTL":           ttl,
+		"AIPolicy":         aiPolicy,
 		"CaptchaProvider":  cc.Provider,
 		"CaptchaSiteKey":   cc.SiteKey,
 		"CaptchaSecretSet": cc.Secret != "",
@@ -2512,6 +2519,12 @@ func (h *Handler) SaveBotSettings(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	if err := h.db.SetCaptchaConfig(cc); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if err := h.db.SetAICrawlerPolicy(aiPolicy.String()); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if err := h.registry.Reload(h.db); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
@@ -2652,6 +2665,33 @@ func (h *Handler) SetServiceHosts(c echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "hosts-saved")
+	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+}
+
+// aiPolicyForm reads the ai_<category> selects; anything else is dropped.
+func aiPolicyForm(c echo.Context) bot.AIPolicy {
+	p := bot.AIPolicy{}
+	for _, cat := range bot.AICategories {
+		if a := c.FormValue("ai_" + cat); bot.ValidAIAction(a) {
+			p[cat] = a
+		}
+	}
+	return p
+}
+
+// SetServiceAICrawlers saves a service's AI crawler policy overrides
+// (issue #187); a category left on inherit takes the global default.
+func (h *Handler) SetServiceAICrawlers(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+	}
+	if err := h.db.SetServiceAICrawlerPolicy(id, aiPolicyForm(c).String()); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
 	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
 }
 

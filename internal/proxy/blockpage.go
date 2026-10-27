@@ -20,10 +20,11 @@ var blockPageTmpl = template.Must(template.New("block").Parse(blockPageHTML))
 // Deliberately a category only: rule IDs and matched data stay in the logs,
 // found there by the request ID.
 var blockMessages = map[string][2]string{
-	"ip_blocked":   {"Access denied", "Requests from your network are blocked on this site."},
-	"geo_blocked":  {"Access denied", "This site is not available in your region."},
-	"waf_rule":     {"Request blocked", "Your request looked unsafe and was stopped by the site's firewall."},
-	"rate_limited": {"Too many requests", "You are sending requests too quickly. Wait a moment and try again."},
+	"ip_blocked":         {"Access denied", "Requests from your network are blocked on this site."},
+	"geo_blocked":        {"Access denied", "This site is not available in your region."},
+	"waf_rule":           {"Request blocked", "Your request looked unsafe and was stopped by the site's firewall."},
+	"rate_limited":       {"Too many requests", "You are sending requests too quickly. Wait a moment and try again."},
+	"ai_crawler_blocked": {"Access denied", "This site does not allow AI crawlers."},
 }
 
 // deny writes a block response: a readable page for browsers, the JSON body

@@ -1,0 +1,24 @@
+{{/* AI crawler policy selects (issue #187). Policy: bot.AIPolicy, may be nil; Empty: label of the "" option ("No policy" globally, "Inherit" per service). */}}
+{{define "ai-crawler-policy"}}
+{{$p := .Policy}}{{if not $p}}{{$p = map "training" "" "search" "" "user" ""}}{{end}}
+<div class="flex flex-col sm:flex-row gap-4">
+  {{template "ai-crawler-select" (map "Cat" "training" "Label" "Training" "Hint" "GPTBot, ClaudeBot, CCBot, Bytespider" "Cur" (index $p "training") "Empty" .Empty)}}
+  {{template "ai-crawler-select" (map "Cat" "search" "Label" "AI search" "Hint" "OAI-SearchBot, Claude-SearchBot, PerplexityBot" "Cur" (index $p "search") "Empty" .Empty)}}
+  {{template "ai-crawler-select" (map "Cat" "user" "Label" "User fetch" "Hint" "ChatGPT-User, Claude-User, Perplexity-User" "Cur" (index $p "user") "Empty" .Empty)}}
+</div>
+{{end}}
+
+{{define "ai-crawler-select"}}
+<div class="flex-1">
+  <label class="block text-[12px] font-semibold text-slate-700 mb-1">{{.Label}}
+    <select name="ai_{{.Cat}}" data-ai-cat="{{.Cat}}"
+            class="mt-1 w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] font-normal px-3 py-2 outline-hidden focus-green focus:border-brand transition">
+      <option value="" {{if eq .Cur ""}}selected{{end}}>{{.Empty}}</option>
+      <option value="allow" {{if eq .Cur "allow"}}selected{{end}}>Allow verified</option>
+      <option value="challenge" {{if eq .Cur "challenge"}}selected{{end}}>Challenge</option>
+      <option value="block" {{if eq .Cur "block"}}selected{{end}}>Block</option>
+    </select>
+  </label>
+  <p class="text-[11px] text-slate-400 mt-1">{{.Hint}}</p>
+</div>
+{{end}}

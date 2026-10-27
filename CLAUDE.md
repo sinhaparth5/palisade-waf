@@ -31,7 +31,9 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - Lint suppressions the presets don't cover get a same-line `//nolint` with a short reason (see `internal/storage/db.go`).
 - Admin UI handler tests use `newAdminEnv` (`internal/ui/harness_test.go`): real handler + session + CSRF over temp SQLite. Use `env.do(method, path, form(...))`, don't call handlers directly.
 - Storage tests get their DB from `openTestDB(t)`: temp SQLite by default; set `TEST_DB_DRIVER` + `TEST_DB_DSN` (admin DSN that can CREATE/DROP DATABASE) to run against a real server. `docker compose -f docker-compose.test.yml up -d` gives mysql:8 on `:3307` and postgres:16 on `:5433`; MySQL needs ~20–25s before it's really ready (early `mysqladmin ping` lies).
-- CI (`ci.yml`): `lint`, `test` (`-coverpkg=./...`, Codecov), and a `test-external-db` matrix all gate `release` and `docker`.
+- CI (`ci.yml`): `lint`, `test` (`-coverpkg=./...`, Codecov), and a `test-external-db` matrix all gate `release` and `docker`. `codeql.yml` and `govulncheck.yml` run separately.
+- Run `go test -race` on packages where you touched shared state or a `Reload*` swap.
+- Reviews follow `REVIEW.md` (every finding needs a concrete input/state → breakage scenario).
 
 **CLI flags** — there is no config file; every bootstrap setting is a flag (`main.go`), every runtime knob lives in the DB and is edited in the admin UI. Comments mentioning "config.yaml" are historical.
 
@@ -120,7 +122,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 
 ## Security subsystems
 
-- **Bot** (`security/bot`, `challenge`): header scoring; trusted crawlers must verify by FCrDNS, ASN or pinned CIDR — UA alone is `unverified_crawler`. Operator pins come only from `--trusted-crawlers`; never hardcode IPs. JS PoW challenge + FingerprintJS (vendored, `/_cz/fp.js`) + automation detection; optional Turnstile/hCaptcha fallback. `challenge.Exempt` skips the gate for web manifests (path-based, never header-based). Per-service `bot_mode`: `inherit`/`always`/`off`.
+- **Bot** (`security/bot`, `challenge`): header scoring; trusted crawlers must verify by FCrDNS, ASN or pinned CIDR — UA alone is `unverified_crawler`. Operator pins come only from `--trusted-crawlers`; never hardcode IPs. JS PoW challenge + FingerprintJS (vendored, `/_cz/fp.js`) + automation detection; optional Turnstile/hCaptcha fallback. `challenge.Exempt` skips the gate for web manifests (path-based, never header-based). Per-service `bot_mode`: `inherit`/`always`/`off`. **AI crawler policy** (`bot/ai.go`, `services/aicrawler.go`): per category `allow`/`challenge`/`block`, service override over the global default in `meta`; block hits any UA naming the category, allow needs a verified crawler (vendors without rDNS/ASN must be pinned via `--trusted-crawlers`, which merges into the existing entry). AI crawlers are never `IsTrustedCrawler`.
 - **TLS fingerprints**: JA4 primary, JA3 deprecated (don't build on it). Cloudflare `Cf-Ja4`/`Cf-Ja3-Fp` win only from Cloudflare peers. Per-connection geo/ASN caches store the client IP and discard on mismatch (pooled proxies multiplex clients).
 - **Autoban** (`security/autoban`): scores events per IP in a window; `ip_blocked*`/`geo_blocked*` never score; cross-site subresource requests never score. Bans are `Auto-banned — ` notes on global block rules; existing admin rules always win; private IPs never banned.
 - **TypeSafe ASN classification** (`threatscore/typesafeclassify.go`, Settings "AI classification", off by default; key is the `typesafe_api_key` secret): judges unknown ASN orgs in a background goroutine, never on the log worker. Successes are cached per ASN until the config is reloaded; failures back off `typesafeRetryAfter` (10m) per ASN; a 401/403 (`errTypeSafeAuth`) pauses classification until the settings are saved again. Every call is a `typesafe_calls` row (capped at `typesafeCallsKeep`).

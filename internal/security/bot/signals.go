@@ -27,6 +27,10 @@ type Analysis struct {
 	Signals          []string
 	IsBot            bool // true if a confirmed attack/scanner tool was detected
 	IsTrustedCrawler bool // true if UA and source IP match a known-good SEO/social crawler
+	// AICategory is set when the UA names an AI crawler, verified or not, so
+	// "block" applies to spoofers too; AIVerified gates "allow".
+	AICategory string
+	AIVerified bool
 }
 
 // Analyze scores r for bot-like characteristics. It only reads headers
@@ -41,7 +45,17 @@ func Analyze(r *http.Request, ip string, asnNum uint) Analysis {
 	// Verified crawlers bypass all scoring and are never challenged. They
 	// still pass through the Coraza WAF for payload inspection. A UA that
 	// claims to be one but fails verification is scored like anyone else.
-	if c := matchCrawler(uaLow); c != nil {
+	// An AI crawler is scored as usual: whether it skips the challenge is
+	// up to the AI crawler policy (issue #187), not to verification alone.
+	if c := matchCrawler(uaLow); c != nil && c.ai != "" {
+		a.AICategory = c.ai
+		a.AIVerified = verifyCrawler(c, ip, asnNum)
+		if a.AIVerified {
+			a.Signals = append(a.Signals, "ai_crawler")
+		} else {
+			a.Signals = append(a.Signals, "unverified_crawler")
+		}
+	} else if c != nil {
 		if verifyCrawler(c, ip, asnNum) {
 			a.IsTrustedCrawler = true
 			a.Signals = append(a.Signals, "trusted_crawler")

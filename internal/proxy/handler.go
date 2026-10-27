@@ -339,7 +339,28 @@ func (h *Handler) Handle(c echo.Context) error {
 	// A login path (issue #132) is always challenged, even with the
 	// service's bot mode off.
 	login := services.IsLoginPath(app, r.URL.Path)
-	if ch != nil && !open && !botAnalysis.IsTrustedCrawler && !challenge.Exempt(r.Method, r.URL.Path) {
+	// AI crawler policy (issue #187). Block applies to any client whose UA
+	// names the category, verified or not: refusing a spoofer costs nothing.
+	// Allow needs a verified crawler, or "ClaudeBot" in a UA would be a pass.
+	aiAllowed := false
+	if cat := botAnalysis.AICategory; cat != "" && !open {
+		switch h.registry.AIAction(app, cat) {
+		case bot.AIBlock:
+			mark("challenge")
+			h.logBlocked(r, appName, clientIP, country, http.StatusForbidden, 0, "ai_crawler_blocked:"+cat, time.Since(start), meta)
+			return deny(c, http.StatusForbidden, "ai_crawler_blocked", reqID, map[string]any{"error": "access denied"})
+		case bot.AIChallenge:
+			if ch != nil && !challenge.Exempt(r.Method, r.URL.Path) && !ch.PassedChallenge(r) {
+				metrics.BotChallengedTotal.WithLabelValues(appName).Inc()
+				mark("challenge")
+				h.logChallenged(r, appName, clientIP, http.StatusTemporaryRedirect, "ai_crawler_challenge:"+cat, time.Since(start), meta)
+				return c.Redirect(http.StatusTemporaryRedirect, ch.ChallengeURL(r.RequestURI))
+			}
+		case bot.AIAllow:
+			aiAllowed = botAnalysis.AIVerified
+		}
+	}
+	if ch != nil && !open && !botAnalysis.IsTrustedCrawler && !aiAllowed && !challenge.Exempt(r.Method, r.URL.Path) {
 		svcMode := "inherit"
 		if app != nil && app.BotMode != "" {
 			svcMode = app.BotMode

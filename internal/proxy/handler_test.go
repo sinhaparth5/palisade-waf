@@ -13,6 +13,7 @@ import (
 	"palisade/internal/proxy"
 	"palisade/internal/security/adaptive"
 	"palisade/internal/security/blocklist"
+	"palisade/internal/security/bot"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
 	"palisade/internal/security/ratelimit"
@@ -1075,5 +1076,86 @@ func TestLoginProtection(t *testing.T) {
 	}
 	if code := do(http.MethodGet, "/other", "203.0.113.71"); code != http.StatusOK {
 		t.Fatalf("other page: %d, want 200", code)
+	}
+}
+
+func TestAICrawlerPolicy(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer backend.Close()
+	h, db, reg := newTestHandlerDB(t, backend)
+	svc := reg.List()[0]
+	// Every client is challenged unless something lets it skip the gate.
+	if err := db.SetServiceBotMode(svc.ID, "always"); err != nil {
+		t.Fatal(err)
+	}
+	if err := bot.AddPinnedCrawlers("oai-searchbot=203.0.113.80"); err != nil {
+		t.Fatal(err)
+	}
+	h.ReloadBotProtection(challenge.New("test-secret", 3600, 1000))
+	e := echo.New()
+	do := func(path, ua, ip string) (int, string) {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.RemoteAddr = ip + ":1234"
+		req.Header.Set("User-Agent", ua)
+		rec := httptest.NewRecorder()
+		_ = h.Handle(e.NewContext(req, rec))
+		return rec.Code, rec.Header().Get("X-WAF-Block-Reason")
+	}
+	set := func(global, service string) {
+		t.Helper()
+		if err := db.SetAICrawlerPolicy(global); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.SetServiceAICrawlerPolicy(svc.ID, service); err != nil {
+			t.Fatal(err)
+		}
+		if err := reg.Reload(db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const (
+		search   = "Mozilla/5.0; compatible; OAI-SearchBot/1.0"
+		training = "Mozilla/5.0; compatible; GPTBot/1.2"
+		user     = "Mozilla/5.0; compatible; ChatGPT-User/1.0"
+	)
+
+	tests := []struct {
+		name, global, service, path, ua, ip string
+		want                                int
+		wantReason                          string
+	}{
+		{"no policy: challenged like anyone", "", "", "/", search, "203.0.113.80", http.StatusTemporaryRedirect, ""},
+		{"global block", "training=block", "", "/", training, "198.51.100.1", http.StatusForbidden, "ai_crawler_blocked"},
+		{"blocked crawler still reads robots.txt", "training=block", "", "/robots.txt", training, "198.51.100.1", http.StatusOK, ""},
+		{"blocked crawler still reads llms.txt", "training=block", "", "/llms.txt", training, "198.51.100.1", http.StatusOK, ""},
+		{"other category unaffected", "training=block", "", "/", user, "198.51.100.1", http.StatusTemporaryRedirect, ""},
+		{"verified allow skips challenge", "search=allow", "", "/", search, "203.0.113.80", http.StatusOK, ""},
+		{"spoofed allow is challenged", "search=allow", "", "/", search, "198.51.100.1", http.StatusTemporaryRedirect, ""},
+		{"service overrides global", "search=allow", "search=block", "/", search, "203.0.113.80", http.StatusForbidden, "ai_crawler_blocked"},
+		{"service inherits other categories", "training=block", "search=allow", "/", training, "198.51.100.1", http.StatusForbidden, "ai_crawler_blocked"},
+		{"challenge category", "user=challenge", "", "/", user, "198.51.100.1", http.StatusTemporaryRedirect, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			set(tt.global, tt.service)
+			code, reason := do(tt.path, tt.ua, tt.ip)
+			if code != tt.want || reason != tt.wantReason {
+				t.Fatalf("got %d %q, want %d %q", code, reason, tt.want, tt.wantReason)
+			}
+		})
+	}
+
+	// Trusted IPs skip the policy like every other stage.
+	set("training=block", "")
+	if err := db.SetTrustedIPs([]string{"198.51.100.9"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Reload(db); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := do("/", training, "198.51.100.9"); code != http.StatusOK {
+		t.Fatalf("trusted IP: %d, want 200", code)
 	}
 }

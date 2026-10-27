@@ -498,6 +498,18 @@ func TestSettingsCards(t *testing.T) {
 		t.Errorf("bot = %v %d %d reloads=%d", en, th, ttl, env.count("bot"))
 	}
 
+	// AI crawler default: invalid actions dropped, applied without a restart.
+	aiRec := env.do("POST", "/admin/settings/bot", form("ai_training", "block", "ai_search", "bogus", "ai_user", "allow"))
+	if p, _ := env.db.GetAICrawlerPolicy(); p != "training=block,user=allow" {
+		t.Errorf("ai policy = %q", p)
+	}
+	if env.h.registry.AIAction(nil, "training") != "block" {
+		t.Error("registry not reloaded with the AI crawler policy")
+	}
+	if !strings.Contains(aiRec.Body.String(), `<option value="block" selected>Block</option>`) {
+		t.Error("saved AI policy not shown in the card")
+	}
+
 	// CAPTCHA fallback: bad provider and missing secret are refused, a blank
 	// secret on re-save keeps the stored one, and it is never echoed back.
 	for _, tc := range []struct {
@@ -874,4 +886,30 @@ func TestSetServiceLoginPaths(t *testing.T) {
 		t.Errorf("not cleared: %v", got.LoginPaths)
 	}
 	wantCode(t, "bad id", env.do("POST", "/admin/services/login/x", nil).Code, 200, "")
+}
+
+func TestSetServiceAICrawlers(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("shop", "shop.example.com")
+	path := "/admin/services/ai/" + itoa(svc.ID)
+
+	rec := env.do("POST", path, form("ai_training", "block", "ai_search", "", "ai_user", "nope"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	got, _ := env.db.GetService(svc.ID)
+	if got.AICrawlerPolicy != "training=block" {
+		t.Errorf("stored = %q", got.AICrawlerPolicy)
+	}
+	if !strings.Contains(rec.Body.String(), "AI crawlers: custom") || !strings.Contains(rec.Body.String(), `data-ai="training=block"`) {
+		t.Error("row badge or data-ai missing")
+	}
+	if app := env.h.registry.Match("shop.example.com", "/"); env.h.registry.AIAction(app, "training") != "block" {
+		t.Error("registry not reloaded")
+	}
+
+	// All on inherit clears the override.
+	env.do("POST", path, form("ai_training", ""))
+	if got, _ = env.db.GetService(svc.ID); got.AICrawlerPolicy != "" {
+		t.Errorf("not cleared: %q", got.AICrawlerPolicy)
+	}
+	wantCode(t, "bad id", env.do("POST", "/admin/services/ai/x", nil).Code, 400, "")
 }

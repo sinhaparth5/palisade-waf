@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Added
+
+- (#187) AI crawler policy per service: allow, challenge or block by crawler category
+
 ## [2.10.4] - 2026-10-26
 
 ### Fixed

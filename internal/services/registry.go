@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"palisade/internal/security/bot"
 	"palisade/internal/security/ratelimit"
 	"palisade/internal/storage"
 
@@ -119,6 +120,7 @@ type Registry struct {
 	stopCheck chan struct{}                 // closed on Reload to stop the previous active health checks
 	honeypots []string                      // see Honeypot
 	trusted   []netip.Prefix                // see Trusted
+	aiDefault bot.AIPolicy                  // global AI crawler policy, see AIAction
 
 	healthMu sync.RWMutex
 	health   map[string]*backendHealth // service name + "\x00" + backend URL
@@ -160,6 +162,13 @@ func (r *Registry) Reload(db *storage.DB) error {
 		log.Printf("trusted IPs: skipping %v", err)
 	}
 	r.SetTrustedIPs(trusted)
+	aiPolicy, err := db.GetAICrawlerPolicy()
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	r.aiDefault = bot.ParseAIPolicy(aiPolicy)
+	r.mu.Unlock()
 
 	proxies := make(map[string]http.Handler, len(list))
 	direct := make(map[string]http.Handler, len(list))

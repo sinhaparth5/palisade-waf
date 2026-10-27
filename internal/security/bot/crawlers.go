@@ -21,6 +21,7 @@ type crawler struct {
 	rdns  []string       // PTR suffixes, forward-confirmed (e.g. "googlebot.com")
 	asns  []uint         // origin ASNs from the bundled ASN database
 	cidrs []netip.Prefix // pinned source ranges
+	ai    string         // AI crawler category (AITraining etc.), "" for search/social crawlers
 }
 
 // Slack, Discord and DuckDuckGo publish no reverse DNS or dedicated ASN for
@@ -42,6 +43,25 @@ var trustedCrawlers = []crawler{
 	{ua: []string{"linkedinbot"}, asns: []uint{14413}},
 	{ua: []string{"telegrambot"}, asns: []uint{62041}},
 	{ua: []string{"ia_archiver", "archive.org_bot"}, asns: []uint{7941}},
+
+	// AI crawlers (issue #187), matched for the per-service AI crawler
+	// policy. Only Meta's come from a dedicated ASN; OpenAI, Anthropic and
+	// Perplexity publish IP lists that change, so the operator pins them with
+	// --trusted-crawlers (merged into these entries by AddPinnedCrawlers).
+	// Until pinned they never verify, so "allow" can't be bought by a UA.
+	// Google-Extended and Applebot-Extended are robots.txt tokens, not UAs.
+	{ua: []string{"gptbot"}, ai: AITraining},
+	{ua: []string{"claudebot", "anthropic-ai"}, ai: AITraining},
+	{ua: []string{"ccbot"}, ai: AITraining},
+	{ua: []string{"bytespider"}, ai: AITraining},
+	{ua: []string{"meta-externalagent"}, asns: []uint{32934}, ai: AITraining},
+	{ua: []string{"oai-searchbot"}, ai: AISearch},
+	{ua: []string{"claude-searchbot"}, ai: AISearch},
+	{ua: []string{"perplexitybot"}, ai: AISearch},
+	{ua: []string{"chatgpt-user"}, ai: AIUser},
+	{ua: []string{"claude-user"}, ai: AIUser},
+	{ua: []string{"perplexity-user"}, ai: AIUser},
+	{ua: []string{"meta-externalfetcher"}, asns: []uint{32934}, ai: AIUser},
 }
 
 // AddPinnedCrawlers trusts extra crawlers by source range, from the
@@ -59,7 +79,14 @@ func AddPinnedCrawlers(spec string) error {
 		if !ok || ua == "" {
 			return fmt.Errorf("trusted crawler %q: want ua=cidr[,cidr]", entry)
 		}
-		c := crawler{ua: []string{ua}}
+		// A pin for a UA already listed adds ranges to that entry, so it
+		// keeps its other verification and its AI category; a separate
+		// entry would never be reached, matchCrawler returns the first hit.
+		c := knownCrawler(ua)
+		if c == nil {
+			trustedCrawlers = append(trustedCrawlers, crawler{ua: []string{ua}})
+			c = &trustedCrawlers[len(trustedCrawlers)-1]
+		}
 		for r := range strings.SplitSeq(ranges, ",") {
 			p, err := parsePrefix(strings.TrimSpace(r))
 			if err != nil {
@@ -67,7 +94,6 @@ func AddPinnedCrawlers(spec string) error {
 			}
 			c.cidrs = append(c.cidrs, p)
 		}
-		trustedCrawlers = append(trustedCrawlers, c)
 	}
 	return nil
 }
@@ -80,6 +106,15 @@ func parsePrefix(s string) (netip.Prefix, error) {
 	}
 	p, err := netip.ParsePrefix(s)
 	return p.Masked(), err
+}
+
+func knownCrawler(ua string) *crawler {
+	for i := range trustedCrawlers {
+		if slices.Contains(trustedCrawlers[i].ua, ua) {
+			return &trustedCrawlers[i]
+		}
+	}
+	return nil
 }
 
 func matchCrawler(uaLow string) *crawler {
