@@ -353,6 +353,20 @@
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
       <div id="svc-openapi-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+
+      <form id="svc-responses-form" hx-post="{{.AdminPath}}/services/responses/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-canvas pt-5">
+        <p class="text-[13px] font-semibold text-slate-800 mb-1">Inspect responses</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Checks the backend's replies for leaked SQL errors, stack traces, PHP/Java/IIS error pages and web shells with the OWASP CRS outbound rules. Logged as <code class="font-mono">response_leak</code>. Only HTML, plain text, JSON and XML up to 64 KiB are inspected; binary, streaming and larger responses pass through untouched. Each inspected response adds about 0.5 ms per KiB.</p>
+        <label for="svc-responses-mode" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Mode</label>
+        <select id="svc-responses-mode" name="response_inspect"
+          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4">
+          <option value="">Off</option>
+          <option value="log">Log only</option>
+          <option value="block">Block: replace the response with a 502</option>
+        </select>
+        <button type="submit" class="btn-primary w-full">Save</button>
+      </form>
+      <div id="svc-responses-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
     </div>
 
     <!-- ── Cache tab ── -->
@@ -710,6 +724,9 @@
     {{if and .OpenAPIMode (ne .OpenAPIMode "off")}}
     <span class="text-[11px] font-semibold {{if eq .OpenAPIMode "enforce"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">OpenAPI: {{.OpenAPIMode}}</span>
     {{end}}
+    {{if .ResponseInspect}}
+    <span class="text-[11px] font-semibold {{if eq .ResponseInspect "block"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">Responses: {{.ResponseInspect}}</span>
+    {{end}}
     {{if and .MTLS.Mode (ne .MTLS.Mode "off")}}
     <span class="text-[11px] font-semibold {{if eq .MTLS.Mode "required"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">mTLS: {{.MTLS.Mode}}</span>
     {{end}}
@@ -724,7 +741,7 @@
       data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
       data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}"
       data-schema="{{.RequestSchema}}" data-schema-mode="{{.SchemaMode}}" data-openapi-mode="{{.OpenAPIMode}}"
-      data-mtls-mode="{{.MTLS.Mode}}" data-mtls-ca="{{if .MTLS.CAPath}}1{{else}}0{{end}}" data-mtls-allow="{{.MTLS.Allow}}"
+      data-response-inspect="{{.ResponseInspect}}" data-mtls-mode="{{.MTLS.Mode}}" data-mtls-ca="{{if .MTLS.CAPath}}1{{else}}0{{end}}" data-mtls-allow="{{.MTLS.Allow}}"
       data-ttl-floor="{{.CacheTTLFloor}}" data-ttl-ceiling="{{.CacheTTLCeiling}}" data-grace="{{.CacheGrace}}" data-keep="{{.CacheKeep}}">
       <i class="hgi hgi-stroke hgi-rounded hgi-settings-01 text-xs"></i>
       Edit

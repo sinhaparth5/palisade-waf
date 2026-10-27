@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"log"
 	"math"
 	"net/http"
@@ -95,6 +96,10 @@ func newPool(s storage.Service, health func(raw string) *backendHealth, stripPat
 			return modify(resp)
 		}
 		u.rp.ErrorHandler = func(w http.ResponseWriter, out *http.Request, err error) {
+			if errors.Is(err, ErrResponseBlocked) { // the backend answered; nothing to retry
+				http.Error(w, "bad gateway", http.StatusBadGateway)
+				return
+			}
 			log.Printf("proxy error [%s → %s]: %v", p.name, u.raw, err)
 			if out.Context().Err() == nil { // a client hanging up says nothing about the backend
 				until := time.Now().Add(passiveCooldown).UnixNano()

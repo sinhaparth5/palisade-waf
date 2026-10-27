@@ -357,6 +357,7 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"services", "ai_crawler_policy TEXT NOT NULL DEFAULT ''"},
 	{"services", "breach_action TEXT NOT NULL DEFAULT ''"},
 	{"services", "breach_fields TEXT NOT NULL DEFAULT ''"},
+	{"services", "response_inspect TEXT NOT NULL DEFAULT ''"},
 }
 
 func (db *DB) migrate() error {
@@ -877,6 +878,9 @@ type Service struct {
 	// field; empty = breach.DefaultFields.
 	BreachAction string
 	BreachFields []string
+	// ResponseInspect runs CRS's outbound rules over the backend's text
+	// responses (issue #192): "" off, "log" or "block".
+	ResponseInspect string
 }
 
 // DefaultHealthInterval is the active health check interval used when a
@@ -912,6 +916,15 @@ func (db *DB) SetServiceAICrawlerPolicy(id int, policy string) error {
 // SetServiceBreachCheck sets a service's leaked-password check.
 func (db *DB) SetServiceBreachCheck(id int, action string, fields []string) error {
 	_, err := db.exec(`UPDATE services SET breach_action = ?, breach_fields = ? WHERE id = ?`, action, strings.Join(fields, "\n"), id)
+	return err
+}
+
+// SetServiceResponseInspect sets a service's response inspection mode.
+func (db *DB) SetServiceResponseInspect(id int, mode string) error {
+	if mode != "log" && mode != "block" {
+		mode = ""
+	}
+	_, err := db.exec(`UPDATE services SET response_inspect = ? WHERE id = ?`, mode, id)
 	return err
 }
 
@@ -1363,12 +1376,12 @@ func (db *DB) SetCaptchaConfig(c CaptchaConfig) error {
 
 // serviceColumns is shared by ListServices/GetService so their SELECT list
 // and Scan args can't drift out of sync as columns are added.
-const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy, breach_action, breach_fields`
+const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy, breach_action, breach_fields, response_inspect`
 
 func (db *DB) scanService(row interface{ Scan(...any) error }) (Service, error) {
 	var s Service
 	var extra, aliases, login, breachFields string
-	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy, &s.BreachAction, &breachFields)
+	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy, &s.BreachAction, &breachFields, &s.ResponseInspect)
 	if extra != "" {
 		s.ExtraBackends = strings.Split(extra, "\n")
 	}

@@ -1063,3 +1063,26 @@ func TestVirtualPatchesCard(t *testing.T) {
 		t.Errorf("exception rows = %v", ids)
 	}
 }
+
+func TestSetServiceResponseInspect(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("api", "api.example.com")
+	path := "/admin/services/responses/" + itoa(svc.ID)
+
+	rec := env.do("POST", path, form("response_inspect", "block"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if rec.Header().Get("HX-Trigger") != "responses-saved" || !strings.Contains(rec.Body.String(), "Responses: block") {
+		t.Fatalf("save: no trigger or badge: %s", rec.Body)
+	}
+	if s, _ := env.db.GetService(svc.ID); s.ResponseInspect != "block" {
+		t.Fatalf("stored %q", s.ResponseInspect)
+	}
+	rec = env.do("POST", path, form("response_inspect", "sometimes"))
+	if rec.Header().Get("HX-Retarget") != "#svc-responses-error" {
+		t.Fatalf("unknown mode: want inline error, got %s", rec.Body)
+	}
+	env.do("POST", path, form("response_inspect", ""))
+	if s, _ := env.db.GetService(svc.ID); s.ResponseInspect != "" {
+		t.Fatalf("off: stored %q", s.ResponseInspect)
+	}
+}

@@ -1,6 +1,7 @@
 package proxy_test
 
 import (
+	"compress/gzip"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -1373,5 +1374,92 @@ func TestClientCertMTLS(t *testing.T) {
 	fp := hdr.Get("X-Client-Cert-Fingerprint")
 	if len(fp) != 64 || !strings.Contains(l.HeadersJSON, fp) {
 		t.Fatalf("fingerprint %q not forwarded and logged: %s", fp, l.HeadersJSON)
+	}
+}
+
+// TestResponseInspection: a backend SQL error page is logged or replaced by
+// a 502 per the service's mode, the backend is asked for an uncompressed
+// body, and Palisade's own compression still answers the client.
+func TestResponseInspection(t *testing.T) {
+	const sqlError = "<html><body>You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version</body></html>"
+	clean := "<html><body>" + strings.Repeat("<p>hello</p>", 200) + "</body></html>"
+	// Gzips whenever asked, like most real backends.
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		var out io.Writer = w
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			w.Header().Set("Content-Encoding", "gzip")
+			zw := gzip.NewWriter(w)
+			defer zw.Close()
+			out = zw
+		}
+		page := sqlError
+		if r.URL.Path == "/clean" {
+			page = clean
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		_, _ = io.WriteString(out, page)
+	}))
+	defer backend.Close()
+	h, db, reg := newTestHandlerDB(t, backend)
+	logs := make(chan storage.RequestLog, 10)
+	db.SetWebhookFn(func(l storage.RequestLog) { logs <- l })
+	svc := reg.List()[0]
+	_ = db.SetServiceBotMode(svc.ID, "off")
+	_ = db.SetServiceCompress(svc.ID, true)
+
+	do := func(mode, path string) (*httptest.ResponseRecorder, storage.RequestLog) {
+		t.Helper()
+		if err := db.SetServiceResponseInspect(svc.ID, mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := reg.Reload(db); err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rec := httptest.NewRecorder()
+		_ = h.Handle(echo.New().NewContext(req, rec))
+		select {
+		case l := <-logs:
+			return rec, l
+		case <-time.After(2 * time.Second):
+			t.Fatal("no request logged")
+		}
+		return rec, storage.RequestLog{}
+	}
+	body := func(rec *httptest.ResponseRecorder) string {
+		t.Helper()
+		if rec.Header().Get("Content-Encoding") != "gzip" {
+			return rec.Body.String()
+		}
+		zr, err := gzip.NewReader(rec.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, _ := io.ReadAll(zr)
+		return string(b)
+	}
+
+	if rec, l := do("", "/err"); rec.Code != 500 || l.Action != "" || body(rec) != sqlError {
+		t.Fatalf("off: %d %q", rec.Code, l.Action)
+	}
+	rec, l := do("log", "/err")
+	if rec.Code != 500 || body(rec) != sqlError || l.Action != "response_leak:log" || l.RuleID < 951000 || l.RuleID >= 952000 || l.Blocked {
+		t.Fatalf("log: %d %q rule %d blocked=%v", rec.Code, l.Action, l.RuleID, l.Blocked)
+	}
+	rec, l = do("block", "/err")
+	if rec.Code != http.StatusBadGateway || strings.Contains(rec.Body.String(), "SQL") || l.Action != "response_leak:block" || !l.Blocked || l.RuleID == 0 {
+		t.Fatalf("block: %d %q %q rule %d", rec.Code, rec.Body.String(), l.Action, l.RuleID)
+	}
+	// A clean page passes and is still compressed for the client; the
+	// block above didn't take the backend out of rotation either.
+	rec, l = do("block", "/clean")
+	if rec.Code != 200 || rec.Header().Get("Content-Encoding") != "gzip" || body(rec) != clean || l.Action != "" {
+		t.Fatalf("clean: %d encoding=%q %q", rec.Code, rec.Header().Get("Content-Encoding"), l.Action)
+	}
+	if healthy, _ := reg.IsHealthy(svc.Name); !healthy {
+		t.Error("blocked response marked the backend down")
 	}
 }

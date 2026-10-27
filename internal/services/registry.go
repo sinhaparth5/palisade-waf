@@ -300,12 +300,17 @@ func (r *Registry) Reload(db *storage.DB) error {
 			}
 			return nil
 		}
-		clientModify := modify
-		if s.CompressEnabled {
-			clientModify = func(resp *http.Response) error {
-				compressResponse(resp)
-				return modify(resp)
+		// Toward the client: response inspection (issue #192) sees the
+		// backend's own bytes, before compression re-encodes them.
+		compress := s.CompressEnabled
+		clientModify := func(resp *http.Response) error {
+			if err := runResponseHook(resp); err != nil {
+				return err
 			}
+			if compress {
+				compressResponse(resp)
+			}
+			return modify(resp)
 		}
 		healthOf := func(raw string) *backendHealth {
 			key := name + "\x00" + raw
@@ -352,6 +357,10 @@ func (r *Registry) Reload(db *storage.DB) error {
 			var opErr *net.OpError
 			// Only GET/HEAD are routed to Varnish (see Director), and
 			// neither carries a body a failed dial could have consumed.
+			if errors.Is(err, ErrResponseBlocked) {
+				http.Error(w, "bad gateway", http.StatusBadGateway)
+				return
+			}
 			if errors.As(err, &opErr) && opErr.Op == "dial" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
 				log.Printf("cache [%s]: varnish unreachable, serving from backend: %v", name, err)
 				bp.ServeHTTP(w, r)

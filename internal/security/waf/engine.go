@@ -123,11 +123,10 @@ Include @crs-setup.conf.example
 Include @owasp_crs/*.conf
 SecRuleEngine On
 SecRequestBodyAccess On
-SecResponseBodyAccess Off
 SecRequestBodyLimit %d
 SecRequestBodyLimitAction Reject
 SecDebugLogLevel 0
-`, requestBodyLimit)
+`, requestBodyLimit) + responseDirectives
 	if len(disabledRuleIDs) > 0 {
 		ids := make([]string, len(disabledRuleIDs))
 		for i, id := range disabledRuleIDs {

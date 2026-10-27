@@ -100,7 +100,7 @@ func compressResponse(resp *http.Response) {
 	if resp.ContentLength >= 0 && resp.ContentLength < minCompressSize {
 		return
 	}
-	enc := negotiateEncoding(resp.Request.Header.Get("Accept-Encoding"))
+	enc := negotiateEncoding(clientAcceptEncoding(resp.Request))
 	if enc == "" {
 		return
 	}
