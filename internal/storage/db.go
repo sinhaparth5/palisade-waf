@@ -965,8 +965,10 @@ func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
 }
 
 func (db *DB) RemoveService(id int) error {
-	if _, err := db.exec(`DELETE FROM service_openapi WHERE service_id = ?`, id); err != nil {
-		return err
+	for _, t := range []string{"service_openapi", "service_mtls"} {
+		if _, err := db.exec(`DELETE FROM `+t+` WHERE service_id = ?`, id); err != nil {
+			return err
+		}
 	}
 	_, err := db.exec(`DELETE FROM services WHERE id = ?`, id)
 	return err
@@ -1139,6 +1141,50 @@ func (db *DB) ListServiceOpenAPIModes() (map[int]string, error) {
 			return nil, err
 		}
 		out[id] = mode
+	}
+	return out, rows.Err()
+}
+
+// ServiceMTLS is a service's client-certificate policy (issue #191). CAPath
+// is the client CA bundle on disk (certs/services/<name>/client-ca.pem);
+// Allow is a newline-separated list of subject CNs, SAN DNS names or SHA-256
+// fingerprints, empty meaning any cert from the CA.
+type ServiceMTLS struct {
+	Mode   string // "off", "optional" or "required"
+	CAPath string
+	Allow  string
+}
+
+// SetServiceMTLS stores a service's mTLS policy. Mode "off" keeps the CA
+// for later; an empty CAPath removes the policy.
+func (db *DB) SetServiceMTLS(id int, m ServiceMTLS) error {
+	if m.CAPath == "" {
+		_, err := db.exec(`DELETE FROM service_mtls WHERE service_id = ?`, id)
+		return err
+	}
+	if m.Mode != "optional" && m.Mode != "required" {
+		m.Mode = "off"
+	}
+	_, err := db.exec(db.dialect.upsertUpdate("service_mtls", []string{"service_id", "mode", "ca_path", "allow_list"}, "?, ?, ?, ?",
+		[]string{"service_id"}, []string{"mode", "ca_path", "allow_list"}), id, m.Mode, m.CAPath, m.Allow)
+	return err
+}
+
+// ListServiceMTLS returns every service's mTLS policy by service id.
+func (db *DB) ListServiceMTLS() (map[int]ServiceMTLS, error) {
+	rows, err := db.query(`SELECT service_id, mode, ca_path, allow_list FROM service_mtls`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]ServiceMTLS{}
+	for rows.Next() {
+		var id int
+		var m ServiceMTLS
+		if err := rows.Scan(&id, &m.Mode, &m.CAPath, &m.Allow); err != nil {
+			return nil, err
+		}
+		out[id] = m
 	}
 	return out, rows.Err()
 }

@@ -276,6 +276,15 @@ func (db *DB) schemaStatements() []string {
 			last_seen    %s NOT NULL
 		)`, ts),
 
+		// Client-certificate policy per service (issue #191). The CA
+		// bundle itself lives on disk next to the service's TLS cert.
+		`CREATE TABLE IF NOT EXISTS service_mtls (
+			service_id INTEGER PRIMARY KEY,
+			mode       VARCHAR(16) NOT NULL,
+			ca_path    TEXT NOT NULL,
+			allow_list TEXT NOT NULL
+		)`,
+
 		// One OpenAPI document per service (issue #190). Its own table, not
 		// a services column, because a real spec easily outgrows MySQL's
 		// 64 KiB TEXT.

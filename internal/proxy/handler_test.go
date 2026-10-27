@@ -1,10 +1,18 @@
 package proxy_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha1" //nolint:gosec // HIBP range API is SHA-1
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1280,5 +1288,90 @@ func TestLeakedPasswordCheck(t *testing.T) {
 	h.SetBreachChecker(breach.New(hibp.URL + "/"))
 	if rec := do("/login", leakedPW, ""); rec.Code != http.StatusOK {
 		t.Fatalf("HIBP down: %d, want 200 (fail open)", rec.Code)
+	}
+}
+
+// TestClientCertMTLS: a required-mTLS host is enforced even when a Prefix "/"
+// service is what routes it, logs mtls_required with the fingerprint, and
+// forwards only Palisade's own X-Client-Cert-* headers.
+func TestClientCertMTLS(t *testing.T) {
+	var got atomic.Value
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got.Store(r.Header.Clone())
+	}))
+	defer backend.Close()
+	t.Chdir(t.TempDir())
+	h, db, reg := newTestHandlerDB(t, backend)
+	logs := make(chan storage.RequestLog, 10)
+	db.SetWebhookFn(func(l storage.RequestLog) { logs <- l })
+
+	caKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	caTmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "ca"}, IsCA: true,
+		BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}
+	caDER, _ := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKey.PublicKey, caKey)
+	caCert, _ := x509.ParseCertificate(caDER)
+	leafKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	leafDER, _ := x509.CreateCertificate(rand.Reader, &x509.Certificate{SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "svc-a"},
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)},
+		caCert, &leafKey.PublicKey, caKey)
+	leaf, _ := x509.ParseCertificate(leafDER)
+
+	if err := db.AddService("secure", "secure.test", "", backend.URL, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	caPath, err := services.SaveClientCA("secure", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, _ := db.ListServices()
+	for _, s := range list {
+		_ = db.SetServiceBotMode(s.ID, "off")
+		if s.Name == "secure" {
+			if err := db.SetServiceMTLS(s.ID, storage.ServiceMTLS{Mode: "required", CAPath: caPath}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := reg.Reload(db); err != nil {
+		t.Fatal(err)
+	}
+
+	do := func(cert *x509.Certificate) (*httptest.ResponseRecorder, storage.RequestLog) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "https://secure.test/x", nil)
+		req.Header.Set("X-Client-Cert-Verified", "1")
+		req.Header.Set("X-Client-Cert-Subject", "CN=admin")
+		req.TLS = &tls.ConnectionState{}
+		if cert != nil {
+			req.TLS.PeerCertificates = []*x509.Certificate{cert}
+		}
+		rec := httptest.NewRecorder()
+		_ = h.Handle(echo.New().NewContext(req, rec))
+		select {
+		case l := <-logs:
+			return rec, l
+		case <-time.After(2 * time.Second):
+			t.Fatal("no request logged")
+		}
+		return rec, storage.RequestLog{}
+	}
+
+	got.Store(http.Header{})
+	rec, l := do(nil)
+	if rec.Code != http.StatusForbidden || l.Action != "mtls_required" || !l.Blocked {
+		t.Fatalf("no cert: %d %q, want 403 mtls_required", rec.Code, l.Action)
+	}
+	if len(got.Load().(http.Header)) != 0 {
+		t.Fatal("backend reached without a cert")
+	}
+
+	rec, l = do(leaf)
+	hdr := got.Load().(http.Header)
+	if rec.Code != http.StatusOK || hdr.Get("X-Client-Cert-Verified") != "1" || hdr.Get("X-Client-Cert-Subject") != "CN=svc-a" {
+		t.Fatalf("valid cert: %d, backend saw verified=%q subject=%q", rec.Code, hdr.Get("X-Client-Cert-Verified"), hdr.Get("X-Client-Cert-Subject"))
+	}
+	fp := hdr.Get("X-Client-Cert-Fingerprint")
+	if len(fp) != 64 || !strings.Contains(l.HeadersJSON, fp) {
+		t.Fatalf("fingerprint %q not forwarded and logged: %s", fp, l.HeadersJSON)
 	}
 }
