@@ -22,8 +22,13 @@ type Worker struct {
 	reloadIPBL func()
 	client     *http.Client
 	ticker     *time.Ticker
+	csTicker   *time.Ticker
 	stop       chan struct{}
 	once       sync.Once
+
+	csMu sync.Mutex
+	cs   map[int64]map[string]time.Time // CrowdSec source → decision value → expiry
+	now  func() time.Time
 }
 
 // New creates a Worker and starts the background sync loop.
@@ -35,7 +40,10 @@ func New(db *storage.DB, reloadIPBL func()) *Worker {
 		reloadIPBL: reloadIPBL,
 		client:     &http.Client{Timeout: 30 * time.Second},
 		ticker:     time.NewTicker(30 * time.Minute),
+		csTicker:   time.NewTicker(crowdSecPoll),
 		stop:       make(chan struct{}),
+		cs:         make(map[int64]map[string]time.Time),
+		now:        time.Now,
 	}
 	go w.run()
 	return w
@@ -44,6 +52,7 @@ func New(db *storage.DB, reloadIPBL func()) *Worker {
 func (w *Worker) Stop() {
 	w.once.Do(func() {
 		w.ticker.Stop()
+		w.csTicker.Stop()
 		close(w.stop)
 	})
 }
@@ -64,10 +73,13 @@ func (w *Worker) SyncSource(id int64) {
 
 func (w *Worker) run() {
 	w.syncDue() // immediate first-pass on startup
+	w.syncCrowdSec()
 	for {
 		select {
 		case <-w.ticker.C:
 			w.syncDue()
+		case <-w.csTicker.C:
+			w.syncCrowdSec()
 		case <-w.stop:
 			return
 		}
@@ -85,6 +97,9 @@ func (w *Worker) syncDue() {
 		if !s.Enabled {
 			continue
 		}
+		if s.CrowdSec() {
+			continue // polled by syncCrowdSec
+		}
 		deadline := s.LastSyncedAt.Add(time.Duration(s.IntervalHours) * time.Hour)
 		if !s.LastSyncedAt.IsZero() && now.Before(deadline) {
 			continue
@@ -93,7 +108,25 @@ func (w *Worker) syncDue() {
 	}
 }
 
+// syncCrowdSec polls every enabled CrowdSec source.
+func (w *Worker) syncCrowdSec() {
+	sources, err := w.db.ListThreatIntelSources()
+	if err != nil {
+		log.Printf("threat-intel: list sources: %v", err)
+		return
+	}
+	for _, s := range sources {
+		if s.Enabled && s.CrowdSec() {
+			w.sync(s)
+		}
+	}
+}
+
 func (w *Worker) sync(s storage.ThreatIntelSource) {
+	if s.CrowdSec() {
+		w.syncCrowdSecSource(s)
+		return
+	}
 	log.Printf("threat-intel: syncing %q (%s)", s.Label, s.URL)
 	ips, err := fetchIPs(w.client, s.URL)
 	if err != nil {

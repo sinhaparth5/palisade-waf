@@ -422,6 +422,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/ai-usage", h.AIUsagePage)
 	g.GET("/threat-intel", h.ThreatIntelPage)
 	g.POST("/threat-intel", h.AddThreatIntelSource)
+	g.POST("/threat-intel/crowdsec", h.AddCrowdSecSource)
 	g.DELETE("/threat-intel/:id", h.DeleteThreatIntelSource)
 	g.POST("/threat-intel/:id/toggle", h.ToggleThreatIntelSource)
 	g.POST("/threat-intel/:id/sync", h.SyncThreatIntelSource)
@@ -1774,6 +1775,10 @@ func (h *Handler) AIUsagePage(c echo.Context) error {
 
 func (h *Handler) threatIntelData() map[string]any {
 	sources, _ := h.db.ListThreatIntelSources()
+	ranges, _ := h.db.ThreatIntelRangeCounts()
+	for i := range sources {
+		sources[i].RangeCount = ranges[sources[i].ID]
+	}
 	return map[string]any{
 		"Sources":   sources,
 		"Presets":   threatIntelPresets,
@@ -1817,6 +1822,25 @@ func (h *Handler) AddThreatIntelSource(c echo.Context) error {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 	if err := h.db.AddThreatIntelSource(label, url, hours); err != nil {
+		return c.String(http.StatusConflict, "source already exists")
+	}
+	return h.renderPartial(c, "threat_intel", "intel-rows", h.threatIntelData())
+}
+
+// AddCrowdSecSource adds a CrowdSec LAPI source (issue #194). The bouncer
+// key is stored sealed and never rendered back; the worker's next poll
+// (within 30s) does the initial sync.
+func (h *Handler) AddCrowdSecSource(c echo.Context) error {
+	label := strings.TrimSpace(c.FormValue("label"))
+	url := strings.TrimSpace(c.FormValue("url"))
+	key := strings.TrimSpace(c.FormValue("api_key"))
+	if label == "" || url == "" || key == "" {
+		return c.String(http.StatusBadRequest, "label, LAPI URL and bouncer key required")
+	}
+	if err := validateOutboundURL(url); err != nil {
+		return c.String(http.StatusBadRequest, err.Error())
+	}
+	if err := h.db.AddCrowdSecSource(label, url, key); err != nil {
 		return c.String(http.StatusConflict, "source already exists")
 	}
 	return h.renderPartial(c, "threat_intel", "intel-rows", h.threatIntelData())

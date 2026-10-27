@@ -17,6 +17,7 @@ rather than growing this file forever.
 ### Added
 
 - (#193) Autoban on repeated 4xx responses (scanner detection)
+- (#194) Threat intel: CIDR ranges in feeds and CrowdSec LAPI source
 
 ## [2.10.5] - 2026-10-27
 

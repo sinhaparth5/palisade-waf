@@ -58,6 +58,38 @@
         </div>
       </div>
 
+      <!-- CrowdSec LAPI -->
+      <div class="mt-5 pt-4 border-t border-canvas">
+        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-3">CrowdSec LAPI</p>
+        <form hx-post="{{$.AdminPath}}/threat-intel/crowdsec"
+              hx-target="#intel-rows" hx-swap="innerHTML"
+              class="grid grid-cols-1 items-end gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1.5fr_1fr_auto]">
+          <div>
+            <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Label</label>
+            <input name="label" type="text" value="CrowdSec" required
+              class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden bg-white text-slate-800"
+            />
+          </div>
+          <div>
+            <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">LAPI URL</label>
+            <input name="url" type="url" placeholder="http://127.0.0.1:8080" required
+              class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] font-mono outline-hidden bg-white text-slate-800"
+            />
+          </div>
+          <div>
+            <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Bouncer API key</label>
+            <input name="api_key" type="password" autocomplete="off" placeholder="cscli bouncers add palisade" required
+              class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] font-mono outline-hidden bg-white text-slate-800"
+            />
+          </div>
+          <button type="submit" class="btn-primary flex w-full items-center justify-center gap-2 xl:w-auto">
+            <i class="hgi hgi-stroke hgi-rounded hgi-add-01 text-sm"></i>
+            Add LAPI
+          </button>
+        </form>
+        <p class="mt-2 text-[12px] text-slate-500">Polled every 30 seconds; only changes are transferred after the first sync. Ban decisions on IPs and ranges are blocked (logged as <code class="font-mono bg-surface px-1 rounded-sm text-[11px]">ip_blocked:crowdsec</code>) until CrowdSec expires them; captcha decisions are ignored.</p>
+      </div>
+
       <div class="mt-4 grid grid-cols-1 gap-2 border-t border-canvas pt-4 text-[12px] text-slate-500 md:grid-cols-2">
         <p>Feeds are plain-text lists of IPs/CIDRs, one per line. Lines starting with <code class="font-mono bg-surface px-1 rounded-sm text-[11px]">#</code> or <code class="font-mono bg-surface px-1 rounded-sm text-[11px]">;</code> are treated as comments.</p>
         <p class="mt-1">Intel blocks are lower priority than your IP Rules; your allow rules always win.</p>
@@ -95,7 +127,7 @@
         <div class="text-[11px] text-slate-400 font-mono truncate max-w-[260px]">{{.URL}}</div>
       </td>
       <td class="px-5 py-3 text-right font-semibold text-slate-700">
-        {{if gt .IPCount 0}}{{.IPCount}}{{else}}<span class="text-slate-400">—</span>{{end}}
+        {{if gt .IPCount 0}}{{sub .IPCount .RangeCount}} IPs{{if .RangeCount}}<div class="text-[11px] font-normal text-slate-400">{{.RangeCount}} ranges</div>{{end}}{{else}}<span class="text-slate-400">—</span>{{end}}
       </td>
       <td class="px-5 py-3 text-slate-500">
         {{if .LastSyncedAt.IsZero}}
