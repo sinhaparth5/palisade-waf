@@ -10,11 +10,12 @@ project's [Apache License 2.0](LICENSE), and to abide by the project's
 
 ## Prerequisites
 
-- **Go 1.25+** (the module targets `go 1.25`).
+- **Go 1.27+** (the module targets `go 1.27`).
 - That's it. Every dependency is pure Go — the SQLite driver is
   `modernc.org/sqlite` (no CGO), and there is **no Node/npm toolchain**. The
   admin UI's JS is minified by a small pure-Go tool in `tools/minify`, run via
-  `go:generate`.
+  `go:generate`, and `make css` downloads the standalone Tailwind CLI into
+  `.cache/`.
 
 ## Getting started
 
@@ -52,7 +53,7 @@ Tests live alongside the code they cover — `internal/proxy/`,
 `internal/services/`, `internal/ui/`. Every implementation package lives
 under `internal/`, grouped by concern (`internal/security/` for
 signal/mitigation packages, `internal/notify/` for outbound reporting) — see
-[`CLAUDE.md`](CLAUDE.md)'s "Module layout" for the full tree.
+[`CLAUDE.md`](CLAUDE.md)'s "Layout" section.
 
 ## Build rules that will bite you
 
@@ -74,8 +75,12 @@ signal/mitigation packages, `internal/notify/` for outbound reporting) — see
   lowercase, and role-based; export only what crosses a package boundary.
 - Prefer **table-driven tests** (e.g. `TestRegistryMatchPrefixPriority`), and add
   cases next to the package you changed.
-- **Frontend:** styling is Tailwind via the CDN Play script — there is no
-  `tailwind.config.js`, PostCSS, or purge step. Use `class="..."` utilities
+- **Frontend:** styling is Tailwind v4 with a CSS-first config in
+  `static/css/tailwind.css`, compiled to the committed
+  `static/css/dist/tailwind.min.css`. **Run `make css` and commit the output
+  whenever you add a class** under `internal/ui/` or `static/js/src/`,
+  otherwise it won't exist. Use v4 names (`rounded-sm`, `shadow-xs`,
+  `outline-hidden`, `bg-linear-to-*`) and `class="..."` utilities
   (including arbitrary-value syntax like `w-[34px]`); do **not** add
   `style="..."` attributes or `<style>` blocks for anything Tailwind can
   express, and toggle visibility with `classList`, not `element.style.*`.
@@ -85,12 +90,13 @@ signal/mitigation packages, `internal/notify/` for outbound reporting) — see
   addresses, TLS binding, WAF rules dir, DB path, retention) are CLI flags —
   see `palisade --help`-equivalent flag list in `main.go`'s `main()`. All
   runtime knobs (bot protection, ACME email, per-service overrides,
-  etc.) are stored in the SQLite `meta` table / per-service columns and
-  managed from the admin UI.
+  etc.) are stored in the database (`meta` table / per-service columns, on
+  SQLite, MySQL or Postgres) and managed from the admin UI.
 
-See [`CLAUDE.md`](CLAUDE.md) for a deep architecture tour (request pipeline,
-hot-reload pattern, SQLite concurrency and date/time gotchas, cache sandwich,
-etc.) before making non-trivial changes.
+See [`CLAUDE.md`](CLAUDE.md) for the architecture rules (request pipeline,
+hot-reload pattern, storage dialects and date/time gotchas, Varnish cache,
+etc.) before making non-trivial changes, and [`REVIEW.md`](REVIEW.md) for what
+reviewers check.
 
 ## Security & secret hygiene
 
@@ -103,12 +109,12 @@ Never commit any of the following:
 Admin credentials are seeded via `palisade setup` (password read from
 stdin, never a flag or file — see `--help`). When adding a new configurable
 secret, follow the existing pattern: store it in the `meta` table, enter it
-from the Settings page, and never echo it back to the UI or ship it in the
-binary/installer.
+from the Settings page, add its key to `secretMetaKeys` and read/write it only
+through `getSecretMeta`/`setSecretMeta` (so `--db-key-file` encrypts it at
+rest), and never echo it back to the UI or ship it in the binary/installer.
 
 Found a security vulnerability? Please **do not** open a public issue — report it
-privately to the maintainer (see `git log` for the contact address) so it can be
-fixed before disclosure.
+privately as described in [`SECURITY.md`](SECURITY.md).
 
 ## Submitting changes
 
@@ -118,15 +124,16 @@ This project is hosted on **GitHub**; changes are proposed as **pull requests**.
 2. Make focused commits with short, imperative or descriptive summaries — match
    the existing history (e.g. `ci: run go generate before go test to produce
    embedded JS assets`). Mention the affected area when useful.
-3. Run `make test` (and `gofmt`) before pushing.
+3. Run `make test`, `gofmt` and `make lint` before pushing.
 4. Open a pull request that includes:
    - a brief description of the change and its motivation;
    - test results, plus any config or migration notes;
    - screenshots for dashboard/UI changes;
    - an explicit call-out for anything affecting routing, TLS, storage, or
      blocking decisions.
-5. Add a `## [Unreleased]` entry to [`CHANGELOG.md`](CHANGELOG.md) for anything
-   user-visible.
+5. Add one line under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) for
+   anything user-visible: `- (#137) <issue title as on GitHub>`, no
+   description.
 
 Preserve unrelated changes in the working tree, and keep each PR scoped to one
 logical change.
@@ -135,9 +142,10 @@ logical change.
 
 Releases are cut by the maintainer with `make tag VERSION=vX.Y.Z`, which pushes
 an annotated tag and triggers the GitHub Actions release workflow. The project follows
-[Semantic Versioning](https://semver.org/). Before tagging, move the relevant
-`CHANGELOG.md` entries from `## [Unreleased]` into a version section such as
-`## [1.4.0] - 2026-07-08`; the workflow uses that section as the GitHub Release
-description and appends install/checksum instructions automatically. Contributors
+[Semantic Versioning](https://semver.org/). `make tag` rolls the
+`## [Unreleased]` entries into a version section (`scripts/roll-changelog.sh`)
+and commits it before tagging; the workflow uses that section as the GitHub
+Release description and appends install/checksum instructions automatically.
+`CHANGELOG.md` only ever holds `[Unreleased]` plus the latest version. Contributors
 don't need to tag — just land your `Unreleased` changelog entry and it will roll
 into the next release.

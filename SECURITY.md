@@ -8,8 +8,8 @@ maintainer explicitly announces an exception in a release note.
 
 | Version | Supported |
 | ------- | --------- |
-| 1.4.x   | Yes       |
-| < 1.4   | No        |
+| 2.10.x  | Yes       |
+| < 2.10  | No        |
 
 Users should upgrade to the newest published release before reporting an issue
 that may already be fixed.
