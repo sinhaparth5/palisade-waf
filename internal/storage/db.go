@@ -131,6 +131,9 @@ type RequestLog struct {
 	VisitorID   string // FingerprintJS browser fingerprint from the bot-challenge bypass cookie; "" when unchallenged
 	BotScore    int    // anomaly score from bot signal analysis (0 = clean)
 	CacheStatus string // Varnish X-Cache verdict (HIT/MISS/PASS); "" when the request didn't go through Varnish
+	// Exempt marks a trusted IP, open path or verified crawler, whose
+	// response status must not count against it (issue #193). Not stored.
+	Exempt bool `json:"-"`
 }
 
 // Open opens the default SQLite-backed store at path. It is a thin wrapper
@@ -540,13 +543,41 @@ type AutobanConfig struct {
 	Threshold     int // points within the window that trigger a ban
 	WindowMinutes int // sliding window size
 	BanHours      int // how long a ban lasts; 0 = never expires (issue #156)
+
+	// Bad-status scoring (issue #193): a backend response with one of these
+	// codes to a request Palisade let through scores BadStatusPoints.
+	BadStatusEnabled bool
+	BadStatusCodes   []int
+	BadStatusPoints  int
 }
 
 // DefaultAutobanConfig is used when nothing is stored yet: enabled, ban for
 // 24 hours at 10 points in 10 minutes (≈2 critical WAF hits, 4 generic WAF
 // hits, or 10 rate-limited requests — see autoban's scoring).
 func DefaultAutobanConfig() AutobanConfig {
-	return AutobanConfig{Enabled: true, Threshold: 10, WindowMinutes: 10, BanHours: 24}
+	return AutobanConfig{Enabled: true, Threshold: 10, WindowMinutes: 10, BanHours: 24,
+		BadStatusCodes: []int{400, 401, 403, 404, 405, 444}, BadStatusPoints: 1}
+}
+
+// ParseStatusCodes reads a comma- or space-separated list of HTTP status
+// codes, dropping anything outside 100–599.
+func ParseStatusCodes(s string) []int {
+	var codes []int
+	for _, f := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' }) {
+		if n, err := strconv.Atoi(f); err == nil && n >= 100 && n <= 599 {
+			codes = append(codes, n)
+		}
+	}
+	return codes
+}
+
+// FormatStatusCodes is the inverse of ParseStatusCodes.
+func FormatStatusCodes(codes []int) string {
+	parts := make([]string, len(codes))
+	for i, c := range codes {
+		parts[i] = strconv.Itoa(c)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (db *DB) GetAutobanConfig() (AutobanConfig, error) {
@@ -571,6 +602,17 @@ func (db *DB) GetAutobanConfig() (AutobanConfig, error) {
 			cfg.BanHours = n
 		}
 	}
+	if v, _ := db.getMeta("autoban_bad_status"); v != "" {
+		cfg.BadStatusEnabled = v == "1"
+	}
+	if v, _ := db.getMeta("autoban_bad_status_codes"); v != "" {
+		cfg.BadStatusCodes = ParseStatusCodes(v)
+	}
+	if v, _ := db.getMeta("autoban_bad_status_points"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.BadStatusPoints = n
+		}
+	}
 	return cfg, nil
 }
 
@@ -588,7 +630,20 @@ func (db *DB) SetAutobanConfig(cfg AutobanConfig) error {
 	if err := db.setMeta("autoban_window_min", strconv.Itoa(cfg.WindowMinutes)); err != nil {
 		return err
 	}
-	return db.setMeta("autoban_ban_hours", strconv.Itoa(cfg.BanHours))
+	if err := db.setMeta("autoban_ban_hours", strconv.Itoa(cfg.BanHours)); err != nil {
+		return err
+	}
+	bad := "0"
+	if cfg.BadStatusEnabled {
+		bad = "1"
+	}
+	if err := db.setMeta("autoban_bad_status", bad); err != nil {
+		return err
+	}
+	if err := db.setMeta("autoban_bad_status_codes", FormatStatusCodes(cfg.BadStatusCodes)); err != nil {
+		return err
+	}
+	return db.setMeta("autoban_bad_status_points", strconv.Itoa(cfg.BadStatusPoints))
 }
 
 // ExpireAutobans deletes automatic ban rules created before cutoff and

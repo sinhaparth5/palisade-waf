@@ -379,6 +379,7 @@ func (h *Handler) Handle(c echo.Context) error {
 			aiAllowed = botAnalysis.AIVerified
 		}
 	}
+	meta.Exempt = open || botAnalysis.IsTrustedCrawler || aiAllowed
 	if ch != nil && !open && !botAnalysis.IsTrustedCrawler && !aiAllowed && !challenge.Exempt(r.Method, r.URL.Path) {
 		svcMode := "inherit"
 		if app != nil && app.BotMode != "" {
@@ -691,6 +692,7 @@ type reqMeta struct {
 	VisitorID   string
 	BotScore    int
 	CacheStatus string
+	Exempt      bool // response status never scores in autoban (issue #193)
 }
 
 func (h *Handler) logRequest(r *http.Request, appName, clientIP, country string, status int, wafResult *waf.Result, dur time.Duration, m reqMeta) {
@@ -723,6 +725,7 @@ func (h *Handler) logRequest(r *http.Request, appName, clientIP, country string,
 		VisitorID:   m.VisitorID,
 		BotScore:    m.BotScore,
 		CacheStatus: m.CacheStatus,
+		Exempt:      m.Exempt,
 	})
 }
 

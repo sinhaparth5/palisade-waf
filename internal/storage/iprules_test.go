@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -153,15 +154,16 @@ func TestAutobanConfigRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg != DefaultAutobanConfig() {
+	if !reflect.DeepEqual(cfg, DefaultAutobanConfig()) {
 		t.Errorf("unset config = %+v, want defaults %+v", cfg, DefaultAutobanConfig())
 	}
 
-	want := AutobanConfig{Enabled: false, Threshold: 25, WindowMinutes: 30, BanHours: 0}
+	want := AutobanConfig{Enabled: false, Threshold: 25, WindowMinutes: 30, BanHours: 0,
+		BadStatusEnabled: true, BadStatusCodes: []int{404, 444}, BadStatusPoints: 3}
 	if err := db.SetAutobanConfig(want); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := db.GetAutobanConfig(); got != want {
+	if got, _ := db.GetAutobanConfig(); !reflect.DeepEqual(got, want) {
 		t.Errorf("roundtrip = %+v, want %+v", got, want)
 	}
 }

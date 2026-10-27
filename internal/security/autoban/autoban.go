@@ -12,6 +12,7 @@
 //	rate limited                                1 point
 //	bot-challenge redirect (never solved)       1 point
 //	honeypot path hit (issue #130)              the whole threshold
+//	bad backend status, opt-in (issue #193)     configured, default 1
 //
 // Challenge redirects are logged with Blocked=false (a challenge is not a
 // deny), but a client that keeps hitting the challenge wall without ever
@@ -29,6 +30,10 @@
 // make a visitor's browser fetch payload URLs from a protected site through
 // <img>/<iframe>/fetch, and that must not get the visitor banned.
 //
+// Bad-status scoring catches scanners whose probes trip no rule: a run of
+// 404s/403s from the backend. Trusted IPs, open paths and verified crawlers
+// (RequestLog.Exempt) and missing static assets never score.
+//
 // IPv6 clients are scored and banned by /64 (ratelimit.ClientKey, issue
 // #131): the ban rule is the /64 CIDR, so rotating addresses inside it
 // neither resets the score nor escapes the ban.
@@ -39,6 +44,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"path"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -73,6 +80,7 @@ type event struct {
 	pts int
 	// event class for the ban-reason breakdown
 	critical, waf, rl, chal, hp, leaked bool
+	status                              int // bad backend status, 0 otherwise
 }
 
 // Banner accumulates blocked-event scores per IP and issues bans.
@@ -165,7 +173,10 @@ func (b *Banner) Record(e storage.RequestLog) {
 	// A breached password on a login path (issue #188) scores whether it was
 	// blocked or only logged: repeated hits from one client are a stuffing run.
 	leaked := strings.HasPrefix(e.Action, "leaked_password")
-	if !e.Blocked && !challenged && !honeypot && !leaked {
+	// A backend error status on a request Palisade let through (issue #193);
+	// whether the code counts is decided under the lock from the config.
+	badStatus := !e.Blocked && !e.Exempt && e.Action == "" && e.Status >= 400 && !staticAsset(e.Path)
+	if !e.Blocked && !challenged && !honeypot && !leaked && !badStatus {
 		return
 	}
 	// Never score traffic that is already blocked by an IP rule or geo rule:
@@ -191,6 +202,8 @@ func (b *Banner) Record(e storage.RequestLog) {
 		ev.pts, ev.waf = ptsWAF, true
 	case strings.HasPrefix(e.Action, "rate_limited"):
 		ev.pts, ev.rl = ptsRateLimited, true
+	case badStatus:
+		ev.status = e.Status // pts set from the config below, under the lock
 	default:
 		return
 	}
@@ -205,6 +218,12 @@ func (b *Banner) Record(e storage.RequestLog) {
 	}
 	if ev.hp {
 		ev.pts = b.cfg.Threshold
+	}
+	if ev.status != 0 {
+		if !b.cfg.BadStatusEnabled || !slices.Contains(b.cfg.BadStatusCodes, ev.status) {
+			return
+		}
+		ev.pts = b.cfg.BadStatusPoints
 	}
 	if !bannable(e.RealIP) {
 		return
@@ -356,6 +375,18 @@ func criticalRule(id int) bool {
 		(id >= waf.VPatchIDMin && id <= waf.VPatchIDMax)
 }
 
+// staticExts are asset types whose 404s are broken pages, not probes: a
+// missing favicon or source map must never get a visitor banned.
+var staticExts = map[string]bool{
+	".js": true, ".mjs": true, ".css": true, ".map": true, ".ico": true,
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".svg": true,
+	".webp": true, ".avif": true, ".woff": true, ".woff2": true, ".ttf": true,
+}
+
+func staticAsset(p string) bool {
+	return staticExts[strings.ToLower(path.Ext(p))]
+}
+
 // bannable rejects addresses that must never be auto-banned: unparseable,
 // loopback, RFC1918/ULA private, link-local, and unspecified addresses —
 // banning those could lock out the LAN, health checks, or the admin.
@@ -371,7 +402,8 @@ func bannable(ip string) bool {
 // banReason summarises what earned the ban, e.g.
 // "12 flagged requests in 10 min (2 critical WAF hits, 1 WAF hit, 3 rate-limited)".
 func banReason(evs []event, windowMin int) string {
-	var hp, crit, waf, rl, chal, leaked int
+	var hp, crit, waf, rl, chal, leaked, bad int
+	var codes []int
 	for _, ev := range evs {
 		switch {
 		case ev.hp:
@@ -386,6 +418,11 @@ func banReason(evs []event, windowMin int) string {
 			chal++
 		case ev.leaked:
 			leaked++
+		case ev.status != 0:
+			bad++
+			if !slices.Contains(codes, ev.status) {
+				codes = append(codes, ev.status)
+			}
 		}
 	}
 	var parts []string
@@ -406,6 +443,9 @@ func banReason(evs []event, windowMin int) string {
 	}
 	if chal > 0 {
 		parts = append(parts, fmt.Sprintf("%d unsolved bot %s", chal, plural(chal, "challenge")))
+	}
+	if bad > 0 {
+		parts = append(parts, fmt.Sprintf("%d bad %s (%s)", bad, plural(bad, "response"), storage.FormatStatusCodes(codes)))
 	}
 	return fmt.Sprintf("%d flagged requests in %d min (%s)",
 		len(evs), windowMin, strings.Join(parts, ", "))

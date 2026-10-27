@@ -127,6 +127,24 @@
     </div>
     <p class="text-[12px] text-slate-500 -mt-1">Scoring inside the window: critical WAF hit = 5, other WAF hit = 2, rate-limited = 1, unsolved bot challenge = 1. Requests another site's page makes the browser send don't count. Private and allow-listed IPs are never banned.</p>
 
+    <label class="flex items-center justify-between cursor-pointer">
+      <span class="text-[13px] font-medium text-slate-700">Score bad backend responses</span>
+      {{template "toggle-switch" (map "Name" "autoban_bad_status" "Checked" .AutobanBadStatus)}}
+    </label>
+    <div class="grid grid-cols-3 gap-3">
+      <div class="col-span-2">
+        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Status codes</label>
+        <input name="autoban_bad_codes" type="text" value="{{.AutobanBadCodes}}" placeholder="400, 401, 403, 404, 405, 444"
+          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+      </div>
+      <div>
+        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Points per hit</label>
+        <input name="autoban_bad_points" type="number" min="1" max="1000" value="{{.AutobanBadPoints}}"
+          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+      </div>
+    </div>
+    <p class="text-[12px] text-slate-500 -mt-1">Catches scanners whose probes trip no WAF rule. Missing static assets (images, scripts, fonts, source maps), crawler files, verified crawlers and trusted IPs never count.</p>
+
     <button type="submit" class="btn-primary w-full flex items-center justify-center gap-2">
       <i class="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-sm"></i>
       Save &amp; apply

@@ -1267,6 +1267,9 @@ func (h *Handler) IPRulesPage(c echo.Context) error {
 	data["AutobanThresh"] = ab.Threshold
 	data["AutobanWindow"] = ab.WindowMinutes
 	data["AutobanBanHours"] = ab.BanHours
+	data["AutobanBadStatus"] = ab.BadStatusEnabled
+	data["AutobanBadCodes"] = storage.FormatStatusCodes(ab.BadStatusCodes)
+	data["AutobanBadPoints"] = ab.BadStatusPoints
 	data["AdaptiveEnabled"] = ad.Enabled
 	data["AdaptiveHighThresh"] = ad.HighRiskThreshold
 	data["AdaptiveLowThresh"] = ad.LowRiskThreshold
@@ -1302,6 +1305,13 @@ func (h *Handler) SaveAutobanSettings(c echo.Context) error {
 	if n, err := strconv.Atoi(c.FormValue("autoban_ban_hours")); err == nil && n >= 0 && n <= 8760 {
 		cfg.BanHours = n
 	}
+	cfg.BadStatusEnabled = c.FormValue("autoban_bad_status") == "1"
+	if codes := storage.ParseStatusCodes(c.FormValue("autoban_bad_codes")); len(codes) > 0 {
+		cfg.BadStatusCodes = codes
+	}
+	if n, err := strconv.Atoi(c.FormValue("autoban_bad_points")); err == nil && n >= 1 && n <= 1000 {
+		cfg.BadStatusPoints = n
+	}
 	saveErr := ""
 	if err := h.db.SetAutobanConfig(cfg); err != nil {
 		saveErr = "Could not save: " + err.Error()
@@ -1309,12 +1319,15 @@ func (h *Handler) SaveAutobanSettings(c echo.Context) error {
 		h.reloadAutoban()
 	}
 	return h.renderPartial(c, "ip_rules", "autoban-card", map[string]any{
-		"AutobanEnabled":  cfg.Enabled,
-		"AutobanThresh":   cfg.Threshold,
-		"AutobanWindow":   cfg.WindowMinutes,
-		"AutobanBanHours": cfg.BanHours,
-		"AutobanSaveOK":   saveErr == "",
-		"AutobanSaveErr":  saveErr,
+		"AutobanEnabled":   cfg.Enabled,
+		"AutobanThresh":    cfg.Threshold,
+		"AutobanWindow":    cfg.WindowMinutes,
+		"AutobanBanHours":  cfg.BanHours,
+		"AutobanBadStatus": cfg.BadStatusEnabled,
+		"AutobanBadCodes":  storage.FormatStatusCodes(cfg.BadStatusCodes),
+		"AutobanBadPoints": cfg.BadStatusPoints,
+		"AutobanSaveOK":    saveErr == "",
+		"AutobanSaveErr":   saveErr,
 	})
 }
 
