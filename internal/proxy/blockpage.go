@@ -25,6 +25,7 @@ var blockMessages = map[string][2]string{
 	"waf_rule":           {"Request blocked", "Your request looked unsafe and was stopped by the site's firewall."},
 	"rate_limited":       {"Too many requests", "You are sending requests too quickly. Wait a moment and try again."},
 	"ai_crawler_blocked": {"Access denied", "This site does not allow AI crawlers."},
+	"leaked_password":    {"Password found in a data breach", "This password appears in a public data breach, so it can no longer be used to sign in here. Reset it with the site's forgotten-password option."},
 }
 
 // deny writes a block response: a readable page for browsers, the JSON body

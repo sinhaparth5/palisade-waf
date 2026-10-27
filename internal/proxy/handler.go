@@ -2,12 +2,14 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -21,6 +23,7 @@ import (
 	"palisade/internal/security/asn"
 	"palisade/internal/security/blocklist"
 	"palisade/internal/security/bot"
+	"palisade/internal/security/breach"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
 	ja3pkg "palisade/internal/security/ja3"
@@ -64,6 +67,7 @@ type Handler struct {
 	scorer         *threatscore.Scorer
 	adaptive       *adaptive.Policy
 	trustedProxies []*net.IPNet
+	breach         *breach.Checker
 }
 
 // ReloadWAF swaps in a freshly built default engine plus any per-service
@@ -191,8 +195,13 @@ func NewHandler(registry *services.Registry, engine *waf.Engine, wafByService ma
 		scorer:         scorer,
 		adaptive:       adaptivePolicy,
 		trustedProxies: ParseTrustedProxyCIDRs(trustedProxyCIDRs),
+		breach:         breach.New(""),
 	}
 }
+
+// SetBreachChecker replaces the leaked-password checker (tests point it at a
+// fake range API). Must run before serving.
+func (h *Handler) SetBreachChecker(c *breach.Checker) { h.breach = c }
 
 func (h *Handler) Handle(c echo.Context) error {
 	start := time.Now()
@@ -489,6 +498,19 @@ func (h *Handler) Handle(c echo.Context) error {
 	}
 	mark("waf")
 
+	// 5.5 Leaked password check (issue #188), login paths only. After the
+	// WAF, which has already buffered a form/JSON body; fails open.
+	leaked := login && !trusted && app.BreachAction != "" && h.leakedPassword(r, app)
+	if leaked {
+		if app.BreachAction == "block" {
+			h.logBlocked(r, appName, clientIP, country, http.StatusForbidden, 0, "leaked_password:block", time.Since(start), meta)
+			return deny(c, http.StatusForbidden, "leaked_password", reqID, map[string]any{"error": "password found in a data breach"})
+		}
+		hit := *result // may be the verdict cache's shared copy
+		hit.Action = "leaked_password:log"
+		result = &hit
+	}
+
 	// 6. Proxy to backend.
 	if app == nil {
 		mark("proxy")
@@ -528,6 +550,13 @@ func (h *Handler) Handle(c echo.Context) error {
 	// A clone, so the request log keeps the headers the client really sent.
 	out := r.Clone(r.Context())
 	forwardClientIP(out, clientIP)
+	if app.BreachAction != "" {
+		// Only Palisade sets it, so the backend can force a password reset.
+		out.Header.Del(leakedPasswordHeader)
+		if leaked {
+			out.Header.Set(leakedPasswordHeader, "1")
+		}
+	}
 	rp.ServeHTTP(rw, out)
 	mark("proxy")
 	r.URL.Path = originalPath
@@ -541,6 +570,38 @@ func (h *Handler) Handle(c echo.Context) error {
 	}
 	h.logRequest(r, appName, clientIP, country, rw.status, h.honeypot(clientIP, originalPath, rw.status, result), time.Since(start), meta)
 	return nil
+}
+
+// leakedPasswordHeader tells the backend a login used a breached password.
+const leakedPasswordHeader = "X-Palisade-Leaked-Password"
+
+// breachBodyLimit caps how much of a login body is read for the password.
+const breachBodyLimit = 64 << 10
+
+// leakedPassword reports whether r's password (Basic auth, or a form/JSON
+// body field) is in a known breach. The body is restored for the proxy; it
+// is normally already in memory from the WAF. A failed lookup counts as not
+// leaked, so an HIBP outage never blocks a login.
+func (h *Handler) leakedPassword(r *http.Request, app *storage.Service) bool {
+	var body []byte
+	ct := r.Header.Get("Content-Type")
+	if r.Body != nil && r.Body != http.NoBody && (strings.Contains(ct, "form-urlencoded") || strings.Contains(ct, "json")) {
+		b, err := io.ReadAll(io.LimitReader(r.Body, breachBodyLimit))
+		r.Body = struct {
+			io.Reader
+			io.Closer
+		}{io.MultiReader(bytes.NewReader(b), r.Body), r.Body}
+		if err != nil {
+			return false
+		}
+		body = b
+	}
+	pw := breach.Password(r, body, app.BreachFields)
+	if pw == "" {
+		return false
+	}
+	leaked, _ := h.breach.Leaked(r.Context(), pw)
+	return leaked
 }
 
 // openPaths are the files crawlers and AI agents read to learn about a site,

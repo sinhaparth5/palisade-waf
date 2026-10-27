@@ -427,3 +427,24 @@ func TestBansExpire(t *testing.T) {
 		t.Error("BanHours 0 must keep bans forever")
 	}
 }
+
+func TestLeakedPasswordScores(t *testing.T) {
+	db := newFakeStore()
+	now := time.Date(2026, 7, 3, 9, 16, 12, 0, time.UTC)
+	b, _ := testBanner(db, now)
+
+	// Logged (not blocked) and blocked hits both score: 5 x 2 points.
+	for i := range 5 {
+		action := "leaked_password:log"
+		if i%2 == 1 {
+			action = "leaked_password:block"
+		}
+		b.Record(storage.RequestLog{Timestamp: now, RealIP: "203.0.113.40", Action: action, Blocked: i%2 == 1, Status: 200})
+		if banned := db.rules[":203.0.113.40"] == "block"; banned != (i == 4) {
+			t.Fatalf("after %d hits banned=%v", i+1, banned)
+		}
+	}
+	if note := db.banNote("203.0.113.40"); !strings.Contains(note, "5 breached passwords") {
+		t.Errorf("note = %q, want breached-password breakdown", note)
+	}
+}

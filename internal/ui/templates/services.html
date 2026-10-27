@@ -268,6 +268,23 @@
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
       <div id="svc-login-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+
+      <form id="svc-breach-form" hx-post="{{.AdminPath}}/services/breach/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-canvas pt-5">
+        <p class="text-[13px] font-semibold text-slate-800 mb-1">Leaked password check</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Checks passwords sent to the login paths above against known data breaches (Have I Been Pwned). Only the first 5 characters of the password's SHA-1 hash leave this server. If the lookup fails or takes over 300 ms, the login goes through unchecked. A hit is logged as <code class="font-mono">leaked_password</code>, counts toward autoban, and reaches the backend with <code class="font-mono">X-Palisade-Leaked-Password: 1</code> so the app can ask for a password reset.</p>
+        <label for="svc-breach-action" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Action</label>
+        <select id="svc-breach-action" name="breach_action"
+          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4">
+          <option value="">Off</option>
+          <option value="log">Log and tell the backend</option>
+          <option value="block">Block the login (403)</option>
+        </select>
+        <label for="svc-breach-fields" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Password field names (empty = password, passwd, pass, pwd)</label>
+        <input id="svc-breach-fields" name="breach_fields" type="text" autocomplete="off" placeholder="password"
+          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] font-mono outline-hidden text-slate-800 bg-white mb-4"/>
+        <button type="submit" class="btn-primary w-full">Save</button>
+      </form>
+      <div id="svc-breach-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
     </div>
 
     <!-- ── Uploads tab ── -->
@@ -634,6 +651,9 @@
     {{if .CompressEnabled}}
     <span class="text-[11px] font-semibold bg-sky-100 text-sky-600 px-2 py-[2px] rounded-sm">Compressed</span>
     {{end}}
+    {{if .BreachAction}}
+    <span class="text-[11px] font-semibold bg-green-100 text-green-700 px-2 py-[2px] rounded-sm">Leaked passwords: {{.BreachAction}}</span>
+    {{end}}
     {{if .AICrawlerPolicy}}
     <span class="text-[11px] font-semibold bg-purple-100 text-purple-600 px-2 py-[2px] rounded-sm">AI crawlers: custom</span>
     {{end}}
@@ -650,7 +670,7 @@
     <button type="button" class="svc-edit-btn inline-flex items-center gap-[5px] text-[12px] font-medium text-slate-600 bg-white border border-line rounded-md px-4 py-[6px] cursor-pointer font-sans hover:border-slate-400 transition-colors duration-150 ml-1"
       data-id="{{.ID}}" data-name="{{.Name}}" data-has-host="{{if .Host}}1{{else}}0{{end}}" data-host="{{.Host}}"
       data-aliases="{{range $i, $a := .HostAliases}}{{if $i}}&#10;{{end}}{{$a}}{{end}}" data-canonical="{{.CanonicalHost}}"
-      data-ai="{{.AICrawlerPolicy}}"
+      data-ai="{{.AICrawlerPolicy}}" data-breach-action="{{.BreachAction}}" data-breach-fields="{{range $i, $f := .BreachFields}}{{if $i}} {{end}}{{$f}}{{end}}"
       data-login-paths="{{range $i, $p := .LoginPaths}}{{if $i}}&#10;{{end}}{{$p}}{{end}}"
       data-rps="{{.RateLimitRPS}}" data-burst="{{.RateLimitBurst}}" data-mode="{{.BotMode}}" data-cache="{{if .CacheEnabled}}1{{else}}0{{end}}"
       data-session-cache="{{if .CacheBySession}}1{{else}}0{{end}}" data-session-cookie="{{.SessionCookieName}}"

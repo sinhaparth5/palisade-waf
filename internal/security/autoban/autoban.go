@@ -48,13 +48,14 @@ import (
 )
 
 // Points per event class. The default threshold (10) means ~2 critical WAF
-// hits, 4 generic WAF hits, or 10 rate-limited or challenged requests inside
-// the window.
+// hits, 4 generic WAF hits, 5 breached-password logins, or 10 rate-limited or
+// challenged requests inside the window.
 const (
 	ptsCritical    = 5
 	ptsWAF         = 2
 	ptsRateLimited = 1
 	ptsChallenged  = 1
+	ptsLeaked      = 2
 )
 
 // store is the slice of *storage.DB the banner needs; an interface so tests
@@ -70,7 +71,7 @@ type event struct {
 	t   time.Time
 	pts int
 	// event class for the ban-reason breakdown
-	critical, waf, rl, chal, hp bool
+	critical, waf, rl, chal, hp, leaked bool
 }
 
 // Banner accumulates blocked-event scores per IP and issues bans.
@@ -160,7 +161,10 @@ func (b *Banner) Record(e storage.RequestLog) {
 	// A honeypot hit is logged unblocked too (the backend answered 404),
 	// and nothing legitimate asks for those paths, so it bans outright.
 	honeypot := e.Action == "honeypot"
-	if !e.Blocked && !challenged && !honeypot {
+	// A breached password on a login path (issue #188) scores whether it was
+	// blocked or only logged: repeated hits from one client are a stuffing run.
+	leaked := strings.HasPrefix(e.Action, "leaked_password")
+	if !e.Blocked && !challenged && !honeypot && !leaked {
 		return
 	}
 	// Never score traffic that is already blocked by an IP rule or geo rule:
@@ -178,6 +182,8 @@ func (b *Banner) Record(e storage.RequestLog) {
 		ev.hp = true // pts set to the threshold below, under the lock
 	case challenged:
 		ev.pts, ev.chal = ptsChallenged, true
+	case leaked:
+		ev.pts, ev.leaked = ptsLeaked, true
 	case e.RuleID > 0 && criticalRule(e.RuleID):
 		ev.pts, ev.critical = ptsCritical, true
 	case e.RuleID > 0:
@@ -362,7 +368,7 @@ func bannable(ip string) bool {
 // banReason summarises what earned the ban, e.g.
 // "12 flagged requests in 10 min (2 critical WAF hits, 1 WAF hit, 3 rate-limited)".
 func banReason(evs []event, windowMin int) string {
-	var hp, crit, waf, rl, chal int
+	var hp, crit, waf, rl, chal, leaked int
 	for _, ev := range evs {
 		switch {
 		case ev.hp:
@@ -375,6 +381,8 @@ func banReason(evs []event, windowMin int) string {
 			rl++
 		case ev.chal:
 			chal++
+		case ev.leaked:
+			leaked++
 		}
 	}
 	var parts []string
@@ -386,6 +394,9 @@ func banReason(evs []event, windowMin int) string {
 	}
 	if waf > 0 {
 		parts = append(parts, fmt.Sprintf("%d WAF %s", waf, plural(waf, "hit")))
+	}
+	if leaked > 0 {
+		parts = append(parts, fmt.Sprintf("%d breached %s", leaked, plural(leaked, "password")))
 	}
 	if rl > 0 {
 		parts = append(parts, fmt.Sprintf("%d rate-limited", rl))

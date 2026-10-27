@@ -355,6 +355,8 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"services", "canonical_host TEXT NOT NULL DEFAULT ''"},
 	{"services", "login_paths TEXT NOT NULL DEFAULT ''"},
 	{"services", "ai_crawler_policy TEXT NOT NULL DEFAULT ''"},
+	{"services", "breach_action TEXT NOT NULL DEFAULT ''"},
+	{"services", "breach_fields TEXT NOT NULL DEFAULT ''"},
 }
 
 func (db *DB) migrate() error {
@@ -870,6 +872,11 @@ type Service struct {
 	// AICrawlerPolicy overrides the global AI crawler policy per category
 	// (issue #187), encoded by bot.AIPolicy; "" inherits every category.
 	AICrawlerPolicy string
+	// BreachAction checks login passwords against known breaches (issue
+	// #188): "" off, "log" or "block". BreachFields name the password
+	// field; empty = breach.DefaultFields.
+	BreachAction string
+	BreachFields []string
 }
 
 // DefaultHealthInterval is the active health check interval used when a
@@ -899,6 +906,12 @@ func (db *DB) SetServiceLoginPaths(id int, paths []string) error {
 // SetServiceAICrawlerPolicy replaces a service's AI crawler policy overrides.
 func (db *DB) SetServiceAICrawlerPolicy(id int, policy string) error {
 	_, err := db.exec(`UPDATE services SET ai_crawler_policy = ? WHERE id = ?`, policy, id)
+	return err
+}
+
+// SetServiceBreachCheck sets a service's leaked-password check.
+func (db *DB) SetServiceBreachCheck(id int, action string, fields []string) error {
+	_, err := db.exec(`UPDATE services SET breach_action = ?, breach_fields = ? WHERE id = ?`, action, strings.Join(fields, "\n"), id)
 	return err
 }
 
@@ -1229,12 +1242,12 @@ func (db *DB) SetCaptchaConfig(c CaptchaConfig) error {
 
 // serviceColumns is shared by ListServices/GetService so their SELECT list
 // and Scan args can't drift out of sync as columns are added.
-const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy`
+const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy, breach_action, breach_fields`
 
 func (db *DB) scanService(row interface{ Scan(...any) error }) (Service, error) {
 	var s Service
-	var extra, aliases, login string
-	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy)
+	var extra, aliases, login, breachFields string
+	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy, &s.BreachAction, &breachFields)
 	if extra != "" {
 		s.ExtraBackends = strings.Split(extra, "\n")
 	}
@@ -1243,6 +1256,9 @@ func (db *DB) scanService(row interface{ Scan(...any) error }) (Service, error) 
 	}
 	if login != "" {
 		s.LoginPaths = strings.Split(login, "\n")
+	}
+	if breachFields != "" {
+		s.BreachFields = strings.Split(breachFields, "\n")
 	}
 	return s, err
 }

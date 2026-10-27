@@ -913,3 +913,35 @@ func TestSetServiceAICrawlers(t *testing.T) {
 	}
 	wantCode(t, "bad id", env.do("POST", "/admin/services/ai/x", nil).Code, 400, "")
 }
+
+func TestSetServiceBreachCheck(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("shop", "shop.example.com")
+	path := "/admin/services/breach/" + itoa(svc.ID)
+
+	rec := env.do("POST", path, form("breach_action", "block", "breach_fields", "user_pass, pwd user_pass"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if rec.Header().Get("HX-Trigger") != "breach-saved" {
+		t.Fatalf("no breach-saved trigger: %s", rec.Body)
+	}
+	got, _ := env.db.GetService(svc.ID)
+	if got.BreachAction != "block" || strings.Join(got.BreachFields, ",") != "user_pass,pwd" {
+		t.Errorf("stored = %q %v", got.BreachAction, got.BreachFields)
+	}
+	if !strings.Contains(rec.Body.String(), "Leaked passwords: block") || !strings.Contains(rec.Body.String(), `data-breach-fields="user_pass pwd"`) {
+		t.Error("row badge or data attribute missing")
+	}
+
+	rec = env.do("POST", path, form("breach_action", "challenge"))
+	if rec.Header().Get("HX-Retarget") != "#svc-breach-error" {
+		t.Fatalf("unknown action: want inline error, got %s", rec.Body)
+	}
+	if got, _ = env.db.GetService(svc.ID); got.BreachAction != "block" {
+		t.Error("rejected save changed the action")
+	}
+
+	env.do("POST", path, form("breach_action", ""))
+	if got, _ = env.db.GetService(svc.ID); got.BreachAction != "" || got.BreachFields != nil {
+		t.Errorf("not cleared: %q %v", got.BreachAction, got.BreachFields)
+	}
+}

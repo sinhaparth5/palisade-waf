@@ -17,6 +17,7 @@ rather than growing this file forever.
 ### Added
 
 - (#187) AI crawler policy per service: allow, challenge or block by crawler category
+- (#188) Check login passwords against known breaches (HIBP k-anonymity)
 
 ## [2.10.4] - 2026-10-26
 
