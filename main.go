@@ -188,6 +188,7 @@ func main() {
 			allowLargeJS bool
 			schema       string
 			schemaMode   string
+			openapi      storage.ServiceOpenAPI
 		}
 		serviceSet := make(map[string]wafServiceOpts, len(svcNames))
 		for _, name := range svcNames {
@@ -197,12 +198,18 @@ func main() {
 		if err != nil {
 			return nil, nil, err
 		}
+		specs, err := db.ListServiceOpenAPI()
+		if err != nil {
+			return nil, nil, err
+		}
 		for _, svc := range services {
-			if svc.AllowLargeJSUploads || (svc.SchemaMode != "" && svc.SchemaMode != "off" && svc.RequestSchema != "") {
+			spec := specs[svc.ID]
+			if svc.AllowLargeJSUploads || (spec.Mode != "" && spec.Mode != "off") || (svc.SchemaMode != "" && svc.SchemaMode != "off" && svc.RequestSchema != "") {
 				serviceSet[svc.Name] = wafServiceOpts{
 					allowLargeJS: svc.AllowLargeJSUploads,
 					schema:       svc.RequestSchema,
 					schemaMode:   svc.SchemaMode,
+					openapi:      spec,
 				}
 			}
 		}
@@ -237,6 +244,9 @@ func main() {
 			// than failing the whole engine rebuild.
 			if err := eng.SetRequestSchema(opts.schema, opts.schemaMode); err != nil {
 				log.Printf("waf: service %q: invalid request schema, ignoring: %v", name, err)
+			}
+			if err := eng.SetOpenAPI(opts.openapi.Spec, opts.openapi.Mode); err != nil {
+				log.Printf("waf: service %q: invalid OpenAPI spec, ignoring: %v", name, err)
 			}
 			byService[name] = eng
 		}

@@ -947,6 +947,43 @@ func TestSetServiceBreachCheck(t *testing.T) {
 	}
 }
 
+func TestSetServiceOpenAPI(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("api", "api.example.com")
+	path := "/admin/services/openapi/" + itoa(svc.ID)
+	const spec = "openapi: 3.0.3\npaths:\n  /users/{id}:\n    get: {}"
+
+	rec := env.do("POST", path, form("openapi_spec", spec, "openapi_mode", "enforce"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if rec.Header().Get("HX-Trigger") != "openapi-saved" {
+		t.Fatalf("no openapi-saved trigger: %s", rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), "OpenAPI: enforce") {
+		t.Error("row badge missing")
+	}
+	if rec = env.do("GET", path, nil); rec.Body.String() != spec {
+		t.Errorf("GET spec = %q", rec.Body)
+	}
+
+	rec = env.do("POST", path, form("openapi_spec", `{"swagger":"2.0"}`, "openapi_mode", "enforce"))
+	if rec.Header().Get("HX-Retarget") != "#svc-openapi-error" || !strings.Contains(rec.Body.String(), "OpenAPI 3.x") {
+		t.Fatalf("invalid spec: want inline error, got %s", rec.Body)
+	}
+	if got, _ := env.db.GetServiceOpenAPI(svc.ID); got.Spec != spec {
+		t.Error("rejected save replaced the spec")
+	}
+
+	env.do("POST", path, form("openapi_spec", spec, "openapi_mode", "off"))
+	if got, _ := env.db.GetServiceOpenAPI(svc.ID); got.Spec != spec || got.Mode != "off" {
+		t.Errorf("off should keep the spec: %+v", got)
+	}
+
+	env.do("POST", path, form("openapi_spec", "", "openapi_mode", "log"))
+	if got, _ := env.db.GetServiceOpenAPI(svc.ID); got.Spec != "" {
+		t.Errorf("not removed: %+v", got)
+	}
+}
+
 func TestVirtualPatchesCard(t *testing.T) {
 	env := newAdminEnv(t)
 	env.seedService("shop", "shop.example.com")

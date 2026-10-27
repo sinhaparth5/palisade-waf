@@ -1,6 +1,9 @@
 package storage
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestSetServiceSchemaRoundtrip exercises SetServiceSchema/GetService for the
 // request-schema validation feature (issue #75) — waf.Engine.SetRequestSchema
@@ -69,5 +72,37 @@ func TestSetServiceSchemaNormalizesUnknownMode(t *testing.T) {
 	}
 	if svc.SchemaMode != "off" {
 		t.Errorf("SetServiceSchema with an empty schema persisted mode %q, want off", svc.SchemaMode)
+	}
+}
+
+// TestServiceOpenAPIRoundtrip covers the service_openapi table (issue #190),
+// including a spec past MySQL's 64 KiB TEXT limit and cleanup on removal.
+func TestServiceOpenAPIRoundtrip(t *testing.T) {
+	db := openTestDB(t)
+	if err := db.AddService("api", "api.example.com", "", "http://127.0.0.1:3000", 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := db.ListServices()
+	id := list[0].ID
+
+	big := "openapi: 3.0.3\n#" + strings.Repeat("x", 100<<10)
+	for _, mode := range []string{"log", "enforce"} { // the second save is an upsert
+		if err := db.SetServiceOpenAPI(id, big, mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := db.GetServiceOpenAPI(id)
+	if err != nil || got.Spec != big || got.Mode != "enforce" {
+		t.Fatalf("get = %d bytes %q, %v", len(got.Spec), got.Mode, err)
+	}
+	if modes, _ := db.ListServiceOpenAPIModes(); modes[id] != "enforce" {
+		t.Fatalf("modes = %v", modes)
+	}
+
+	if err := db.RemoveService(id); err != nil {
+		t.Fatal(err)
+	}
+	if all, _ := db.ListServiceOpenAPI(); len(all) != 0 {
+		t.Fatalf("spec left behind after RemoveService: %d rows", len(all))
 	}
 }

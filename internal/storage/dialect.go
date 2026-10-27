@@ -112,6 +112,15 @@ func (d dialect) timestampType() string {
 	return "DATETIME"
 }
 
+// longTextType is TEXT for a column that can exceed MySQL's 64 KiB TEXT;
+// MEDIUMTEXT there holds 16 MiB. SQLite and Postgres TEXT are unbounded.
+func (d dialect) longTextType() string {
+	if d.name == "mysql" {
+		return "MEDIUMTEXT"
+	}
+	return "TEXT"
+}
+
 // createIndexIfNotExists returns a "CREATE INDEX ..." statement for this
 // dialect. SQLite and Postgres both support "IF NOT EXISTS" on CREATE
 // INDEX; MySQL's grammar has no such clause at all (unlike its ALTER TABLE

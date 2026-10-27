@@ -965,6 +965,9 @@ func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
 }
 
 func (db *DB) RemoveService(id int) error {
+	if _, err := db.exec(`DELETE FROM service_openapi WHERE service_id = ?`, id); err != nil {
+		return err
+	}
 	_, err := db.exec(`DELETE FROM services WHERE id = ?`, id)
 	return err
 }
@@ -1066,6 +1069,78 @@ func (db *DB) SetServiceSchema(id int, schemaJSON, mode string) error {
 	}
 	_, err := db.exec(`UPDATE services SET request_schema = ?, schema_mode = ? WHERE id = ?`, schemaJSON, mode, id)
 	return err
+}
+
+// ServiceOpenAPI is a service's OpenAPI document and mode ("log" or
+// "enforce") — see waf.Engine.SetOpenAPI.
+type ServiceOpenAPI struct {
+	Spec string
+	Mode string
+}
+
+// SetServiceOpenAPI stores a service's OpenAPI spec (issue #190), already
+// checked by waf.ValidateOpenAPI. Mode "off" keeps the spec but disables
+// it; an empty spec removes it.
+func (db *DB) SetServiceOpenAPI(id int, spec, mode string) error {
+	if spec == "" {
+		_, err := db.exec(`DELETE FROM service_openapi WHERE service_id = ?`, id)
+		return err
+	}
+	if !serviceSchemaModes[mode] {
+		mode = "off"
+	}
+	_, err := db.exec(db.dialect.upsertUpdate("service_openapi", []string{"service_id", "spec", "mode"}, "?, ?, ?",
+		[]string{"service_id"}, []string{"spec", "mode"}), id, spec, mode)
+	return err
+}
+
+// ListServiceOpenAPI returns every stored spec by service id.
+func (db *DB) ListServiceOpenAPI() (map[int]ServiceOpenAPI, error) {
+	rows, err := db.query(`SELECT service_id, spec, mode FROM service_openapi`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]ServiceOpenAPI{}
+	for rows.Next() {
+		var id int
+		var o ServiceOpenAPI
+		if err := rows.Scan(&id, &o.Spec, &o.Mode); err != nil {
+			return nil, err
+		}
+		out[id] = o
+	}
+	return out, rows.Err()
+}
+
+// GetServiceOpenAPI returns one service's spec; zero value when it has none.
+func (db *DB) GetServiceOpenAPI(id int) (ServiceOpenAPI, error) {
+	var o ServiceOpenAPI
+	err := db.queryRow(`SELECT spec, mode FROM service_openapi WHERE service_id = ?`, id).Scan(&o.Spec, &o.Mode)
+	if err == sql.ErrNoRows {
+		return ServiceOpenAPI{}, nil
+	}
+	return o, err
+}
+
+// ListServiceOpenAPIModes returns each service's spec mode without the
+// specs themselves, for the polled services table.
+func (db *DB) ListServiceOpenAPIModes() (map[int]string, error) {
+	rows, err := db.query(`SELECT service_id, mode FROM service_openapi`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]string{}
+	for rows.Next() {
+		var id int
+		var mode string
+		if err := rows.Scan(&id, &mode); err != nil {
+			return nil, err
+		}
+		out[id] = mode
+	}
+	return out, rows.Err()
 }
 
 // SetServiceCache toggles routing this service's clean traffic through the

@@ -85,6 +85,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - Custom rules (`waf_custom_rules`): `waf.ValidateCustomRule` — only `SecRule`/`SecAction`, ids in 1000000–1999999, standalone compile, unique ids. `buildWAFAll` skips invalid rows rather than failing startup.
 - Verdict cache (`verdictcache.go`): 5s TTL, 4096 entries, per engine. Fingerprint covers IP, method, host, raw path/query, all headers and body. Requests with `Cookie`/`Authorization` are never cached.
 - Per-service request JSON Schema (`SetRequestSchema`, `off`/`log`/`enforce`): only on a fully buffered JSON-typed body; enforce → 400 `schema_violation`, log mode → action `schema_violation:log` (no stdout line per request).
+- Per-service OpenAPI 3.x spec (`waf/openapi.go`, `SetOpenAPI`, table `service_openapi`, `MEDIUMTEXT` on MySQL): compiled into a route trie per engine build. Matched against `CheckOptions.Path` (service prefix stripped); `servers[].url` base paths are optional. Enforce → 404 route / 405 method / 400 params or body / 415 media type, action `openapi_violation`; log → `openapi_violation:log`. Declared operations skip the plain request schema. Undeclared `OPTIONS` passes (CORS) and `HEAD` falls back to `GET`.
 - A failed body read returns `waf.ErrBodyRead` (client abort/malformed body) → 400 in the handler, never a 500 "waf error".
 - No paranoia-level tiering: it would need one CRS engine per level per service.
 

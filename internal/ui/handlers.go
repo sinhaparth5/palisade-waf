@@ -384,6 +384,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.POST("/services/backends/:id", h.SetServiceBackends)
 	g.POST("/services/hosts/:id", h.SetServiceHosts)
 	g.POST("/services/schema/:id", h.SetServiceSchema)
+	g.GET("/services/openapi/:id", h.ServiceOpenAPI)
+	g.POST("/services/openapi/:id", h.SetServiceOpenAPI)
 	g.POST("/services/cache/:id", h.SetServiceCache)
 	g.POST("/services/cache-session/:id", h.SetServiceCacheSession)
 	g.POST("/services/cache-tuning/:id", h.SetServiceCacheTuning)
@@ -1851,6 +1853,10 @@ type ServiceView struct {
 	Known    bool
 	CertName string // pool cert name when CertID > 0, otherwise ""
 	Health   []services.BackendStatus
+	// OpenAPIMode is "log" or "enforce" when the service has a spec; the
+	// spec itself is fetched by the edit modal (ServiceOpenAPI), since this
+	// table is polled.
+	OpenAPIMode string
 }
 
 func (h *Handler) serviceViews() []ServiceView {
@@ -1861,10 +1867,11 @@ func (h *Handler) serviceViews() []ServiceView {
 			certMap[c.ID] = c.Name
 		}
 	}
+	modes, _ := h.db.ListServiceOpenAPIModes()
 	out := make([]ServiceView, len(list))
 	for i, s := range list {
 		healthy, known := h.registry.IsHealthy(s.Name)
-		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name)}
+		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID]}
 	}
 	return out
 }
@@ -2855,6 +2862,59 @@ func (h *Handler) SetServiceSchema(c echo.Context) error {
 	w := c.Response().Writer
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+}
+
+// openAPIMaxBytes caps an uploaded OpenAPI document.
+const openAPIMaxBytes = 2 << 20
+
+// ServiceOpenAPI returns a service's stored OpenAPI spec as plain text, for
+// the edit modal.
+func (h *Handler) ServiceOpenAPI(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return c.String(http.StatusBadRequest, "invalid id")
+	}
+	o, err := h.db.GetServiceOpenAPI(id)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+	return c.String(http.StatusOK, o.Spec)
+}
+
+// SetServiceOpenAPI uploads, replaces or removes a service's OpenAPI spec
+// (issue #190): a positive security model where only declared operations
+// reach the backend. See waf.Engine.SetOpenAPI.
+func (h *Handler) SetServiceOpenAPI(c echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-openapi-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	spec := strings.TrimSpace(c.FormValue("openapi_spec"))
+	mode := c.FormValue("openapi_mode")
+	if mode != "log" && mode != "enforce" {
+		mode = "off"
+	}
+	if len(spec) > openAPIMaxBytes {
+		return fail("The spec is larger than 2 MiB.")
+	}
+	if spec != "" {
+		if err := waf.ValidateOpenAPI(spec); err != nil {
+			return fail("Invalid OpenAPI spec: " + err.Error())
+		}
+	}
+	if err := h.db.SetServiceOpenAPI(id, spec, mode); err != nil {
+		return fail(err.Error())
+	}
+	if h.reloadWAF != nil {
+		h.reloadWAF()
+	}
+	c.Response().Header().Set("HX-Trigger", "openapi-saved")
+	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
 }
 
 // SetServiceCache toggles routing one service's clean traffic through the
