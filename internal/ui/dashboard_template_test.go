@@ -102,6 +102,7 @@ func TestBaseTemplateCarriesCSRF(t *testing.T) {
 		"EmailSender":    "alert@example.com",
 		"EmailTo":        "",
 		"EmailTokenSet":  false,
+		"Role":           "owner",
 	}
 
 	var buf bytes.Buffer

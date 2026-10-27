@@ -637,8 +637,8 @@ func TestSettingsCards(t *testing.T) {
 	}
 
 	// Devices: revoke every other session.
-	other, _ := env.db.CreateSession("10.0.0.2", "other", "dev2") // revokes env.session...
-	env.session = other                                           // ...so continue as the new one
+	other, _ := env.db.CreateSession(env.uid, "10.0.0.2", "other", "dev2") // revokes env.session...
+	env.session = other                                                    // ...so continue as the new one
 	mine, _ := env.db.GetSession(other)
 	if !mine.Live() {
 		t.Fatal("precondition: new session live")
@@ -721,11 +721,11 @@ func TestChangeCredentialsAndBackup(t *testing.T) {
 	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/admin/login" {
 		t.Fatalf("credentials ok: %d", rec.Code)
 	}
-	if ok, _ := env.db.CheckAdminPassword("a-new-password"); !ok {
+	if ok, _ := env.db.CheckAdminPassword(env.uid, "a-new-password"); !ok {
 		t.Error("password not changed")
 	}
-	if email, _ := env.db.GetAdminEmail(); email != "new@example.com" {
-		t.Errorf("email = %q", email)
+	if u, _ := env.db.GetAdminUser(env.uid); u.Email != "new@example.com" {
+		t.Errorf("email = %q", u.Email)
 	}
 	if sess, _ := env.db.GetSession(env.session); sess != nil {
 		t.Error("session should be dropped after a credential change")
@@ -755,27 +755,26 @@ func TestPasskeyHandlers(t *testing.T) {
 		t.Errorf("finish without a pending ceremony: %s", rec.Body)
 	}
 
-	_ = env.db.AddWebAuthnCredential("AQID", "Key", []byte(`{"id":"AQID"}`))
-	creds, _ := env.db.ListWebAuthnCredentials()
+	_ = env.db.AddWebAuthnCredential(env.uid, "AQID", "Key", []byte(`{"id":"AQID"}`))
+	creds, _ := env.db.ListWebAuthnCredentials(env.uid)
 	wantCode(t, "delete bad", env.do("DELETE", "/admin/settings/passkeys/x", nil).Code, 400, "")
 	if rec := env.do("DELETE", "/admin/settings/passkeys/"+itoa(creds[0].ID), nil); rec.Code != 200 {
 		t.Errorf("delete passkey: %d", rec.Code)
 	}
-	if creds, _ := env.db.ListWebAuthnCredentials(); len(creds) != 0 {
+	if creds, _ := env.db.ListWebAuthnCredentials(env.uid); len(creds) != 0 {
 		t.Error("passkey not deleted")
 	}
 
 	// Expired enrollment slot.
-	env.h.pkEnroll.begin(nil, "x")
-	env.h.pkEnroll.expires = time.Now().Add(-time.Second)
-	if _, _, ok := env.h.pkEnroll.take(); ok {
+	env.h.pkEnroll.m[env.uid] = pkEnrollment{name: "x", expires: time.Now().Add(-time.Second)}
+	if _, _, ok := env.h.pkEnroll.take(env.uid); ok {
 		t.Error("expired enrollment should not be taken")
 	}
 }
 
 func TestPasskeyLogin(t *testing.T) {
 	env := newAdminEnv(t)
-	_ = env.db.AddWebAuthnCredential("AQID", "Key", []byte(`{"id":"AQID"}`))
+	_ = env.db.AddWebAuthnCredential(env.uid, "AQID", "Key", []byte(`{"id":"AQID"}`))
 
 	post := func(path string, cookies ...*http.Cookie) *httptestRecorder {
 		r := newReq(env, "POST", path, "{}")

@@ -17,6 +17,7 @@ import (
 
 	"palisade/internal/security/passkey"
 	"palisade/internal/security/totp"
+	"palisade/internal/storage"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/labstack/echo/v4"
@@ -47,6 +48,8 @@ const (
 // (issue #161).
 type twoFAEntry struct {
 	expires          time.Time
+	uid              int64  // the user whose password passed, set once at create
+	account          string // their normalized email, for the per-account limiter
 	mu               sync.Mutex
 	emailCode        string // emailed recovery code, "" until requested
 	emailCodeExpires time.Time
@@ -55,8 +58,8 @@ type twoFAEntry struct {
 }
 
 // twoFAStore holds pending two-factor logins in memory. In-process state is
-// the same tradeoff loginLimiter already makes: one admin, one process, and
-// losing entries on restart only means signing in again.
+// the same tradeoff loginLimiter already makes: one process, and losing
+// entries on restart only means signing in again.
 type twoFAStore struct {
 	mu sync.Mutex
 	m  map[string]*twoFAEntry
@@ -112,8 +115,8 @@ func (e *twoFAEntry) takeSession() *webauthn.SessionData {
 
 func newTwoFAStore() *twoFAStore { return &twoFAStore{m: make(map[string]*twoFAEntry)} }
 
-// create registers a new pending login and returns its opaque token.
-func (s *twoFAStore) create() (string, error) {
+// create registers a new pending login for user uid and returns its opaque token.
+func (s *twoFAStore) create(uid int64, account string) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -129,7 +132,7 @@ func (s *twoFAStore) create() (string, error) {
 			delete(s.m, t)
 		}
 	}
-	s.m[token] = &twoFAEntry{expires: now.Add(twoFAPendingTTL)}
+	s.m[token] = &twoFAEntry{expires: now.Add(twoFAPendingTTL), uid: uid, account: account}
 	return token, nil
 }
 
@@ -171,8 +174,8 @@ func (h *Handler) pendingEntry(c echo.Context) (string, *twoFAEntry) {
 // form. Deliberately does NOT reset loginLimiter — the password is already
 // known-correct to whoever got here, so resetting on every password round
 // would let an attacker launder TOTP guesses by re-posting the password.
-func (h *Handler) beginTOTPStage(c echo.Context) error {
-	token, err := h.twoFA.create()
+func (h *Handler) beginTOTPStage(c echo.Context, u *storage.AdminUser) error {
+	token, err := h.twoFA.create(u.ID, u.Email)
 	if err != nil {
 		return h.renderLogin(c, "Internal error. Please try again.")
 	}
@@ -185,13 +188,13 @@ func (h *Handler) beginTOTPStage(c echo.Context) error {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secureCookie(c),
 	})
-	return h.renderLoginTOTP(c, http.StatusOK, "", "")
+	return h.renderLoginTOTP(c, u.ID, http.StatusOK, "", "")
 }
 
 // LoginTOTPPost is the second authentication step: it accepts an
 // authenticator code, a one-time backup code, or an emailed recovery code,
-// in that order. Failures feed the same per-IP loginLimiter as password
-// failures, so 2FA doesn't open a fresh brute-force surface.
+// in that order. Failures feed the same per-IP and per-account limiters as
+// password failures, so 2FA doesn't open a fresh brute-force surface.
 func (h *Handler) LoginTOTPPost(c echo.Context) error {
 	ip := h.clientIP(c.Request())
 	if wait, locked := h.loginLimiter.blocked(ip); locked {
@@ -204,16 +207,19 @@ func (h *Handler) LoginTOTPPost(c echo.Context) error {
 	if entry == nil {
 		return h.renderLogin(c, "Sign-in expired. Enter your password again.")
 	}
+	if _, locked := h.accountLimiter.blocked(entry.account); locked {
+		return h.renderLoginStatus(c, http.StatusTooManyRequests,
+			"Too many failed attempts. Try again later.")
+	}
 
 	code := strings.TrimSpace(c.FormValue("code"))
 	if !h.verifySecondFactor(entry, code) {
-		if h.loginLimiter.fail(ip) {
-			log.Printf("admin login: %s locked out after %d failed attempts", ip, maxLoginFailures)
+		if h.loginFailed(ip, entry.account) {
 			return h.renderLoginStatus(c, http.StatusTooManyRequests,
 				"Too many failed attempts. Try again later.")
 		}
 		log.Printf("admin login: failed 2FA attempt from %s", ip)
-		return h.renderLoginTOTP(c, http.StatusOK, "Invalid code. Try again.", "")
+		return h.renderLoginTOTP(c, entry.uid, http.StatusOK, "Invalid code. Try again.", "")
 	}
 
 	h.twoFA.delete(token)
@@ -221,16 +227,17 @@ func (h *Handler) LoginTOTPPost(c echo.Context) error {
 		Name: twoFACookie, Value: "", HttpOnly: true, Path: "/", MaxAge: -1,
 		Secure: secureCookie(c),
 	})
-	h.loginLimiter.success(ip)
-	log.Printf("admin login: successful login from %s (2FA)", ip)
-	return h.issueSession(c)
+	h.loginSucceeded(ip, entry.account)
+	log.Printf("admin login: successful login for %s from %s (2FA)", entry.account, ip)
+	return h.issueSession(c, entry.uid)
 }
 
 // verifySecondFactor tries the three accepted proofs. TOTP replay is blocked
 // by persisting the last accepted counter: a code is otherwise valid for its
 // whole 30s window even after a successful login with it.
 func (h *Handler) verifySecondFactor(entry *twoFAEntry, code string) bool {
-	secret, err := h.db.GetTOTPSecret()
+	uid := entry.uid
+	secret, err := h.db.GetTOTPSecret(uid)
 	if err != nil {
 		return false
 	}
@@ -239,23 +246,23 @@ func (h *Handler) verifySecondFactor(entry *twoFAEntry, code string) bool {
 		// was fully disabled between the two steps — the password already
 		// passed, let them in. If passkeys ARE enrolled, TOTP was simply
 		// never the active factor here: don't treat a blank/guessed code
-		// as a pass, the admin must use the passkey button instead.
-		passkeysEnabled, _ := h.passkeys.Enabled()
+		// as a pass, the user must use the passkey button instead.
+		passkeysEnabled, _ := h.passkeys.Enabled(uid)
 		return !passkeysEnabled
 	}
 
 	if ok, counter := totp.Validate(secret, code, time.Now()); ok {
-		last, err := h.db.GetTOTPLastCounter()
+		last, err := h.db.GetTOTPLastCounter(uid)
 		if err != nil || counter <= last {
 			return false
 		}
-		if err := h.db.SetTOTPLastCounter(counter); err != nil {
+		if err := h.db.SetTOTPLastCounter(uid, counter); err != nil {
 			return false
 		}
 		return true
 	}
 
-	if used, _ := h.db.ConsumeTOTPBackupCode(hashBackupCode(code)); used {
+	if used, _ := h.db.ConsumeTOTPBackupCode(uid, hashBackupCode(code)); used {
 		return true
 	}
 
@@ -276,22 +283,22 @@ func (h *Handler) LoginTOTPEmail(c echo.Context) error {
 		return h.renderLogin(c, "Sign-in expired. Enter your password again.")
 	}
 	if h.sendLoginCode == nil || !h.emailRecoveryAvailable() {
-		return h.renderLoginTOTP(c, http.StatusOK, "Email recovery is not configured.", "")
+		return h.renderLoginTOTP(c, entry.uid, http.StatusOK, "Email recovery is not configured.", "")
 	}
 	code, err := randomDigits(6)
 	if err != nil {
-		return h.renderLoginTOTP(c, http.StatusOK, "Internal error. Please try again.", "")
+		return h.renderLoginTOTP(c, entry.uid, http.StatusOK, "Internal error. Please try again.", "")
 	}
 	if wait := entry.setEmailCode(code); wait > 0 {
-		return h.renderLoginTOTP(c, http.StatusOK, "", fmt.Sprintf("A code was already sent. You can request another in %s.", wait.Round(time.Second)))
+		return h.renderLoginTOTP(c, entry.uid, http.StatusOK, "", fmt.Sprintf("A code was already sent. You can request another in %s.", wait.Round(time.Second)))
 	}
 	if err := h.sendLoginCode(code); err != nil {
 		entry.clearEmailCode()
 		log.Printf("admin login: sending 2FA recovery code failed: %v", err)
-		return h.renderLoginTOTP(c, http.StatusOK, "Sending the code failed. Check the email settings.", "")
+		return h.renderLoginTOTP(c, entry.uid, http.StatusOK, "Sending the code failed. Check the email settings.", "")
 	}
 	log.Printf("admin login: 2FA recovery code emailed (requested from %s)", ip)
-	return h.renderLoginTOTP(c, http.StatusOK, "", "Code sent to the configured admin email. It expires in 10 minutes.")
+	return h.renderLoginTOTP(c, entry.uid, http.StatusOK, "", "Code sent to the configured admin email. It expires in 10 minutes.")
 }
 
 // emailRecoveryAvailable reports whether the mailer has enough config to
@@ -304,8 +311,8 @@ func (h *Handler) emailRecoveryAvailable() bool {
 	return err == nil && cfg.Token != "" && cfg.To != ""
 }
 
-func (h *Handler) renderLoginTOTP(c echo.Context, status int, errMsg, notice string) error {
-	passkeysEnabled, _ := h.passkeys.Enabled()
+func (h *Handler) renderLoginTOTP(c echo.Context, uid int64, status int, errMsg, notice string) error {
+	passkeysEnabled, _ := h.passkeys.Enabled(uid)
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.Response().WriteHeader(status)
 	return h.tmpls["login"].ExecuteTemplate(c.Response(), "login", map[string]any{
@@ -315,6 +322,7 @@ func (h *Handler) renderLoginTOTP(c echo.Context, status int, errMsg, notice str
 		"EmailAvailable":    h.emailRecoveryAvailable(),
 		"PasskeysAvailable": passkeysEnabled && passkey.IsSecureContext(c.Request()),
 		"AdminPath":         h.cfg.Admin.Path,
+		"Asset":             h.assetVer,
 	})
 }
 
@@ -322,8 +330,8 @@ func (h *Handler) renderLoginTOTP(c echo.Context, status int, errMsg, notice str
 
 // twoFACardData builds the settings card's default (no enrollment in
 // progress) rendering state.
-func (h *Handler) twoFACardData(extra map[string]any) map[string]any {
-	enabled, _ := h.db.TOTPEnabled()
+func (h *Handler) twoFACardData(c echo.Context, extra map[string]any) map[string]any {
+	enabled, _ := h.db.TOTPEnabled(currentUID(c))
 	data := map[string]any{
 		"AdminPath":   h.cfg.Admin.Path,
 		"TOTPEnabled": enabled,
@@ -342,15 +350,14 @@ func (h *Handler) StartTOTPEnrollment(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := h.db.SetPendingTOTPSecret(secret); err != nil {
+	if err := h.db.SetPendingTOTPSecret(currentUID(c), secret); err != nil {
 		return err
 	}
 	return h.renderTOTPEnrollment(c, secret, "")
 }
 
 func (h *Handler) renderTOTPEnrollment(c echo.Context, secret, errMsg string) error {
-	email, _ := h.db.GetAdminEmail()
-	uri := totp.ProvisioningURI(secret, email, totpIssuer)
+	uri := totp.ProvisioningURI(secret, currentUser(c).Email, totpIssuer)
 	png, err := qrcode.Encode(uri, qrcode.Medium, 220)
 	// template.URL: html/template's URL filter rejects data: URIs from plain
 	// strings (rendered as ZgotmplZ); this one is built entirely server-side
@@ -359,7 +366,7 @@ func (h *Handler) renderTOTPEnrollment(c echo.Context, secret, errMsg string) er
 	if err == nil {
 		qr = template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png))
 	}
-	return h.renderPartial(c, "settings", "twofa-card", h.twoFACardData(map[string]any{
+	return h.renderPartial(c, "settings", "twofa-card", h.twoFACardData(c, map[string]any{
 		"Enrolling": true,
 		"QRDataURI": qr,
 		"ManualKey": groupKey(secret),
@@ -372,13 +379,14 @@ func (h *Handler) renderTOTPEnrollment(c echo.Context, secret, errMsg string) er
 // stored only as SHA-256 hashes (they're high-entropy random, same reasoning
 // as API keys).
 func (h *Handler) ConfirmTOTPEnrollment(c echo.Context) error {
-	pending, err := h.db.GetPendingTOTPSecret()
+	uid := currentUID(c)
+	pending, err := h.db.GetPendingTOTPSecret(uid)
 	if err != nil {
 		return err
 	}
 	if pending == "" {
 		return h.renderPartial(c, "settings", "twofa-card",
-			h.twoFACardData(map[string]any{"CardErr": "No enrollment in progress. Start again."}))
+			h.twoFACardData(c, map[string]any{"CardErr": "No enrollment in progress. Start again."}))
 	}
 	code := c.FormValue("code")
 	if ok, _ := totp.Validate(pending, code, time.Now()); !ok {
@@ -390,11 +398,11 @@ func (h *Handler) ConfirmTOTPEnrollment(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := h.db.EnableTOTP(hashes); err != nil {
+	if err := h.db.EnableTOTP(uid, hashes); err != nil {
 		return err
 	}
-	log.Printf("admin 2FA: enabled")
-	return h.renderPartial(c, "settings", "twofa-card", h.twoFACardData(map[string]any{
+	log.Printf("admin 2FA: enabled for %s", currentUser(c).Email)
+	return h.renderPartial(c, "settings", "twofa-card", h.twoFACardData(c, map[string]any{
 		"BackupCodes": codes,
 	}))
 }
@@ -403,26 +411,27 @@ func (h *Handler) ConfirmTOTPEnrollment(c echo.Context) error {
 // code, not just the session cookie: a hijacked session shouldn't be able to
 // quietly remove the second factor.
 func (h *Handler) DisableTOTP(c echo.Context) error {
-	secret, err := h.db.GetTOTPSecret()
+	uid := currentUID(c)
+	secret, err := h.db.GetTOTPSecret(uid)
 	if err != nil {
 		return err
 	}
 	code := c.FormValue("code")
 	ok, _ := totp.Validate(secret, code, time.Now())
 	if !ok {
-		if used, _ := h.db.ConsumeTOTPBackupCode(hashBackupCode(code)); used {
+		if used, _ := h.db.ConsumeTOTPBackupCode(uid, hashBackupCode(code)); used {
 			ok = true
 		}
 	}
 	if !ok {
 		return h.renderPartial(c, "settings", "twofa-card",
-			h.twoFACardData(map[string]any{"CardErr": "Enter a valid authenticator or backup code to disable 2FA."}))
+			h.twoFACardData(c, map[string]any{"CardErr": "Enter a valid authenticator or backup code to disable 2FA."}))
 	}
-	if err := h.db.DisableTOTP(); err != nil {
+	if err := h.db.DisableTOTP(uid); err != nil {
 		return err
 	}
-	log.Printf("admin 2FA: disabled")
-	return h.renderPartial(c, "settings", "twofa-card", h.twoFACardData(nil))
+	log.Printf("admin 2FA: disabled for %s", currentUser(c).Email)
+	return h.renderPartial(c, "settings", "twofa-card", h.twoFACardData(c, nil))
 }
 
 // ── Code helpers ─────────────────────────────────────────────────────────────

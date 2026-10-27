@@ -18,7 +18,6 @@ import (
 	"palisade/internal/security/ratelimit"
 
 	"github.com/jmoiron/sqlx"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // logQueueSize bounds how many request-log entries can be buffered waiting
@@ -346,6 +345,8 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"sessions", "last_active_at TEXT NOT NULL DEFAULT ''"},
 	{"sessions", "revoked_at TEXT NOT NULL DEFAULT ''"},
 	{"sessions", "device_id TEXT NOT NULL DEFAULT ''"},
+	{"sessions", "user_id INTEGER NOT NULL DEFAULT 0"},
+	{"webauthn_credentials", "user_id INTEGER NOT NULL DEFAULT 0"},
 	{"api_keys", "read_only INTEGER NOT NULL DEFAULT 0"},
 	{"services", "request_schema TEXT NOT NULL DEFAULT ''"},
 	{"services", "schema_mode TEXT NOT NULL DEFAULT 'off'"},
@@ -391,6 +392,10 @@ func (db *DB) migrate() error {
 		if _, err := db.exec(stmt); err != nil {
 			return fmt.Errorf("schema: %w", err)
 		}
+	}
+
+	if err := db.migrateAdminFromMeta(); err != nil {
+		return err
 	}
 
 	// Redis support was removed; drop its leftover settings so the saved
@@ -2252,137 +2257,80 @@ func (db *DB) Vacuum() error {
 }
 
 // ── Admin auth & sessions ─────────────────────────────────────────────────────
+//
+// Accounts live in admin_users (users.go); everything below is per user.
 
 const sessionTTL = 24 * time.Hour
 
-// SeedAdmin sets admin credentials from the CLI setup subcommand. Idempotent —
-// on upgrades (credentials already exist) it logs and returns nil without
-// overwriting the stored password, so re-running the installer is safe.
-func (db *DB) SeedAdmin(email, password string) error {
-	existing, _ := db.getMeta("admin_email")
-	if existing != "" {
-		log.Printf("admin credentials already exist for %s — skipping", existing)
-		return nil
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return fmt.Errorf("hash password: %w", err)
-	}
-	if err := db.setMeta("admin_email", email); err != nil {
-		return err
-	}
-	return db.setMeta("admin_password_hash", string(hash))
-}
-
-func (db *DB) GetAdminEmail() (string, error) { return db.getMeta("admin_email") }
-
-// UpdateAdminCredentials replaces the stored email and/or password hash.
-// Pass empty string for either field to leave it unchanged.
-// Invalidates all existing sessions so active sessions can't persist with stale credentials.
-func (db *DB) UpdateAdminCredentials(email, newPassword string) error {
-	if email != "" {
-		if err := db.setMeta("admin_email", email); err != nil {
-			return err
-		}
-	}
-	if newPassword != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-		if err != nil {
-			return fmt.Errorf("hash password: %w", err)
-		}
-		if err := db.setMeta("admin_password_hash", string(hash)); err != nil {
-			return err
-		}
-	}
-	// Invalidate all sessions — anyone logged in must re-authenticate.
-	_, err := db.exec(`DELETE FROM sessions`)
-	return err
-}
-
-// CheckAdminPassword validates password against the stored bcrypt hash.
-// Returns (false, nil) for any mismatch so callers can't distinguish "no
-// user" from "wrong password" — avoids leaking whether an email is registered.
-func (db *DB) CheckAdminPassword(password string) (bool, error) {
-	hash, err := db.getMeta("admin_password_hash")
-	if err != nil || hash == "" {
-		return false, err
-	}
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil, nil
-}
-
 // ── Admin TOTP (two-factor auth) ─────────────────────────────────────────────
 //
-// All state lives in meta keys, like the credentials above:
-//   admin_totp_secret          active base32 secret ("" = 2FA disabled)
-//   admin_totp_pending_secret  enrollment in progress, not yet confirmed
-//   admin_totp_backup_codes    comma-separated SHA-256 hex digests, removed on use
-//   admin_totp_last_counter    last accepted TOTP counter, to reject replays
+// All state lives in the user's admin_users row:
+//   totp_secret          active base32 secret ("" = 2FA disabled), sealed
+//   totp_pending_secret  enrollment in progress, not yet confirmed, sealed
+//   totp_backup_codes    comma-separated SHA-256 hex digests, removed on use
+//   totp_last_counter    last accepted TOTP counter, to reject replays
 
-// GetTOTPSecret returns the active TOTP secret, or "" when 2FA is disabled.
-func (db *DB) GetTOTPSecret() (string, error) { return db.getSecretMeta("admin_totp_secret") }
+// GetTOTPSecret returns the user's active TOTP secret, or "" when 2FA is disabled.
+func (db *DB) GetTOTPSecret(uid int64) (string, error) {
+	return db.getSecretUserField(uid, "totp_secret")
+}
 
-// TOTPEnabled reports whether admin login requires a second factor. Reads the
-// raw value: "is 2FA on" doesn't need the secret decrypted, so it keeps
-// working (and keeps the login flow demanding a second factor) even when the
-// key file is missing — failing open to password-only here would let a key
-// misconfiguration disable 2FA.
-func (db *DB) TOTPEnabled() (bool, error) {
-	s, err := db.getMeta("admin_totp_secret")
+// TOTPEnabled reports whether the user's login requires a second factor.
+// Reads the raw value: "is 2FA on" doesn't need the secret decrypted, so it
+// keeps working (and keeps the login flow demanding a second factor) even
+// when the key file is missing — failing open to password-only here would
+// let a key misconfiguration disable 2FA.
+func (db *DB) TOTPEnabled(uid int64) (bool, error) {
+	s, err := db.userField(uid, "totp_secret")
 	return s != "", err
 }
 
 // SetPendingTOTPSecret stores a not-yet-confirmed enrollment secret. It only
-// becomes active via EnableTOTP after the admin proves their authenticator
+// becomes active via EnableTOTP after the user proves their authenticator
 // produces a valid code; a stale pending secret is inert.
-func (db *DB) SetPendingTOTPSecret(secret string) error {
-	return db.setSecretMeta("admin_totp_pending_secret", secret)
+func (db *DB) SetPendingTOTPSecret(uid int64, secret string) error {
+	return db.setSecretUserField(uid, "totp_pending_secret", secret)
 }
 
 // GetPendingTOTPSecret returns the enrollment secret awaiting confirmation.
-func (db *DB) GetPendingTOTPSecret() (string, error) {
-	return db.getSecretMeta("admin_totp_pending_secret")
+func (db *DB) GetPendingTOTPSecret(uid int64) (string, error) {
+	return db.getSecretUserField(uid, "totp_pending_secret")
 }
 
 // EnableTOTP promotes the pending secret to active and stores the backup-code
 // hashes (SHA-256 hex — the codes are high-entropy random, so like API keys
 // they don't need bcrypt). Returns an error if no enrollment is pending.
-func (db *DB) EnableTOTP(backupHashes []string) error {
-	pending, err := db.getSecretMeta("admin_totp_pending_secret")
+func (db *DB) EnableTOTP(uid int64, backupHashes []string) error {
+	pending, err := db.GetPendingTOTPSecret(uid)
 	if err != nil {
 		return err
 	}
 	if pending == "" {
 		return fmt.Errorf("no pending TOTP enrollment")
 	}
-	if err := db.setSecretMeta("admin_totp_secret", pending); err != nil {
+	if err := db.setSecretUserField(uid, "totp_secret", pending); err != nil {
 		return err
 	}
-	if err := db.setMeta("admin_totp_backup_codes", strings.Join(backupHashes, ",")); err != nil {
+	if err := db.setUserField(uid, "totp_backup_codes", strings.Join(backupHashes, ",")); err != nil {
 		return err
 	}
-	if err := db.setMeta("admin_totp_last_counter", ""); err != nil {
+	if err := db.setUserField(uid, "totp_last_counter", ""); err != nil {
 		return err
 	}
-	return db.setMeta("admin_totp_pending_secret", "")
+	return db.setUserField(uid, "totp_pending_secret", "")
 }
 
-// DisableTOTP clears the secret, backup codes, and any pending enrollment.
-func (db *DB) DisableTOTP() error {
-	for _, key := range []string{
-		"admin_totp_secret", "admin_totp_pending_secret",
-		"admin_totp_backup_codes", "admin_totp_last_counter",
-	} {
-		if err := db.setMeta(key, ""); err != nil {
-			return err
-		}
-	}
-	return nil
+// DisableTOTP clears the user's secret, backup codes, and any pending enrollment.
+func (db *DB) DisableTOTP(uid int64) error {
+	_, err := db.exec(`UPDATE admin_users SET totp_secret = '', totp_pending_secret = '',
+		totp_backup_codes = '', totp_last_counter = '' WHERE id = ?`, uid)
+	return err
 }
 
-// ConsumeTOTPBackupCode removes hash from the stored backup codes and reports
+// ConsumeTOTPBackupCode removes hash from the user's backup codes and reports
 // whether it was present — each code works exactly once.
-func (db *DB) ConsumeTOTPBackupCode(hash string) (bool, error) {
-	stored, err := db.getMeta("admin_totp_backup_codes")
+func (db *DB) ConsumeTOTPBackupCode(uid int64, hash string) (bool, error) {
+	stored, err := db.userField(uid, "totp_backup_codes")
 	if err != nil || stored == "" {
 		return false, err
 	}
@@ -2390,16 +2338,16 @@ func (db *DB) ConsumeTOTPBackupCode(hash string) (bool, error) {
 	for i, c := range codes {
 		if c == hash {
 			codes = append(codes[:i], codes[i+1:]...)
-			return true, db.setMeta("admin_totp_backup_codes", strings.Join(codes, ","))
+			return true, db.setUserField(uid, "totp_backup_codes", strings.Join(codes, ","))
 		}
 	}
 	return false, nil
 }
 
-// GetTOTPLastCounter returns the counter of the last accepted TOTP code
-// (0 when none has been accepted yet).
-func (db *DB) GetTOTPLastCounter() (uint64, error) {
-	v, err := db.getMeta("admin_totp_last_counter")
+// GetTOTPLastCounter returns the counter of the user's last accepted TOTP
+// code (0 when none has been accepted yet).
+func (db *DB) GetTOTPLastCounter(uid int64) (uint64, error) {
+	v, err := db.userField(uid, "totp_last_counter")
 	if err != nil || v == "" {
 		return 0, err
 	}
@@ -2412,16 +2360,16 @@ func (db *DB) GetTOTPLastCounter() (uint64, error) {
 
 // SetTOTPLastCounter records the counter of an accepted code so the same
 // code can't be replayed within its validity window.
-func (db *DB) SetTOTPLastCounter(counter uint64) error {
-	return db.setMeta("admin_totp_last_counter", strconv.FormatUint(counter, 10))
+func (db *DB) SetTOTPLastCounter(uid int64, counter uint64) error {
+	return db.setUserField(uid, "totp_last_counter", strconv.FormatUint(counter, 10))
 }
 
 // ── Admin passkeys (WebAuthn, issue #78) ─────────────────────────────────────
 //
 // A second, browser/authenticator-backed factor alongside TOTP — see
-// internal/security/passkey. Unlike the single TOTP secret, an admin
-// normally registers more than one passkey (phone, laptop, security key),
-// so these live in their own table rather than a meta key.
+// internal/security/passkey. A user normally registers more than one
+// passkey (phone, laptop, security key), so these live in their own table,
+// keyed by user_id.
 
 // WebAuthnCredential is one registered passkey.
 type WebAuthnCredential struct {
@@ -2433,13 +2381,12 @@ type WebAuthnCredential struct {
 	LastUsedAt   string
 }
 
-// GetOrCreateWebAuthnHandle returns the stable, opaque WebAuthn user handle
-// for the single admin account, generating and persisting one (32 random
-// bytes) on first use. It is not a secret — knowing it alone proves
-// nothing — just a stable non-PII identifier the spec requires, so it's
-// stored as plain meta rather than via getSecretMeta/setSecretMeta.
-func (db *DB) GetOrCreateWebAuthnHandle() ([]byte, error) {
-	s, err := db.getMeta("admin_webauthn_handle")
+// GetOrCreateWebAuthnHandle returns the user's stable, opaque WebAuthn user
+// handle, generating and persisting one (32 random bytes) on first use. It
+// is not a secret — knowing it alone proves nothing — just a stable non-PII
+// identifier the spec requires, so it's stored unsealed.
+func (db *DB) GetOrCreateWebAuthnHandle(uid int64) ([]byte, error) {
+	s, err := db.userField(uid, "webauthn_handle")
 	if err != nil {
 		return nil, err
 	}
@@ -2450,25 +2397,26 @@ func (db *DB) GetOrCreateWebAuthnHandle() ([]byte, error) {
 	if _, err := rand.Read(b); err != nil {
 		return nil, err
 	}
-	if err := db.setMeta("admin_webauthn_handle", base64.StdEncoding.EncodeToString(b)); err != nil {
+	if err := db.setUserField(uid, "webauthn_handle", base64.StdEncoding.EncodeToString(b)); err != nil {
 		return nil, err
 	}
 	return b, nil
 }
 
-// WebAuthnEnabled reports whether the admin has at least one registered
+// WebAuthnEnabled reports whether the user has at least one registered
 // passkey — the login page only offers the passkey option, and LoginPost
-// only demands a second factor for passkey-only admins, when this is true.
-func (db *DB) WebAuthnEnabled() (bool, error) {
+// only demands a second factor for passkey-only users, when this is true.
+func (db *DB) WebAuthnEnabled(uid int64) (bool, error) {
 	var n int
-	err := db.queryRow(`SELECT COUNT(*) FROM webauthn_credentials`).Scan(&n)
+	err := db.queryRow(`SELECT COUNT(*) FROM webauthn_credentials WHERE user_id = ?`, uid).Scan(&n)
 	return n > 0, err
 }
 
-// ListWebAuthnCredentials returns every registered passkey, newest first.
-func (db *DB) ListWebAuthnCredentials() ([]WebAuthnCredential, error) {
+// ListWebAuthnCredentials returns the user's registered passkeys, newest first.
+func (db *DB) ListWebAuthnCredentials(uid int64) ([]WebAuthnCredential, error) {
 	rows, err := db.query(
-		`SELECT id, credential_id, data, name, created_at, last_used_at FROM webauthn_credentials ORDER BY created_at DESC`,
+		`SELECT id, credential_id, data, name, created_at, last_used_at FROM webauthn_credentials
+		 WHERE user_id = ? ORDER BY created_at DESC`, uid,
 	)
 	if err != nil {
 		return nil, err
@@ -2488,11 +2436,11 @@ func (db *DB) ListWebAuthnCredentials() ([]WebAuthnCredential, error) {
 	return out, rows.Err()
 }
 
-// AddWebAuthnCredential stores a newly registered passkey.
-func (db *DB) AddWebAuthnCredential(credentialID, name string, data []byte) error {
+// AddWebAuthnCredential stores a newly registered passkey for the user.
+func (db *DB) AddWebAuthnCredential(uid int64, credentialID, name string, data []byte) error {
 	_, err := db.exec(
-		`INSERT INTO webauthn_credentials (credential_id, data, name, created_at) VALUES (?, ?, ?, ?)`,
-		credentialID, string(data), name, time.Now(),
+		`INSERT INTO webauthn_credentials (user_id, credential_id, data, name, created_at) VALUES (?, ?, ?, ?, ?)`,
+		uid, credentialID, string(data), name, time.Now(),
 	)
 	return err
 }
@@ -2508,16 +2456,16 @@ func (db *DB) TouchWebAuthnCredential(credentialID string, data []byte) error {
 	return err
 }
 
-// DeleteWebAuthnCredential removes one registered passkey by its row id.
-func (db *DB) DeleteWebAuthnCredential(id int64) error {
-	_, err := db.exec(`DELETE FROM webauthn_credentials WHERE id = ?`, id)
+// DeleteWebAuthnCredential removes one of the user's passkeys by its row id.
+func (db *DB) DeleteWebAuthnCredential(uid, id int64) error {
+	_, err := db.exec(`DELETE FROM webauthn_credentials WHERE id = ? AND user_id = ?`, id, uid)
 	return err
 }
 
 // sessionHistoryTTL is how long a session row survives after it was
 // created. It is deliberately much longer than sessionTTL: a row stops
 // authenticating anything after sessionTTL, but is kept as the device
-// history the Settings page's "Registered devices" card lists, so an admin
+// history the Settings page's "Registered devices" card lists, so a user
 // can still see where the account was logged in last month.
 const sessionHistoryTTL = 30 * 24 * time.Hour
 
@@ -2535,11 +2483,11 @@ func (db *DB) PruneExpiredSessions() (int64, error) {
 	return res.RowsAffected()
 }
 
-// Session is one row of the sessions table: a single admin login on a
-// single device. There is no user_id — this deployment has exactly one
-// admin account (credentials live in meta), so every row belongs to it.
+// Session is one row of the sessions table: a single login of one user on
+// a single device.
 type Session struct {
 	Token        string
+	UserID       int64
 	CreatedAt    time.Time
 	IP           string
 	UserAgent    string
@@ -2549,7 +2497,7 @@ type Session struct {
 
 // Revoked reports whether the session was explicitly ended — by logging
 // out, by being revoked from the Settings page, or by being superseded by a
-// newer login. Distinct from Expired so the login page can tell the admin
+// newer login. Distinct from Expired so the login page can tell the user
 // which of the two happened.
 func (s *Session) Revoked() bool { return !s.RevokedAt.IsZero() }
 
@@ -2569,23 +2517,38 @@ func parseSessionTime(v string) time.Time {
 	return t
 }
 
-// CreateSession generates a random token, stores it, and returns it for use
-// as a session cookie value.
+const sessionColumns = `token, user_id, created_at, ip, user_agent, last_active_at, revoked_at`
+
+func scanSession(row interface{ Scan(...any) error }) (*Session, error) {
+	var s Session
+	var created, lastActive, revoked string
+	if err := row.Scan(&s.Token, &s.UserID, &created, &s.IP, &s.UserAgent, &lastActive, &revoked); err != nil {
+		return nil, err
+	}
+	s.CreatedAt = parseSessionTime(created)
+	s.LastActiveAt = parseSessionTime(lastActive)
+	s.RevokedAt = parseSessionTime(revoked)
+	return &s, nil
+}
+
+// CreateSession generates a random token for user uid, stores it, and
+// returns it for use as a session cookie value.
 //
 // deviceID is the browser's long-lived device cookie (see ui.deviceCookie).
-// A login replaces that device's earlier rows instead of adding another, so
-// the "Registered devices" card lists each browser once, not once per login.
-// Rows from before device IDs existed are matched on identical IP + user agent.
+// A login replaces that device's earlier rows for the same user instead of
+// adding another, so the "Registered devices" card lists each browser
+// once, not once per login. Rows from before device IDs existed are matched
+// on identical IP + user agent.
 //
-// An account may only have one live session at a time, so this first
-// revokes every session that is currently live: logging in on a new device
-// immediately signs the old one out, and the old device is told why on its
-// next request (see Session.Revoked). The legitimate owner can therefore
-// always take back an account someone else is sitting on, which is the
-// point — the alternative (refusing the new login while an old session
-// lives) locks the owner out until the intruder's session happens to
-// expire.
-func (db *DB) CreateSession(ip, userAgent, deviceID string) (string, error) {
+// Each user may only have one live session at a time, so this first
+// revokes the user's sessions that are currently live: logging in on a new
+// device immediately signs the old one out, and the old device is told why
+// on its next request (see Session.Revoked). The legitimate owner of an
+// account can therefore always take it back from someone else sitting on
+// it — the alternative (refusing the new login while an old session lives)
+// locks them out until the intruder's session happens to expire. Other
+// users' sessions are untouched.
+func (db *DB) CreateSession(uid int64, ip, userAgent, deviceID string) (string, error) {
 	// Opportunistically sweep aged-out rows — logins are the only way the
 	// table grows, so pruning here keeps it bounded without a background
 	// goroutine (the prune CLI covers deployments that never log in again).
@@ -2598,19 +2561,19 @@ func (db *DB) CreateSession(ip, userAgent, deviceID string) (string, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if deviceID != "" {
 		if _, err := db.exec(
-			`DELETE FROM sessions WHERE device_id = ? OR (device_id = '' AND ip = ? AND user_agent = ?)`,
-			deviceID, ip, userAgent,
+			`DELETE FROM sessions WHERE user_id = ? AND (device_id = ? OR (device_id = '' AND ip = ? AND user_agent = ?))`,
+			uid, deviceID, ip, userAgent,
 		); err != nil {
 			return "", err
 		}
 	}
-	if _, err := db.exec(`UPDATE sessions SET revoked_at = ? WHERE revoked_at = ''`, now); err != nil {
+	if _, err := db.exec(`UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at = ''`, now, uid); err != nil {
 		return "", err
 	}
 	_, err := db.exec(
-		`INSERT INTO sessions (token, created_at, ip, user_agent, last_active_at, revoked_at, device_id)
-		 VALUES (?, ?, ?, ?, ?, '', ?)`,
-		token, now, ip, userAgent, now, deviceID,
+		`INSERT INTO sessions (token, user_id, created_at, ip, user_agent, last_active_at, revoked_at, device_id)
+		 VALUES (?, ?, ?, ?, ?, ?, '', ?)`,
+		token, uid, now, ip, userAgent, now, deviceID,
 	)
 	return token, err
 }
@@ -2618,24 +2581,13 @@ func (db *DB) CreateSession(ip, userAgent, deviceID string) (string, error) {
 // GetSession returns the row for token, or nil if there is none. Whether
 // the session still authenticates anything is the caller's decision — see
 // Session.Live/Revoked/Expired, which the login page uses to explain to a
-// signed-out admin which of the two happened.
+// signed-out user which of the two happened.
 func (db *DB) GetSession(token string) (*Session, error) {
-	var s Session
-	var created, lastActive, revoked string
-	err := db.queryRow(
-		`SELECT token, created_at, ip, user_agent, last_active_at, revoked_at
-		 FROM sessions WHERE token = ?`, token,
-	).Scan(&s.Token, &created, &s.IP, &s.UserAgent, &lastActive, &revoked)
+	s, err := scanSession(db.queryRow(`SELECT `+sessionColumns+` FROM sessions WHERE token = ?`, token))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	s.CreatedAt = parseSessionTime(created)
-	s.LastActiveAt = parseSessionTime(lastActive)
-	s.RevokedAt = parseSessionTime(revoked)
-	return &s, nil
+	return s, err
 }
 
 // ValidateSession reports whether the token authenticates a request.
@@ -2657,53 +2609,52 @@ func (db *DB) TouchSession(token string) error {
 	return err
 }
 
-// ListSessions returns every session row for the Settings page's
+// ListSessions returns the user's session rows for the Settings page's
 // "Registered devices" card: the live session first (which, given one live
-// session is enforced at login, is the caller's own device), then signed-out
-// devices newest first. Ordering on the boolean is portable across all three
-// dialects — SQLite and MySQL yield 1/0, Postgres a real boolean, and DESC
-// puts true first in every case. Without it, two logins landing in the same
-// RFC3339 second could list the current device below a dead one.
-func (db *DB) ListSessions() ([]Session, error) {
+// session per user is enforced at login, is the caller's own device), then
+// signed-out devices newest first. Ordering on the boolean is portable
+// across all three dialects — SQLite and MySQL yield 1/0, Postgres a real
+// boolean, and DESC puts true first in every case. Without it, two logins
+// landing in the same RFC3339 second could list the current device below a
+// dead one.
+func (db *DB) ListSessions(uid int64) ([]Session, error) {
 	rows, err := db.query(
-		`SELECT token, created_at, ip, user_agent, last_active_at, revoked_at
-		 FROM sessions ORDER BY (revoked_at = '') DESC, created_at DESC`)
+		`SELECT `+sessionColumns+` FROM sessions WHERE user_id = ?
+		 ORDER BY (revoked_at = '') DESC, created_at DESC`, uid)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []Session
 	for rows.Next() {
-		var s Session
-		var created, lastActive, revoked string
-		if err := rows.Scan(&s.Token, &created, &s.IP, &s.UserAgent, &lastActive, &revoked); err != nil {
+		s, err := scanSession(rows)
+		if err != nil {
 			return nil, err
 		}
-		s.CreatedAt = parseSessionTime(created)
-		s.LastActiveAt = parseSessionTime(lastActive)
-		s.RevokedAt = parseSessionTime(revoked)
-		out = append(out, s)
+		out = append(out, *s)
 	}
 	return out, rows.Err()
 }
 
-// RevokeSession ends one session without deleting its history row.
-func (db *DB) RevokeSession(token string) error {
+// RevokeSession ends one of the user's sessions without deleting its
+// history row.
+func (db *DB) RevokeSession(uid int64, token string) error {
 	_, err := db.exec(
-		`UPDATE sessions SET revoked_at = ? WHERE token = ? AND revoked_at = ''`,
-		time.Now().UTC().Format(time.RFC3339), token,
+		`UPDATE sessions SET revoked_at = ? WHERE token = ? AND user_id = ? AND revoked_at = ''`,
+		time.Now().UTC().Format(time.RFC3339), token, uid,
 	)
 	return err
 }
 
-// RevokeOtherSessions ends every live session except keep. With one live
-// session enforced at login this is normally a no-op, and exists for the
-// "Log out of all other devices" button to be honest anyway — a row could
-// still be live if it was created before this rule shipped.
-func (db *DB) RevokeOtherSessions(keep string) (int64, error) {
+// RevokeOtherSessions ends every live session of the user except keep.
+// With one live session per user enforced at login this is normally a
+// no-op, and exists for the "Log out of all other devices" button to be
+// honest anyway — a row could still be live if it was created before this
+// rule shipped.
+func (db *DB) RevokeOtherSessions(uid int64, keep string) (int64, error) {
 	res, err := db.exec(
-		`UPDATE sessions SET revoked_at = ? WHERE revoked_at = '' AND token <> ?`,
-		time.Now().UTC().Format(time.RFC3339), keep,
+		`UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at = '' AND token <> ?`,
+		time.Now().UTC().Format(time.RFC3339), uid, keep,
 	)
 	if err != nil {
 		return 0, err
@@ -2712,7 +2663,7 @@ func (db *DB) RevokeOtherSessions(keep string) (int64, error) {
 }
 
 // DeleteSession removes the token on logout. Logging out deliberately drops
-// the row rather than revoking it: an admin who signs out on purpose does
+// the row rather than revoking it: a user who signs out on purpose does
 // not need that device listed back at them as history.
 func (db *DB) DeleteSession(token string) error {
 	_, err := db.exec(`DELETE FROM sessions WHERE token = ?`, token)

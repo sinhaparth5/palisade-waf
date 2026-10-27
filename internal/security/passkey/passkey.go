@@ -1,8 +1,7 @@
 // Package passkey wraps github.com/go-webauthn/webauthn for the admin
-// login's optional WebAuthn/passkey second factor (issue #78). There is
-// exactly one admin account (see storage's meta-table auth), so this
-// package deliberately has no concept of multiple users — just one
-// account that may hold zero or more registered passkeys.
+// login's optional WebAuthn/passkey second factor (issue #78). Every call
+// is for one admin user (storage.AdminUser, issue #196), who may hold zero
+// or more registered passkeys.
 package passkey
 
 import (
@@ -29,7 +28,7 @@ func New(db *storage.DB) *Manager {
 	return &Manager{db: db}
 }
 
-// adminUser adapts the single admin account to webauthn.User.
+// adminUser adapts one admin account to webauthn.User.
 type adminUser struct {
 	handle []byte
 	email  string
@@ -41,19 +40,22 @@ func (u *adminUser) WebAuthnName() string                       { return u.email
 func (u *adminUser) WebAuthnDisplayName() string                { return u.email }
 func (u *adminUser) WebAuthnCredentials() []webauthn.Credential { return u.creds }
 
-// user loads the admin account plus its currently-registered credentials.
-func (m *Manager) user() (*adminUser, []storage.WebAuthnCredential, error) {
-	handle, err := m.db.GetOrCreateWebAuthnHandle()
+// user loads admin account uid plus its currently-registered credentials.
+func (m *Manager) user(uid int64) (*adminUser, error) {
+	handle, err := m.db.GetOrCreateWebAuthnHandle(uid)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	email, err := m.db.GetAdminEmail()
+	u, err := m.db.GetAdminUser(uid)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	rows, err := m.db.ListWebAuthnCredentials()
+	if u == nil {
+		return nil, fmt.Errorf("no such user")
+	}
+	rows, err := m.db.ListWebAuthnCredentials(uid)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	creds := make([]webauthn.Credential, 0, len(rows))
 	for _, r := range rows {
@@ -63,18 +65,18 @@ func (m *Manager) user() (*adminUser, []storage.WebAuthnCredential, error) {
 		}
 		creds = append(creds, c)
 	}
-	return &adminUser{handle: handle, email: email, creds: creds}, rows, nil
+	return &adminUser{handle: handle, email: u.Email, creds: creds}, nil
 }
 
-// Enabled reports whether the admin has at least one registered passkey. A
+// Enabled reports whether user uid has at least one registered passkey. A
 // nil Manager (e.g. a Handler built without going through NewHandler, as
 // some tests do) behaves as "not available" rather than panicking — same
 // nil-receiver-guard pattern as asn.Lookup.Lookup.
-func (m *Manager) Enabled() (bool, error) {
+func (m *Manager) Enabled(uid int64) (bool, error) {
 	if m == nil {
 		return false, nil
 	}
-	return m.db.WebAuthnEnabled()
+	return m.db.WebAuthnEnabled(uid)
 }
 
 // IsSecureContext reports whether the request was served in a context
@@ -120,10 +122,10 @@ func (m *Manager) config(r *http.Request) (*webauthn.WebAuthn, error) {
 	})
 }
 
-// BeginRegistration starts enrolling a new passkey for the admin account.
+// BeginRegistration starts enrolling a new passkey for user uid.
 // The returned SessionData must be held (server-side only — never handed
 // to the browser) until FinishRegistration.
-func (m *Manager) BeginRegistration(r *http.Request) (*protocol.CredentialCreation, *webauthn.SessionData, error) {
+func (m *Manager) BeginRegistration(r *http.Request, uid int64) (*protocol.CredentialCreation, *webauthn.SessionData, error) {
 	if m == nil {
 		return nil, nil, fmt.Errorf("passkeys unavailable")
 	}
@@ -131,7 +133,7 @@ func (m *Manager) BeginRegistration(r *http.Request) (*protocol.CredentialCreati
 	if err != nil {
 		return nil, nil, err
 	}
-	user, _, err := m.user()
+	user, err := m.user(uid)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,7 +146,7 @@ func (m *Manager) BeginRegistration(r *http.Request) (*protocol.CredentialCreati
 
 // FinishRegistration validates the browser's response and stores the new
 // credential under name.
-func (m *Manager) FinishRegistration(r *http.Request, session webauthn.SessionData, name string) error {
+func (m *Manager) FinishRegistration(r *http.Request, uid int64, session webauthn.SessionData, name string) error {
 	if m == nil {
 		return fmt.Errorf("passkeys unavailable")
 	}
@@ -152,7 +154,7 @@ func (m *Manager) FinishRegistration(r *http.Request, session webauthn.SessionDa
 	if err != nil {
 		return err
 	}
-	user, _, err := m.user()
+	user, err := m.user(uid)
 	if err != nil {
 		return err
 	}
@@ -167,12 +169,12 @@ func (m *Manager) FinishRegistration(r *http.Request, session webauthn.SessionDa
 	if name == "" {
 		name = "Passkey"
 	}
-	return m.db.AddWebAuthnCredential(credentialID(cred.ID), name, data)
+	return m.db.AddWebAuthnCredential(uid, credentialID(cred.ID), name, data)
 }
 
-// BeginLogin starts a login ceremony scoped to the admin's own registered
+// BeginLogin starts a login ceremony scoped to user uid's own registered
 // credentials. Returns an error if none are registered.
-func (m *Manager) BeginLogin(r *http.Request) (*protocol.CredentialAssertion, *webauthn.SessionData, error) {
+func (m *Manager) BeginLogin(r *http.Request, uid int64) (*protocol.CredentialAssertion, *webauthn.SessionData, error) {
 	if m == nil {
 		return nil, nil, fmt.Errorf("passkeys unavailable")
 	}
@@ -180,12 +182,12 @@ func (m *Manager) BeginLogin(r *http.Request) (*protocol.CredentialAssertion, *w
 	if err != nil {
 		return nil, nil, err
 	}
-	user, _, err := m.user()
+	user, err := m.user(uid)
 	if err != nil {
 		return nil, nil, err
 	}
 	// Check the successfully-parsed credentials, not the raw row count —
-	// a row that failed to unmarshal in m.user() is already excluded from
+	// a row that failed to unmarshal in m.user is already excluded from
 	// user.creds, and BeginLogin against zero real credentials would
 	// otherwise surface as a confusing library-internal error instead of
 	// this clear one.
@@ -201,7 +203,7 @@ func (m *Manager) BeginLogin(r *http.Request) (*protocol.CredentialAssertion, *w
 
 // FinishLogin validates the browser's assertion and bumps the matched
 // credential's stored sign counter (cloned-authenticator detection).
-func (m *Manager) FinishLogin(r *http.Request, session webauthn.SessionData) error {
+func (m *Manager) FinishLogin(r *http.Request, uid int64, session webauthn.SessionData) error {
 	if m == nil {
 		return fmt.Errorf("passkeys unavailable")
 	}
@@ -209,7 +211,7 @@ func (m *Manager) FinishLogin(r *http.Request, session webauthn.SessionData) err
 	if err != nil {
 		return err
 	}
-	user, _, err := m.user()
+	user, err := m.user(uid)
 	if err != nil {
 		return err
 	}

@@ -166,13 +166,31 @@ func (db *DB) schemaStatements() []string {
 			created_at  %s NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`, pk, ts),
 
+		// Admin accounts (issue #196), see users.go. email is VARCHAR so
+		// MySQL can put a UNIQUE index on it; the totp_* columns are the
+		// old admin_totp_* meta keys, per user.
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS admin_users (
+			id                  %s,
+			email               VARCHAR(255) NOT NULL UNIQUE,
+			password_hash       TEXT NOT NULL,
+			role                TEXT NOT NULL,
+			disabled            INTEGER NOT NULL DEFAULT 0,
+			totp_secret         TEXT NOT NULL DEFAULT '',
+			totp_pending_secret TEXT NOT NULL DEFAULT '',
+			totp_backup_codes   TEXT NOT NULL DEFAULT '',
+			totp_last_counter   TEXT NOT NULL DEFAULT '',
+			webauthn_handle     TEXT NOT NULL DEFAULT '',
+			created_at          %s NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`, pk, ts),
+
 		// token is 32 random bytes hex-encoded (64 chars, see
 		// DB.CreateSession) — VARCHAR(64) fits exactly.
-		// One row per admin login. Only one row is ever live at a time
+		// One row per login. Only one row per user is ever live at a time
 		// (see CreateSession); superseded and revoked rows are kept, with
 		// revoked_at set, as the device history the Settings page lists.
 		`CREATE TABLE IF NOT EXISTS sessions (
 			token          VARCHAR(64) PRIMARY KEY,
+			user_id        INTEGER NOT NULL DEFAULT 0,
 			created_at     TEXT NOT NULL,
 			ip             TEXT NOT NULL DEFAULT '',
 			user_agent     TEXT NOT NULL DEFAULT '',
@@ -323,8 +341,8 @@ func (db *DB) schemaStatements() []string {
 			created_at     %s NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`, pk, ts),
 
-		// One row per registered passkey (issue #78). There's one admin
-		// account but, unlike the single TOTP secret, an admin normally
+		// One row per registered passkey (issue #78), owned by user_id.
+		// Unlike the single TOTP secret, a user normally
 		// registers more than one authenticator (phone, laptop, a security
 		// key), so this is a list, not another meta key. `data` is the
 		// go-webauthn Credential JSON-encoded whole (public key, sign
@@ -343,6 +361,7 @@ func (db *DB) schemaStatements() []string {
 		// authenticator seen in practice.
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS webauthn_credentials (
 			id            %s,
+			user_id       INTEGER NOT NULL DEFAULT 0,
 			credential_id VARCHAR(768) NOT NULL UNIQUE,
 			data          TEXT NOT NULL,
 			name          TEXT NOT NULL DEFAULT '',

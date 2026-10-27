@@ -27,7 +27,7 @@ func TestAuditLog(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("want 1 entry, got %+v", got)
 	}
-	if e := got[0]; e.Actor != "admin" || e.Action != "POST /ip-rules" || e.Summary != "ip=203.0.113.5 rule_type=block" || e.IP == "" {
+	if e := got[0]; e.Actor != testAdminEmail || e.Action != "POST /ip-rules" || e.Summary != "ip=203.0.113.5 rule_type=block" || e.IP == "" {
 		t.Fatalf("entry = %+v", e)
 	}
 

@@ -86,8 +86,11 @@
   <!-- Account -->
   <div class="px-3 pb-3 pt-2 border-t border-white/10 shrink-0">
     <div class="flex items-center gap-3 px-3 py-[10px]">
-      <div class="w-8 h-8 rounded-full bg-navy flex items-center justify-center text-white text-[12px] font-bold shrink-0">A</div>
-      <span class="text-[13px] font-semibold text-white flex-1 truncate">Admin</span>
+      <div class="w-8 h-8 rounded-full bg-navy flex items-center justify-center text-white shrink-0"><i class="hgi hgi-stroke hgi-rounded hgi-user text-[14px]"></i></div>
+      <span class="flex-1 min-w-0" title="{{.UserEmail}}">
+        <span class="block text-[13px] font-semibold text-white truncate">{{.UserEmail}}</span>
+        <span class="block text-[11px] text-white/60 capitalize">{{.Role}}</span>
+      </span>
       <div class="flex items-center gap-1 shrink-0">
       <!-- Theme -->
       <button id="theme-toggle" type="button" title="Toggle dark mode" aria-label="Dark mode" aria-pressed="false"
@@ -127,6 +130,12 @@
 <div class="flex min-h-[calc(100dvh-4rem)] flex-col lg:ml-[264px] xl:flex-row">
 
   <main id="main-content" class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
+    {{if eq .Role "viewer"}}
+    <div class="mb-5 flex items-center gap-2 rounded-md border border-line bg-surface px-4 py-3 text-[13px] text-slate-600">
+      <i class="hgi hgi-stroke hgi-rounded hgi-view text-base text-slate-500"></i>
+      You have read-only access. Changes are refused for viewers.
+    </div>
+    {{end}}
     <!-- Page header -->
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6 lg:mb-7">
       <div>

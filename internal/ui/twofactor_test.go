@@ -48,8 +48,10 @@ func newTestLoginHandler(t *testing.T) (*Handler, *echo.Echo, *storage.DB) {
 		staticImgs:   fstest.MapFS{},
 		loginLimiter: newLoginLimiter(),
 		twoFA:        newTwoFAStore(),
-		passkeys:     passkey.New(db),
-		pkEnroll:     newPkEnrollStore(),
+
+		accountLimiter: newLoginLimiter(),
+		passkeys:       passkey.New(db),
+		pkEnroll:       newPkEnrollStore(),
 	}
 	if err := h.parseTemplates(); err != nil {
 		t.Fatal(err)
@@ -66,10 +68,11 @@ func enableTOTP(t *testing.T, db *storage.DB, backupHashes ...string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.SetPendingTOTPSecret(secret); err != nil {
+	u, _ := db.GetAdminUserByEmail(twoFATestEmail)
+	if err := db.SetPendingTOTPSecret(u.ID, secret); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.EnableTOTP(backupHashes); err != nil {
+	if err := db.EnableTOTP(u.ID, backupHashes); err != nil {
 		t.Fatal(err)
 	}
 	return secret
@@ -302,12 +305,16 @@ func TestTwoFACardStates(t *testing.T) {
 func TestTOTPEnrollmentHandlers(t *testing.T) {
 	h, _, db := newTestLoginHandler(t)
 	e := echo.New()
+	me, _ := db.GetAdminUserByEmail(twoFATestEmail)
+	uid := me.ID
 
 	invoke := func(handler echo.HandlerFunc, form url.Values) (*httptest.ResponseRecorder, error) {
 		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		rec := httptest.NewRecorder()
-		return rec, handler(e.NewContext(req, rec))
+		c := e.NewContext(req, rec)
+		c.Set(ctxUser, me)
+		return rec, handler(c)
 	}
 
 	rec, err := invoke(h.StartTOTPEnrollment, url.Values{})
@@ -317,7 +324,7 @@ func TestTOTPEnrollmentHandlers(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "data:image/png;base64,") {
 		t.Fatal("enrollment start did not render a QR code")
 	}
-	secret, _ := db.GetPendingTOTPSecret()
+	secret, _ := db.GetPendingTOTPSecret(uid)
 	if secret == "" {
 		t.Fatal("enrollment start did not store a pending secret")
 	}
@@ -326,7 +333,7 @@ func TestTOTPEnrollmentHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if enabled, _ := db.TOTPEnabled(); enabled {
+	if enabled, _ := db.TOTPEnabled(uid); enabled {
 		t.Fatal("wrong confirm code enabled 2FA")
 	}
 	if !strings.Contains(rec.Body.String(), "didn") {
@@ -338,7 +345,7 @@ func TestTOTPEnrollmentHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if enabled, _ := db.TOTPEnabled(); !enabled {
+	if enabled, _ := db.TOTPEnabled(uid); !enabled {
 		t.Fatal("valid confirm code did not enable 2FA")
 	}
 	if got := strings.Count(rec.Body.String(), "select-all"); got < backupCodeCount {
@@ -349,14 +356,14 @@ func TestTOTPEnrollmentHandlers(t *testing.T) {
 	if _, err = invoke(h.DisableTOTP, url.Values{"code": {"000000"}}); err != nil {
 		t.Fatal(err)
 	}
-	if enabled, _ := db.TOTPEnabled(); !enabled {
+	if enabled, _ := db.TOTPEnabled(uid); !enabled {
 		t.Fatal("2FA disabled without a valid code")
 	}
 	code, _ = totp.Code(secret, time.Now())
 	if _, err = invoke(h.DisableTOTP, url.Values{"code": {code}}); err != nil {
 		t.Fatal(err)
 	}
-	if enabled, _ := db.TOTPEnabled(); enabled {
+	if enabled, _ := db.TOTPEnabled(uid); enabled {
 		t.Fatal("valid code did not disable 2FA")
 	}
 }

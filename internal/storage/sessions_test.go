@@ -64,8 +64,9 @@ func TestPruneExpiredSessions(t *testing.T) {
 // authenticating and can tell it was signed out rather than timed out.
 func TestCreateSessionSingleActive(t *testing.T) {
 	db := openTestDB(t)
+	uid := testUser(t, db)
 
-	deviceA, err := db.CreateSession("10.0.0.1", "Mozilla/5.0 (Macintosh) Firefox/130.0", "")
+	deviceA, err := db.CreateSession(uid, "10.0.0.1", "Mozilla/5.0 (Macintosh) Firefox/130.0", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +74,7 @@ func TestCreateSessionSingleActive(t *testing.T) {
 		t.Fatal("device A session not valid immediately after login")
 	}
 
-	deviceB, err := db.CreateSession("10.0.0.2", "Mozilla/5.0 (Windows NT 10.0) Chrome/131.0", "")
+	deviceB, err := db.CreateSession(uid, "10.0.0.2", "Mozilla/5.0 (Windows NT 10.0) Chrome/131.0", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,13 +99,13 @@ func TestCreateSessionSingleActive(t *testing.T) {
 	}
 
 	// Revoking the one live session leaves nothing authenticating.
-	if _, err := db.RevokeOtherSessions("none-of-them"); err != nil {
+	if _, err := db.RevokeOtherSessions(uid, "none-of-them"); err != nil {
 		t.Fatal(err)
 	}
 	if valid, _ := db.ValidateSession(deviceB); valid {
 		t.Error("device B still valid after RevokeOtherSessions")
 	}
-	if sessions, err := db.ListSessions(); err != nil || len(sessions) != 2 {
+	if sessions, err := db.ListSessions(uid); err != nil || len(sessions) != 2 {
 		t.Errorf("ListSessions = %d rows (err %v), want 2", len(sessions), err)
 	}
 }
@@ -114,19 +115,20 @@ func TestCreateSessionSingleActive(t *testing.T) {
 // the card relies on to show "This device" first.
 func TestListSessionsLiveFirst(t *testing.T) {
 	db := openTestDB(t)
+	uid := testUser(t, db)
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, tok := range []string{"dead-a", "dead-b"} {
 		if _, err := db.exec(
-			`INSERT INTO sessions (token, created_at, revoked_at) VALUES (?, ?, ?)`,
-			tok, now, now); err != nil {
+			`INSERT INTO sessions (token, user_id, created_at, revoked_at) VALUES (?, ?, ?, ?)`,
+			tok, uid, now, now); err != nil {
 			t.Fatal(err)
 		}
 	}
-	live, err := db.CreateSession("10.0.0.9", "curl/8.5.0", "")
+	live, err := db.CreateSession(uid, "10.0.0.9", "curl/8.5.0", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	sessions, err := db.ListSessions()
+	sessions, err := db.ListSessions(uid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,23 +145,24 @@ func TestListSessionsLiveFirst(t *testing.T) {
 // must not grow the "Registered devices" list by a row per login.
 func TestCreateSessionSameDeviceReplacesRow(t *testing.T) {
 	db := openTestDB(t)
+	uid := testUser(t, db)
 	ua := "Mozilla/5.0 (X11; Linux) Firefox/130.0"
 	// A pre-device-ID row from this browser, matched on IP + UA.
-	if _, err := db.CreateSession("10.0.0.1", ua, ""); err != nil {
+	if _, err := db.CreateSession(uid, "10.0.0.1", ua, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.CreateSession("10.0.0.1", ua, "dev-a"); err != nil {
+	if _, err := db.CreateSession(uid, "10.0.0.1", ua, "dev-a"); err != nil {
 		t.Fatal(err)
 	}
 	// Same device from a new IP, then a different device.
-	last, err := db.CreateSession("10.0.0.2", ua, "dev-a")
+	last, err := db.CreateSession(uid, "10.0.0.2", ua, "dev-a")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.CreateSession("10.0.0.3", ua, "dev-b"); err != nil {
+	if _, err := db.CreateSession(uid, "10.0.0.3", ua, "dev-b"); err != nil {
 		t.Fatal(err)
 	}
-	sessions, err := db.ListSessions()
+	sessions, err := db.ListSessions(uid)
 	if err != nil || len(sessions) != 2 {
 		t.Fatalf("ListSessions = %d rows (err %v), want 2 (one per device)", len(sessions), err)
 	}
