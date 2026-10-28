@@ -14,16 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-10-28
+
 ### Added
 
 - (#225) v3: Site-wide search in the admin top bar
 
-## [3.0.0] - 2026-10-28
-
-### Changed
-
-- (#215) v3: Redesign the admin UI (retro archival theme)
-- (#216) v3: Role-aware admin UI with read-only views for viewers
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.0...main
-[3.0.0]: https://github.com/sinhaparth5/palisade-waf/compare/v2.11.1...v3.0.0
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.1...main
+[3.0.1]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.0...v3.0.1
