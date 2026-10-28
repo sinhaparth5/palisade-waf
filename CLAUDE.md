@@ -119,8 +119,9 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - `h.render` sets `data["Page"]` to the template name, so pagination uses `CurPage`.
 - Go templates: content outside `{{define}}` never renders — modals go inside `{{define "content"}}`.
 - Hidden-step wizards use `novalidate` + manual JS checks; `required` in a hidden step silently blocks submission in Chrome.
+- Form controls use the `.field`, `.field-label`, `.btn-ghost` and `.tag` classes from `tailwind.css`, not long utility strings.
 - Reuse partials in `templates/components/` (`card_header`, `panel_header`, `management_hero`, `empty_state`, `confirm_modal`, `toggle_switch`, `remove_btn`, `rule_type_badge`, `rule_ring_row`, `ring`, `section_head`, `pager`).
-- Management pages (IP Rules, Geo Rules, Services, Certificates, WAF Rules, Threat Intel): `management-hero`, then one full-width `card border-t-2 border-t-brand p-5` primary-action card, supporting panels in a grid **below** it. Inline submit for single-row forms, button below for multi-row.
+- Management pages (IP Rules, Geo Rules, Services, Certificates, WAF Rules, Threat Intel): `management-hero`, then one full-width `card border-t-4 border-t-edge p-5` primary-action card, supporting panels in a grid **below** it. Inline submit for single-row forms, button below for multi-row.
 - Icon names (`hgi-*`) are not validated; a wrong one renders blank. Check against `curl -s https://cdn.hugeicons.com/font/hgi-stroke-rounded.css | grep -oE '\.hgi-[a-z0-9-]+'`.
 
 **JS/CSS**

@@ -4,22 +4,22 @@
 <div class="flex flex-col gap-4">
 
   <!-- ── Compact disable strip ── -->
-    <div class="card border-t-2 border-t-brand p-5">
+    <div class="card border-t-4 border-t-edge p-5">
       {{template "panel-header" (map "Icon" "hgi-security-block" "Title" "Disable Rule")}}
 
       <form hx-post="/admin/waf-rules/disable" hx-target="#waf-content" hx-swap="innerHTML" class="grid grid-cols-1 items-end gap-4 lg:grid-cols-[1fr_1fr_1.35fr_auto]">
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">CRS Rule ID</label>
+          <label class="field-label">CRS Rule ID</label>
           <input name="rule_id" type="number" placeholder="e.g. 942100" required
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] font-mono outline-hidden transition-[border] duration-150 text-slate-800 bg-white"
+            class="field font-mono"
           />
         </div>
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Scope</label>
+          <label class="field-label">Scope</label>
           <select name="service"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white">
+            class="field">
             <option value="">Global (all services)</option>
             {{range .Services}}
             <option value="{{.Name}}">{{.Name}}</option>
@@ -28,9 +28,9 @@
         </div>
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Reason <span class="text-slate-400">(optional)</span></label>
+          <label class="field-label">Reason <span class="text-slate-400">(optional)</span></label>
           <input name="reason" type="text" placeholder="e.g. false positive on login form"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"
+            class="field"
           />
         </div>
 
@@ -40,7 +40,7 @@
         </button>
       </form>
 
-      <div class="mt-5 grid grid-cols-1 gap-2 border-t border-canvas pt-4 text-[12px] text-slate-500 md:grid-cols-3">
+      <div class="mt-5 grid grid-cols-1 gap-2 border-t border-line pt-4 text-[12px] text-slate-500 md:grid-cols-3">
         <p>Disabling a rule suppresses it via <code class="font-mono bg-surface px-1 py-[1px] rounded-sm text-[11px]">SecRuleRemoveById</code> and reloads the WAF engine immediately, no restart needed.</p>
         <p class="mt-1">Leave scope on Global to disable everywhere, or pick a service to only suppress the rule for that backend; every other service keeps enforcing it.</p>
         <p class="mt-1">Re-enable any time from the lists below.</p>
@@ -53,15 +53,15 @@
     <form id="custom-rule-form" class="flex flex-col gap-4">
       <input type="hidden" name="id" value="">
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Rule</label>
+        <label class="field-label">Rule</label>
         <textarea name="rules" rows="5" placeholder='SecRule ARGS "@contains badword" "id:1000001,phase:2,deny,status:403,msg:&apos;test&apos;"'
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] font-mono outline-hidden transition-[border] duration-150 text-slate-800 bg-white"></textarea>
+          class="field text-[13px] font-mono"></textarea>
       </div>
       <div class="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-[1fr_1.35fr_auto]">
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Scope</label>
+          <label class="field-label">Scope</label>
           <select name="service"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white">
+            class="field">
             <option value="">Global (all services)</option>
             {{range .Services}}
             <option value="{{.Name}}">{{.Name}}</option>
@@ -69,20 +69,20 @@
           </select>
         </div>
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Note <span class="text-slate-400">(optional)</span></label>
+          <label class="field-label">Note <span class="text-slate-400">(optional)</span></label>
           <input name="note" type="text" placeholder="e.g. CVE-2026-1234 probe"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+            class="field"/>
         </div>
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Replay last N requests</label>
+          <label class="field-label">Replay last N requests</label>
           <input name="limit" type="number" min="1" max="2000" value="500"
-            class="focus-green w-32 border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+            class="field w-32"/>
         </div>
       </div>
       <p id="custom-rule-error" class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700 break-all empty:hidden"></p>
       <div class="flex flex-wrap items-center gap-3">
         <button type="button" hx-post="/admin/waf-rules/dry-run" hx-target="#waf-dryrun-result" hx-swap="innerHTML" hx-indicator="#waf-dryrun-spinner"
-          class="flex min-h-[44px] items-center justify-center gap-2 rounded-md border-[1.5px] border-line bg-white px-[18px] py-[9px] text-[14px] font-medium text-slate-700 hover:bg-surface">
+          class="btn-ghost min-h-[44px] px-[18px] text-[13px]">
           <i class="hgi hgi-stroke hgi-rounded hgi-play text-sm"></i>
           Dry run
         </button>
@@ -96,7 +96,7 @@
       </div>
     </form>
     <div id="waf-dryrun-result" class="mt-4"></div>
-    <div class="mt-5 grid grid-cols-1 gap-2 border-t border-canvas pt-4 text-[12px] text-slate-500 md:grid-cols-3">
+    <div class="mt-5 grid grid-cols-1 gap-2 border-t border-line pt-4 text-[12px] text-slate-500 md:grid-cols-3">
       <p>Saving compiles the rule and makes it live on the next request, no restart needed. Only <code class="font-mono bg-surface px-1 py-[1px] rounded-sm text-[11px]">SecRule</code> and <code class="font-mono bg-surface px-1 py-[1px] rounded-sm text-[11px]">SecAction</code> are allowed, with ids from 1000000 to 1999999.</p>
       <p>Dry run first: it replays logged method, URL and headers through the current global rules and the same plus your rule, and lists every request whose verdict changes. Bodies aren't logged, so body rules can't match there.</p>
       <p>Scope a rule to one service to apply it only there. Disable or remove it from the list below.</p>
@@ -117,11 +117,11 @@
   <!-- Virtual patches (issue #189) -->
   <div class="card overflow-hidden">
     {{template "card-header" (map "Cat" "Shipped with Palisade" "Title" "Virtual Patches" "Badge" (printf "%d CVEs" (len .VPatches)))}}
-    <p class="px-5 pb-3 text-[12px] text-slate-500">Rules for actively exploited CVEs, on for every service and blocking. They load ahead of CRS, so a hit is logged under the patch's own rule id and counts as critical for autoban. Turning one off adds a normal rule exception; re-enable it from the lists below. New patches arrive with Palisade releases.</p>
+    <p class="px-5 py-3 text-[12px] text-slate-500">Rules for actively exploited CVEs, on for every service and blocking. They load ahead of CRS, so a hit is logged under the patch's own rule id and counts as critical for autoban. Turning one off adds a normal rule exception; re-enable it from the lists below. New patches arrive with Palisade releases.</p>
     <div class="px-2 pb-2">
       <div class="table-scroll"><table class="w-full text-[13px]">
         <thead>
-          <tr class="text-slate-400 text-[11px] font-semibold uppercase tracking-wide bg-surface">
+          <tr class="label-mono border-b border-edge">
             <th class="px-4 py-2 text-left">CVE</th>
             <th class="px-4 py-2 text-left">Product</th>
             <th class="px-4 py-2 text-right">Hits</th>
@@ -131,20 +131,20 @@
         </thead>
         <tbody>
           {{range .VPatches}}
-          <tr class="border-t border-canvas hover:bg-surface transition-colors duration-100 align-top">
+          <tr class="border-t border-line hover:bg-surface transition-colors duration-100 align-top">
             <td class="px-4 py-3 whitespace-nowrap">
-              <a href="{{.Reference}}" target="_blank" rel="noopener noreferrer" class="font-mono font-semibold text-slate-900 hover:text-brand-dark underline">{{.CVE}}</a>
+              <a href="{{.Reference}}" target="_blank" rel="noopener noreferrer" class="font-mono font-semibold text-slate-900 hover:text-slate-600 underline">{{.CVE}}</a>
               <div class="text-[11px] text-slate-400 font-mono">rule {{.RuleID}} · added {{.Added}}</div>
             </td>
             <td class="px-4 py-3 text-slate-600 min-w-[220px]">{{.Product}}</td>
             <td class="px-4 py-3 text-right font-semibold text-slate-700">{{.Hits}}</td>
             <td class="px-4 py-3">
               {{if .GlobalOff}}
-              <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-amber-100 text-amber-700">Off everywhere</span>
+              <span class="tag"><span class="h-2 w-2 rounded-full bg-warning"></span>Off everywhere</span>
               {{else}}
-              <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-green-100 text-green-700">Active</span>
+              <span class="tag"><span class="h-2 w-2 rounded-full bg-success"></span>Active</span>
               {{range .OffFor}}
-              <span class="ml-1 text-[11px] font-semibold px-[8px] py-1 rounded-sm bg-amber-100 text-amber-700">off: {{.}}</span>
+              <span class="ml-1 tag"><span class="h-2 w-2 rounded-full bg-warning"></span>off: {{.}}</span>
               {{end}}
               {{end}}
             </td>
@@ -154,14 +154,14 @@
                 <input type="hidden" name="rule_id" value="{{.RuleID}}"/>
                 <input type="hidden" name="reason" value="Virtual patch {{.CVE}} turned off"/>
                 <select name="service" aria-label="Turn off for"
-                  class="focus-green border border-line rounded-lg px-2 py-1 text-[12px] outline-hidden text-slate-700 bg-white">
+                  class="field w-auto px-2 py-1 text-[12px]">
                   <option value="">All services</option>
                   {{range $.Services}}
                   <option value="{{.Name}}">{{.Name}}</option>
                   {{end}}
                 </select>
                 <button type="submit"
-                  class="text-[12px] font-medium text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded-lg px-3 py-1 transition-colors cursor-pointer bg-white"
+                  class="btn-ghost border-red-300 text-red-600 hover:bg-red-50"
                   hx-confirm="Turn off the {{.CVE}} patch? The engine reloads immediately.">
                   Turn off
                 </button>
@@ -178,17 +178,17 @@
   <!-- Suggested exceptions (issue #76) -->
   <div class="card overflow-hidden">
     {{template "card-header" (map "Cat" "Feedback" "Title" "Suggested Exceptions" "Badge" (printf "%d suggested" (len .Suggestions)))}}
-    <div class="flex flex-col gap-1 px-2 pb-2">
+    <div class="flex flex-col px-2 pb-2">
       {{if .Suggestions}}
       {{range .Suggestions}}
-      <div class="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors duration-150">
+      <div class="flex items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
         <div class="w-10 h-10 rounded-md flex items-center justify-center shrink-0 bg-amber-50">
           <i class="hgi hgi-stroke hgi-rounded hgi-thumbs-down text-base text-amber-500"></i>
         </div>
         <div class="flex-1 min-w-0">
           <div class="font-mono text-[14px] font-semibold text-slate-900">
             Rule {{.RuleID}}
-            <span class="ml-1 font-sans text-[11px] font-semibold px-[8px] py-[2px] rounded-sm bg-brand-tint text-brand-dark">{{if .ServiceName}}{{.ServiceName}}{{else}}Global{{end}}</span>
+            <span class="ml-1 tag">{{if .ServiceName}}{{.ServiceName}}{{else}}Global{{end}}</span>
           </div>
           <div class="text-[12px] text-slate-500 truncate">
             Marked false-positive {{.FalsePositiveCount}} times · last {{fmtTime .LastMarked}}
@@ -199,7 +199,7 @@
           <input type="hidden" name="service" value="{{.ServiceName}}"/>
           <input type="hidden" name="reason" value="{{printf "Suggested: %d false-positive marks in the last %d days" .FalsePositiveCount $.FeedbackWindow}}"/>
           <button type="submit"
-            class="text-[12px] font-medium text-brand hover:text-brand-dark border border-line hover:border-brand rounded-lg px-3 py-1 transition-colors cursor-pointer bg-white">
+            class="btn-ghost">
             Add exception
           </button>
         </form>
@@ -210,18 +210,18 @@
       {{end}}
     </div>
     <form hx-post="/admin/waf-rules/feedback-config" hx-target="#waf-content" hx-swap="innerHTML"
-      class="flex flex-wrap items-end gap-3 border-t border-canvas px-5 py-4">
+      class="flex flex-wrap items-end gap-3 border-t border-line px-5 py-4">
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">False-positive marks needed</label>
+        <label class="field-label">False-positive marks needed</label>
         <input name="feedback_threshold" type="number" min="1" max="1000" value="{{.FeedbackThreshold}}"
-          class="focus-green w-28 border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field w-28"/>
       </div>
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Window (days)</label>
+        <label class="field-label">Window (days)</label>
         <input name="feedback_window" type="number" min="1" max="90" value="{{.FeedbackWindow}}"
-          class="focus-green w-28 border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field w-28"/>
       </div>
-      <button type="submit" class="text-[12px] font-medium text-slate-600 hover:text-slate-900 border border-line hover:border-slate-400 rounded-lg px-3 py-[9px] transition-colors cursor-pointer bg-white">
+      <button type="submit" class="btn-ghost py-[10px]">
         Save
       </button>
       <p class="text-[12px] text-slate-500 basis-full">A suggestion needs this many false-positive marks and zero true-positive marks on the same rule/service within the window. Suggestion-only — nothing is ever disabled automatically.</p>
@@ -235,7 +235,7 @@
       {{if .TopRules}}
       <div class="table-scroll"><table class="w-full text-[13px]">
         <thead>
-          <tr class="text-slate-400 text-[11px] font-semibold uppercase tracking-wide bg-surface">
+          <tr class="label-mono border-b border-edge">
             <th class="px-4 py-2 text-left">Rule ID</th>
             <th class="px-4 py-2 text-right">Hits</th>
             <th class="px-4 py-2 text-left">Last seen</th>
@@ -245,15 +245,15 @@
         </thead>
         <tbody>
           {{range .TopRules}}
-          <tr class="border-t border-canvas hover:bg-surface transition-colors duration-100">
+          <tr class="border-t border-line hover:bg-surface transition-colors duration-100">
             <td class="px-4 py-3 font-mono font-semibold text-slate-900">{{.RuleID}}</td>
             <td class="px-4 py-3 text-right font-semibold text-slate-700">{{.HitCount}}</td>
             <td class="px-4 py-3 text-slate-500">{{fmtTime .LastSeen}}</td>
             <td class="px-4 py-3">
               {{if .Disabled}}
-              <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-amber-100 text-amber-700">Disabled</span>
+              <span class="tag"><span class="h-2 w-2 rounded-full bg-warning"></span>Disabled</span>
               {{else}}
-              <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-green-100 text-green-700">Active</span>
+              <span class="tag"><span class="h-2 w-2 rounded-full bg-success"></span>Active</span>
               {{end}}
             </td>
             <td class="px-4 py-3 text-right">
@@ -261,7 +261,7 @@
               <form hx-post="/admin/waf-rules/disable" hx-target="#waf-content" hx-swap="innerHTML" class="inline">
                 <input type="hidden" name="rule_id" value="{{.RuleID}}"/>
                 <button type="submit"
-                  class="text-[12px] font-medium text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded-lg px-3 py-1 transition-colors cursor-pointer bg-white"
+                  class="btn-ghost border-red-300 text-red-600 hover:bg-red-50"
                   hx-confirm="Disable WAF rule {{.RuleID}}? The engine will reload immediately.">
                   Disable
                 </button>
@@ -281,10 +281,10 @@
   <!-- Custom rules (issue #112) -->
   <div class="card overflow-hidden">
     {{template "card-header" (map "Cat" "Firewall" "Title" "Custom Rules" "Badge" (printf "%d rules" (len .CustomRules)))}}
-    <div class="flex flex-col gap-1 px-2 pb-2">
+    <div class="flex flex-col px-2 pb-2">
       {{if .CustomRules}}
       {{range .CustomRules}}
-      <div class="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors duration-150">
+      <div class="flex items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
         <form hx-post="/admin/waf-rules/custom/{{.ID}}/toggle" hx-trigger="change" hx-target="#waf-content" hx-swap="innerHTML" class="shrink-0" title="{{if .Enabled}}Enabled{{else}}Disabled{{end}}">
           {{template "toggle-switch" (map "Name" "enabled" "Checked" .Enabled)}}
         </form>
@@ -293,12 +293,12 @@
             {{.Rule}}
           </div>
           <div class="text-[12px] text-slate-500 truncate">
-            <span class="font-semibold px-[8px] py-[1px] rounded-sm bg-brand-tint text-brand-dark text-[11px]">{{if .ServiceName}}{{.ServiceName}}{{else}}Global{{end}}</span>
+            <span class="tag mr-1">{{if .ServiceName}}{{.ServiceName}}{{else}}Global{{end}}</span>
             {{if .Note}}{{.Note}}{{else}}No note{{end}} · {{fmtTime .CreatedAt}}
           </div>
         </div>
         <button type="button" data-custom-edit data-id="{{.ID}}" data-rule="{{.Rule}}" data-service="{{.ServiceName}}" data-note="{{.Note}}"
-          class="shrink-0 text-[12px] font-semibold text-slate-500 hover:text-brand-dark">Edit</button>
+          class="btn-ghost shrink-0">Edit</button>
         {{template "remove-btn" (map "URL" (printf "/admin/waf-rules/custom/%d" .ID) "Target" "#waf-content" "Confirm" "Delete this custom rule? The engine reloads immediately.")}}
       </div>
       {{end}}
@@ -311,10 +311,10 @@
   <!-- Disabled rules -->
   <div class="card overflow-hidden">
     {{template "card-header" (map "Cat" "Firewall" "Title" "Disabled Rules" "Badge" (printf "%d rules" (len .Disabled)))}}
-    <div class="flex flex-col gap-1 px-2 pb-2">
+    <div class="flex flex-col px-2 pb-2">
       {{if .Disabled}}
       {{range .Disabled}}
-      <div class="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors duration-150">
+      <div class="flex items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
         <div class="w-10 h-10 rounded-md flex items-center justify-center shrink-0 bg-amber-50">
           <i class="hgi hgi-stroke hgi-rounded hgi-security-block text-base text-amber-500"></i>
         </div>
@@ -336,17 +336,17 @@
   <!-- Per-service exceptions -->
   <div class="card overflow-hidden">
     {{template "card-header" (map "Cat" "Firewall" "Title" "Per-Service Exceptions" "Badge" (printf "%d rules" (len .ServiceExceptions)))}}
-    <div class="flex flex-col gap-1 px-2 pb-2">
+    <div class="flex flex-col px-2 pb-2">
       {{if .ServiceExceptions}}
       {{range .ServiceExceptions}}
-      <div class="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors duration-150">
-        <div class="w-10 h-10 rounded-md flex items-center justify-center shrink-0 bg-brand-tint">
-          <i class="hgi hgi-stroke hgi-rounded hgi-security-block text-base text-brand-dark"></i>
+      <div class="flex items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
+        <div class="w-10 h-10 rounded-md flex items-center justify-center shrink-0 bg-green-50">
+          <i class="hgi hgi-stroke hgi-rounded hgi-security-block text-base text-green-600"></i>
         </div>
         <div class="flex-1 min-w-0">
           <div class="font-mono text-[14px] font-semibold text-slate-900">
             Rule {{.RuleID}}
-            <span class="ml-1 font-sans text-[11px] font-semibold px-[8px] py-[2px] rounded-sm bg-brand-tint text-brand-dark">{{.ServiceName}}</span>
+            <span class="ml-1 tag">{{.ServiceName}}</span>
           </div>
           <div class="text-[12px] text-slate-500 truncate">
             {{if .Reason}}{{.Reason}}{{else}}No reason given{{end}} · {{fmtTime .CreatedAt}}
@@ -372,7 +372,7 @@
 {{if .Hits}}
 <div class="table-scroll"><table class="w-full text-[13px]">
   <thead>
-    <tr class="text-slate-400 text-[11px] font-semibold uppercase tracking-wide bg-surface">
+    <tr class="label-mono border-b border-edge">
       <th class="px-4 py-2 text-left">Log</th>
       <th class="px-4 py-2 text-left">Request</th>
       <th class="px-4 py-2 text-left">Now</th>
@@ -381,7 +381,7 @@
   </thead>
   <tbody>
     {{range .Hits}}
-    <tr class="border-t border-canvas">
+    <tr class="border-t border-line">
       <td class="px-4 py-2 font-mono text-slate-500">#{{.ID}}</td>
       <td class="px-4 py-2 font-mono text-slate-700 break-all"><span class="font-semibold">{{.Method}}</span> {{.Host}}{{.Target}} <span class="font-sans text-[11px] text-slate-400">{{.AppName}}</span></td>
       <td class="px-4 py-2">{{template "waf-dryrun-verdict" .Before}}</td>
@@ -395,7 +395,7 @@
 {{end}}
 
 {{define "waf-dryrun-verdict"}}
-{{if .Blocked}}<span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-red-100 text-red-700">Block{{if .RuleID}} · {{.RuleID}}{{end}}</span>{{else}}<span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-green-100 text-green-700">Pass</span>{{end}}
+{{if .Blocked}}<span class="tag"><span class="h-2 w-2 rounded-full bg-danger"></span>Block{{if .RuleID}} · {{.RuleID}}{{end}}</span>{{else}}<span class="tag"><span class="h-2 w-2 rounded-full bg-success"></span>Pass</span>{{end}}
 {{end}}
 
 {{define "scripts"}}<script src="{{.AdminPath}}/static/js/wafrules.min.js?v={{.Asset}}" defer></script>{{end}}

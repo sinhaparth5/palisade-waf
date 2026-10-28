@@ -5,7 +5,7 @@
 
   <!-- ── Left: upload form ── -->
   <div class="flex flex-col gap-4">
-    <div class="card border-t-2 border-t-brand p-5">
+    <div class="card border-t-4 border-t-edge p-5">
       {{template "panel-header" (map "Icon" "hgi-certificate-01" "Title" "Add Certificate")}}
 
       <form id="cert-upload-form"
@@ -16,21 +16,21 @@
             class="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
         <div class="lg:col-span-2">
-          <label for="cert-name" class="block text-[12px] text-slate-500 mb-[6px] font-medium">
+          <label for="cert-name" class="field-label">
             Name <span class="text-red-400">*</span>
           </label>
           <input id="cert-name" name="name" type="text"
             placeholder="e.g. cloudflare-example-com"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+            class="field"/>
         </div>
 
         <div>
           <div class="flex items-center justify-between mb-[6px]">
-            <label for="cert-pem" class="text-[12px] text-slate-500 font-medium">
+            <label for="cert-pem" class="label-mono">
               Certificate (PEM) <span class="text-red-400">*</span>
             </label>
             <label for="cert-file-input"
-              class="inline-flex items-center gap-[5px] text-[11px] font-medium text-brand cursor-pointer hover:text-brand-dark transition-colors select-none">
+              class="inline-flex items-center gap-[5px] text-[11px] font-medium text-ink underline cursor-pointer hover:text-slate-600 transition-colors select-none">
               <i class="hgi hgi-stroke hgi-rounded hgi-upload-02 text-xs"></i>
               Upload .pem / .crt
             </label>
@@ -39,16 +39,16 @@
             data-fills="cert-pem" data-names="cert-name"/>
           <textarea id="cert-pem" name="cert_pem" rows="5"
             placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white resize-y"></textarea>
+            class="field text-[12px] font-mono resize-y"></textarea>
         </div>
 
         <div>
           <div class="flex items-center justify-between mb-[6px]">
-            <label for="key-pem" class="text-[12px] text-slate-500 font-medium">
+            <label for="key-pem" class="label-mono">
               Private Key (PEM) <span class="text-red-400">*</span>
             </label>
             <label for="key-file-input"
-              class="inline-flex items-center gap-[5px] text-[11px] font-medium text-brand cursor-pointer hover:text-brand-dark transition-colors select-none">
+              class="inline-flex items-center gap-[5px] text-[11px] font-medium text-ink underline cursor-pointer hover:text-slate-600 transition-colors select-none">
               <i class="hgi hgi-stroke hgi-rounded hgi-upload-02 text-xs"></i>
               Upload .pem / .key
             </label>
@@ -57,7 +57,7 @@
             data-fills="key-pem"/>
           <textarea id="key-pem" name="key_pem" rows="5"
             placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white resize-y"></textarea>
+            class="field text-[12px] font-mono resize-y"></textarea>
         </div>
 
         <div id="cert-error" class="text-[12px] text-red-500 -mt-1 lg:col-span-2"></div>
@@ -68,8 +68,8 @@
         </button>
       </form>
 
-      <div class="mt-5 pt-4 border-t border-canvas">
-        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Cloudflare origin certs</p>
+      <div class="mt-5 pt-4 border-t border-line">
+        <p class="label-mono mb-2">Cloudflare origin certs</p>
         <p class="text-[12px] text-slate-500 leading-[1.6]">
           Cloudflare → SSL/TLS → Origin Server → <strong>Create Certificate</strong>.
           Covers your domain and <code class="font-mono bg-surface px-1 rounded-sm text-[11px]">*.domain</code> in one cert.
@@ -86,11 +86,11 @@
     <div class="table-scroll px-4 sm:px-6 pb-6">
       <table class="w-full min-w-[640px] border-collapse text-[13px]">
         <thead>
-          <tr class="border-b border-canvas bg-surface">
-            <th class="text-left pb-3 pr-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Name</th>
-            <th class="text-left pb-3 pr-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Domains covered</th>
-            <th class="text-left pb-3 pr-6 text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Expires</th>
-            <th class="pb-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wide"></th>
+          <tr class="border-b border-line bg-surface">
+            <th class="text-left pb-3 pr-6 label-mono">Name</th>
+            <th class="text-left pb-3 pr-6 label-mono">Domains covered</th>
+            <th class="text-left pb-3 pr-6 label-mono">Expires</th>
+            <th class="pb-3 label-mono"></th>
           </tr>
         </thead>
         <tbody id="cert-rows">
@@ -113,7 +113,7 @@
 </tr>
 {{else}}
 {{range .Certs}}
-<tr class="border-b border-canvas last:border-0">
+<tr class="border-b border-line last:border-0">
   <td class="py-4 pr-6 font-medium text-slate-800 align-top">{{.Name}}</td>
   <td class="py-4 pr-6 align-top">
     {{if .Domains}}

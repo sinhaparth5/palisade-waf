@@ -4,7 +4,7 @@
 <div class="flex flex-col gap-4">
 
   <!-- ── Add sources at the top so the feed table can use the full width ── -->
-    <div class="card border-t-2 border-t-brand p-5">
+    <div class="card border-t-4 border-t-edge p-5">
       {{template "panel-header" (map "Icon" "hgi-database-01" "Title" "Add Feed")}}
 
       <form hx-post="{{$.AdminPath}}/threat-intel"
@@ -12,23 +12,23 @@
             class="grid grid-cols-1 items-end gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1.5fr_.7fr_auto]">
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Label</label>
+          <label class="field-label">Label</label>
           <input name="label" type="text" placeholder="e.g. Tor Exit Nodes" required
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden bg-white text-slate-800"
+            class="field"
           />
         </div>
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">URL</label>
+          <label class="field-label">URL</label>
           <input name="url" type="url" placeholder="https://…/iplist.txt" required
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] font-mono outline-hidden bg-white text-slate-800"
+            class="field font-mono"
           />
         </div>
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Sync interval (hours)</label>
+          <label class="field-label">Sync interval (hours)</label>
           <input name="interval_hours" type="number" value="24" min="1"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden bg-white text-slate-800"
+            class="field"
           />
         </div>
 
@@ -39,8 +39,8 @@
       </form>
 
       <!-- Presets -->
-      <div class="mt-5 pt-4 border-t border-canvas">
-        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-3">Quick-add presets</p>
+      <div class="mt-5 pt-4 border-t border-line">
+        <p class="label-mono mb-3">Quick-add presets</p>
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {{range .Presets}}
           <form hx-post="{{$.AdminPath}}/threat-intel"
@@ -49,7 +49,7 @@
             <input type="hidden" name="url" value="{{.URL}}"/>
             <input type="hidden" name="interval_hours" value="{{.IntervalHours}}"/>
             <button type="submit"
-              class="w-full text-left text-[12px] text-slate-700 font-medium border border-line hover:border-brand hover:bg-brand-tint rounded-md px-3 py-2 transition-colors cursor-pointer bg-white flex items-center justify-between gap-2">
+              class="w-full text-left text-[12px] text-slate-700 font-medium border border-edge hover:bg-surface rounded-sm px-3 py-2 transition-colors cursor-pointer bg-white flex items-center justify-between gap-2">
               <span>{{.Label}}</span>
               <span class="text-slate-400 text-[11px] shrink-0">every {{.IntervalHours}}h</span>
             </button>
@@ -59,27 +59,27 @@
       </div>
 
       <!-- CrowdSec LAPI -->
-      <div class="mt-5 pt-4 border-t border-canvas">
-        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-3">CrowdSec LAPI</p>
+      <div class="mt-5 pt-4 border-t border-line">
+        <p class="label-mono mb-3">CrowdSec LAPI</p>
         <form hx-post="{{$.AdminPath}}/threat-intel/crowdsec"
               hx-target="#intel-rows" hx-swap="innerHTML"
               class="grid grid-cols-1 items-end gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1.5fr_1fr_auto]">
           <div>
-            <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Label</label>
+            <label class="field-label">Label</label>
             <input name="label" type="text" value="CrowdSec" required
-              class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden bg-white text-slate-800"
+              class="field"
             />
           </div>
           <div>
-            <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">LAPI URL</label>
+            <label class="field-label">LAPI URL</label>
             <input name="url" type="url" placeholder="http://127.0.0.1:8080" required
-              class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] font-mono outline-hidden bg-white text-slate-800"
+              class="field font-mono"
             />
           </div>
           <div>
-            <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Bouncer API key</label>
+            <label class="field-label">Bouncer API key</label>
             <input name="api_key" type="password" autocomplete="off" placeholder="cscli bouncers add palisade" required
-              class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] font-mono outline-hidden bg-white text-slate-800"
+              class="field font-mono"
             />
           </div>
           <button type="submit" class="btn-primary flex w-full items-center justify-center gap-2 xl:w-auto">
@@ -90,7 +90,7 @@
         <p class="mt-2 text-[12px] text-slate-500">Polled every 30 seconds; only changes are transferred after the first sync. Ban decisions on IPs and ranges are blocked (logged as <code class="font-mono bg-surface px-1 rounded-sm text-[11px]">ip_blocked:crowdsec</code>) until CrowdSec expires them; captcha decisions are ignored.</p>
       </div>
 
-      <div class="mt-4 grid grid-cols-1 gap-2 border-t border-canvas pt-4 text-[12px] text-slate-500 md:grid-cols-2">
+      <div class="mt-4 grid grid-cols-1 gap-2 border-t border-line pt-4 text-[12px] text-slate-500 md:grid-cols-2">
         <p>Feeds are plain-text lists of IPs/CIDRs, one per line. Lines starting with <code class="font-mono bg-surface px-1 rounded-sm text-[11px]">#</code> or <code class="font-mono bg-surface px-1 rounded-sm text-[11px]">;</code> are treated as comments.</p>
         <p class="mt-1">Intel blocks are lower priority than your IP Rules; your allow rules always win.</p>
       </div>
@@ -111,7 +111,7 @@
 {{if .Sources}}
 <div class="table-scroll"><table class="w-full text-[13px]">
   <thead>
-    <tr class="text-slate-400 text-[11px] font-semibold uppercase tracking-wide bg-surface">
+    <tr class="label-mono border-b border-edge">
       <th class="px-5 py-3 text-left">Feed</th>
       <th class="px-5 py-3 text-right">IPs</th>
       <th class="px-5 py-3 text-left">Last synced</th>
@@ -121,7 +121,7 @@
   </thead>
   <tbody>
     {{range .Sources}}
-    <tr class="border-t border-canvas hover:bg-surface transition-colors duration-100">
+    <tr class="border-t border-line hover:bg-surface transition-colors duration-100">
       <td class="px-5 py-3">
         <div class="font-semibold text-slate-900">{{.Label}}</div>
         <div class="text-[11px] text-slate-400 font-mono truncate max-w-[260px]">{{.URL}}</div>
@@ -141,9 +141,9 @@
       </td>
       <td class="px-5 py-3">
         {{if .Enabled}}
-        <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-green-100 text-green-700">Active</span>
+        <span class="tag"><span class="h-2 w-2 rounded-full bg-success"></span>Active</span>
         {{else}}
-        <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-slate-100 text-slate-500">Paused</span>
+        <span class="tag"><span class="h-2 w-2 rounded-full bg-slate-400"></span>Paused</span>
         {{end}}
       </td>
       <td class="px-5 py-3">
@@ -152,7 +152,7 @@
           <form hx-post="{{$.AdminPath}}/threat-intel/{{.ID}}/sync"
                 hx-target="#intel-rows" hx-swap="innerHTML">
             <button type="submit" title="Sync now"
-              class="w-8 h-8 flex items-center justify-center rounded-md bg-surface border border-line hover:bg-brand-tint hover:border-brand transition-colors cursor-pointer text-slate-500 hover:text-brand-dark">
+              class="w-8 h-8 flex items-center justify-center rounded-sm border border-edge text-ink hover:bg-surface transition-colors cursor-pointer">
               <i class="hgi hgi-stroke hgi-rounded hgi-refresh text-[13px]"></i>
             </button>
           </form>
@@ -162,13 +162,13 @@
             {{if .Enabled}}
             <input type="hidden" name="enabled" value="0"/>
             <button type="submit" title="Pause feed"
-              class="w-8 h-8 flex items-center justify-center rounded-md bg-surface border border-line hover:bg-amber-50 hover:border-amber-300 transition-colors cursor-pointer text-slate-500 hover:text-amber-600">
+              class="w-8 h-8 flex items-center justify-center rounded-sm border border-edge text-ink hover:bg-surface transition-colors cursor-pointer">
               <i class="hgi hgi-stroke hgi-rounded hgi-pause text-[13px]"></i>
             </button>
             {{else}}
             <input type="hidden" name="enabled" value="1"/>
             <button type="submit" title="Resume feed"
-              class="w-8 h-8 flex items-center justify-center rounded-md bg-surface border border-line hover:bg-green-50 hover:border-green-300 transition-colors cursor-pointer text-slate-500 hover:text-green-600">
+              class="w-8 h-8 flex items-center justify-center rounded-sm border border-edge text-ink hover:bg-surface transition-colors cursor-pointer">
               <i class="hgi hgi-stroke hgi-rounded hgi-play text-[13px]"></i>
             </button>
             {{end}}

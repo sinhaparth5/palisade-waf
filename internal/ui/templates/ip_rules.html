@@ -4,37 +4,37 @@
 <div class="flex flex-col gap-4">
 
   <!-- ── Primary action: the same full-width row-form every management page uses ── -->
-  <div class="card border-t-2 border-t-brand p-5">
+  <div class="card border-t-4 border-t-edge p-5">
     {{template "panel-header" (map "Icon" "hgi-add-circle" "Title" "Add IP Rule")}}
 
     <form hx-post="/admin/ip-rules" hx-target="#ip-rules-body" hx-swap="innerHTML"
           class="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_auto_auto]">
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">IP Address</label>
+          <label class="field-label">IP Address</label>
           <input name="ip" type="text" placeholder="1.2.3.4 or 10.0.0.0/8" required
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] font-mono outline-hidden transition-[border] duration-150 text-slate-800 bg-white"
+            class="field font-mono"
             />
         </div>
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Scope</label>
-          <select name="app_name" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white">
+          <label class="field-label">Scope</label>
+          <select name="app_name" class="field">
             <option value="">Global (all apps)</option>
             {{range .Apps}}<option value="{{.Name}}">{{.Name}} only</option>{{end}}
           </select>
         </div>
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Action</label>
+          <label class="field-label">Action</label>
           <div class="flex items-center gap-4 rounded-md border-[1.5px] border-transparent py-[10px]">
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="radio" name="rule_type" value="block" checked class="accent-red-500"/>
-              <span class="text-[14px] font-medium text-red-500">Block</span>
+              <span class="font-mono text-[13px] uppercase text-red-600">Block</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="radio" name="rule_type" value="allow" class="accent-brand"/>
-              <span class="text-[14px] font-medium text-brand">Allow</span>
+              <span class="font-mono text-[13px] uppercase text-green-600">Allow</span>
             </label>
           </div>
         </div>
@@ -45,13 +45,13 @@
         </button>
       </form>
 
-    <div class="mt-5 grid grid-cols-1 gap-2 border-t border-canvas pt-4 text-[12px] text-slate-500 md:grid-cols-3">
+    <div class="mt-5 grid grid-cols-1 gap-2 border-t border-line pt-4 text-[12px] text-slate-500 md:grid-cols-3">
       <div class="flex items-center gap-2">
-        <span class="bg-red-100 text-red-600 px-2 py-[2px] rounded-sm font-semibold text-[11px]">Block</span>
+        {{template "rule-type-badge" "block"}}
         deny all requests from this IP
       </div>
       <div class="flex items-center gap-2">
-        <span class="bg-green-100 text-green-600 px-2 py-[2px] rounded-sm font-semibold text-[11px]">Allow</span>
+        {{template "rule-type-badge" "allow"}}
         whitelist, bypasses other blocks
       </div>
       <p>Per-app rules take priority over global. CIDR ranges (e.g. 10.0.0.0/8) are supported.</p>
@@ -65,10 +65,10 @@
     {{template "honeypot-card" .}}
 
     <!-- Rules overview -->
-    <div class="relative overflow-hidden rounded-xl bg-navy p-5 flex flex-col gap-2 shadow-[0_12px_28px_rgba(16,42,67,.16)]">
-      <img src="{{.AdminPath}}/static/imgs/security-traffic-mesh.webp" alt="" aria-hidden="true" width="1600" height="682" loading="lazy" class="absolute inset-0 h-full w-full object-cover object-right opacity-20"/>
-      <div class="absolute inset-0 bg-linear-to-b from-navy/40 to-navy"></div>
-      <p class="relative text-[12px] text-white/60 mb-1">Rules overview</p>
+    <div class="relative overflow-hidden border border-edge bg-side p-5 flex flex-col gap-2">
+      <img src="{{.AdminPath}}/static/imgs/security-traffic-mesh.webp" alt="" aria-hidden="true" width="1600" height="682" loading="lazy" class="absolute inset-0 h-full w-full object-cover object-right opacity-20 grayscale sepia-[.35]"/>
+      <div class="absolute inset-0 bg-linear-to-b from-side/40 to-side"></div>
+      <p class="relative mb-1 font-mono text-[11px] uppercase tracking-[.08em] text-side-muted">Rules overview</p>
 
       <div class="relative flex flex-col gap-2">
         {{template "rule-ring-row" (map "Stroke" "stroke-danger" "Pct" .BlockPct "Title" "Block rules" "Sub" "deny matching traffic" "Count" .BlockCount)}}
@@ -82,7 +82,7 @@
   <!-- ── Active rules use the full width, independent of control-card height ── -->
   <div class="card overflow-hidden h-fit">
     {{template "card-header" (map "Cat" "Firewall" "Title" "Active IP Rules" "Badge" (printf "%d rules" .Total))}}
-    <div id="ip-rules-body" class="flex flex-col gap-1 px-2 pb-2">
+    <div id="ip-rules-body" class="flex flex-col px-2 pb-2">
       {{template "ip-rules-rows" (map "AdminPath" .AdminPath "Rules" .Rules "ThreatScores" .ThreatScores "CurPage" .CurPage "TotalPages" .TotalPages "Total" .Total)}}
     </div>
   </div>
@@ -110,19 +110,19 @@
 
     <div class="grid grid-cols-3 gap-3">
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Ban score</label>
+        <label class="field-label">Ban score</label>
         <input name="autoban_threshold" type="number" min="1" max="1000" value="{{.AutobanThresh}}"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field"/>
       </div>
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Window (min)</label>
+        <label class="field-label">Window (min)</label>
         <input name="autoban_window" type="number" min="1" max="1440" value="{{.AutobanWindow}}"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field"/>
       </div>
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Ban (hours)</label>
+        <label class="field-label">Ban (hours)</label>
         <input name="autoban_ban_hours" type="number" min="0" max="8760" value="{{.AutobanBanHours}}"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field"/>
       </div>
     </div>
     <p class="text-[12px] text-slate-500 -mt-1">Scoring inside the window: critical WAF hit = 5, other WAF hit = 2, rate-limited = 1, unsolved bot challenge = 1. Requests another site's page makes the browser send don't count. Private and allow-listed IPs are never banned.</p>
@@ -133,14 +133,14 @@
     </label>
     <div class="grid grid-cols-3 gap-3">
       <div class="col-span-2">
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Status codes</label>
+        <label class="field-label">Status codes</label>
         <input name="autoban_bad_codes" type="text" value="{{.AutobanBadCodes}}" placeholder="400, 401, 403, 404, 405, 444"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field"/>
       </div>
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Points per hit</label>
+        <label class="field-label">Points per hit</label>
         <input name="autoban_bad_points" type="number" min="1" max="1000" value="{{.AutobanBadPoints}}"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field"/>
       </div>
     </div>
     <p class="text-[12px] text-slate-500 -mt-1">Catches scanners whose probes trip no WAF rule. Missing static assets (images, scripts, fonts, source maps), crawler files, verified crawlers and trusted IPs never count.</p>
@@ -167,7 +167,7 @@
 
   <form hx-post="/admin/ip-rules/honeypots" hx-target="#honeypot-card" hx-swap="outerHTML" class="flex flex-col gap-4">
     <textarea name="honeypot_paths" rows="6" placeholder="/wp-login.php&#10;/xmlrpc.php&#10;/phpmyadmin/"
-      class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white resize-y">{{range .HoneypotPaths}}{{.}}
+      class="field text-[12px] font-mono resize-y">{{range .HoneypotPaths}}{{.}}
 {{end}}</textarea>
     <p class="text-[12px] text-slate-500 -mt-1">One path per line, case-insensitive. A path ending in <span class="font-mono">/</span> covers everything under it. Hits show up in Logs as <span class="font-mono">honeypot</span>.</p>
 
@@ -199,29 +199,29 @@
 
     <div class="grid grid-cols-2 gap-3">
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">High-risk threshold (score ≥)</label>
+        <label class="field-label">High-risk threshold (score ≥)</label>
         <input name="adaptive_high_threshold" type="number" min="1" max="100" value="{{.AdaptiveHighThresh}}"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field"/>
       </div>
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Low-risk threshold (score ≤)</label>
+        <label class="field-label">Low-risk threshold (score ≤)</label>
         <input name="adaptive_low_threshold" type="number" min="0" max="99" value="{{.AdaptiveLowThresh}}"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field"/>
       </div>
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">High-risk rate scale</label>
+        <label class="field-label">High-risk rate scale</label>
         <input name="adaptive_high_rate_scale" type="number" min="0.05" max="1" step="0.05" value="{{.AdaptiveHighScale}}"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field"/>
       </div>
       <div>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Low-risk rate scale</label>
+        <label class="field-label">Low-risk rate scale</label>
         <input name="adaptive_low_rate_scale" type="number" min="1" max="5" step="0.05" value="{{.AdaptiveLowScale}}"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field"/>
       </div>
       <div class="col-span-2">
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Force bot challenge (score ≥)</label>
+        <label class="field-label">Force bot challenge (score ≥)</label>
         <input name="adaptive_force_challenge_threshold" type="number" min="1" max="100" value="{{.AdaptiveForceChallenge}}"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"/>
+          class="field"/>
       </div>
     </div>
     <p class="text-[12px] text-slate-500 -mt-1">Rate scale multiplies the global limit's rate and burst: 0.3 means 30% of normal for high-risk IPs, 1.5 means 150% of normal for low-risk ones. Blocked/challenged rows from adaptive enforcement show up in Logs tagged <span class="font-mono">:adaptive</span>.</p>
@@ -236,12 +236,12 @@
 
 {{define "ip-rules-rows"}}
 {{range .Rules}}
-<div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-3 rounded-lg hover:bg-surface transition-colors duration-150">
-  <div class="w-10 h-10 rounded-md flex items-center justify-center shrink-0 {{if eq .RuleType "block"}}bg-red-50{{else}}bg-brand-tint{{end}}">
+<div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
+  <div class="w-10 h-10 rounded-md flex items-center justify-center shrink-0 {{if eq .RuleType "block"}}bg-red-50{{else}}bg-green-50{{end}}">
     {{if eq .RuleType "block"}}
     <i class="hgi hgi-stroke hgi-rounded hgi-cancel-circle text-base text-red-500"></i>
     {{else}}
-    <i class="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-base text-brand-dark"></i>
+    <i class="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-base text-green-600"></i>
     {{end}}
   </div>
   <div class="flex-1 min-w-[200px]">
@@ -250,11 +250,11 @@
   </div>
   <div class="flex items-center gap-2 ml-[52px] sm:ml-0">
   {{if .Auto}}
-  <span class="text-[12px] font-semibold px-[10px] py-1 rounded-sm shrink-0 bg-amber-100 text-amber-700">Auto</span>
+  <span class="tag shrink-0"><span class="h-2 w-2 rounded-full bg-warning"></span>Auto</span>
   {{end}}
   {{$score := 0}}
   {{if $.ThreatScores}}{{$score = index $.ThreatScores .IP}}{{end}}
-  <span class="text-[12px] font-semibold px-[10px] py-1 rounded-sm shrink-0 bg-slate-100 text-slate-600" title="Composite threat score (0-100)">
+  <span class="tag shrink-0 border-line text-slate-600" title="Composite threat score (0-100)">
     {{if gt $score 0}}Score {{$score}}{{else}}Score —{{end}}
   </span>
   {{template "rule-type-badge" .RuleType}}
