@@ -160,24 +160,27 @@ type Handler struct {
 }
 
 type dashboardCountry struct {
-	Code       string
-	Name       string
-	Count      int
-	WidthClass string
+	Code     string
+	Name     string
+	Count    int
+	Segments []bool // meter cells, filled relative to the top country
 }
 
+// atAGlanceCard is one cell of the dashboard's live strip.
 type atAGlanceCard struct {
-	Label      string
-	Icon       string
-	IconClass  string
-	CardClass  string
-	TrendClass string
-	Trend      string
-	Value      string
-	SparkID    string
-	SparkColor string
-	AreaPath   string
-	LinePath   string
+	Label string
+	Value string
+	Trend string
+}
+
+// sparkBar is one bar of an inline-SVG sparkline (viewBox 0 0 96 32).
+type sparkBar struct{ X, Y, H int }
+
+// dashboardService is one service card on the dashboard.
+type dashboardService struct {
+	Name, Route, TLS string
+	Healthy, Known   bool
+	Cache            bool
 }
 
 // NewHandler builds the UI handler. jsFS must contain the minified JS
@@ -694,7 +697,7 @@ func (h *Handler) Dashboard(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	topBlocked, err := h.db.ListRequests(true, "", 5, 0)
+	topBlocked, err := h.db.ListRequests(true, "", 8, 0)
 	if err != nil {
 		return err
 	}
@@ -702,19 +705,14 @@ func (h *Handler) Dashboard(c echo.Context) error {
 	if stats.TotalToday > 0 {
 		blockRate = stats.BlockedToday * 100 / stats.TotalToday
 	}
-	// SVG donut: r=74 circle has circumference ~465. Drawn as a 240° open
-	// gauge (310 of those 465 units), with a 7-unit gap between the
-	// allowed/blocked segments so the rounded caps read as a true break.
-	const circ = 465
-	const arc240 = circ * 240 / 360
-	const gap = 7
-	hasTraffic := stats.TotalToday > 0
-	allowedArc, blockedArc, blockedOffset := 0, 0, 0
-	if hasTraffic {
-		usable := arc240 - gap
-		blockedArc = stats.BlockedToday * usable / stats.TotalToday
-		allowedArc = usable - blockedArc
-		blockedOffset = -(allowedArc + gap)
+	hourly, err := h.db.GetHourlyTraffic(24)
+	if err != nil {
+		return err
+	}
+	_, allowed, blocked := hourlySeries(hourly, 24)
+	total := make([]int, len(allowed))
+	for i := range allowed {
+		total[i] = allowed[i] + blocked[i]
 	}
 	botStats := h.db.GetBotStats()
 	apps := h.registry.List()
@@ -734,41 +732,53 @@ func (h *Handler) Dashboard(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+	changes, _, err := h.db.ListAudit(6, 0)
+	if err != nil {
+		return err
+	}
+	svcs := make([]dashboardService, 0, len(apps))
+	for _, s := range apps {
+		route := s.Host
+		if route == "" {
+			route = s.Prefix
+		}
+		healthy, known := h.registry.IsHealthy(s.Name)
+		svcs = append(svcs, dashboardService{Name: s.Name, Route: route, TLS: s.TLSMode, Healthy: healthy, Known: known, Cache: s.CacheEnabled})
+	}
 	return h.render(c, "dashboard", map[string]any{
-		"Stats":         stats,
-		"Recent":        recent,
-		"TopBlocked":    topBlocked,
-		"TopCountries":  dashboardCountries(topCountryCounts),
-		"AtAGlance":     dashboardAtAGlance(atAGlance, len(apps)),
-		"Enforcement":   dashboardEnforcement(report),
-		"BlockRate":     blockRate,
-		"HasTraffic":    hasTraffic,
-		"TrackArc":      arc240,
-		"AllowedArc":    allowedArc,
-		"BlockedArc":    blockedArc,
-		"BlockedOffset": blockedOffset,
-		"Apps":          apps,
-		"BotStats":      botStats,
+		"Stats":        stats,
+		"Recent":       recent,
+		"TopBlocked":   topBlocked,
+		"TopCountries": dashboardCountries(topCountryCounts),
+		"AtAGlance":    dashboardAtAGlance(atAGlance),
+		"Enforcement":  dashboardEnforcement(report),
+		"BlockRate":    blockRate,
+		"SparkTotal":   sparkBars(total),
+		"SparkBlocked": sparkBars(blocked),
+		"Apps":         apps,
+		"Services":     svcs,
+		"Changes":      changes,
+		"BotStats":     botStats,
+		"Visitors":     atAGlance.UniqueVisitorsToday,
 	})
 }
 
 func dashboardCountries(rows []storage.CountryCount) []dashboardCountry {
-	widths := []string{"w-full", "w-[85%]", "w-[79%]", "w-[75%]", "w-[70%]"}
+	top := 0
+	for _, row := range rows {
+		top = max(top, row.Count)
+	}
 	out := make([]dashboardCountry, 0, len(rows))
-	for i, row := range rows {
+	for _, row := range rows {
 		code := strings.ToUpper(strings.TrimSpace(row.Country))
 		if code == "" {
 			continue
 		}
-		widthClass := widths[len(widths)-1]
-		if i < len(widths) {
-			widthClass = widths[i]
-		}
 		out = append(out, dashboardCountry{
-			Code:       code,
-			Name:       countryName(code),
-			Count:      row.Count,
-			WidthClass: widthClass,
+			Code:     code,
+			Name:     countryName(code),
+			Count:    row.Count,
+			Segments: meterSegments(row.Count, top),
 		})
 	}
 	return out
@@ -786,87 +796,28 @@ func countryName(code string) string {
 	return name
 }
 
-func dashboardAtAGlance(s storage.AtAGlanceStats, serviceCount int) []atAGlanceCard {
+func dashboardAtAGlance(s storage.AtAGlanceStats) []atAGlanceCard {
 	return []atAGlanceCard{
-		{
-			Label:      "Requests/sec",
-			Icon:       "hgi-activity-01",
-			IconClass:  "text-brand-dark",
-			CardClass:  "bg-brand-tint",
-			TrendClass: "text-brand-dark",
-			Trend:      trendLabel(s.RequestsLastMinute, s.RequestsPrevMinute),
-			Value:      fmt.Sprintf("%.1f", float64(s.RequestsLastMinute)/60),
-			SparkID:    "spark-req",
-			SparkColor: "#3E9B55",
-			AreaPath:   "M0,26 18,23 36,25 54,16 72,19 90,9 108,13 126,5 144,8 170,3 170,36 0,36 Z",
-			LinePath:   "M0,26 18,23 36,25 54,16 72,19 90,9 108,13 126,5 144,8 170,3",
-		},
-		{
-			Label:      "Avg latency",
-			Icon:       "hgi-loading-03",
-			IconClass:  "text-blue-500",
-			CardClass:  "bg-blue-50",
-			TrendClass: "text-blue-500",
-			Trend:      trendLabel(s.AvgLatencyMS, s.PrevAvgLatencyMS),
-			Value:      fmt.Sprintf("%dms", s.AvgLatencyMS),
-			SparkID:    "spark-lat",
-			SparkColor: "#3B82F6",
-			AreaPath:   "M0,10 18,14 36,9 54,18 72,15 90,22 108,17 126,26 144,22 170,28 170,36 0,36 Z",
-			LinePath:   "M0,10 18,14 36,9 54,18 72,15 90,22 108,17 126,26 144,22 170,28",
-		},
-		{
-			Label:      "Blocked/min",
-			Icon:       "hgi-shield-ban",
-			IconClass:  "text-amber-600",
-			CardClass:  "bg-amber-50",
-			TrendClass: "text-amber-600",
-			Trend:      trendLabel(s.BlockedLastMinute, s.BlockedPrevMinute),
-			Value:      strconv.Itoa(s.BlockedLastMinute),
-			SparkID:    "spark-blk",
-			SparkColor: "#D97706",
-			AreaPath:   "M0,8 18,12 36,11 54,17 72,15 90,20 108,18 126,24 144,21 170,27 170,36 0,36 Z",
-			LinePath:   "M0,8 18,12 36,11 54,17 72,15 90,20 108,18 126,24 144,21 170,27",
-		},
-		{
-			Label:      "Unique visitors",
-			Icon:       "hgi-user-account",
-			IconClass:  "text-violet-500",
-			CardClass:  "bg-violet-50",
-			TrendClass: "text-violet-500",
-			Trend:      trendLabel(s.UniqueVisitorsToday, s.UniqueVisitorsPrevDay),
-			Value:      strconv.Itoa(s.UniqueVisitorsToday),
-			SparkID:    "spark-vis",
-			SparkColor: "#8B5CF6",
-			AreaPath:   "M0,24 18,20 36,22 54,15 72,18 90,11 108,14 126,8 144,10 170,5 170,36 0,36 Z",
-			LinePath:   "M0,24 18,20 36,22 54,15 72,18 90,11 108,14 126,8 144,10 170,5",
-		},
-		{
-			Label:      "Active services",
-			Icon:       "hgi-server-stack-01",
-			IconClass:  "text-slate-500",
-			CardClass:  "bg-surface",
-			TrendClass: "text-slate-400",
-			Trend:      "live",
-			Value:      strconv.Itoa(serviceCount),
-			SparkID:    "spark-svc",
-			SparkColor: "#94A3B8",
-			AreaPath:   "M0,18 18,18 36,17 54,18 72,16 90,18 108,17 126,18 144,16 170,18 170,36 0,36 Z",
-			LinePath:   "M0,18 18,18 36,17 54,18 72,16 90,18 108,17 126,18 144,16 170,18",
-		},
-		{
-			Label:      "WAF rule hits",
-			Icon:       "hgi-cancel-circle",
-			IconClass:  "text-red-500",
-			CardClass:  "bg-red-50",
-			TrendClass: "text-red-500",
-			Trend:      trendLabel(s.WAFRuleHitsToday, s.WAFRuleHitsPreviousDay),
-			Value:      strconv.Itoa(s.WAFRuleHitsToday),
-			SparkID:    "spark-rul",
-			SparkColor: "#C8453C",
-			AreaPath:   "M0,28 18,25 36,26 54,20 72,22 90,14 108,17 126,9 144,12 170,6 170,36 0,36 Z",
-			LinePath:   "M0,28 18,25 36,26 54,20 72,22 90,14 108,17 126,9 144,12 170,6",
-		},
+		{Label: "Requests/sec", Value: fmt.Sprintf("%.1f", float64(s.RequestsLastMinute)/60), Trend: trendLabel(s.RequestsLastMinute, s.RequestsPrevMinute)},
+		{Label: "Avg latency", Value: fmt.Sprintf("%dms", s.AvgLatencyMS), Trend: trendLabel(s.AvgLatencyMS, s.PrevAvgLatencyMS)},
+		{Label: "Blocked/min", Value: strconv.Itoa(s.BlockedLastMinute), Trend: trendLabel(s.BlockedLastMinute, s.BlockedPrevMinute)},
+		{Label: "WAF rule hits", Value: strconv.Itoa(s.WAFRuleHitsToday), Trend: trendLabel(s.WAFRuleHitsToday, s.WAFRuleHitsPreviousDay)},
 	}
+}
+
+// sparkBars scales an hourly series into SVG bars for a 96x32 viewBox, 4
+// units per bar. A zero hour keeps a 1-unit stub so the baseline reads.
+func sparkBars(vals []int) []sparkBar {
+	top := 1
+	for _, v := range vals {
+		top = max(top, v)
+	}
+	out := make([]sparkBar, len(vals))
+	for i, v := range vals {
+		h := max(1, v*32/top)
+		out[i] = sparkBar{X: i * 4, Y: 32 - h, H: h}
+	}
+	return out
 }
 
 // enforcementRow is one defense layer in the right panel's "Enforcement
@@ -875,20 +826,19 @@ func dashboardAtAGlance(s storage.AtAGlanceStats, serviceCount int) []atAGlanceC
 // countries WidthClass — runtime-computed widths would need a style
 // attribute, which the templates don't use.
 type enforcementRow struct {
-	Label      string
-	Icon       string
-	Count      int
-	WidthClass string
-	BarClass   string
+	Label    string
+	Icon     string
+	Count    int
+	Segments []bool
 }
 
 func dashboardEnforcement(rep storage.DailyReport) []enforcementRow {
 	rows := []enforcementRow{
-		{Label: "WAF rules", Icon: "hgi-security-block", Count: rep.WAFBlocked, BarClass: "bg-red-400"},
-		{Label: "IP blocklist", Icon: "hgi-cancel-circle", Count: rep.IPBlocked, BarClass: "bg-navy"},
-		{Label: "Geo rules", Icon: "hgi-earth", Count: rep.GeoBlocked, BarClass: "bg-slateblue"},
-		{Label: "Rate limit", Icon: "hgi-time-04", Count: rep.RateLimited, BarClass: "bg-amber-400"},
-		{Label: "Bot challenge", Icon: "hgi-bot", Count: rep.BotChallenged, BarClass: "bg-brand"},
+		{Label: "WAF rules", Icon: "hgi-security-block", Count: rep.WAFBlocked},
+		{Label: "IP blocklist", Icon: "hgi-cancel-circle", Count: rep.IPBlocked},
+		{Label: "Geo rules", Icon: "hgi-earth", Count: rep.GeoBlocked},
+		{Label: "Rate limit", Icon: "hgi-time-04", Count: rep.RateLimited},
+		{Label: "Bot challenge", Icon: "hgi-bot", Count: rep.BotChallenged},
 	}
 	max := 0
 	for _, r := range rows {
@@ -897,23 +847,25 @@ func dashboardEnforcement(rep storage.DailyReport) []enforcementRow {
 		}
 	}
 	for i := range rows {
-		rows[i].WidthClass = meterWidthClass(rows[i].Count, max)
+		rows[i].Segments = meterSegments(rows[i].Count, max)
 	}
 	return rows
 }
 
-// meterWidthClass buckets count/max into one of eight fixed Tailwind widths.
-// Zero collapses to a hairline sliver so an idle layer still reads as a meter.
-func meterWidthClass(count, max int) string {
-	if count == 0 || max == 0 {
-		return "w-[3%]"
+// meterSegments fills a 12-cell segmented meter with count/max, rounded up
+// so any nonzero count shows at least one cell. Cells are server-computed:
+// a runtime width would need a style attribute, which the CSP forbids.
+func meterSegments(count, max int) []bool {
+	const cells = 12
+	out := make([]bool, cells)
+	if count <= 0 || max <= 0 {
+		return out
 	}
-	buckets := []string{"w-[12%]", "w-[25%]", "w-[38%]", "w-[50%]", "w-[62%]", "w-[75%]", "w-[88%]", "w-full"}
-	idx := (count*8 + max - 1) / max // ceil(count/max * 8), 1..8
-	if idx > 8 {
-		idx = 8
+	n := min(cells, (count*cells+max-1)/max)
+	for i := range n {
+		out[i] = true
 	}
-	return buckets[idx-1]
+	return out
 }
 
 func trendLabel(current, previous int) string {
@@ -1019,28 +971,30 @@ func (h *Handler) TrafficSeries(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	byHour := make(map[string]storage.HourlyPoint, len(points))
-	for _, p := range points {
-		byHour[p.Hour.Format("2006-01-02T15:04:05Z")] = p
-	}
-
-	now := time.Now().UTC().Truncate(time.Hour)
-	labels := make([]string, 0, hours)
-	allowed := make([]int, 0, hours)
-	blocked := make([]int, 0, hours)
-	for i := hours - 1; i >= 0; i-- {
-		t := now.Add(-time.Duration(i) * time.Hour)
-		p := byHour[t.Format("2006-01-02T15:04:05Z")]
-		labels = append(labels, t.Format("15:00"))
-		allowed = append(allowed, p.Total-p.Blocked)
-		blocked = append(blocked, p.Blocked)
-	}
-
+	labels, allowed, blocked := hourlySeries(points, hours)
 	return c.JSON(http.StatusOK, map[string]any{
 		"labels":  labels,
 		"allowed": allowed,
 		"blocked": blocked,
 	})
+}
+
+// hourlySeries lays GetHourlyTraffic's sparse points onto the last `hours`
+// UTC hours, oldest first, zero-filling gaps so charts stay continuous.
+func hourlySeries(points []storage.HourlyPoint, hours int) (labels []string, allowed, blocked []int) {
+	byHour := make(map[int64]storage.HourlyPoint, len(points))
+	for _, p := range points {
+		byHour[p.Hour.Unix()] = p
+	}
+	now := time.Now().UTC().Truncate(time.Hour)
+	for i := hours - 1; i >= 0; i-- {
+		t := now.Add(-time.Duration(i) * time.Hour)
+		p := byHour[t.Unix()]
+		labels = append(labels, t.Format("15:00"))
+		allowed = append(allowed, p.Total-p.Blocked)
+		blocked = append(blocked, p.Blocked)
+	}
+	return labels, allowed, blocked
 }
 
 // ThreatsSeries returns the top blocked-from countries in the last 24h as

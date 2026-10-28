@@ -4,71 +4,73 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"palisade/internal/storage"
 )
 
-func TestDashboardTemplateRendersAtAGlanceCards(t *testing.T) {
+func TestDashboardTemplateRenders(t *testing.T) {
 	h := &Handler{}
 	if err := h.parseTemplates(); err != nil {
 		t.Fatalf("parse templates: %v", err)
 	}
 
 	data := map[string]any{
-		"Page":          "dashboard",
-		"Heading":       "Dashboard",
-		"AdminPath":     "/admin",
-		"AlertCount":    0,
-		"Stats":         storage.Stats{},
-		"Recent":        []storage.LogRow{},
-		"TopBlocked":    []storage.LogRow{},
-		"TopCountries":  []dashboardCountry{},
-		"AtAGlance":     dashboardAtAGlance(storage.AtAGlanceStats{RequestsLastMinute: 12}, 2),
-		"Enforcement":   dashboardEnforcement(storage.DailyReport{WAFBlocked: 3, BotChallenged: 9}),
-		"BlockRate":     0,
-		"HasTraffic":    false,
-		"TrackArc":      310,
-		"AllowedArc":    0,
-		"BlockedArc":    0,
-		"BlockedOffset": 0,
-		"Apps":          []any{"app-a", "app-b"},
-		"BotStats":      storage.BotStats{},
+		"Page":         "dashboard",
+		"Heading":      "Dashboard",
+		"AdminPath":    "/admin",
+		"AlertCount":   0,
+		"Stats":        storage.Stats{TotalToday: 40, BlockedToday: 10},
+		"Recent":       []storage.LogRow{},
+		"TopBlocked":   []storage.LogRow{},
+		"TopCountries": []dashboardCountry{},
+		"AtAGlance":    dashboardAtAGlance(storage.AtAGlanceStats{RequestsLastMinute: 12}),
+		"Enforcement":  dashboardEnforcement(storage.DailyReport{WAFBlocked: 3, BotChallenged: 9}),
+		"BlockRate":    25,
+		"SparkTotal":   sparkBars([]int{0, 4, 8}),
+		"SparkBlocked": sparkBars([]int{0, 1, 2}),
+		"Apps":         []any{"app-a", "app-b"},
+		"Services":     []dashboardService{{Name: "shop", Route: "shop.example.com", Healthy: true, Known: true}},
+		"Changes":      []storage.AuditEntry{{Actor: "admin", Action: "POST /services"}},
+		"BotStats":     storage.BotStats{},
 	}
 
 	var buf bytes.Buffer
 	if err := h.tmpls["dashboard"].ExecuteTemplate(&buf, "base", data); err != nil {
 		t.Fatalf("execute dashboard template: %v", err)
 	}
-	if !bytes.Contains(buf.Bytes(), []byte("Requests/sec")) {
-		t.Fatal("dashboard did not render at-a-glance cards")
-	}
-	if !bytes.Contains(buf.Bytes(), []byte("Enforcement today")) {
-		t.Fatal("dashboard did not render the enforcement card")
-	}
-	// Bot challenge (9 hits) is the busiest layer, so its meter is full width.
-	if !bytes.Contains(buf.Bytes(), []byte("bg-brand w-full")) {
-		t.Fatal("enforcement meters missing bucketed width class")
+	for _, want := range []string{
+		"Requests/sec", "Enforcement today", "shop.example.com", "POST /services",
+		`stroke-dasharray="25 100"`,   // block rate ring
+		`y="0" width="3" height="32"`, // busiest hour fills the sparkline
+	} {
+		if !bytes.Contains(buf.Bytes(), []byte(want)) {
+			t.Errorf("dashboard missing %q", want)
+		}
 	}
 }
 
-// TestMeterWidthClass pins the bucket math: ceil(count/max*8) into eight
-// fixed classes, zero collapsing to a hairline sliver.
-func TestMeterWidthClass(t *testing.T) {
-	cases := []struct {
-		count, max int
-		want       string
-	}{
-		{0, 0, "w-[3%]"},
-		{0, 10, "w-[3%]"},
-		{1, 8, "w-[12%]"},
-		{4, 8, "w-[50%]"},
-		{5, 8, "w-[62%]"},
-		{8, 8, "w-full"},
-		{1, 1000, "w-[12%]"}, // tiny but nonzero never rounds to the zero sliver
+// TestMeterSegments pins the meter math: ceil(count/max*12) filled cells,
+// zero leaving the meter empty.
+func TestMeterSegments(t *testing.T) {
+	cases := []struct{ count, max, want int }{
+		{0, 0, 0},
+		{0, 10, 0},
+		{1, 12, 1},
+		{6, 12, 6},
+		{7, 12, 7},
+		{12, 12, 12},
+		{1, 1000, 1}, // tiny but nonzero still shows one cell
 	}
 	for _, tc := range cases {
-		if got := meterWidthClass(tc.count, tc.max); got != tc.want {
-			t.Errorf("meterWidthClass(%d, %d) = %q, want %q", tc.count, tc.max, got, tc.want)
+		got := 0
+		for _, on := range meterSegments(tc.count, tc.max) {
+			if on {
+				got++
+			}
+		}
+		if got != tc.want {
+			t.Errorf("meterSegments(%d, %d) fills %d, want %d", tc.count, tc.max, got, tc.want)
 		}
 	}
 }
@@ -127,5 +129,21 @@ func TestBaseTemplateCarriesCSRF(t *testing.T) {
 	}
 	if strings.Contains(page, `href="/admin/settings/backup"`) {
 		t.Error("backup is still reachable as a GET link")
+	}
+}
+
+// TestHourlySeries checks sparse hourly points land in the right zero-filled
+// slot, newest hour last.
+func TestHourlySeries(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Hour)
+	labels, allowed, blocked := hourlySeries([]storage.HourlyPoint{
+		{Hour: now, Total: 5, Blocked: 2},
+		{Hour: now.Add(-3 * time.Hour), Total: 1},
+	}, 24)
+	if len(labels) != 24 || len(allowed) != 24 || len(blocked) != 24 {
+		t.Fatalf("got %d/%d/%d buckets, want 24", len(labels), len(allowed), len(blocked))
+	}
+	if allowed[23] != 3 || blocked[23] != 2 || allowed[20] != 1 || allowed[22] != 0 {
+		t.Errorf("allowed=%v blocked=%v", allowed, blocked)
 	}
 }

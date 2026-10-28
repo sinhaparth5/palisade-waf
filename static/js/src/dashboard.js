@@ -1,18 +1,26 @@
 (function () {
   var adminPath = document.body.dataset.adminPath || '';
 
-  var whiteTooltip = {
-    enabled: true,
-    backgroundColor: '#FFFFFF',
-    titleColor: '#0F172A',
-    bodyColor: '#0F172A',
-    borderColor: '#E2E5EA',
+  // Ledger chart style: colors come from the theme's --fn-* variables, so
+  // the charts follow light/dark mode (read once, at page load).
+  var css = getComputedStyle(document.documentElement);
+  function v(name) { return css.getPropertyValue(name).trim(); }
+  var ink = v('--fn-ink'), muted = v('--fn-muted'), rule = v('--fn-rule'),
+      danger = v('--fn-danger'), card = v('--fn-card'), edge = v('--fn-edge');
+
+  Chart.defaults.font.family = "'JetBrains Mono', ui-monospace, monospace";
+  Chart.defaults.font.size = 10;
+  Chart.defaults.color = muted;
+
+  var tooltip = {
+    backgroundColor: card,
+    titleColor: ink,
+    bodyColor: ink,
+    borderColor: edge,
     borderWidth: 1,
-    padding: { top: 8, bottom: 8, left: 12, right: 12 },
-    cornerRadius: 14,
+    cornerRadius: 0,
+    padding: 8,
     displayColors: false,
-    bodyFont: { size: 12, weight: '600' },
-    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
   };
 
   fetch(adminPath + '/api/traffic')
@@ -20,79 +28,41 @@
     .then(function (traffic) {
       var el = document.getElementById('trafficChart');
       if (!el) return;
-
-      // A single permanent marker on the Allowed line's peak hour, the
-      // rest of the line stays bare until hovered (matches the calm,
-      // single-highlight look of the reference design).
-      var peakIdx = traffic.allowed.indexOf(Math.max.apply(null, traffic.allowed));
-      var allowedPointRadius = traffic.allowed.map(function (_, i) {
-        return i === peakIdx ? 4 : 0;
-      });
-
       new Chart(el, {
-        type: 'line',
+        type: 'bar',
         data: {
           labels: traffic.labels,
           datasets: [
-            {
-              label: 'Allowed',
-              data: traffic.allowed,
-              borderColor: '#3E9B55',
-              borderWidth: 2,
-              tension: 0.4,
-              fill: 'origin',
-              backgroundColor: function (context) {
-                var chartArea = context.chart.chartArea;
-                if (!chartArea) return 'rgba(118,200,147,0)';
-                var gradient = context.chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                gradient.addColorStop(0, 'rgba(118,200,147,0.18)');
-                gradient.addColorStop(1, 'rgba(118,200,147,0)');
-                return gradient;
-              },
-              pointRadius: allowedPointRadius,
-              pointHoverRadius: 5,
-              pointBackgroundColor: '#FFFFFF',
-              pointHoverBackgroundColor: '#FFFFFF',
-              pointBorderColor: '#3E9B55',
-              pointHoverBorderColor: '#3E9B55',
-              pointBorderWidth: 2,
-            },
-            {
-              label: 'Blocked',
-              data: traffic.blocked,
-              borderColor: '#102A43',
-              borderWidth: 2,
-              tension: 0.4,
-              pointRadius: 0,
-              pointHoverRadius: 5,
-              pointBackgroundColor: '#FFFFFF',
-              pointHoverBackgroundColor: '#FFFFFF',
-              pointBorderColor: '#102A43',
-              pointHoverBorderColor: '#102A43',
-              pointBorderWidth: 2,
-            },
+            { label: 'Allowed', data: traffic.allowed, backgroundColor: ink, stack: 'req' },
+            { label: 'Blocked', data: traffic.blocked, backgroundColor: danger, stack: 'req' },
           ],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           interaction: { intersect: false, mode: 'index' },
+          datasets: { bar: { barPercentage: 0.7, categoryPercentage: 0.9 } },
           plugins: {
             legend: { display: false },
-            tooltip: Object.assign({}, whiteTooltip, {
+            tooltip: Object.assign({}, tooltip, {
               callbacks: {
-                title: function () { return ''; },
-                label: function (ctx) { return ctx.dataset.label + ': ' + ctx.raw + ' requests'; },
+                label: function (ctx) { return ctx.dataset.label + ': ' + ctx.raw; },
               },
             }),
           },
           scales: {
-            x: { display: false },
+            x: {
+              stacked: true,
+              grid: { display: false },
+              border: { color: edge },
+              ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+            },
             y: {
+              stacked: true,
               beginAtZero: true,
               border: { display: false },
-              grid: { color: '#EDEFF2', drawTicks: false, borderDash: [4, 4] },
-              ticks: { font: { size: 10 }, color: '#A6ADB8', padding: 8, maxTicksLimit: 4 },
+              grid: { color: rule, drawTicks: false },
+              ticks: { padding: 6, maxTicksLimit: 4, precision: 0 },
             },
           },
         },
@@ -108,27 +78,19 @@
         type: 'bar',
         data: {
           labels: threats.labels,
-          datasets: [{
-            data: threats.counts,
-            backgroundColor: '#102A43',
-            borderRadius: 10,
-            maxBarThickness: 18,
-          }],
+          datasets: [{ data: threats.counts, backgroundColor: danger, maxBarThickness: 14 }],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: Object.assign({}, whiteTooltip, {
-              callbacks: {
-                title: function () { return ''; },
-                label: function (ctx) { return ctx.raw + ' blocked'; },
-              },
+            tooltip: Object.assign({}, tooltip, {
+              callbacks: { label: function (ctx) { return ctx.raw + ' blocked'; } },
             }),
           },
           scales: {
-            x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#64748B' } },
+            x: { grid: { display: false }, border: { color: edge } },
             y: { display: false, beginAtZero: true },
           },
         },
