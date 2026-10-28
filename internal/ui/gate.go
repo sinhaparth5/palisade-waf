@@ -79,5 +79,5 @@ func (h *Handler) SetServiceGate(c echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "gate-saved")
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
 }

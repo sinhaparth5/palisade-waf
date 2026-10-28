@@ -26,6 +26,7 @@ func TestIPRulesTemplateRendersAutobanAndNotes(t *testing.T) {
 	}
 	data := map[string]any{
 		"Page":                   "ip_rules",
+		"Role":                   "admin",
 		"Heading":                "IP Rules",
 		"AdminPath":              "/admin",
 		"AlertCount":             0,
@@ -111,7 +112,7 @@ func TestIPRulesRowsPagination(t *testing.T) {
 	render := func(curPage, totalPages, total int) string {
 		var buf bytes.Buffer
 		err := h.tmpls["ip_rules"].ExecuteTemplate(&buf, "ip-rules-rows", map[string]any{
-			"AdminPath": "/admin", "Rules": rules,
+			"AdminPath": "/admin", "Rules": rules, "Role": "admin",
 			"CurPage": curPage, "TotalPages": totalPages, "Total": total,
 		})
 		if err != nil {

@@ -3,6 +3,7 @@
 
 <div class="flex flex-col gap-4">
 
+  {{if can .Role "admin"}}
   <!-- ── Compact disable strip ── -->
     <div class="card border-t-4 border-t-edge p-5">
       {{template "panel-header" (map "Icon" "hgi-security-block" "Title" "Disable Rule")}}
@@ -102,6 +103,7 @@
       <p>Scope a rule to one service to apply it only there. Disable or remove it from the list below.</p>
     </div>
   </div>
+  {{end}}
 
   <!-- ── Live content spans the full page ── -->
   <div id="waf-content">
@@ -126,7 +128,7 @@
             <th class="px-4 py-2 text-left">Product</th>
             <th class="px-4 py-2 text-right">Hits</th>
             <th class="px-4 py-2 text-left">Status</th>
-            <th class="px-4 py-2"></th>
+{{if can $.Role "admin"}}<th class="px-4 py-2"></th>{{end}}
           </tr>
         </thead>
         <tbody>
@@ -148,7 +150,7 @@
               {{end}}
               {{end}}
             </td>
-            <td class="px-4 py-3 text-right">
+            {{if can $.Role "admin"}}<td class="px-4 py-3 text-right">
               {{if not .GlobalOff}}
               <form hx-post="/admin/waf-rules/disable" hx-target="#waf-content" hx-swap="innerHTML" class="inline-flex items-center gap-2">
                 <input type="hidden" name="rule_id" value="{{.RuleID}}"/>
@@ -167,7 +169,7 @@
                 </button>
               </form>
               {{end}}
-            </td>
+            </td>{{end}}
           </tr>
           {{end}}
         </tbody>
@@ -194,6 +196,7 @@
             Marked false-positive {{.FalsePositiveCount}} times · last {{fmtTime .LastMarked}}
           </div>
         </div>
+        {{if can $.Role "admin"}}
         <form hx-post="/admin/waf-rules/disable" hx-target="#waf-content" hx-swap="innerHTML" class="inline">
           <input type="hidden" name="rule_id" value="{{.RuleID}}"/>
           <input type="hidden" name="service" value="{{.ServiceName}}"/>
@@ -203,14 +206,16 @@
             Add exception
           </button>
         </form>
+        {{end}}
       </div>
       {{end}}
       {{else}}
       {{template "empty-state" (map "Icon" "hgi-thumbs-up" "Message" "No suggestions — mark a blocked request false-positive from the Logs page to start collecting signal")}}
       {{end}}
     </div>
-    <form hx-post="/admin/waf-rules/feedback-config" hx-target="#waf-content" hx-swap="innerHTML"
-      class="flex flex-wrap items-end gap-3 border-t border-line px-5 py-4">
+    <form
+      class="flex flex-wrap items-end gap-3 border-t border-line px-5 py-4" {{if can $.Role "admin"}}hx-post="/admin/waf-rules/feedback-config" hx-target="#waf-content" hx-swap="innerHTML"{{end}}>
+<fieldset class="contents" {{if not (can $.Role "admin")}}disabled{{end}}>
       <div>
         <label class="field-label">False-positive marks needed</label>
         <input name="feedback_threshold" type="number" min="1" max="1000" value="{{.FeedbackThreshold}}"
@@ -221,11 +226,12 @@
         <input name="feedback_window" type="number" min="1" max="90" value="{{.FeedbackWindow}}"
           class="field w-28"/>
       </div>
-      <button type="submit" class="btn-ghost py-[10px]">
+      {{if can $.Role "admin"}}<button type="submit" class="btn-ghost py-[10px]">
         Save
-      </button>
+      </button>{{end}}
       <p class="text-[12px] text-slate-500 basis-full">A suggestion needs this many false-positive marks and zero true-positive marks on the same rule/service within the window. Suggestion-only — nothing is ever disabled automatically.</p>
-    </form>
+    </fieldset>
+</form>
   </div>
 
   <!-- Top firing rules -->
@@ -240,7 +246,7 @@
             <th class="px-4 py-2 text-right">Hits</th>
             <th class="px-4 py-2 text-left">Last seen</th>
             <th class="px-4 py-2 text-left">Status</th>
-            <th class="px-4 py-2"></th>
+{{if can $.Role "admin"}}<th class="px-4 py-2"></th>{{end}}
           </tr>
         </thead>
         <tbody>
@@ -256,7 +262,7 @@
               <span class="tag"><span class="h-2 w-2 rounded-full bg-success"></span>Active</span>
               {{end}}
             </td>
-            <td class="px-4 py-3 text-right">
+            {{if can $.Role "admin"}}<td class="px-4 py-3 text-right">
               {{if not .Disabled}}
               <form hx-post="/admin/waf-rules/disable" hx-target="#waf-content" hx-swap="innerHTML" class="inline">
                 <input type="hidden" name="rule_id" value="{{.RuleID}}"/>
@@ -267,7 +273,7 @@
                 </button>
               </form>
               {{end}}
-            </td>
+            </td>{{end}}
           </tr>
           {{end}}
         </tbody>
@@ -285,9 +291,13 @@
       {{if .CustomRules}}
       {{range .CustomRules}}
       <div class="flex items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
+        {{if can $.Role "admin"}}
         <form hx-post="/admin/waf-rules/custom/{{.ID}}/toggle" hx-trigger="change" hx-target="#waf-content" hx-swap="innerHTML" class="shrink-0" title="{{if .Enabled}}Enabled{{else}}Disabled{{end}}">
           {{template "toggle-switch" (map "Name" "enabled" "Checked" .Enabled)}}
         </form>
+        {{else}}
+        <span class="tag shrink-0"><span class="h-2 w-2 rounded-full {{if .Enabled}}bg-success{{else}}bg-slate-400{{end}}"></span>{{if .Enabled}}On{{else}}Off{{end}}</span>
+        {{end}}
         <div class="flex-1 min-w-0">
           <div class="font-mono text-[13px] text-slate-900 truncate{{if not .Enabled}} opacity-50{{end}}">
             {{.Rule}}
@@ -297,9 +307,11 @@
             {{if .Note}}{{.Note}}{{else}}No note{{end}} · {{fmtTime .CreatedAt}}
           </div>
         </div>
+        {{if can $.Role "admin"}}
         <button type="button" data-custom-edit data-id="{{.ID}}" data-rule="{{.Rule}}" data-service="{{.ServiceName}}" data-note="{{.Note}}"
           class="btn-ghost shrink-0">Edit</button>
         {{template "remove-btn" (map "URL" (printf "/admin/waf-rules/custom/%d" .ID) "Target" "#waf-content" "Confirm" "Delete this custom rule? The engine reloads immediately.")}}
+        {{end}}
       </div>
       {{end}}
       {{else}}
@@ -324,7 +336,7 @@
             {{if .Reason}}{{.Reason}}{{else}}No reason given{{end}} · {{fmtTime .CreatedAt}}
           </div>
         </div>
-        {{template "remove-btn" (map "URL" (printf "/admin/waf-rules/%d" .ID) "Target" "#waf-content" "Confirm" (printf "Re-enable WAF rule %d?" .RuleID))}}
+        {{if can $.Role "admin"}}{{template "remove-btn" (map "URL" (printf "/admin/waf-rules/%d" .ID) "Target" "#waf-content" "Confirm" (printf "Re-enable WAF rule %d?" .RuleID))}}{{end}}
       </div>
       {{end}}
       {{else}}
@@ -352,7 +364,7 @@
             {{if .Reason}}{{.Reason}}{{else}}No reason given{{end}} · {{fmtTime .CreatedAt}}
           </div>
         </div>
-        {{template "remove-btn" (map "URL" (printf "/admin/waf-rules/service/%d" .ID) "Target" "#waf-content" "Confirm" (printf "Re-enable rule %d for %s?" .RuleID .ServiceName))}}
+        {{if can $.Role "admin"}}{{template "remove-btn" (map "URL" (printf "/admin/waf-rules/service/%d" .ID) "Target" "#waf-content" "Confirm" (printf "Re-enable rule %d for %s?" .RuleID .ServiceName))}}{{end}}
       </div>
       {{end}}
       {{else}}

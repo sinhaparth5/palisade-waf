@@ -3,6 +3,7 @@
 
 <div class="flex flex-col gap-4">
 
+  {{if can .Role "admin"}}
   <!-- ── Add Service Wizard ── -->
   <div class="card h-fit border-t-4 border-t-edge p-5" id="service-wizard" data-step="1">
     {{template "panel-header" (map "Icon" "hgi-cloud-server" "Title" "Add Service" "Mb" "mb-0")}}
@@ -93,12 +94,13 @@
       </div>
     </form>
   </div>
+  {{end}}
 
   <!-- ── Services List ── -->
   <div class="card overflow-hidden">
     {{template "card-header" (map "Cat" "Routing" "Title" "Configured Services" "Badge" (printf "%d services" (len .Services)))}}
     <div id="services-body" class="flex flex-col px-2 pb-2" hx-get="/admin/services/rows" hx-trigger="every 15s" hx-swap="innerHTML">
-      {{template "services-rows" .Services}}
+      {{template "services-rows" (map "Services" .Services "Role" .Role)}}
     </div>
   </div>
 
@@ -112,6 +114,7 @@
 
 </div>
 
+{{if can .Role "admin"}}
 <!-- ── Edit Service Modal (all per-service settings in one place) ── -->
 <div id="svc-modal-overlay" class="hidden flex fixed inset-0 bg-slate-900/[.55] backdrop-blur-[2px] z-[200] items-center justify-center p-4">
   <div class="card mobile-safe-modal max-w-[720px] overflow-y-auto p-4 sm:p-6">
@@ -650,6 +653,18 @@
     </form>
   </div>
 </div>
+{{else}}
+<!-- ── View Service Modal (issue #216): the row's <template> copied in ── -->
+<div id="svc-view-overlay" class="hidden flex fixed inset-0 bg-slate-900/[.55] backdrop-blur-[2px] z-[200] items-center justify-center p-4">
+  <div class="card mobile-safe-modal max-w-[720px] overflow-y-auto p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="svc-view-title">
+    <div class="flex items-center justify-between mb-2">
+      <h2 id="svc-view-title" class="font-mono text-[15px] uppercase tracking-[.04em] text-ink"><span id="svc-view-name"></span></h2>
+      <button type="button" id="svc-view-close" aria-label="Close service details" class="flex h-9 w-9 items-center justify-center rounded-sm border border-edge text-ink text-lg leading-none cursor-pointer hover:bg-surface">&times;</button>
+    </div>
+    <div id="svc-view-body"></div>
+  </div>
+</div>
+{{end}}
 
 {{end}}
 
@@ -714,7 +729,7 @@
 {{end}}
 
 {{define "services-rows"}}
-{{range .}}
+{{range .Services}}
 <div class="flex flex-col sm:flex-row sm:items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
   <div class="relative w-10 h-10 border border-edge flex items-center justify-center shrink-0">
     <i class="hgi hgi-stroke hgi-rounded hgi-cloud-server text-base text-ink"></i>
@@ -803,6 +818,7 @@
     <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .MTLS.Mode "required"}}bg-warning{{else}}bg-slate-400{{end}}"></span>mTLS: {{.MTLS.Mode}}</span>
     {{end}}
     <span class="text-[12px] text-slate-500 whitespace-nowrap ml-1">{{fmtTime .CreatedAt}}</span>
+    {{if can $.Role "admin"}}
     <button type="button" class="svc-edit-btn btn-ghost ml-1"
       data-id="{{.ID}}" data-name="{{.Name}}" data-has-host="{{if .Host}}1{{else}}0{{end}}" data-host="{{.Host}}"
       data-aliases="{{range $i, $a := .HostAliases}}{{if $i}}&#10;{{end}}{{$a}}{{end}}" data-canonical="{{.CanonicalHost}}"
@@ -824,11 +840,89 @@
       <i class="hgi hgi-stroke hgi-rounded hgi-settings-01 text-xs"></i>
       Edit
     </button>
+    {{else}}
+    <button type="button" class="svc-view-btn btn-ghost ml-1" data-view="svc-view-{{.ID}}" data-name="{{.Name}}">
+      <i class="hgi hgi-stroke hgi-rounded hgi-view text-xs"></i>
+      View
+    </button>
+    <template id="svc-view-{{.ID}}">{{template "service-view" .}}</template>
+    {{end}}
   </div>
 </div>
 {{else}}
 {{template "empty-state" (map "Icon" "hgi-cloud-server" "Message" "No services configured yet")}}
 {{end}}
+{{end}}
+
+{{/* Read-only service settings for viewers (issue #216). Same ServiceView
+     as the Edit button's data attributes; never the maintenance bypass token. */}}
+{{define "service-view"}}
+<dl class="text-[13px]">
+  {{template "svc-view-head" "Routing"}}
+  {{template "svc-kv" (map "K" (or (and .Host "Host") "Path prefix") "V" (or .Host .Prefix))}}
+  {{if .Host}}
+  {{template "svc-kv" (map "K" "Extra hostnames" "V" (or (join .HostAliases ", ") "None"))}}
+  {{template "svc-kv" (map "K" "Redirect to" "V" (or .CanonicalHost "No redirect"))}}
+  {{end}}
+  <div class="flex justify-between gap-4 border-b border-line py-2">
+    <dt class="text-slate-500">Backends</dt>
+    <dd class="flex min-w-0 flex-col items-end gap-1 font-mono text-ink">
+      {{if .Health}}{{range .Health}}
+      <span class="inline-flex items-center gap-[6px] break-all"><span class="h-2 w-2 shrink-0 rounded-full {{if not .Known}}bg-slate-400{{else if .Healthy}}bg-success{{else}}bg-danger{{end}}"></span>{{.URL}}</span>
+      {{end}}{{else}}{{range .Backends}}<span class="break-all">{{.}}</span>{{end}}{{end}}
+    </dd>
+  </div>
+  {{if .ExtraBackends}}{{template "svc-kv" (map "K" "Balancing" "V" (or (and (eq .LBPolicy "least_conn") "Least connections") "Round robin"))}}{{end}}
+  {{template "svc-kv" (map "K" "Health check" "V" (or (and .HealthPath (printf "%s every %ds" .HealthPath (or .HealthInterval 10))) "From real traffic"))}}
+
+  {{template "svc-view-head" "Rate limit"}}
+  {{template "svc-kv" (map "K" "Limit" "V" (or (and (gt .RateLimitRPS 0.0) (printf "%g/s, burst %s" .RateLimitRPS (or (and .RateLimitBurst (printf "%d" .RateLimitBurst)) "auto"))) "Global limit"))}}
+
+  {{template "svc-view-head" "Bot"}}
+  {{template "svc-kv" (map "K" "Bot protection" "V" (or (and (eq .BotMode "always") "Always challenge") (and (eq .BotMode "off") "Off for this service") "Inherit global"))}}
+  {{$ai := aiPolicy .AICrawlerPolicy}}
+  {{template "svc-kv" (map "K" "AI crawlers" "V" (or (and $ai (printf "training %s · search %s · user %s" (or (index $ai "training") "inherit") (or (index $ai "search") "inherit") (or (index $ai "user") "inherit"))) "Inherit"))}}
+  {{template "svc-kv" (map "K" "Login paths" "V" (or (join .LoginPaths ", ") "Off"))}}
+  {{template "svc-kv" (map "K" "Leaked passwords" "V" (or (and .BreachAction (printf "%s · fields %s" .BreachAction (or (join .BreachFields ", ") "default"))) "Off"))}}
+
+  {{template "svc-view-head" "Availability"}}
+  {{template "svc-kv" (map "K" "Maintenance" "V" (or (and .Gate.Maintenance (printf "On%s%s" (or (and (not .Gate.MaintStart.IsZero) (printf " from %s" (fmtTimeFull .Gate.MaintStart))) "") (or (and (not .Gate.MaintEnd.IsZero) (printf " until %s" (fmtTimeFull .Gate.MaintEnd))) ""))) "Off"))}}
+  {{if .Gate.MaintMsg}}{{template "svc-kv" (map "K" "Maintenance message" "V" .Gate.MaintMsg)}}{{end}}
+  {{template "svc-kv" (map "K" "Waiting room" "V" (or (and .Gate.WaitingRoom (printf "%d active · %d min idle · crawlers %s" .Gate.MaxActive .Gate.IdleMins (or .Gate.Crawlers "bypass"))) "Off"))}}
+  {{if .Gate.WaitMsg}}{{template "svc-kv" (map "K" "Queue message" "V" .Gate.WaitMsg)}}{{end}}
+
+  {{template "svc-view-head" "Request checks"}}
+  {{template "svc-kv" (map "K" "Large JS uploads" "V" (or (and .AllowLargeJSUploads "Allowed, bodies not inspected") "Off"))}}
+  {{template "svc-kv" (map "K" "JSON Schema" "V" (or (and (ne .SchemaMode "off") .SchemaMode) "Off"))}}
+  {{if .RequestSchema}}<pre class="my-2 max-h-48 overflow-auto border border-line bg-surface p-3 font-mono text-[12px] text-ink whitespace-pre-wrap">{{.RequestSchema}}</pre>{{end}}
+  {{template "svc-kv" (map "K" "OpenAPI" "V" (or .OpenAPIMode "No spec"))}}
+  {{template "svc-kv" (map "K" "Inspect responses" "V" (or .ResponseInspect "Off"))}}
+
+  {{template "svc-view-head" "Cache"}}
+  {{template "svc-kv" (map "K" "Varnish cache" "V" (or (and .CacheEnabled "On") "Off"))}}
+  {{template "svc-kv" (map "K" "Cache by session" "V" (or (and .CacheBySession (printf "On · cookie %s" .SessionCookieName)) "Off"))}}
+  {{template "svc-kv" (map "K" "TTL floor / ceiling" "V" (printf "%s / %s" (or (and .CacheTTLFloor (printf "%ds" .CacheTTLFloor)) "default") (or (and .CacheTTLCeiling (printf "%ds" .CacheTTLCeiling)) "none")))}}
+  {{template "svc-kv" (map "K" "Grace / keep" "V" (printf "%s / %s" (or (and .CacheGrace (printf "%ds" .CacheGrace)) "30s") (or (and .CacheKeep (printf "%ds" .CacheKeep)) "30s")))}}
+  {{if not .CacheRules}}{{template "svc-kv" (map "K" "Path rules" "V" "None")}}{{else}}<p class="pt-2 text-slate-500">Path rules</p><pre class="my-2 border border-line bg-surface p-3 font-mono text-[12px] text-ink whitespace-pre-wrap">{{.CacheRules}}</pre>{{end}}
+  {{template "svc-kv" (map "K" "Compression" "V" (or (and .CompressEnabled "On") "Off"))}}
+
+  {{if .Host}}
+  {{template "svc-view-head" "TLS"}}
+  {{template "svc-kv" (map "K" "Certificate" "V" (or (and (eq .TLSMode "custom") (or .CertName (printf "Uploaded%s" (or (and .TLSExpiresAt (printf " · expires %s" (shortDate .TLSExpiresAt))) "")))) (and (eq .TLSMode "auto") "Auto (Let's Encrypt)") "None"))}}
+  {{template "svc-kv" (map "K" "HTTP/3" "V" (or (and .HTTP3Enabled "On") "Off"))}}
+  {{template "svc-kv" (map "K" "Client certificates" "V" (or (and .MTLS.CAPath (printf "%s · CA saved" (or .MTLS.Mode "off"))) "Off"))}}
+  {{if .MTLS.Allow}}<pre class="my-2 border border-line bg-surface p-3 font-mono text-[12px] text-ink whitespace-pre-wrap">{{.MTLS.Allow}}</pre>{{end}}
+  {{end}}
+</dl>
+{{end}}
+
+{{define "svc-view-head"}}<h3 class="label-mono mt-5 border-b border-edge pb-1 text-ink">{{.}}</h3>{{end}}
+
+{{define "svc-kv"}}
+<div class="flex justify-between gap-4 border-b border-line py-2">
+  <dt class="shrink-0 text-slate-500">{{.K}}</dt>
+  <dd class="min-w-0 text-right font-mono text-ink wrap-anywhere">{{.V}}</dd>
+</div>
 {{end}}
 
 {{define "scripts"}}<script src="{{.AdminPath}}/static/js/services.min.js?v={{.Asset}}" defer></script>{{end}}

@@ -273,6 +273,8 @@
      Utilities still win, so text-[13px]/font-mono/w-28 adjust a field. */
   .field { width: 100%; background: var(--fn-card); color: var(--fn-ink); border: 1px solid var(--fn-edge); border-radius: 2px; padding: 9px 12px; font-size: 14px; outline: none; transition: border-color .15s, box-shadow .15s; }
   .field:focus { box-shadow: 0 0 0 3px color-mix(in oklab, var(--fn-info) 25%, transparent); }
+  /* Read-only roles get settings in a disabled fieldset (issue #216). */
+  .field:disabled { background: transparent; border-color: var(--fn-rule); cursor: default; }
   .field-label { display: block; margin-bottom: 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--fn-muted); }
   .btn-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: transparent; color: var(--fn-ink); border: 1px solid var(--fn-edge); border-radius: 2px; padding: 5px 12px; font-family: var(--font-mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; cursor: pointer; transition: background-color var(--dur-fast) ease; }
   .btn-ghost:hover { background: var(--fn-paper-2); }

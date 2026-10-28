@@ -3,6 +3,7 @@
 
 <div class="flex flex-col gap-4">
 
+  {{if can .Role "admin"}}
   <!-- ── Left: upload form ── -->
   <div class="flex flex-col gap-4">
     <div class="card border-t-4 border-t-edge p-5">
@@ -78,6 +79,7 @@
       </div>
     </div>
   </div>
+  {{end}}
 
   <!-- ── Right: saved certs ── -->
   <div class="card overflow-hidden">
@@ -90,7 +92,7 @@
             <th class="text-left pb-3 pr-6 label-mono">Name</th>
             <th class="text-left pb-3 pr-6 label-mono">Domains covered</th>
             <th class="text-left pb-3 pr-6 label-mono">Expires</th>
-            <th class="pb-3 label-mono"></th>
+            {{if can .Role "admin"}}<th class="pb-3 label-mono"></th>{{end}}
           </tr>
         </thead>
         <tbody id="cert-rows">
@@ -129,9 +131,11 @@
   <td class="py-4 pr-6 text-[12px] text-slate-500 whitespace-nowrap align-top">
     {{if .ExpiresAt}}{{shortDate .ExpiresAt}}{{else}}—{{end}}
   </td>
+  {{if can $.Role "admin"}}
   <td class="py-4 text-right align-top">
     {{template "remove-btn" (map "URL" (printf "%s/certificates/%d" $.AdminPath .ID) "Target" "#cert-rows" "Confirm" (printf "Delete '%s'? Services using it will lose TLS." .Name))}}
   </td>
+  {{end}}
 </tr>
 {{end}}
 {{end}}

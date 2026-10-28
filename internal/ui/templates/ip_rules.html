@@ -3,6 +3,7 @@
 
 <div class="flex flex-col gap-4">
 
+  {{if can .Role "admin"}}
   <!-- ── Primary action: the same full-width row-form every management page uses ── -->
   <div class="card border-t-4 border-t-edge p-5">
     {{template "panel-header" (map "Icon" "hgi-add-circle" "Title" "Add IP Rule")}}
@@ -57,6 +58,7 @@
       <p>Per-app rules take priority over global. CIDR ranges (e.g. 10.0.0.0/8) are supported.</p>
     </div>
   </div>
+  {{end}}
 
   <!-- ── Supporting controls sit under the primary form, never beside it ── -->
   <div class="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3" data-stagger>
@@ -83,7 +85,7 @@
   <div class="card overflow-hidden h-fit">
     {{template "card-header" (map "Cat" "Firewall" "Title" "Active IP Rules" "Badge" (printf "%d rules" .Total))}}
     <div id="ip-rules-body" class="flex flex-col px-2 pb-2">
-      {{template "ip-rules-rows" (map "AdminPath" .AdminPath "Rules" .Rules "ThreatScores" .ThreatScores "CurPage" .CurPage "TotalPages" .TotalPages "Total" .Total)}}
+      {{template "ip-rules-rows" (map "AdminPath" .AdminPath "Rules" .Rules "ThreatScores" .ThreatScores "CurPage" .CurPage "TotalPages" .TotalPages "Total" .Total "Role" .Role)}}
     </div>
   </div>
 
@@ -102,7 +104,8 @@
   <div class="rounded-md bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3 mb-4">{{.AutobanSaveErr}}</div>
   {{end}}
 
-  <form hx-post="/admin/ip-rules/autoban" hx-target="#autoban-card" hx-swap="outerHTML" class="flex flex-col gap-4">
+  <form class="flex flex-col gap-4" {{if can $.Role "admin"}}hx-post="/admin/ip-rules/autoban" hx-target="#autoban-card" hx-swap="outerHTML"{{end}}>
+  <fieldset class="contents" {{if not (can $.Role "admin")}}disabled{{end}}>
     <label class="flex items-center justify-between cursor-pointer">
       <span class="text-[13px] font-medium text-slate-700">Ban IPs automatically</span>
       {{template "toggle-switch" (map "Name" "autoban_enabled" "Checked" .AutobanEnabled)}}
@@ -145,10 +148,11 @@
     </div>
     <p class="text-[12px] text-slate-500 -mt-1">Catches scanners whose probes trip no WAF rule. Missing static assets (images, scripts, fonts, source maps), crawler files, verified crawlers and trusted IPs never count.</p>
 
-    <button type="submit" class="btn-primary w-full flex items-center justify-center gap-2">
+    {{if can $.Role "admin"}}<button type="submit" class="btn-primary w-full flex items-center justify-center gap-2">
       <i class="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-sm"></i>
       Save &amp; apply
-    </button>
+    </button>{{end}}
+  </fieldset>
   </form>
 </div>
 {{end}}
@@ -165,16 +169,18 @@
   <div class="rounded-md bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3 mb-4">{{.HoneypotSaveErr}}</div>
   {{end}}
 
-  <form hx-post="/admin/ip-rules/honeypots" hx-target="#honeypot-card" hx-swap="outerHTML" class="flex flex-col gap-4">
+  <form class="flex flex-col gap-4" {{if can $.Role "admin"}}hx-post="/admin/ip-rules/honeypots" hx-target="#honeypot-card" hx-swap="outerHTML"{{end}}>
+  <fieldset class="contents" {{if not (can $.Role "admin")}}disabled{{end}}>
     <textarea name="honeypot_paths" rows="6" placeholder="/wp-login.php&#10;/xmlrpc.php&#10;/phpmyadmin/"
       class="field text-[12px] font-mono resize-y">{{range .HoneypotPaths}}{{.}}
 {{end}}</textarea>
     <p class="text-[12px] text-slate-500 -mt-1">One path per line, case-insensitive. A path ending in <span class="font-mono">/</span> covers everything under it. Hits show up in Logs as <span class="font-mono">honeypot</span>.</p>
 
-    <button type="submit" class="btn-primary w-full flex items-center justify-center gap-2">
+    {{if can $.Role "admin"}}<button type="submit" class="btn-primary w-full flex items-center justify-center gap-2">
       <i class="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-sm"></i>
       Save &amp; apply
-    </button>
+    </button>{{end}}
+  </fieldset>
   </form>
 </div>
 {{end}}
@@ -191,7 +197,8 @@
   <div class="rounded-md bg-red-50 border border-red-200 text-red-600 text-[13px] px-4 py-3 mb-4">{{.AdaptiveSaveErr}}</div>
   {{end}}
 
-  <form hx-post="/admin/ip-rules/adaptive" hx-target="#adaptive-card" hx-swap="outerHTML" class="flex flex-col gap-4">
+  <form class="flex flex-col gap-4" {{if can $.Role "admin"}}hx-post="/admin/ip-rules/adaptive" hx-target="#adaptive-card" hx-swap="outerHTML"{{end}}>
+  <fieldset class="contents" {{if not (can $.Role "admin")}}disabled{{end}}>
     <label class="flex items-center justify-between cursor-pointer">
       <span class="text-[13px] font-medium text-slate-700">Adjust enforcement automatically</span>
       {{template "toggle-switch" (map "Name" "adaptive_enabled" "Checked" .AdaptiveEnabled)}}
@@ -226,10 +233,11 @@
     </div>
     <p class="text-[12px] text-slate-500 -mt-1">Rate scale multiplies the global limit's rate and burst: 0.3 means 30% of normal for high-risk IPs, 1.5 means 150% of normal for low-risk ones. Blocked/challenged rows from adaptive enforcement show up in Logs tagged <span class="font-mono">:adaptive</span>.</p>
 
-    <button type="submit" class="btn-primary w-full flex items-center justify-center gap-2">
+    {{if can $.Role "admin"}}<button type="submit" class="btn-primary w-full flex items-center justify-center gap-2">
       <i class="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-sm"></i>
       Save &amp; apply
-    </button>
+    </button>{{end}}
+  </fieldset>
   </form>
 </div>
 {{end}}
@@ -258,7 +266,7 @@
     {{if gt $score 0}}Score {{$score}}{{else}}Score —{{end}}
   </span>
   {{template "rule-type-badge" .RuleType}}
-  {{template "remove-btn" (map "URL" (printf "%s/ip-rules/%d?page=%d" $.AdminPath .ID $.CurPage) "Target" "#ip-rules-body" "Confirm" (printf "Remove rule for %s?" .IP))}}
+  {{if can $.Role "admin"}}{{template "remove-btn" (map "URL" (printf "%s/ip-rules/%d?page=%d" $.AdminPath .ID $.CurPage) "Target" "#ip-rules-body" "Confirm" (printf "Remove rule for %s?" .IP))}}{{end}}
   </div>
 </div>
 {{else}}

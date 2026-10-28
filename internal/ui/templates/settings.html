@@ -13,10 +13,10 @@
 
   <nav aria-label="Settings sections" class="flex flex-wrap gap-2">
     <a href="#settings-access" class="btn-ghost min-h-10 px-4 no-underline">Account &amp; access</a>
-    {{if ne .Role "viewer"}}
+    {{if can .Role "admin"}}
     <a href="#settings-protection" class="btn-ghost min-h-10 px-4 no-underline">Protection</a>
     <a href="#settings-infrastructure" class="btn-ghost min-h-10 px-4 no-underline">Infrastructure</a>
-    {{if eq .Role "owner"}}
+    {{if can .Role "owner"}}
     <a href="#settings-alerts" class="btn-ghost min-h-10 px-4 no-underline">Alerts &amp; integrations</a>
     {{end}}
     {{end}}
@@ -76,12 +76,12 @@
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       {{template "devices-card" .}}
-      {{if eq .Role "owner"}}{{template "api-keys-card" .}}{{end}}
+      {{if can .Role "owner"}}{{template "api-keys-card" .}}{{end}}
     </div>
-    {{if eq .Role "owner"}}{{template "users-card" .}}{{template "sso-card" .}}{{end}}
+    {{if can .Role "owner"}}{{template "users-card" .}}{{template "sso-card" .}}{{end}}
   </section>
 
-  {{if ne .Role "viewer"}}
+  {{if can .Role "admin"}}
 
   <!-- ── Protection ───────────────────────────────────────────────────────── -->
   <section id="settings-protection" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-protection-title">
@@ -98,9 +98,9 @@
     {{template "settings-section-title" (map "ID" "settings-infrastructure-title" "Title" "Infrastructure" "Copy" "Cache, the database and rule reloads.")}}
     {{template "varnish-card" .}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-      {{if eq .Role "owner"}}{{template "dbconn-card" .}}{{end}}
+      {{if can .Role "owner"}}{{template "dbconn-card" .}}{{end}}
       <div class="flex flex-col gap-4 min-w-0">
-      {{if eq .Role "owner"}}
+      {{if can .Role "owner"}}
       <!-- ── Database backup ───────────────────────────────────────────────────── -->
         <div class="card p-5">
           <h3 class="font-mono text-[14px] font-medium uppercase tracking-[.04em] text-ink mb-1">Database backup</h3>
@@ -126,7 +126,7 @@
     </div>
   </section>
 
-  {{if eq .Role "owner"}}
+  {{if can .Role "owner"}}
   <!-- ── Alerts & integrations ────────────────────────────────────────────── -->
   <section id="settings-alerts" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-alerts-title">
     {{template "settings-section-title" (map "ID" "settings-alerts-title" "Title" "Alerts & integrations" "Copy" "Where security events and reports are sent.")}}

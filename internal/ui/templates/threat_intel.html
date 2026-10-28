@@ -3,6 +3,7 @@
 
 <div class="flex flex-col gap-4">
 
+  {{if can .Role "admin"}}
   <!-- ── Add sources at the top so the feed table can use the full width ── -->
     <div class="card border-t-4 border-t-edge p-5">
       {{template "panel-header" (map "Icon" "hgi-database-01" "Title" "Add Feed")}}
@@ -95,6 +96,7 @@
         <p class="mt-1">Intel blocks are lower priority than your IP Rules; your allow rules always win.</p>
       </div>
   </div>
+  {{end}}
 
   <!-- ── Sources table spans the page ── -->
   <div class="card overflow-hidden">
@@ -116,7 +118,7 @@
       <th class="px-5 py-3 text-right">IPs</th>
       <th class="px-5 py-3 text-left">Last synced</th>
       <th class="px-5 py-3 text-left">Status</th>
-      <th class="px-5 py-3"></th>
+      {{if can $.Role "admin"}}<th class="px-5 py-3"></th>{{end}}
     </tr>
   </thead>
   <tbody>
@@ -146,6 +148,7 @@
         <span class="tag"><span class="h-2 w-2 rounded-full bg-slate-400"></span>Paused</span>
         {{end}}
       </td>
+      {{if can $.Role "admin"}}
       <td class="px-5 py-3">
         <div class="flex items-center justify-end gap-2">
           <!-- Sync now -->
@@ -177,6 +180,7 @@
           {{template "remove-btn" (map "URL" (printf "%s/threat-intel/%d" $.AdminPath .ID) "Target" "#intel-rows" "Confirm" (printf "Delete feed \"%s\"?" .Label))}}
         </div>
       </td>
+      {{end}}
     </tr>
     {{end}}
   </tbody>

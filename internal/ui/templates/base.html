@@ -122,6 +122,7 @@
     <p class="font-mono text-[13px] uppercase tracking-[.06em] text-ink whitespace-nowrap">
       <span id="clock-date">{{today}}</span><span id="clock-time" class="hidden sm:inline"></span>
     </p>
+    {{if not (can .Role "admin")}}<span class="tag shrink-0" title="Your role can read every page but not change settings"><span class="h-2 w-2 rounded-full bg-slate-400"></span>Read-only</span>{{end}}
     <div class="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap justify-end py-2">
       {{block "actions" .}}{{end}}
     </div>
@@ -129,12 +130,6 @@
 
   <div class="flex flex-1 flex-col xl:flex-row">
     <main id="main-content" class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
-      {{if eq .Role "viewer"}}
-      <div class="mb-5 flex items-center gap-2 border border-edge bg-surface px-4 py-3 text-[13px] text-slate-600">
-        <i class="hgi hgi-stroke hgi-rounded hgi-view text-base text-slate-500"></i>
-        You have read-only access. Changes are refused for viewers.
-      </div>
-      {{end}}
       <div class="mb-6">
         <p class="label-mono mb-1">Admin / {{.Heading}}</p>
         <h1 class="text-[22px] sm:text-[26px] leading-tight text-ink">{{.Heading}}</h1>

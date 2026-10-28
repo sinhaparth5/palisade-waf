@@ -439,3 +439,34 @@
     if (svcOverlay) svcOverlay.classList.add('hidden');
   });
 })();
+
+// View-service modal for viewers (issue #216): copies the row's <template>
+// in, so the 15s row refresh can't swap it away while it's open.
+(function () {
+  var overlay = document.getElementById('svc-view-overlay');
+  if (!overlay) return;
+  var body = document.getElementById('svc-view-body');
+  var closeBtn = document.getElementById('svc-view-close');
+  var returnFocus = null;
+
+  function close() {
+    overlay.classList.add('hidden');
+    if (returnFocus) returnFocus.focus();
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.svc-view-btn');
+    var tpl = btn && document.getElementById(btn.dataset.view);
+    if (!tpl) return;
+    document.getElementById('svc-view-name').textContent = btn.dataset.name;
+    body.replaceChildren(tpl.content.cloneNode(true));
+    returnFocus = btn;
+    overlay.classList.remove('hidden');
+    closeBtn.focus();
+  });
+  closeBtn.addEventListener('click', close);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !overlay.classList.contains('hidden')) close();
+  });
+})();
