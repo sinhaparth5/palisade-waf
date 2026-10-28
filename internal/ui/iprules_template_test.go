@@ -61,7 +61,7 @@ func TestIPRulesTemplateRendersAutobanAndNotes(t *testing.T) {
 		"Automatic banning",
 		`hx-post="/admin/ip-rules/autoban"`,
 		`name="autoban_threshold"`,
-		`bg-amber-100 text-amber-700">Auto</span>`, // badge on the auto-banned row
+		`bg-warning"></span>Auto</span>`, // badge on the auto-banned row
 		"Auto-banned — 12 blocked requests in 10 min",
 		"Adaptive enforcement",
 		`hx-post="/admin/ip-rules/adaptive"`,
@@ -73,7 +73,7 @@ func TestIPRulesTemplateRendersAutobanAndNotes(t *testing.T) {
 		}
 	}
 	// The manual rule must not carry the Auto badge: exactly one occurrence.
-	if got := strings.Count(page, `bg-amber-100 text-amber-700">Auto</span>`); got != 1 {
+	if got := strings.Count(page, `bg-warning"></span>Auto</span>`); got != 1 {
 		t.Errorf("Auto badge count = %d, want 1", got)
 	}
 	// The card-header badge must show the true total row count, not just how

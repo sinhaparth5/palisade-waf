@@ -1,13 +1,13 @@
 {{define "rule-ring-row"}}
-<div class="flex items-center gap-3 rounded-lg border border-white/10 px-4 py-3">
+<div class="flex items-center gap-3 border border-side-line px-4 py-3">
   <div class="relative w-10 h-10 shrink-0">
-    {{template "ring" (map "Size" "w-10 h-10" "Pct" .Pct "Stroke" .Stroke "Track" "stroke-white/15")}}
-    <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-white">{{.Pct}}%</span>
+    {{template "ring" (map "Size" "w-10 h-10" "Pct" .Pct "Stroke" .Stroke "Track" "stroke-side-line")}}
+    <span class="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-side-active">{{.Pct}}%</span>
   </div>
   <div class="flex-1 min-w-0">
-    <p class="text-[13px] font-semibold text-white">{{.Title}}</p>
-    <p class="text-[11px] text-white/50">{{.Sub}}</p>
+    <p class="text-[13px] text-side-active">{{.Title}}</p>
+    <p class="text-[11px] text-side-muted">{{.Sub}}</p>
   </div>
-  <span class="text-[11px] font-semibold bg-white/10 text-white px-[10px] py-1 rounded-sm shrink-0">{{.Count}} rules</span>
+  <span class="shrink-0 border border-side-line px-2 py-[3px] font-mono text-[11px] uppercase tracking-[.06em] text-side-ink">{{.Count}} rules</span>
 </div>
 {{end}}

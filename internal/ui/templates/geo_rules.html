@@ -4,39 +4,39 @@
 <div class="flex flex-col gap-4">
 
   <!-- ── Primary action: the same full-width row-form every management page uses ── -->
-  <div class="card border-t-2 border-t-brand p-5">
+  <div class="card border-t-4 border-t-edge p-5">
     {{template "panel-header" (map "Icon" "hgi-earth" "Title" "Add Geo Rule")}}
 
     <form hx-post="/admin/geo-rules" hx-target="#geo-rules-body" hx-swap="innerHTML"
           class="grid grid-cols-1 items-end gap-4 md:grid-cols-2 lg:grid-cols-[1fr_1.4fr_auto_auto]">
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">
+          <label class="field-label">
             Country Code <span class="text-slate-300">(ISO 3166-1 &alpha;-2)</span>
           </label>
           <input name="country_code" type="text" placeholder="CN" maxlength="2" required
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] font-mono font-bold uppercase tracking-[.2em] outline-hidden transition-[border] duration-150 text-slate-800 bg-white"
+            class="field font-mono font-bold uppercase tracking-[.2em]"
             />
         </div>
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Scope</label>
-          <select name="app_name" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden transition-[border] duration-150 text-slate-800 bg-white">
+          <label class="field-label">Scope</label>
+          <select name="app_name" class="field">
             <option value="">Global (all apps)</option>
             {{range .Apps}}<option value="{{.Name}}">{{.Name}} only</option>{{end}}
           </select>
         </div>
 
         <div>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Action</label>
+          <label class="field-label">Action</label>
           <div class="flex items-center gap-4 rounded-md border-[1.5px] border-transparent py-[10px]">
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="radio" name="rule_type" value="block" checked class="accent-red-500"/>
-              <span class="text-[14px] font-medium text-red-500">Block</span>
+              <span class="font-mono text-[13px] uppercase text-red-600">Block</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
               <input type="radio" name="rule_type" value="allow" class="accent-brand"/>
-              <span class="text-[14px] font-medium text-brand">Allow</span>
+              <span class="font-mono text-[13px] uppercase text-green-600">Allow</span>
             </label>
           </div>
         </div>
@@ -47,7 +47,7 @@
         </button>
       </form>
 
-    <div class="mt-5 grid grid-cols-1 gap-2 border-t border-canvas pt-4 text-[12px] text-slate-500 md:grid-cols-2">
+    <div class="mt-5 grid grid-cols-1 gap-2 border-t border-line pt-4 text-[12px] text-slate-500 md:grid-cols-2">
       <p>Examples: US · CN · RU · IR · KP · DE</p>
       <p>Per-app rules take priority over global. Allow rules bypass every other block.</p>
     </div>
@@ -56,28 +56,28 @@
   <!-- ── Supporting panels sit under the primary form, never beside it ── -->
   <div class="grid grid-cols-1 items-start gap-4 md:grid-cols-2" data-stagger>
     <!-- Rules overview -->
-    <div class="relative overflow-hidden rounded-xl bg-navy p-5 flex flex-col gap-2 shadow-[0_12px_28px_rgba(16,42,67,.16)]">
+    <div class="relative overflow-hidden border border-edge bg-side p-5 flex flex-col gap-2">
       <img src="{{.AdminPath}}/static/imgs/security-traffic-mesh.webp" alt="" aria-hidden="true"
            width="1600" height="682" loading="lazy"
-           class="absolute inset-0 h-full w-full object-cover opacity-20"/>
-      <div class="absolute inset-0 bg-linear-to-b from-navy/35 to-navy/95"></div>
-      <p class="relative text-[12px] text-white/60 mb-1">Rules overview</p>
+           class="absolute inset-0 h-full w-full object-cover opacity-20 grayscale sepia-[.35]"/>
+      <div class="absolute inset-0 bg-linear-to-b from-side/40 to-side"></div>
+      <p class="relative mb-1 font-mono text-[11px] uppercase tracking-[.08em] text-side-muted">Rules overview</p>
 
       <div class="relative flex flex-col gap-2">
-        {{template "rule-ring-row" (map "Color" "#D6584F" "Pct" .BlockPct "Title" "Block rules" "Sub" "deny matching countries" "Count" .BlockCount)}}
+        {{template "rule-ring-row" (map "Stroke" "stroke-danger" "Pct" .BlockPct "Title" "Block rules" "Sub" "deny matching countries" "Count" .BlockCount)}}
 
-        {{template "rule-ring-row" (map "Color" "#3E9B55" "Pct" .AllowPct "Title" "Allow rules" "Sub" "whitelist, bypasses other blocks" "Count" .AllowCount)}}
+        {{template "rule-ring-row" (map "Stroke" "stroke-success" "Pct" .AllowPct "Title" "Allow rules" "Sub" "whitelist, bypasses other blocks" "Count" .AllowCount)}}
       </div>
     </div>
 
     <!-- GeoIP notice card -->
-    <div class="rounded-xl bg-amber-50 border border-amber-200 px-5 py-4 shadow-[0_8px_22px_rgba(180,83,9,.07)]">
+    <div class="border border-amber-300 bg-amber-50 px-5 py-4">
       <div class="flex gap-3 items-start">
         <i class="hgi hgi-stroke hgi-rounded hgi-earth text-base text-amber-600 shrink-0 mt-px"></i>
         <div>
           <p class="text-[13px] font-semibold text-amber-800 mb-1">GeoIP database bundled</p>
           <p class="text-[12px] text-amber-700 leading-[1.5]">
-            The binary includes MaxMind GeoLite2 Country data. Set <code class="bg-black/[.06] px-[5px] py-px rounded-sm text-[11px]">geo.db_path</code>
+            The binary includes MaxMind GeoLite2 Country data. Pass <code class="font-mono bg-black/[.06] px-[5px] py-px text-[11px]">--geo-db</code>
             only when overriding it with a newer .mmdb file.
           </p>
         </div>
@@ -88,7 +88,7 @@
   <!-- ── Active rules span the page instead of inheriting sidebar height ── -->
   <div class="card overflow-hidden h-fit">
     {{template "card-header" (map "Cat" "Firewall" "Title" "Active Geo Rules" "Badge" (printf "%d rules" (len .Rules)))}}
-    <div id="geo-rules-body" class="flex flex-col gap-1 px-2 pb-2">
+    <div id="geo-rules-body" class="flex flex-col px-2 pb-2">
       {{template "geo-rules-rows" .Rules}}
     </div>
   </div>
@@ -98,7 +98,7 @@
 
 {{define "geo-rules-rows"}}
 {{range .}}
-<div class="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors duration-150">
+<div class="flex items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
   <div class="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-canvas flex items-center justify-center">
     <span class="{{flagClass .CountryCode}} w-10 h-10 bg-cover block"></span>
   </div>
