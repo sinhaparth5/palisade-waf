@@ -14,16 +14,12 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-28
+
 ### Changed
 
 - (#215) v3: Redesign the admin UI (retro archival theme)
 - (#216) v3: Role-aware admin UI with read-only views for viewers
 
-## [2.11.1] - 2026-10-28
-
-### Added
-
-- (#212) Feature Request: Add Path-Based Varnish Cache Rules and Fix Static Asset Loading Issues
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.11.1...main
-[2.11.1]: https://github.com/sinhaparth5/palisade-waf/compare/v2.11.0...v2.11.1
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.0...main
+[3.0.0]: https://github.com/sinhaparth5/palisade-waf/compare/v2.11.1...v3.0.0
