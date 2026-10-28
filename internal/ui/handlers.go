@@ -142,6 +142,7 @@ type Handler struct {
 	registry        *services.Registry
 	broadcaster     *LogBroadcaster
 	tmpls           map[string]*template.Template
+	sections        []section // page cards for the top bar search, see search.go
 	staticJS        fs.FS
 	staticCSS       fs.FS
 	assetVer        string // cache-busting stamp for the embedded CSS/JS URLs
@@ -244,10 +245,9 @@ func (h *Handler) parseTemplates() error {
 		return fmt.Errorf("parse template login: %w", err)
 	}
 
-	pages := []string{"dashboard", "logs", "ip_rules", "geo_rules", "services", "certificates", "waf_rules", "threat_intel", "ai_usage", "settings"}
-	h.tmpls = make(map[string]*template.Template, len(pages)+1)
+	h.tmpls = make(map[string]*template.Template, len(adminPages)+1)
 	h.tmpls["login"] = login
-	for _, page := range pages {
+	for _, page := range adminPages {
 		t, err := template.New("").Funcs(funcs).ParseFS(templateFS,
 			"templates/components/*.html",
 			"templates/log_row.html",
@@ -272,6 +272,8 @@ func (h *Handler) parseTemplates() error {
 		return fmt.Errorf("parse notifications: %w", err)
 	}
 	h.tmpls["notifications"] = notif
+	// Before any Execute: html/template rewrites the trees on first use.
+	h.sections = h.searchSections()
 	return nil
 }
 
@@ -422,6 +424,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/threat-intel", h.ThreatIntelPage)
 	g.GET("/settings", h.SettingsPage)
 	g.GET("/settings/audit", h.AuditRows)
+	g.GET("/search", h.Search)
 
 	// Every role: the user's own session, credentials and second factors.
 	as(storage.RoleViewer,
@@ -3826,20 +3829,8 @@ func (h *Handler) render(c echo.Context, page string, data map[string]any) error
 		data = map[string]any{}
 	}
 	data["Page"] = page
-	headings := map[string]string{
-		"dashboard":    "Dashboard",
-		"logs":         "Live Logs",
-		"ip_rules":     "IP Rules",
-		"geo_rules":    "Geo Rules",
-		"services":     "Services",
-		"waf_rules":    "WAF Rules",
-		"threat_intel": "Threat Intel",
-		"ai_usage":     "AI Usage",
-		"certificates": "Certificates",
-		"settings":     "Settings",
-	}
 	if _, ok := data["Heading"]; !ok {
-		data["Heading"] = headings[page]
+		data["Heading"] = pageHeadings[page]
 	}
 	if _, ok := data["AdminPath"]; !ok {
 		data["AdminPath"] = h.cfg.Admin.Path
