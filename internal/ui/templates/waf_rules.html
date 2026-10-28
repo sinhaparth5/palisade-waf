@@ -28,7 +28,7 @@
         </div>
 
         <div>
-          <label class="field-label">Reason <span class="text-slate-400">(optional)</span></label>
+          <label class="field-label">Reason <span class="text-slate-500">(optional)</span></label>
           <input name="reason" type="text" placeholder="e.g. false positive on login form"
             class="field"
           />
@@ -69,7 +69,7 @@
           </select>
         </div>
         <div>
-          <label class="field-label">Note <span class="text-slate-400">(optional)</span></label>
+          <label class="field-label">Note <span class="text-slate-500">(optional)</span></label>
           <input name="note" type="text" placeholder="e.g. CVE-2026-1234 probe"
             class="field"/>
         </div>
@@ -134,7 +134,7 @@
           <tr class="border-t border-line hover:bg-surface transition-colors duration-100 align-top">
             <td class="px-4 py-3 whitespace-nowrap">
               <a href="{{.Reference}}" target="_blank" rel="noopener noreferrer" class="font-mono font-semibold text-slate-900 hover:text-slate-600 underline">{{.CVE}}</a>
-              <div class="text-[11px] text-slate-400 font-mono">rule {{.RuleID}} · added {{.Added}}</div>
+              <div class="text-[11px] text-slate-500 font-mono">rule {{.RuleID}} · added {{.Added}}</div>
             </td>
             <td class="px-4 py-3 text-slate-600 min-w-[220px]">{{.Product}}</td>
             <td class="px-4 py-3 text-right font-semibold text-slate-700">{{.Hits}}</td>
@@ -183,7 +183,7 @@
       {{range .Suggestions}}
       <div class="flex items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
         <div class="w-10 h-10 rounded-md flex items-center justify-center shrink-0 bg-amber-50">
-          <i class="hgi hgi-stroke hgi-rounded hgi-thumbs-down text-base text-amber-500"></i>
+          <i class="hgi hgi-stroke hgi-rounded hgi-thumbs-down text-base text-amber-600"></i>
         </div>
         <div class="flex-1 min-w-0">
           <div class="font-mono text-[14px] font-semibold text-slate-900">
@@ -316,7 +316,7 @@
       {{range .Disabled}}
       <div class="flex items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
         <div class="w-10 h-10 rounded-md flex items-center justify-center shrink-0 bg-amber-50">
-          <i class="hgi hgi-stroke hgi-rounded hgi-security-block text-base text-amber-500"></i>
+          <i class="hgi hgi-stroke hgi-rounded hgi-security-block text-base text-amber-600"></i>
         </div>
         <div class="flex-1 min-w-0">
           <div class="font-mono text-[14px] font-semibold text-slate-900">Rule {{.RuleID}}</div>
@@ -383,7 +383,7 @@
     {{range .Hits}}
     <tr class="border-t border-line">
       <td class="px-4 py-2 font-mono text-slate-500">#{{.ID}}</td>
-      <td class="px-4 py-2 font-mono text-slate-700 break-all"><span class="font-semibold">{{.Method}}</span> {{.Host}}{{.Target}} <span class="font-sans text-[11px] text-slate-400">{{.AppName}}</span></td>
+      <td class="px-4 py-2 font-mono text-slate-700 break-all"><span class="font-semibold">{{.Method}}</span> {{.Host}}{{.Target}} <span class="font-sans text-[11px] text-slate-500">{{.AppName}}</span></td>
       <td class="px-4 py-2">{{template "waf-dryrun-verdict" .Before}}</td>
       <td class="px-4 py-2">{{template "waf-dryrun-verdict" .After}}</td>
     </tr>

@@ -92,12 +92,12 @@
     if (this.sel) {
       this.display.textContent = MONTH_SHORT[this.sel.mo] + ' ' + this.sel.d + ', ' + this.sel.y +
         ' ' + dpPad(this.sel.h) + ':' + dpPad(this.sel.mi) + ' UTC';
-      this.display.classList.remove('text-slate-400');
+      this.display.classList.remove('text-slate-500');
       this.display.classList.add('text-slate-700');
     } else {
       this.display.textContent = 'Any date';
       this.display.classList.remove('text-slate-700');
-      this.display.classList.add('text-slate-400');
+      this.display.classList.add('text-slate-500');
     }
   };
 
@@ -123,17 +123,17 @@
     // ── Header ──
     html += '<div class="flex items-center justify-between mb-2">';
     html += btn('dp-prev', '<i class="hgi hgi-stroke hgi-rounded hgi-arrow-left-01 text-[11px]"></i>',
-      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-400');
-    html += '<button type="button" class="dp-head text-[13px] font-semibold text-slate-700 hover:text-brand rounded-lg px-2 py-1 cursor-pointer">' +
+      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-500');
+    html += '<button type="button" class="dp-head text-[13px] font-semibold text-slate-700 hover:text-slate-500 rounded-sm px-2 py-1 cursor-pointer">' +
       MONTH_NAMES[m] + ' ' + y + '</button>';
     html += btn('dp-next', '<i class="hgi hgi-stroke hgi-rounded hgi-arrow-right-01 text-[11px]"></i>',
-      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-400');
+      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-500');
     html += '</div>';
     // ── Weekday headers ──
     html += '<div class="grid grid-cols-7 mb-[3px]">';
     ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].forEach(function (d, i) {
       html += '<div class="h-6 flex items-center justify-center text-[10px] font-semibold ' +
-        (i >= 5 ? 'text-red-400' : 'text-slate-400') + '">' + d + '</div>';
+        (i >= 5 ? 'text-red-600' : 'text-slate-500') + '">' + d + '</div>';
     });
     html += '</div>';
     // ── Day grid ──
@@ -143,7 +143,7 @@
       var pd = prevLast - i;
       var pm = m === 0 ? 11 : m - 1;
       var py = m === 0 ? y - 1 : y;
-      html += dayBtn(py, pm, pd, pd, 'text-slate-300 hover:bg-surface');
+      html += dayBtn(py, pm, pd, pd, 'text-slate-500 hover:bg-surface');
     }
     // Current-month days
     for (var d = 1; d <= dim; d++) {
@@ -151,11 +151,11 @@
       var isToday = y === todY && m === todMo && d === todD;
       var dow = (new Date(Date.UTC(y, m, d)).getUTCDay() + 6) % 7;
       var cls = isSel
-        ? 'bg-brand text-white font-semibold'
-        : (dow >= 5 ? 'text-red-500' : 'text-slate-700') + ' hover:bg-surface';
+        ? 'bg-ink text-canvas font-semibold'
+        : (dow >= 5 ? 'text-red-600' : 'text-slate-700') + ' hover:bg-surface';
       html += '<button type="button" class="dp-day h-7 text-[12px] rounded-lg relative cursor-pointer ' + cls + '" ' +
         'data-y="' + y + '" data-m="' + m + '" data-d="' + d + '">' + d;
-      if (isToday && !isSel) html += '<span class="absolute bottom-[1px] left-1/2 -translate-x-1/2 w-[3px] h-[3px] rounded-full bg-brand block"></span>';
+      if (isToday && !isSel) html += '<span class="absolute bottom-[1px] left-1/2 -translate-x-1/2 w-[3px] h-[3px] rounded-full bg-ink block"></span>';
       html += '</button>';
     }
     // Next-month leading days
@@ -163,21 +163,21 @@
     for (var nd = 1; nd <= rem; nd++) {
       var nm = m === 11 ? 0 : m + 1;
       var ny = m === 11 ? y + 1 : y;
-      html += dayBtn(ny, nm, nd, nd, 'text-slate-300 hover:bg-surface');
+      html += dayBtn(ny, nm, nd, nd, 'text-slate-500 hover:bg-surface');
     }
     html += '</div>';
     // ── Time ──
     html += '<div class="flex items-center gap-2 mt-3 pt-3 border-t border-line">';
-    html += '<i class="hgi hgi-stroke hgi-rounded hgi-clock-01 text-slate-400 text-[13px] shrink-0"></i>';
-    html += '<input class="dp-hour border border-line rounded-md w-11 text-center text-[13px] py-[5px] outline-hidden text-slate-700 tabular-nums focus:border-brand" type="number" min="0" max="23" value="' + selH + '">';
-    html += '<span class="text-slate-400 text-[14px] font-semibold select-none">:</span>';
-    html += '<input class="dp-min border border-line rounded-md w-11 text-center text-[13px] py-[5px] outline-hidden text-slate-700 tabular-nums focus:border-brand" type="number" min="0" max="59" value="' + selMi + '">';
-    html += '<span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider ml-1 select-none">UTC</span>';
+    html += '<i class="hgi hgi-stroke hgi-rounded hgi-clock-01 text-slate-500 text-[13px] shrink-0"></i>';
+    html += '<input class="dp-hour field w-11 px-1 py-[5px] text-center text-[13px] tabular-nums" type="number" min="0" max="23" value="' + selH + '">';
+    html += '<span class="text-slate-500 text-[14px] font-semibold select-none">:</span>';
+    html += '<input class="dp-min field w-11 px-1 py-[5px] text-center text-[13px] tabular-nums" type="number" min="0" max="59" value="' + selMi + '">';
+    html += '<span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider ml-1 select-none">UTC</span>';
     html += '</div>';
     // ── Actions ──
     html += '<div class="flex items-center justify-between mt-3">';
-    html += '<button type="button" class="dp-clear text-[12px] text-slate-400 hover:text-slate-600 cursor-pointer py-1">Clear</button>';
-    html += '<button type="button" class="dp-apply text-[13px] font-semibold text-white bg-brand-dark px-4 py-[7px] rounded-md cursor-pointer">Apply</button>';
+    html += '<button type="button" class="dp-clear text-[12px] text-slate-500 hover:text-slate-600 cursor-pointer py-1">Clear</button>';
+    html += '<button type="button" class="dp-apply btn-primary min-h-0 px-4 py-[7px] text-[12px]">Apply</button>';
     html += '</div></div>';
 
     self.pop.innerHTML = html;
@@ -234,15 +234,15 @@
     var html = '<div class="p-3">';
     html += '<div class="flex items-center justify-between mb-3">';
     html += btn('dp-prev-y', '<i class="hgi hgi-stroke hgi-rounded hgi-arrow-left-01 text-[11px]"></i>',
-      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-400');
-    html += '<button type="button" class="dp-to-yrs text-[13px] font-semibold text-slate-700 hover:text-brand px-2 py-1 rounded-lg cursor-pointer">' + y + '</button>';
+      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-500');
+    html += '<button type="button" class="dp-to-yrs text-[13px] font-semibold text-slate-700 hover:text-slate-500 px-2 py-1 rounded-sm cursor-pointer">' + y + '</button>';
     html += btn('dp-next-y', '<i class="hgi hgi-stroke hgi-rounded hgi-arrow-right-01 text-[11px]"></i>',
-      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-400');
+      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-500');
     html += '</div><div class="grid grid-cols-3 gap-1">';
     MONTH_SHORT.forEach(function (mn, i) {
       var isSel = self.sel && self.sel.y === y && self.sel.mo === i;
       html += '<button type="button" class="dp-month h-9 text-[12px] font-medium rounded-lg cursor-pointer ' +
-        (isSel ? 'bg-brand text-white' : 'text-slate-700 hover:bg-surface') +
+        (isSel ? 'bg-ink text-canvas' : 'text-slate-700 hover:bg-surface') +
         '" data-m="' + i + '">' + mn + '</button>';
     });
     html += '</div></div>';
@@ -265,15 +265,15 @@
     var html = '<div class="p-3">';
     html += '<div class="flex items-center justify-between mb-3">';
     html += btn('dp-prev-yr', '<i class="hgi hgi-stroke hgi-rounded hgi-arrow-left-01 text-[11px]"></i>',
-      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-400');
+      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-500');
     html += '<span class="text-[12px] font-semibold text-slate-500 select-none">' + base + ' – ' + (base + 11) + '</span>';
     html += btn('dp-next-yr', '<i class="hgi hgi-stroke hgi-rounded hgi-arrow-right-01 text-[11px]"></i>',
-      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-400');
+      'w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface text-slate-500');
     html += '</div><div class="grid grid-cols-3 gap-1">';
     for (var yr = base; yr < base + 12; yr++) {
       var isSel = self.sel && self.sel.y === yr;
       html += '<button type="button" class="dp-year h-9 text-[12px] font-medium rounded-lg cursor-pointer ' +
-        (isSel ? 'bg-brand text-white' : 'text-slate-700 hover:bg-surface') +
+        (isSel ? 'bg-ink text-canvas' : 'text-slate-700 hover:bg-surface') +
         '" data-y="' + yr + '">' + yr + '</button>';
     }
     html += '</div></div>';
@@ -310,7 +310,7 @@
     opts.forEach(function (opt) {
       if (opt.dataset.value === cur) {
         displayEl.textContent = opt.dataset.label;
-        opt.classList.add('text-brand', 'font-semibold');
+        opt.classList.add('text-ink', 'font-semibold');
         opt.setAttribute('aria-selected', 'true');
       }
     });
@@ -340,7 +340,7 @@
         self.hidden.value = opt.dataset.value;
         displayEl.textContent = opt.dataset.label;
         opts.forEach(function (o) {
-          o.classList.toggle('text-brand', o === opt);
+          o.classList.toggle('text-ink', o === opt);
           o.classList.toggle('font-semibold', o === opt);
           o.setAttribute('aria-selected', String(o === opt));
         });

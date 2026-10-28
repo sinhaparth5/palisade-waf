@@ -22,7 +22,7 @@
         <label class="field-label">Service Name</label>
         <input name="name" type="text" placeholder="e.g. blog, api, admin-panel"
           class="field"/>
-        <p class="step-error hidden text-[12px] text-red-500 mt-[6px]">This field is required.</p>
+        <p class="step-error hidden text-[12px] text-red-600 mt-[6px]">This field is required.</p>
         <p class="text-[12px] text-slate-500 mt-[10px]">A friendly name to identify this backend in logs and rules.</p>
       </div>
 
@@ -41,7 +41,7 @@
         </div>
         <input name="match_value" type="text" placeholder="blog.example.com or /api"
           class="field"/>
-        <p class="step-error hidden text-[12px] text-red-500 mt-[6px]">This field is required.</p>
+        <p class="step-error hidden text-[12px] text-red-600 mt-[6px]">This field is required.</p>
         <p class="text-[12px] text-slate-500 mt-[10px]">Host matches the request's Host header exactly; prefix matches the start of the URL path.</p>
       </div>
 
@@ -50,24 +50,24 @@
         <label class="field-label">Backend URL</label>
         <input name="backend" type="text" placeholder="http://127.0.0.1:3000"
           class="field font-mono"/>
-        <p class="step-error hidden text-[12px] text-red-500 mt-[6px]">This field is required.</p>
+        <p class="step-error hidden text-[12px] text-red-600 mt-[6px]">This field is required.</p>
         <p class="text-[12px] text-slate-500 mt-[10px]">Where the WAF forwards allowed traffic once it's passed inspection.</p>
 
         <div class="border-t border-line mt-5 pt-4">
-          <p class="text-[12px] text-slate-500 mb-3 font-medium">Rate Limit <span class="font-normal text-slate-400">(optional)</span></p>
+          <p class="text-[12px] text-slate-500 mb-3 font-medium">Rate Limit <span class="font-normal text-slate-500">(optional)</span></p>
           <div class="flex flex-col sm:flex-row gap-3">
             <div class="flex-1">
-              <label class="block text-[11px] text-slate-400 mb-[5px]">Requests / second</label>
+              <label class="block text-[11px] text-slate-500 mb-[5px]">Requests / second</label>
               <input name="rps" type="number" min="0" step="0.1" placeholder="e.g. 10"
                 class="field"/>
             </div>
             <div class="flex-1">
-              <label class="block text-[11px] text-slate-400 mb-[5px]">Burst</label>
+              <label class="block text-[11px] text-slate-500 mb-[5px]">Burst</label>
               <input name="burst" type="number" min="0" placeholder="auto (2× RPS)"
                 class="field"/>
             </div>
           </div>
-          <p class="text-[12px] text-slate-400 mt-[8px]">Leave blank to use the global limit from Settings.</p>
+          <p class="text-[12px] text-slate-500 mt-[8px]">Leave blank to use the global limit from Settings.</p>
         </div>
       </div>
 
@@ -86,7 +86,7 @@
           Create Service
         </button>
       </div>
-      <div id="wizard-error" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="wizard-error" class="text-[12px] text-red-600 mt-[10px]"></div>
       <div class="htmx-indicator flex items-center gap-[6px] text-[12px] text-slate-500 mt-[10px]">
         <i class="hgi hgi-stroke hgi-rounded hgi-loading-03 text-xs"></i>
         Checking backend reachability…
@@ -106,7 +106,7 @@
   <div class="card overflow-hidden">
     {{template "card-header" (map "Cat" "Varnish" "Title" "Cache performance" "Badge" "last 24h")}}
     <div id="cache-stats" hx-get="{{.AdminPath}}/services/cache-stats" hx-trigger="load, every 30s" hx-swap="innerHTML">
-      <p class="px-5 py-4 text-[13px] text-slate-400 sm:px-6">Loading…</p>
+      <p class="px-5 py-4 text-[13px] text-slate-500 sm:px-6">Loading…</p>
     </div>
   </div>
 
@@ -149,10 +149,10 @@
               class="field"/>
           </div>
         </div>
-        <p class="text-[12px] text-slate-400 mb-4 leading-[1.5]">Set 0 or leave blank to fall through to the global limit from Settings.</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Set 0 or leave blank to fall through to the global limit from Settings.</p>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="rl-error" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="rl-error" class="text-[12px] text-red-600 mt-[10px]"></div>
     </div>
 
     <!-- ── Backends tab ── -->
@@ -190,10 +190,10 @@
               class="field"/>
           </div>
         </div>
-        <p class="text-[12px] text-slate-400 mb-4 leading-[1.5]">With a path set, each backend is checked on that path and leaves the rotation until it answers 2xx or 3xx again. Leave it blank to judge backends by real traffic only: one that fails sits out for 10 seconds, then gets traffic again.</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">With a path set, each backend is checked on that path and leaves the rotation until it answers 2xx or 3xx again. Leave it blank to judge backends by real traffic only: one that fails sits out for 10 seconds, then gets traffic again.</p>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="svc-backends-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="svc-backends-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
     </div>
 
     <!-- ── Hosts tab ── -->
@@ -214,7 +214,7 @@
         </div>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="svc-hosts-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="svc-hosts-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
     </div>
 
 
@@ -251,7 +251,7 @@
 
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="bot-error" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="bot-error" class="text-[12px] text-red-600 mt-[10px]"></div>
 
       <form id="svc-ai-form" hx-post="{{.AdminPath}}/services/ai/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">AI crawlers</p>
@@ -268,7 +268,7 @@
           class="field text-[13px] font-mono mb-4"></textarea>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="svc-login-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="svc-login-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
 
       <form id="svc-breach-form" hx-post="{{.AdminPath}}/services/breach/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">Leaked password check</p>
@@ -285,7 +285,7 @@
           class="field text-[13px] font-mono mb-4"/>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="svc-breach-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="svc-breach-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
     </div>
 
     <!-- ── Availability tab (issue #198) ── -->
@@ -344,7 +344,7 @@
         </div>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="svc-gate-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="svc-gate-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
     </div>
 
     <!-- ── Uploads tab ── -->
@@ -358,7 +358,7 @@
         <p id="svc-uploads-help" class="text-[12px] text-amber-700 bg-amber-50 border border-amber-100 rounded-md p-3 mb-4 leading-[1.5]">JavaScript request bodies will not be deeply inspected, and the default CRS method/content-type rules are relaxed so S3 <code class="font-mono">PUT</code> works. Other header checks, IP rules, rate limits, and bot protection remain active. Only enable this for a trusted upload endpoint.</p>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="svc-uploads-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="svc-uploads-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
     </div>
 
     <!-- ── Schema tab ── -->
@@ -393,7 +393,7 @@
         </div>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="svc-schema-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="svc-schema-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
 
       <form id="svc-openapi-form" hx-post="{{.AdminPath}}/services/openapi/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">OpenAPI spec</p>
@@ -412,7 +412,7 @@
         </select>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="svc-openapi-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="svc-openapi-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
 
       <form id="svc-responses-form" hx-post="{{.AdminPath}}/services/responses/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">Inspect responses</p>
@@ -426,7 +426,7 @@
         </select>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="svc-responses-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="svc-responses-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
     </div>
 
     <!-- ── Cache tab ── -->
@@ -439,7 +439,7 @@
         </label>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
-      <div id="svc-cache-error" class="text-[12px] text-red-500 mt-[10px]"></div>
+      <div id="svc-cache-error" class="text-[12px] text-red-600 mt-[10px]"></div>
 
       <div class="border-t border-line mt-5 pt-4">
         <form id="svc-cache-session-form" hx-post="{{.AdminPath}}/services/cache-session/0" hx-target="#services-body" hx-swap="innerHTML" data-admin-path="{{.AdminPath}}">
@@ -453,7 +453,7 @@
             class="field mb-4"/>
           <button type="submit" class="btn-primary w-full">Save</button>
         </form>
-        <div id="svc-cache-session-error" class="text-[12px] text-red-500 mt-[10px]"></div>
+        <div id="svc-cache-session-error" class="text-[12px] text-red-600 mt-[10px]"></div>
       </div>
 
       <div class="border-t border-line mt-5 pt-4">
@@ -489,7 +489,7 @@
           <p class="text-[12px] text-slate-500 mt-[6px] mb-4 leading-[1.5]">One <span class="font-mono">cache /path</span> or <span class="font-mono">bypass /path</span> per line; the path is a prefix and the longest match wins. <span class="font-mono">cache</span> stores matching responses like static assets, shared by every visitor: cookies and <span class="font-mono">Set-Cookie</span> are dropped, so never use it for per-user pages. <span class="font-mono">bypass</span> sends requests straight to the backend. Unmatched paths keep the default behavior.</p>
           <button type="submit" class="btn-primary w-full">Save</button>
         </form>
-        <div id="svc-cache-tuning-error" class="text-[12px] text-red-500 mt-[10px]"></div>
+        <div id="svc-cache-tuning-error" class="text-[12px] text-red-600 mt-[10px]"></div>
       </div>
 
       <div class="border-t border-line mt-5 pt-4">
@@ -513,7 +513,7 @@
           <p class="text-[12px] text-slate-500 mb-3 leading-[1.5]">Compresses text responses (HTML, CSS, JavaScript, JSON, SVG) over 1 KB with zstd or gzip, whichever the browser supports, when the backend didn't already compress them. Doesn't need Varnish. Images, video, live event streams and WebSockets pass through unchanged.</p>
           <button type="submit" class="btn-primary w-full">Save</button>
         </form>
-        <div id="svc-compress-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+        <div id="svc-compress-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
       </div>
     </div>
 
@@ -573,7 +573,7 @@
       <button type="submit" class="btn-primary w-full">Enable Auto-Issue</button>
     </form>
 
-    <div id="tls-error" class="text-[12px] text-red-500 mt-[10px]"></div>
+    <div id="tls-error" class="text-[12px] text-red-600 mt-[10px]"></div>
 
     <form id="svc-http3-form" hx-post="{{.AdminPath}}/services/http3/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-line pt-4">
       <label class="flex items-center justify-between cursor-pointer py-2 mb-2">
@@ -586,7 +586,7 @@
       {{end}}
       <button type="submit" class="btn-primary w-full">Save</button>
     </form>
-    <div id="svc-http3-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+    <div id="svc-http3-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
 
     <form id="svc-mtls-form" hx-post="{{.AdminPath}}/services/mtls/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-line pt-4">
       <p class="text-[13px] font-semibold text-slate-700 mb-1">Client certificates (mTLS)</p>
@@ -608,7 +608,7 @@
         class="field text-[12px] font-mono mb-3 resize-y"></textarea>
       <button type="submit" class="btn-primary w-full">Save</button>
     </form>
-    <div id="svc-mtls-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
+    <div id="svc-mtls-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
 
     <form id="tls-clear-form" hx-post="/admin/services/tls/clear" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-line pt-4">
       <input type="hidden" name="service_id" class="tls-service-id"/>
@@ -644,8 +644,8 @@
       <label class="field-label">Email address</label>
       <input id="acme-email-input" name="email" type="email" placeholder="you@example.com" autocomplete="email"
         class="field mb-3"/>
-      <div id="acme-email-error" class="text-[12px] text-red-500 mb-3"></div>
-      <p class="text-[12px] text-slate-400 mb-4 leading-[1.5]">Let's Encrypt sends renewal notices and important account alerts to this address. It is not shown publicly.</p>
+      <div id="acme-email-error" class="text-[12px] text-red-600 mb-3"></div>
+      <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Let's Encrypt sends renewal notices and important account alerts to this address. It is not shown publicly.</p>
       <button type="submit" class="btn-primary w-full">Save &amp; enable auto-TLS</button>
     </form>
   </div>
@@ -802,7 +802,7 @@
     {{if and .MTLS.Mode (ne .MTLS.Mode "off")}}
     <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .MTLS.Mode "required"}}bg-warning{{else}}bg-slate-400{{end}}"></span>mTLS: {{.MTLS.Mode}}</span>
     {{end}}
-    <span class="text-[12px] text-slate-400 whitespace-nowrap ml-1">{{fmtTime .CreatedAt}}</span>
+    <span class="text-[12px] text-slate-500 whitespace-nowrap ml-1">{{fmtTime .CreatedAt}}</span>
     <button type="button" class="svc-edit-btn btn-ghost ml-1"
       data-id="{{.ID}}" data-name="{{.Name}}" data-has-host="{{if .Host}}1{{else}}0{{end}}" data-host="{{.Host}}"
       data-aliases="{{range $i, $a := .HostAliases}}{{if $i}}&#10;{{end}}{{$a}}{{end}}" data-canonical="{{.CanonicalHost}}"

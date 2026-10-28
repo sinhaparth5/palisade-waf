@@ -12,11 +12,11 @@
   Back to live
 </a>
 {{end}}
-<a id="export-link"
+<a id="export-link" aria-label="Export NDJSON"
    href="{{$.AdminPath}}/logs/export{{if or .FilterApp .FilterStatus .FilterFrom .FilterTo}}?app={{.FilterApp}}&status={{.FilterStatus}}&from={{.FilterFrom}}&to={{.FilterTo}}{{end}}"
    class="flex min-h-11 items-center gap-[6px] rounded-sm border border-edge bg-transparent px-4 py-2 font-mono text-[12px] uppercase tracking-[.04em] text-ink no-underline cursor-pointer hover:bg-surface">
   <i class="hgi hgi-stroke hgi-rounded hgi-download-02 text-[13px]"></i>
-  Export NDJSON
+  <span class="hidden sm:inline">Export NDJSON</span>
 </a>
 {{end}}
 
@@ -31,8 +31,8 @@
     <input type="hidden" name="from" id="filter-from" value="{{.FilterFrom}}">
     <button type="button" id="filter-from-btn" aria-labelledby="filter-from-label filter-from-display"
       class="flex min-h-11 w-full items-center gap-2 border border-edge rounded-sm px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[210px] hover:bg-surface transition-colors">
-      <i class="hgi hgi-stroke hgi-rounded hgi-calendar-02 text-[14px] text-slate-400 shrink-0"></i>
-      <span id="filter-from-display" class="flex-1 text-left text-slate-400">Any date</span>
+      <i class="hgi hgi-stroke hgi-rounded hgi-calendar-02 text-[14px] text-slate-500 shrink-0"></i>
+      <span id="filter-from-display" class="flex-1 text-left text-slate-500">Any date</span>
     </button>
   </div>
 
@@ -42,8 +42,8 @@
     <input type="hidden" name="to" id="filter-to" value="{{.FilterTo}}">
     <button type="button" id="filter-to-btn" aria-labelledby="filter-to-label filter-to-display"
       class="flex min-h-11 w-full items-center gap-2 border border-edge rounded-sm px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[210px] hover:bg-surface transition-colors">
-      <i class="hgi hgi-stroke hgi-rounded hgi-calendar-02 text-[14px] text-slate-400 shrink-0"></i>
-      <span id="filter-to-display" class="flex-1 text-left text-slate-400">Any date</span>
+      <i class="hgi hgi-stroke hgi-rounded hgi-calendar-02 text-[14px] text-slate-500 shrink-0"></i>
+      <span id="filter-to-display" class="flex-1 text-left text-slate-500">Any date</span>
     </button>
   </div>
 
@@ -54,7 +54,7 @@
     <button type="button" id="filter-app-btn" aria-labelledby="filter-app-label filter-app-display"
       class="flex min-h-11 w-full items-center gap-2 border border-edge rounded-sm px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[145px] hover:bg-surface transition-colors">
       <span id="filter-app-display" class="flex-1 text-left text-slate-700">All apps</span>
-      <i class="hgi hgi-stroke hgi-rounded hgi-arrow-down-01 text-[11px] text-slate-400 shrink-0"></i>
+      <i class="hgi hgi-stroke hgi-rounded hgi-arrow-down-01 text-[11px] text-slate-500 shrink-0"></i>
     </button>
     <div id="filter-app-dropdown"
       class="hidden absolute top-full left-0 mt-1 z-50 max-h-72 overflow-y-auto bg-card border border-edge py-1 min-w-full shadow-[0_8px_28px_rgba(0,0,0,.12)]">
@@ -72,7 +72,7 @@
     <button type="button" id="filter-status-btn" aria-labelledby="filter-status-label filter-status-display"
       class="flex min-h-11 w-full items-center gap-2 border border-edge rounded-sm px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[155px] hover:bg-surface transition-colors">
       <span id="filter-status-display" class="flex-1 text-left text-slate-700">All statuses</span>
-      <i class="hgi hgi-stroke hgi-rounded hgi-arrow-down-01 text-[11px] text-slate-400 shrink-0"></i>
+      <i class="hgi hgi-stroke hgi-rounded hgi-arrow-down-01 text-[11px] text-slate-500 shrink-0"></i>
     </button>
     <div id="filter-status-dropdown"
       class="hidden absolute top-full left-0 mt-1 z-50 bg-card border border-edge py-1 min-w-[170px] shadow-[0_8px_28px_rgba(0,0,0,.12)]">
@@ -157,7 +157,7 @@
       {{range .Recent}}{{template "log-row" .}}{{end}}
     </div>
     {{if not .Recent}}
-    <div class="flex flex-col items-center justify-center p-16 text-slate-300 text-center">
+    <div class="flex flex-col items-center justify-center p-16 text-slate-500 text-center">
       <i class="hgi hgi-stroke hgi-rounded hgi-search-02 text-[40px] block mb-[10px] opacity-40"></i>
       <p class="text-[14px]">No requests match these filters.</p>
     </div>
@@ -173,7 +173,7 @@
       {{range .Recent}}{{template "log-row" .}}{{end}}
     </div>
     {{if not .Recent}}
-    <div id="empty-state" class="flex flex-col items-center justify-center p-16 text-slate-300 text-center">
+    <div id="empty-state" class="flex flex-col items-center justify-center p-16 text-slate-500 text-center">
       <i class="hgi hgi-stroke hgi-rounded hgi-signal-full-02 text-[40px] block mb-[10px] opacity-40"></i>
       <p class="text-[14px]">Waiting for requests…</p>
     </div>
@@ -372,6 +372,6 @@
 <div class="card p-5">
   <p class="label-mono mb-[2px]">{{.Cat}}</p>
   <h3 class="mb-3 font-mono text-[15px] uppercase text-ink">{{.Title}}</h3>
-  <ol id="st-{{.ID}}" class="space-y-2"><li class="text-[13px] text-slate-400">No requests yet</li></ol>
+  <ol id="st-{{.ID}}" class="space-y-2"><li class="text-[13px] text-slate-500">No requests yet</li></ol>
 </div>
 {{end}}

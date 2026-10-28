@@ -114,7 +114,7 @@
     list.replaceChildren();
     if (!rows.length) {
       var none = document.createElement('li');
-      none.className = 'text-[13px] text-slate-400';
+      none.className = 'text-[13px] text-slate-500';
       none.textContent = 'No requests yet';
       list.appendChild(none);
       return;
@@ -132,7 +132,7 @@
       count.className = 'tabular-nums font-semibold text-slate-800';
       count.textContent = row[1].toLocaleString();
       var pct = document.createElement('span');
-      pct.className = 'w-12 text-right tabular-nums text-[12px] text-slate-400';
+      pct.className = 'w-12 text-right tabular-nums text-[12px] text-slate-500';
       pct.textContent = (row[1] * 100 / sum).toFixed(1) + '%';
       line.append(name, count, pct);
       var bar = svgEl('svg', { 'class': 'mt-1 h-1 w-full', preserveAspectRatio: 'none', viewBox: '0 0 100 1' });

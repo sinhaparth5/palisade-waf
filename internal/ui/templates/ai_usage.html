@@ -10,22 +10,22 @@
   <div class="card p-5">
     <p class="text-[12px] text-slate-500 mb-1">Calls (24h)</p>
     <p class="text-[24px] font-extrabold text-slate-900">{{.Usage24h.Calls}}</p>
-    {{if gt .Usage24h.Errors 0}}<p class="text-[11px] font-semibold text-red-500 mt-1">{{.Usage24h.Errors}} errored</p>{{end}}
+    {{if gt .Usage24h.Errors 0}}<p class="text-[11px] font-semibold text-red-600 mt-1">{{.Usage24h.Errors}} errored</p>{{end}}
   </div>
   <div class="card p-5">
     <p class="text-[12px] text-slate-500 mb-1">Tokens (24h)</p>
     <p class="text-[24px] font-extrabold text-slate-900">{{add .Usage24h.InputTokens .Usage24h.OutputTokens}}</p>
-    <p class="text-[11px] text-slate-400 mt-1">{{.Usage24h.InputTokens}} in / {{.Usage24h.OutputTokens}} out</p>
+    <p class="text-[11px] text-slate-500 mt-1">{{.Usage24h.InputTokens}} in / {{.Usage24h.OutputTokens}} out</p>
   </div>
   <div class="card p-5">
     <p class="text-[12px] text-slate-500 mb-1">Calls (7d)</p>
     <p class="text-[24px] font-extrabold text-slate-900">{{.Usage7d.Calls}}</p>
-    {{if gt .Usage7d.Errors 0}}<p class="text-[11px] font-semibold text-red-500 mt-1">{{.Usage7d.Errors}} errored</p>{{end}}
+    {{if gt .Usage7d.Errors 0}}<p class="text-[11px] font-semibold text-red-600 mt-1">{{.Usage7d.Errors}} errored</p>{{end}}
   </div>
   <div class="card p-5">
     <p class="text-[12px] text-slate-500 mb-1">Tokens (7d)</p>
     <p class="text-[24px] font-extrabold text-slate-900">{{add .Usage7d.InputTokens .Usage7d.OutputTokens}}</p>
-    <p class="text-[11px] text-slate-400 mt-1">{{.Usage7d.InputTokens}} in / {{.Usage7d.OutputTokens}} out</p>
+    <p class="text-[11px] text-slate-500 mt-1">{{.Usage7d.InputTokens}} in / {{.Usage7d.OutputTokens}} out</p>
   </div>
 </div>
 

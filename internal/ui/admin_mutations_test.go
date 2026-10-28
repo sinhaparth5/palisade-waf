@@ -346,7 +346,7 @@ func TestServiceSettingHandlers(t *testing.T) {
 	for path, want := range map[string]string{
 		"/admin/services/cache-purge/x":     "invalid service id",
 		"/admin/services/cache-purge/99999": "service not found",
-		"/admin/services/cache-purge/" + id: "text-red-500",
+		"/admin/services/cache-purge/" + id: "text-red-600",
 	} {
 		rec := env.do("POST", path, form("path", "/blog/"))
 		if rec.Code != 200 || !strings.Contains(rec.Body.String(), want) {
