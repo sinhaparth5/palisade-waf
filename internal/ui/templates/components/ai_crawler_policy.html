@@ -10,9 +10,9 @@
 
 {{define "ai-crawler-select"}}
 <div class="flex-1">
-  <label class="block text-[12px] font-semibold text-slate-700 mb-1">{{.Label}}
+  <label class="field-label">{{.Label}}
     <select name="ai_{{.Cat}}" data-ai-cat="{{.Cat}}"
-            class="mt-1 w-full rounded-lg border border-line bg-white text-slate-800 text-[13px] font-normal px-3 py-2 outline-hidden focus-green focus:border-brand transition">
+            class="field mt-1 px-3 py-2 font-sans text-[13px] normal-case tracking-normal">
       <option value="" {{if eq .Cur ""}}selected{{end}}>{{.Empty}}</option>
       <option value="allow" {{if eq .Cur "allow"}}selected{{end}}>Allow verified</option>
       <option value="challenge" {{if eq .Cur "challenge"}}selected{{end}}>Challenge</option>

@@ -19,7 +19,7 @@
     });
     dots.forEach(function (dot) {
       var active = Number(dot.dataset.dot) <= n;
-      dot.classList.toggle('bg-brand', active);
+      dot.classList.toggle('bg-ink', active);
       dot.classList.toggle('bg-line', !active);
     });
     backBtn.classList.toggle('hidden', n <= 1);
@@ -169,12 +169,7 @@
       tab.classList.toggle('hidden', tab.dataset.tab !== name);
     });
     tabBtns.forEach(function (btn) {
-      var active = btn.dataset.tab === name;
-      btn.classList.toggle('bg-white', active);
-      btn.classList.toggle('shadow-sm', active);
-      btn.classList.toggle('text-slate-900', active);
-      btn.classList.toggle('bg-transparent', !active);
-      btn.classList.toggle('text-slate-500', !active);
+      btn.setAttribute('aria-selected', btn.dataset.tab === name ? 'true' : 'false');
     });
   }
 
