@@ -10,6 +10,7 @@ package config
 // credentials) are kept for internal wiring; their values come from defaults
 // or the DB, never from a config file.
 type Config struct {
+	Version        string // build version (main.version), shown in the admin UI
 	ListenAddr     string
 	ListenAddrTLS  string
 	ListenAddrH3   string   // UDP address for HTTP/3; empty = off. Per-service opt-in on top.

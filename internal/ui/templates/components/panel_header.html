@@ -1,8 +1,6 @@
 {{define "panel-header"}}
-<div class="flex items-center gap-3 {{if .Mb}}{{.Mb}}{{else}}mb-5{{end}}">
-  <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/70 shadow-[0_6px_16px_rgba(16,42,67,.08)] {{if .Tint}}{{.Tint}}{{else}}bg-linear-to-br from-cyan-50 to-brand-tint{{end}}">
-    <i class="hgi hgi-stroke hgi-rounded {{.Icon}} text-base {{if .Color}}{{.Color}}{{else}}text-brand-dark{{end}}"></i>
-  </div>
-  <h2 class="text-[16px] font-extrabold tracking-[-.015em] text-slate-900">{{.Title}}</h2>
+<div class="flex items-center gap-3 border-b border-line pb-3 {{if .Mb}}{{.Mb}}{{else}}mb-5{{end}}">
+  <i class="hgi hgi-stroke hgi-rounded {{.Icon}} text-base {{if .Color}}{{.Color}}{{else}}text-ink{{end}}"></i>
+  <h2 class="text-[14px] text-ink">{{.Title}}</h2>
 </div>
 {{end}}

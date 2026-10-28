@@ -3878,6 +3878,9 @@ func (h *Handler) render(c echo.Context, page string, data map[string]any) error
 	if u := currentUser(c); u != nil {
 		data["UserEmail"], data["Role"] = u.Email, u.Role
 	}
+	// Shell chrome: sidebar status box and bottom status bar. Only the
+	// driver name, never the DSN (it can carry a password).
+	data["Version"], data["DBDriver"], data["WAFOn"] = h.cfg.Version, h.cfg.DB.Driver, h.cfg.WAF.Enabled
 	// CSRF token for this session: picked up by hx-headers on <body> for all
 	// HTMX requests and by hidden _csrf inputs in plain HTML forms.
 	if _, ok := data["CSRF"]; !ok {

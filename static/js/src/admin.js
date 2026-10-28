@@ -107,3 +107,18 @@ document.addEventListener('input', function (e) {
     if (err) err.textContent = '';
   }
 });
+
+// Top bar clock (base.html): the browser's local date and time, ledger style
+// ("28 OCT 2026 · 18:24:37"). The server-rendered date stays without JS.
+(function () {
+  var d = document.getElementById('clock-date'), t = document.getElementById('clock-time');
+  if (!d || !t) return;
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  function tick() {
+    var now = new Date();
+    d.textContent = pad(now.getDate()) + ' ' + now.toLocaleString('en', { month: 'short' }).toUpperCase() + ' ' + now.getFullYear();
+    t.textContent = ' · ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
