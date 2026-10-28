@@ -6,7 +6,7 @@
           hx-get="{{.URL}}?page={{sub .CurPage 1}}" hx-target="{{.Target}}" hx-swap="innerHTML"
           class="min-h-10 shrink-0 whitespace-nowrap text-[13px] font-medium rounded-sm px-4 py-2 border border-edge font-mono uppercase tracking-[.04em] text-ink hover:bg-surface transition-colors duration-150 cursor-pointer"
           {{else}}
-          disabled class="min-h-10 shrink-0 whitespace-nowrap text-[13px] font-medium rounded-sm px-4 py-2 border border-line font-mono uppercase tracking-[.04em] text-slate-400 cursor-not-allowed"
+          disabled class="min-h-10 shrink-0 whitespace-nowrap text-[13px] font-medium rounded-sm px-4 py-2 border border-line font-mono uppercase tracking-[.04em] text-slate-500 cursor-not-allowed"
           {{end}}>← Prev</button>
   <span class="font-mono text-[12px] uppercase tracking-[.04em] text-slate-500 text-center">Page {{.CurPage}} of {{.TotalPages}} · {{.Total}} {{.Noun}}</span>
   <button type="button"
@@ -14,7 +14,7 @@
           hx-get="{{.URL}}?page={{add .CurPage 1}}" hx-target="{{.Target}}" hx-swap="innerHTML"
           class="min-h-10 shrink-0 whitespace-nowrap text-[13px] font-medium rounded-sm px-4 py-2 border border-edge font-mono uppercase tracking-[.04em] text-ink hover:bg-surface transition-colors duration-150 cursor-pointer"
           {{else}}
-          disabled class="min-h-10 shrink-0 whitespace-nowrap text-[13px] font-medium rounded-sm px-4 py-2 border border-line font-mono uppercase tracking-[.04em] text-slate-400 cursor-not-allowed"
+          disabled class="min-h-10 shrink-0 whitespace-nowrap text-[13px] font-medium rounded-sm px-4 py-2 border border-line font-mono uppercase tracking-[.04em] text-slate-500 cursor-not-allowed"
           {{end}}>Next →</button>
 </div>
 {{end}}

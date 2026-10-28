@@ -17,7 +17,7 @@
 
         <div class="lg:col-span-2">
           <label for="cert-name" class="field-label">
-            Name <span class="text-red-400">*</span>
+            Name <span class="text-red-600">*</span>
           </label>
           <input id="cert-name" name="name" type="text"
             placeholder="e.g. cloudflare-example-com"
@@ -27,7 +27,7 @@
         <div>
           <div class="flex items-center justify-between mb-[6px]">
             <label for="cert-pem" class="label-mono">
-              Certificate (PEM) <span class="text-red-400">*</span>
+              Certificate (PEM) <span class="text-red-600">*</span>
             </label>
             <label for="cert-file-input"
               class="inline-flex items-center gap-[5px] text-[11px] font-medium text-ink underline cursor-pointer hover:text-slate-600 transition-colors select-none">
@@ -45,7 +45,7 @@
         <div>
           <div class="flex items-center justify-between mb-[6px]">
             <label for="key-pem" class="label-mono">
-              Private Key (PEM) <span class="text-red-400">*</span>
+              Private Key (PEM) <span class="text-red-600">*</span>
             </label>
             <label for="key-file-input"
               class="inline-flex items-center gap-[5px] text-[11px] font-medium text-ink underline cursor-pointer hover:text-slate-600 transition-colors select-none">
@@ -60,7 +60,7 @@
             class="field text-[12px] font-mono resize-y"></textarea>
         </div>
 
-        <div id="cert-error" class="text-[12px] text-red-500 -mt-1 lg:col-span-2"></div>
+        <div id="cert-error" class="text-[12px] text-red-600 -mt-1 lg:col-span-2"></div>
 
         <button type="submit" class="btn-primary flex w-full items-center justify-center gap-2 lg:col-span-2 lg:w-auto lg:justify-self-start">
           <i class="hgi hgi-stroke hgi-rounded hgi-add-circle text-sm"></i>
@@ -123,7 +123,7 @@
       {{end}}
     </div>
     {{else}}
-    <span class="text-slate-400 text-[12px]">—</span>
+    <span class="text-slate-500 text-[12px]">—</span>
     {{end}}
   </td>
   <td class="py-4 pr-6 text-[12px] text-slate-500 whitespace-nowrap align-top">

@@ -41,13 +41,13 @@
           </div>
 
           <div>
-            <label class="field-label" for="new_email">New email <span class="font-normal text-slate-400">(leave blank to keep current)</span></label>
+            <label class="field-label" for="new_email">New email <span class="font-normal text-slate-500">(leave blank to keep current)</span></label>
             <input id="new_email" name="new_email" type="email" placeholder="new@example.com"
                    class="field text-[13px]"/>
           </div>
 
           <div>
-            <label class="field-label" for="new_password">New password <span class="font-normal text-slate-400">(leave blank to keep current)</span></label>
+            <label class="field-label" for="new_password">New password <span class="font-normal text-slate-500">(leave blank to keep current)</span></label>
             <input id="new_password" name="new_password" type="password" placeholder="Min 8 characters"
                    class="field text-[13px]"/>
           </div>
@@ -59,7 +59,7 @@
           </div>
 
           <div>
-            <label class="field-label" for="current_password">Current password <span class="text-red-500">*</span></label>
+            <label class="field-label" for="current_password">Current password <span class="text-red-600">*</span></label>
             <input id="current_password" name="current_password" type="password" placeholder="Required to confirm changes"
                    class="field text-[13px]" required/>
           </div>
@@ -119,8 +119,8 @@
         <div class="card p-5">
           <h3 class="font-mono text-[14px] font-medium uppercase tracking-[.04em] text-ink mb-1">WAF rules</h3>
           <p class="text-[13px] text-slate-500 mb-1">To reload custom WAF rules from <code class="font-mono text-xs bg-surface px-1 py-0.5 rounded-sm">rules_dir</code> without restarting, send SIGHUP to the process:</p>
-          <pre class="mt-3 bg-slate-900 text-green-400 text-[12px] font-mono rounded-lg px-4 py-3 overflow-x-auto">kill -HUP $(pidof palisade)</pre>
-          <p class="mt-2 text-[12px] text-slate-400">The engine swaps in place: in-flight requests finish on the old ruleset, new requests use the reloaded one.</p>
+          <pre class="mt-3 bg-slate-900 text-green-600 text-[12px] font-mono rounded-lg px-4 py-3 overflow-x-auto">kill -HUP $(pidof palisade)</pre>
+          <p class="mt-2 text-[12px] text-slate-500">The engine swaps in place: in-flight requests finish on the old ruleset, new requests use the reloaded one.</p>
         </div>
       </div>
     </div>
@@ -174,7 +174,7 @@
     <div class="flex items-center justify-between py-2 border-b border-line">
       <div>
         <p class="text-[13px] font-semibold text-slate-700">Enable bot protection</p>
-        <p class="text-[12px] text-slate-400 mt-[2px]">Challenges clients whose anomaly score reaches the threshold below.</p>
+        <p class="text-[12px] text-slate-500 mt-[2px]">Challenges clients whose anomaly score reaches the threshold below.</p>
       </div>
       <label class="relative inline-flex items-center cursor-pointer ml-4 shrink-0">
         {{template "toggle-switch" (map "Name" "bot_enabled" "Checked" .BotEnabled "Controls" "#bot-fields")}}
@@ -187,13 +187,13 @@
           <label class="field-label" for="bot_threshold">Anomaly threshold</label>
           <input id="bot_threshold" name="bot_threshold" type="number" min="1" max="100" value="{{.BotThreshold}}"
                  class="field text-[13px]"/>
-          <p class="text-[11px] text-slate-400 mt-1">Score at which a challenge is issued. Scanners score ≥10; browsers typically score 0–2.</p>
+          <p class="text-[11px] text-slate-500 mt-1">Score at which a challenge is issued. Scanners score ≥10; browsers typically score 0–2.</p>
         </div>
         <div class="flex-1">
           <label class="field-label" for="bot_ttl">Bypass cookie TTL (seconds)</label>
           <input id="bot_ttl" name="bot_ttl" type="number" min="60" value="{{.BotTTL}}"
                  class="field text-[13px]"/>
-          <p class="text-[11px] text-slate-400 mt-1">How long a solved challenge stays valid. 3600 = 1 hour.</p>
+          <p class="text-[11px] text-slate-500 mt-1">How long a solved challenge stays valid. 3600 = 1 hour.</p>
         </div>
       </div>
 
@@ -205,7 +205,7 @@
           <option value="turnstile" {{if eq .CaptchaProvider "turnstile"}}selected{{end}}>Cloudflare Turnstile</option>
           <option value="hcaptcha" {{if eq .CaptchaProvider "hcaptcha"}}selected{{end}}>hCaptcha</option>
         </select>
-        <p class="text-[11px] text-slate-400 mt-1">Shown when a browser can't run the proof-of-work, e.g. over plain HTTP or with locked-down JavaScript. The token is verified with the provider before the bypass cookie is issued.</p>
+        <p class="text-[11px] text-slate-500 mt-1">Shown when a browser can't run the proof-of-work, e.g. over plain HTTP or with locked-down JavaScript. The token is verified with the provider before the bypass cookie is issued.</p>
       </div>
       <div class="flex flex-col sm:flex-row gap-4">
         <div class="flex-1">
@@ -214,7 +214,7 @@
                  class="field text-[13px]"/>
         </div>
         <div class="flex-1">
-          <label class="field-label" for="captcha_secret">Secret key{{if .CaptchaSecretSet}} <span class="font-normal text-slate-400">(saved; leave blank to keep)</span>{{end}}</label>
+          <label class="field-label" for="captcha_secret">Secret key{{if .CaptchaSecretSet}} <span class="font-normal text-slate-500">(saved; leave blank to keep)</span>{{end}}</label>
           <input id="captcha_secret" name="captcha_secret" type="password" autocomplete="off" placeholder="{{if .CaptchaSecretSet}}••••••••••••••••{{end}}"
                  class="field text-[13px]"/>
         </div>
@@ -223,7 +223,7 @@
 
     <div class="pt-3 border-t border-line">
       <p class="text-[13px] font-semibold text-slate-700">AI crawlers</p>
-      <p class="text-[12px] text-slate-400 mt-[2px] mb-3">Default for every service; each service can override it. Block refuses any client whose User-Agent names the category. Allow lets a crawler skip the challenge only once its source is verified: Meta's by network, OpenAI's, Anthropic's and Perplexity's after you pin their published IP ranges with <code class="font-mono">--trusted-crawlers</code>. Challenge needs bot protection on. robots.txt, sitemaps and llms.txt stay readable. Google-Extended and Applebot-Extended are robots.txt tokens, not crawlers; opt out of those in robots.txt.</p>
+      <p class="text-[12px] text-slate-500 mt-[2px] mb-3">Default for every service; each service can override it. Block refuses any client whose User-Agent names the category. Allow lets a crawler skip the challenge only once its source is verified: Meta's by network, OpenAI's, Anthropic's and Perplexity's after you pin their published IP ranges with <code class="font-mono">--trusted-crawlers</code>. Challenge needs bot protection on. robots.txt, sitemaps and llms.txt stay readable. Google-Extended and Applebot-Extended are robots.txt tokens, not crawlers; opt out of those in robots.txt.</p>
       {{template "ai-crawler-policy" (map "Policy" .AIPolicy "Empty" "No policy")}}
     </div>
 
@@ -251,7 +251,7 @@
     <div class="flex items-center justify-between py-2 border-b border-line">
       <div>
         <p class="text-[13px] font-semibold text-slate-700">Route cache-enabled services through Varnish</p>
-        <p class="text-[12px] text-slate-400 mt-[2px]">Off = every service proxies straight to its backend, even those marked cacheable.</p>
+        <p class="text-[12px] text-slate-500 mt-[2px]">Off = every service proxies straight to its backend, even those marked cacheable.</p>
       </div>
       <label class="relative inline-flex items-center cursor-pointer ml-4 shrink-0">
         {{template "toggle-switch" (map "Name" "varnish_enabled" "Checked" .VarnishEnabled "Controls" "#varnish-fields")}}
@@ -263,7 +263,7 @@
         <label class="field-label" for="varnish_addr">Varnish listen address</label>
         <input id="varnish_addr" name="varnish_addr" type="text" value="{{.VarnishAddr}}" placeholder="127.0.0.1:6081"
                class="field text-[13px] font-mono"/>
-        <p class="text-[11px] text-slate-400 mt-1">Must be a loopback address (127.0.0.1 / ::1 / localhost) so nothing reaches the cache without passing the WAF.</p>
+        <p class="text-[11px] text-slate-500 mt-1">Must be a loopback address (127.0.0.1 / ::1 / localhost) so nothing reaches the cache without passing the WAF.</p>
       </div>
     </div>
 
@@ -291,7 +291,7 @@
     <div class="flex items-center justify-between py-2 border-b border-line">
       <div>
         <p class="text-[13px] font-semibold text-slate-700">Enable webhook delivery</p>
-        <p class="text-[12px] text-slate-400 mt-[2px]">POST each matching event as JSON. Disabled automatically if URL is empty.</p>
+        <p class="text-[12px] text-slate-500 mt-[2px]">POST each matching event as JSON. Disabled automatically if URL is empty.</p>
       </div>
       <label class="relative inline-flex items-center cursor-pointer ml-4 shrink-0">
         {{template "toggle-switch" (map "Name" "webhook_enabled" "Checked" .WebhookEnabled)}}
@@ -306,7 +306,7 @@
         <option value="slack" {{if eq .WebhookDestinationType "slack"}}selected{{end}}>Slack (Block Kit)</option>
         <option value="discord" {{if eq .WebhookDestinationType "discord"}}selected{{end}}>Discord (embed)</option>
       </select>
-      <p class="text-[11px] text-slate-400 mt-1">Slack/Discord: paste that platform's incoming webhook URL below — no app install or OAuth needed.</p>
+      <p class="text-[11px] text-slate-500 mt-1">Slack/Discord: paste that platform's incoming webhook URL below — no app install or OAuth needed.</p>
     </div>
 
     <div>
@@ -316,7 +316,7 @@
     </div>
 
     <div>
-      <label class="field-label" for="webhook_secret">Secret <span class="font-normal text-slate-400">(sent as <code class="font-mono text-[11px]">X-WAF-Secret</code> header; unused by Slack/Discord)</span></label>
+      <label class="field-label" for="webhook_secret">Secret <span class="font-normal text-slate-500">(sent as <code class="font-mono text-[11px]">X-WAF-Secret</code> header; unused by Slack/Discord)</span></label>
       <input id="webhook_secret" name="webhook_secret" type="text" value="{{.WebhookSecret}}" placeholder="leave blank for no authentication"
              class="field text-[13px] font-mono"/>
     </div>
@@ -349,7 +349,7 @@
       </button>
       <span id="webhook-test-result" class="text-[13px]"></span>
     </div>
-    <p class="text-[11px] text-slate-400 -mt-2">The test uses the <em>saved</em> settings, ignoring the enable toggle and event filters — save first, then test.</p>
+    <p class="text-[11px] text-slate-500 -mt-2">The test uses the <em>saved</em> settings, ignoring the enable toggle and event filters — save first, then test.</p>
   </form>
 </div>
 {{end}}
@@ -371,7 +371,7 @@
     <div class="flex items-center justify-between py-2 border-b border-line">
       <div>
         <p class="text-[13px] font-semibold text-slate-700">Enable daily report email</p>
-        <p class="text-[12px] text-slate-400 mt-[2px]">Sends once per day, shortly after midnight server time.</p>
+        <p class="text-[12px] text-slate-500 mt-[2px]">Sends once per day, shortly after midnight server time.</p>
       </div>
       <label class="relative inline-flex items-center cursor-pointer ml-4 shrink-0">
         {{template "toggle-switch" (map "Name" "email_enabled" "Checked" .EmailEnabled)}}
@@ -381,21 +381,21 @@
     <div>
       <label class="field-label">Sender</label>
       <p class="text-[13px] text-slate-500 bg-surface border border-line rounded-lg px-3 py-2 font-mono">{{.EmailSender}}</p>
-      <p class="text-[11px] text-slate-400 mt-1">Fixed: reports are delivered through Cloudflare Email Service.</p>
+      <p class="text-[11px] text-slate-500 mt-1">Fixed: reports are delivered through Cloudflare Email Service.</p>
     </div>
 
     <div>
       <label class="field-label" for="email_to">Recipients</label>
       <input id="email_to" name="email_to" type="text" value="{{.EmailTo}}" placeholder="you@example.com, ops@example.com"
              class="field text-[13px] font-mono"/>
-      <p class="text-[11px] text-slate-400 mt-1">Comma-separated list.</p>
+      <p class="text-[11px] text-slate-500 mt-1">Comma-separated list.</p>
     </div>
 
     <div>
-      <label class="field-label" for="email_token">Cloudflare API token{{if .EmailTokenSet}} <span class="font-normal text-slate-400">(saved; leave blank to keep)</span>{{end}}</label>
+      <label class="field-label" for="email_token">Cloudflare API token{{if .EmailTokenSet}} <span class="font-normal text-slate-500">(saved; leave blank to keep)</span>{{end}}</label>
       <input id="email_token" name="email_token" type="password" autocomplete="off" placeholder="{{if .EmailTokenSet}}••••••••••••••••{{else}}Token with Email Sending: Edit permission{{end}}"
              class="field text-[13px]"/>
-      <p class="text-[11px] text-slate-400 mt-1">Stored only in <code class="font-mono text-[11px]">waf.db</code> on this server, never in config files or releases, and never shown here again.</p>
+      <p class="text-[11px] text-slate-500 mt-1">Stored only in <code class="font-mono text-[11px]">waf.db</code> on this server, never in config files or releases, and never shown here again.</p>
     </div>
 
     <div class="pt-1 flex flex-wrap items-center gap-3">
@@ -410,7 +410,7 @@
       </button>
       <span id="email-test-result" class="text-[13px]"></span>
     </div>
-    <p class="text-[11px] text-slate-400 -mt-2">The test uses the <em>saved</em> settings and covers the last 24 hours, so save first, then test.</p>
+    <p class="text-[11px] text-slate-500 -mt-2">The test uses the <em>saved</em> settings and covers the last 24 hours, so save first, then test.</p>
   </form>
 </div>
 {{end}}
@@ -432,7 +432,7 @@
     <div class="flex items-center justify-between py-2 border-b border-line">
       <div>
         <p class="text-[13px] font-semibold text-slate-700">Enable AI-assisted ASN classification</p>
-        <p class="text-[12px] text-slate-400 mt-[2px]">Off by default — the heuristic keeps working without this.</p>
+        <p class="text-[12px] text-slate-500 mt-[2px]">Off by default — the heuristic keeps working without this.</p>
       </div>
       <label class="relative inline-flex items-center cursor-pointer ml-4 shrink-0">
         {{template "toggle-switch" (map "Name" "typesafe_enabled" "Checked" .TypeSafeEnabled)}}
@@ -440,10 +440,10 @@
     </div>
 
     <div>
-      <label class="field-label" for="typesafe_api_key">TypeSafe API key{{if .TypeSafeAPIKeySet}} <span class="font-normal text-slate-400">(saved; leave blank to keep)</span>{{end}}</label>
+      <label class="field-label" for="typesafe_api_key">TypeSafe API key{{if .TypeSafeAPIKeySet}} <span class="font-normal text-slate-500">(saved; leave blank to keep)</span>{{end}}</label>
       <input id="typesafe_api_key" name="typesafe_api_key" type="password" autocomplete="off" placeholder="{{if .TypeSafeAPIKeySet}}••••••••••••••••{{else}}TypeSafe System One API key{{end}}"
              class="field text-[13px]"/>
-      <p class="text-[11px] text-slate-400 mt-1">Stored only in <code class="font-mono text-[11px]">waf.db</code> on this server, never in config files or releases, and never shown here again.</p>
+      <p class="text-[11px] text-slate-500 mt-1">Stored only in <code class="font-mono text-[11px]">waf.db</code> on this server, never in config files or releases, and never shown here again.</p>
     </div>
 
     <div class="pt-1 flex flex-wrap items-center gap-3">
@@ -484,7 +484,7 @@
     </div>
     <button type="submit" class="btn-primary px-6 shrink-0">Add user</button>
   </form>
-  <p class="text-[11px] text-slate-400 -mt-3 mb-5">Hand the initial password over yourself; the user can change it under Account after signing in.</p>
+  <p class="text-[11px] text-slate-500 -mt-3 mb-5">Hand the initial password over yourself; the user can change it under Account after signing in.</p>
 
   {{if .SSOOn}}
   <form hx-post="{{.AdminPath}}/settings/users/invites" hx-target="#users-card" hx-swap="outerHTML" class="flex flex-wrap items-end gap-3 mb-2">
@@ -504,7 +504,7 @@
     </div>
     <button type="submit" class="btn-primary px-6 shrink-0">Invite</button>
   </form>
-  <p class="text-[11px] text-slate-400 mb-5">The invite works once, for 7 days: the first single sign-on with this verified email creates the user and ties it to their identity-provider account.</p>
+  <p class="text-[11px] text-slate-500 mb-5">The invite works once, for 7 days: the first single sign-on with this verified email creates the user and ties it to their identity-provider account.</p>
   {{end}}
 
   {{if .Invites}}
@@ -516,7 +516,7 @@
       </div>
       <div class="flex-1 min-w-[200px]">
         <div class="text-[14px] font-semibold text-slate-900 wrap-anywhere">{{.Email}}</div>
-        <div class="text-[12px] {{if .Expired}}text-red-500{{else}}text-slate-500{{end}}">SSO invite · {{.Role}} · {{if .Expired}}expired{{else}}expires{{end}} {{fmtTime .ExpiresAt}}</div>
+        <div class="text-[12px] {{if .Expired}}text-red-600{{else}}text-slate-500{{end}}">SSO invite · {{.Role}} · {{if .Expired}}expired{{else}}expires{{end}} {{fmtTime .ExpiresAt}}</div>
       </div>
       <div class="ml-[52px] sm:ml-0 flex flex-wrap items-center gap-2">
         <button hx-post="{{$.AdminPath}}/settings/users/invites/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML"
@@ -606,12 +606,12 @@
   <div class="mb-4">
     <p class="field-label">Redirect URI</p>
     <p class="text-[13px] text-slate-600 bg-surface border border-line rounded-lg px-3 py-2 font-mono wrap-anywhere">{{.SSOCallbackURL}}</p>
-    <p class="text-[11px] text-slate-400 mt-1">Register this with the provider. It is built from the address you are using now, so open Settings on the admin host users sign in at.</p>
+    <p class="text-[11px] text-slate-500 mt-1">Register this with the provider. It is built from the address you are using now, so open Settings on the admin host users sign in at.</p>
   </div>
 
   <form hx-post="{{.AdminPath}}/settings/sso" hx-target="#sso-card" hx-swap="outerHTML" class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div class="md:col-span-2">
-      <label class="field-label" for="sso_issuer">Issuer URL <span class="font-normal text-slate-400">(empty turns SSO off)</span></label>
+      <label class="field-label" for="sso_issuer">Issuer URL <span class="font-normal text-slate-500">(empty turns SSO off)</span></label>
       <input id="sso_issuer" name="issuer" type="url" value="{{.SSOIssuer}}" placeholder="https://auth.example.com" autocomplete="off"
              class="field text-[13px]"/>
     </div>
@@ -621,15 +621,15 @@
              class="field text-[13px]"/>
     </div>
     <div>
-      <label class="field-label" for="sso_client_secret">Client secret{{if .SSOSecretSet}} <span class="font-normal text-slate-400">(saved; leave blank to keep)</span>{{end}}</label>
+      <label class="field-label" for="sso_client_secret">Client secret{{if .SSOSecretSet}} <span class="font-normal text-slate-500">(saved; leave blank to keep)</span>{{end}}</label>
       <input id="sso_client_secret" name="client_secret" type="password" autocomplete="off" placeholder="{{if .SSOSecretSet}}••••••••••••••••{{end}}"
              class="field text-[13px]"/>
     </div>
     <div class="md:col-span-2">
-      <label class="field-label" for="sso_group">Required group <span class="font-normal text-slate-400">(optional)</span></label>
+      <label class="field-label" for="sso_group">Required group <span class="font-normal text-slate-500">(optional)</span></label>
       <input id="sso_group" name="group" type="text" value="{{.SSOGroup}}" placeholder="palisade" autocomplete="off"
              class="field text-[13px]"/>
-      <p class="text-[11px] text-slate-400 mt-1">Only users whose <code class="font-mono text-[11px]">groups</code> claim contains this can sign in; removing someone from it signs them out at their next attempt. Roles always come from the invite, never the provider.</p>
+      <p class="text-[11px] text-slate-500 mt-1">Only users whose <code class="font-mono text-[11px]">groups</code> claim contains this can sign in; removing someone from it signs them out at their next attempt. Roles always come from the invite, never the provider.</p>
     </div>
     <div class="md:col-span-2 pt-1">
       <button type="submit" class="btn-primary px-6">Save</button>
@@ -662,7 +662,7 @@
 {{range .Devices}}
 <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150 border border-line{{if not .Live}} opacity-60{{end}}">
   <div class="w-10 h-10 border {{if .Current}}border-edge{{else}}border-line{{end}} flex items-center justify-center shrink-0">
-    <i class="hgi hgi-stroke hgi-rounded hgi-computer text-base {{if .Current}}text-ink{{else}}text-slate-400{{end}}"></i>
+    <i class="hgi hgi-stroke hgi-rounded hgi-computer text-base {{if .Current}}text-ink{{else}}text-slate-500{{end}}"></i>
   </div>
   <div class="flex-1 min-w-[200px]">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -775,7 +775,7 @@
   {{range .Entries}}
   <li class="grid grid-cols-1 gap-1 px-3 py-3 text-[12px] md:grid-cols-[170px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)] md:gap-4">
     <span class="text-slate-500 whitespace-nowrap">{{fmtTimeFull .TS}}</span>
-    <span class="order-3 md:order-none min-w-0 text-slate-700 wrap-anywhere">{{.Actor}}<span class="block font-mono text-slate-400">{{.IP}}</span></span>
+    <span class="order-3 md:order-none min-w-0 text-slate-700 wrap-anywhere">{{.Actor}}<span class="block font-mono text-slate-500">{{.IP}}</span></span>
     <span class="order-2 md:order-none min-w-0 font-mono font-medium text-slate-800 wrap-anywhere">{{.Action}}</span>
     <span class="order-4 md:order-none min-w-0 font-mono text-slate-600 wrap-anywhere">{{.Target}}{{if and .Target .Summary}} · {{end}}{{.Summary}}</span>
   </li>
@@ -791,7 +791,7 @@
 <div class="card p-5" id="dbconn-card">
   <h3 class="font-mono text-[14px] font-medium uppercase tracking-[.04em] text-ink mb-1">Database connection</h3>
   <p class="text-[13px] text-slate-500 mb-1">Point the WAF at an external MySQL/MariaDB or Postgres-compatible database (including managed services like Neon or CockroachDB) instead of the embedded SQLite file.</p>
-  <p class="text-[12px] text-slate-400 mb-5">Currently running: <span class="font-mono">{{.ActiveDBDriver}}</span>{{if eq .ActiveDBDriver "sqlite"}} (<span class="font-mono">{{.ActiveDBPath}}</span>){{end}}. Saving or testing below never touches that live connection — apply a new one by restarting the server with the flags "Test connection" shows you.</p>
+  <p class="text-[12px] text-slate-500 mb-5">Currently running: <span class="font-mono">{{.ActiveDBDriver}}</span>{{if eq .ActiveDBDriver "sqlite"}} (<span class="font-mono">{{.ActiveDBPath}}</span>){{end}}. Saving or testing below never touches that live connection — apply a new one by restarting the server with the flags "Test connection" shows you.</p>
 
   {{if .DBConnSaveOK}}
   <div class="rounded-md bg-green-50 border border-green-200 text-green-700 text-[13px] px-4 py-3 mb-4">Saved. Restart the server with the tested flags below to actually switch to it.</div>
@@ -817,7 +817,7 @@
       <input id="dbconn_host" name="dbconn_host" type="text" value="{{.DBConnHost}}"
              placeholder="{{if eq .DBConnDriver "sqlite"}}waf.db{{else}}db.example.com, 172.18.0.5, or a Docker service name like db{{end}}"
              class="field text-[13px] font-mono"/>
-      <p class="text-[12px] text-slate-400 mt-1">Running this WAF in Docker too? Use the database container's Compose service name (e.g. <code class="font-mono">db</code>) or internal IP here if they share a network — it's just a hostname, nothing special to configure.</p>
+      <p class="text-[12px] text-slate-500 mt-1">Running this WAF in Docker too? Use the database container's Compose service name (e.g. <code class="font-mono">db</code>) or internal IP here if they share a network — it's just a hostname, nothing special to configure.</p>
     </div>
 
     <div id="dbconn-external-fields" class="flex flex-col gap-4 {{if eq .DBConnDriver "sqlite"}}hidden{{end}}">
@@ -836,7 +836,7 @@
       </div>
 
       <div id="dbconn-dsn-field" class="{{if ne .DBConnMode "dsn"}}hidden{{end}}">
-        <label class="field-label" for="dbconn_dsn">Connection string {{if .DBConnDSNSet}}<span class="font-normal text-slate-400">(saved; leave blank to keep)</span>{{end}}</label>
+        <label class="field-label" for="dbconn_dsn">Connection string {{if .DBConnDSNSet}}<span class="font-normal text-slate-500">(saved; leave blank to keep)</span>{{end}}</label>
         <textarea id="dbconn_dsn" name="dbconn_dsn" rows="2"
                   placeholder="{{if .DBConnDSNSet}}••••••••••••••••••••{{else}}postgres://user:password@host:5432/dbname?sslmode=require{{end}}"
                   class="field text-[13px] font-mono"></textarea>
@@ -862,7 +862,7 @@
                    class="field text-[13px] font-mono"/>
           </div>
           <div class="flex-1">
-            <label class="field-label" for="dbconn_password">Password {{if .DBConnPasswordSet}}<span class="font-normal text-slate-400">(saved; leave blank to keep)</span>{{end}}</label>
+            <label class="field-label" for="dbconn_password">Password {{if .DBConnPasswordSet}}<span class="font-normal text-slate-500">(saved; leave blank to keep)</span>{{end}}</label>
             <input id="dbconn_password" name="dbconn_password" type="password" autocomplete="off"
                    placeholder="{{if .DBConnPasswordSet}}••••••••••••••••{{end}}"
                    class="field text-[13px]"/>
@@ -890,10 +890,10 @@
             <option value="verify-ca" {{if eq .DBConnSSLMode "verify-ca"}}selected{{end}}>verify-ca</option>
             <option value="verify-full" {{if eq .DBConnSSLMode "verify-full"}}selected{{end}}>verify-full</option>
           </select>
-          <p class="text-[12px] text-slate-400 mt-1">Neon and most managed Postgres require <code class="font-mono">require</code> or stricter.</p>
+          <p class="text-[12px] text-slate-500 mt-1">Neon and most managed Postgres require <code class="font-mono">require</code> or stricter.</p>
         </div>
         <div>
-          <label class="field-label" for="dbconn_extra">Extra parameters <span class="font-normal text-slate-400">(optional)</span></label>
+          <label class="field-label" for="dbconn_extra">Extra parameters <span class="font-normal text-slate-500">(optional)</span></label>
           <input id="dbconn_extra" name="dbconn_extra" type="text" value="{{.DBConnExtra}}" placeholder="connect_timeout=10&amp;application_name=coraza"
                  class="field text-[13px] font-mono"/>
         </div>
@@ -926,7 +926,7 @@
           Migrate configuration here
         </button>
       </div>
-      <p class="text-[12px] text-slate-400">Copies services, IP/geo rules, certificates, API keys, WAF rule overrides, threat-intel sources, webhook settings, and threat scores — not the request log, which stays behind (it's disposable history, like <code class="font-mono">prune</code> already treats it). Doesn't touch your current database or switch the live connection.</p>
+      <p class="text-[12px] text-slate-500">Copies services, IP/geo rules, certificates, API keys, WAF rule overrides, threat-intel sources, webhook settings, and threat scores — not the request log, which stays behind (it's disposable history, like <code class="font-mono">prune</code> already treats it). Doesn't touch your current database or switch the live connection.</p>
       <div id="dbconn-migrate-result" class="text-[13px]"></div>
     </div>
 
@@ -982,7 +982,7 @@
     <div class="flex items-center justify-between py-2 border-b border-line">
       <div>
         <p class="text-[13px] font-semibold text-slate-700">Enable global rate limiting</p>
-        <p class="text-[12px] text-slate-400 mt-[2px]">Off = no global per-IP limit; per-service limits and auto-banning still apply.</p>
+        <p class="text-[12px] text-slate-500 mt-[2px]">Off = no global per-IP limit; per-service limits and auto-banning still apply.</p>
       </div>
       <label class="relative inline-flex items-center cursor-pointer ml-4 shrink-0">
         {{template "toggle-switch" (map "Name" "rl_enabled" "Checked" .RLEnabled)}}
@@ -1042,7 +1042,7 @@
                class="field text-[13px] w-28 text-center"/>
         <button type="submit" class="btn-primary px-5">Confirm &amp; enable</button>
       </form>
-      <p class="text-[11px] text-slate-400 mt-2">Enter the code the app shows to prove the pairing works before it's enforced.</p>
+      <p class="text-[11px] text-slate-500 mt-2">Enter the code the app shows to prove the pairing works before it's enforced.</p>
     </div>
   </div>
 
@@ -1055,7 +1055,7 @@
            class="field text-[13px] w-28 text-center"/>
     <button type="submit" class="rounded-md border border-red-200 text-red-600 text-[13px] font-medium px-5 py-2 hover:bg-red-50 transition-colors cursor-pointer">Disable 2FA</button>
   </form>
-  <p class="text-[11px] text-slate-400 mt-2">Requires a current authenticator code or a backup code, so a stolen session cookie alone can't turn it off.</p>
+  <p class="text-[11px] text-slate-500 mt-2">Requires a current authenticator code or a backup code, so a stolen session cookie alone can't turn it off.</p>
 
   {{else}}
   <form hx-post="{{.AdminPath}}/settings/2fa/start" hx-target="#twofa-card" hx-swap="outerHTML">
@@ -1093,7 +1093,7 @@
     <div class="flex items-center justify-between py-2.5">
       <div class="min-w-0">
         <p class="text-[13px] font-medium text-slate-800 truncate">{{.Name}}</p>
-        <p class="text-[11px] text-slate-400">Added {{fmtTime .CreatedAt}}{{if .LastUsedAt}} · last used {{.LastUsedAt}}{{end}}</p>
+        <p class="text-[11px] text-slate-500">Added {{fmtTime .CreatedAt}}{{if .LastUsedAt}} · last used {{.LastUsedAt}}{{end}}</p>
       </div>
       <button type="button" class="pk-delete-btn text-[12px] font-medium text-red-600 hover:bg-red-50 rounded-md px-3 py-1.5 transition-colors cursor-pointer"
               data-id="{{.ID}}">Remove</button>
@@ -1101,7 +1101,7 @@
     {{end}}
   </div>
   {{else}}
-  <p class="text-[13px] text-slate-400">No passkeys registered yet.</p>
+  <p class="text-[13px] text-slate-500">No passkeys registered yet.</p>
   {{end}}
 </div>
 {{end}}

@@ -3208,19 +3208,19 @@ func (h *Handler) SetServiceCacheTuning(c echo.Context) error {
 func (h *Handler) PurgeServiceCache(c echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
-		return c.HTML(http.StatusOK, `<span class="text-red-500">invalid service id</span>`)
+		return c.HTML(http.StatusOK, `<span class="text-red-600">invalid service id</span>`)
 	}
 	svc, err := h.db.GetService(id)
 	if err != nil {
-		return c.HTML(http.StatusOK, `<span class="text-red-500">service not found</span>`)
+		return c.HTML(http.StatusOK, `<span class="text-red-600">service not found</span>`)
 	}
 	vcfg, err := h.db.GetVarnishConfig()
 	if err != nil {
-		return c.HTML(http.StatusOK, `<span class="text-red-500">`+html.EscapeString(err.Error())+`</span>`)
+		return c.HTML(http.StatusOK, `<span class="text-red-600">`+html.EscapeString(err.Error())+`</span>`)
 	}
 	path := strings.TrimSpace(c.FormValue("path"))
 	if err := services.Purge(vcfg, svc, path); err != nil {
-		return c.HTML(http.StatusOK, `<span class="text-red-500">`+html.EscapeString(err.Error())+`</span>`)
+		return c.HTML(http.StatusOK, `<span class="text-red-600">`+html.EscapeString(err.Error())+`</span>`)
 	}
 	if path != "" {
 		return c.HTML(http.StatusOK, `<span class="text-green-600">Purged `+html.EscapeString(path)+`*.</span>`)
@@ -3694,7 +3694,7 @@ func (h *Handler) TestDBConnection(c echo.Context) error {
 		`<div class="flex flex-col gap-2">`+
 		`<span class="text-green-600 text-[13px] font-medium">Connected successfully.</span>`+
 		`<p class="text-[12px] text-slate-500">Not applied yet — restart the server with these flags to switch to it:</p>`+
-		`<pre class="bg-slate-900 text-green-400 text-[11px] font-mono rounded-md px-3 py-2 overflow-x-auto">`+template.HTMLEscapeString(flags)+`</pre>`+
+		`<pre class="bg-slate-900 text-green-600 text-[11px] font-mono rounded-md px-3 py-2 overflow-x-auto">`+template.HTMLEscapeString(flags)+`</pre>`+
 		`</div>`)
 }
 

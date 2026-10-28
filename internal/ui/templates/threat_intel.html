@@ -51,7 +51,7 @@
             <button type="submit"
               class="w-full text-left text-[12px] text-slate-700 font-medium border border-edge hover:bg-surface rounded-sm px-3 py-2 transition-colors cursor-pointer bg-white flex items-center justify-between gap-2">
               <span>{{.Label}}</span>
-              <span class="text-slate-400 text-[11px] shrink-0">every {{.IntervalHours}}h</span>
+              <span class="text-slate-500 text-[11px] shrink-0">every {{.IntervalHours}}h</span>
             </button>
           </form>
           {{end}}
@@ -124,19 +124,19 @@
     <tr class="border-t border-line hover:bg-surface transition-colors duration-100">
       <td class="px-5 py-3">
         <div class="font-semibold text-slate-900">{{.Label}}</div>
-        <div class="text-[11px] text-slate-400 font-mono truncate max-w-[260px]">{{.URL}}</div>
+        <div class="text-[11px] text-slate-500 font-mono truncate max-w-[260px]">{{.URL}}</div>
       </td>
       <td class="px-5 py-3 text-right font-semibold text-slate-700">
-        {{if gt .IPCount 0}}{{sub .IPCount .RangeCount}} IPs{{if .RangeCount}}<div class="text-[11px] font-normal text-slate-400">{{.RangeCount}} ranges</div>{{end}}{{else}}<span class="text-slate-400">—</span>{{end}}
+        {{if gt .IPCount 0}}{{sub .IPCount .RangeCount}} IPs{{if .RangeCount}}<div class="text-[11px] font-normal text-slate-500">{{.RangeCount}} ranges</div>{{end}}{{else}}<span class="text-slate-500">—</span>{{end}}
       </td>
       <td class="px-5 py-3 text-slate-500">
         {{if .LastSyncedAt.IsZero}}
-          <span class="text-slate-400">Never</span>
+          <span class="text-slate-500">Never</span>
         {{else}}
           {{fmtTime .LastSyncedAt}}
         {{end}}
         {{if .LastError}}
-          <div class="text-[11px] text-red-500 truncate max-w-[160px]" title="{{.LastError}}">{{truncate .LastError 40}}</div>
+          <div class="text-[11px] text-red-600 truncate max-w-[160px]" title="{{.LastError}}">{{truncate .LastError 40}}</div>
         {{end}}
       </td>
       <td class="px-5 py-3">

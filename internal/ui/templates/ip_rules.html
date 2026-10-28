@@ -33,7 +33,7 @@
               <span class="font-mono text-[13px] uppercase text-red-600">Block</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="rule_type" value="allow" class="accent-brand"/>
+              <input type="radio" name="rule_type" value="allow" class="accent-ink"/>
               <span class="font-mono text-[13px] uppercase text-green-600">Allow</span>
             </label>
           </div>
@@ -92,7 +92,7 @@
 
 {{define "autoban-card"}}
 <div class="card p-5" id="autoban-card">
-  {{template "panel-header" (map "Icon" "hgi-cancel-circle" "Title" "Automatic banning" "Tint" "bg-red-50" "Color" "text-red-500" "Mb" "mb-2")}}
+  {{template "panel-header" (map "Icon" "hgi-cancel-circle" "Title" "Automatic banning" "Tint" "bg-red-50" "Color" "text-red-600" "Mb" "mb-2")}}
   <p class="text-[12px] text-slate-500 mb-4">Repeat offenders and severe attacks (SQL injection, RCE, XSS classes) are banned once they cross the score below, for the ban duration (0 hours = forever). Bans appear in the list as <span class="font-semibold text-slate-600">Auto</span> rules and can be removed like any other.</p>
 
   {{if .AutobanSaveOK}}
@@ -155,7 +155,7 @@
 
 {{define "honeypot-card"}}
 <div class="card p-5" id="honeypot-card">
-  {{template "panel-header" (map "Icon" "hgi-honey-01" "Title" "Honeypot paths" "Tint" "bg-red-50" "Color" "text-red-500" "Mb" "mb-2")}}
+  {{template "panel-header" (map "Icon" "hgi-honey-01" "Title" "Honeypot paths" "Tint" "bg-red-50" "Color" "text-red-600" "Mb" "mb-2")}}
   <p class="text-[12px] text-slate-500 mb-4">Paths only scanners ask for. A client that requests one and gets a <span class="font-semibold text-slate-600">404</span> back is banned on that first hit (when Automatic banning is on). A path your backend really serves answers something else, so it never fires.</p>
 
   {{if .HoneypotSaveOK}}
@@ -239,7 +239,7 @@
 <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
   <div class="w-10 h-10 rounded-md flex items-center justify-center shrink-0 {{if eq .RuleType "block"}}bg-red-50{{else}}bg-green-50{{end}}">
     {{if eq .RuleType "block"}}
-    <i class="hgi hgi-stroke hgi-rounded hgi-cancel-circle text-base text-red-500"></i>
+    <i class="hgi hgi-stroke hgi-rounded hgi-cancel-circle text-base text-red-600"></i>
     {{else}}
     <i class="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-base text-green-600"></i>
     {{end}}
