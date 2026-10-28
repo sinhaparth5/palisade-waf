@@ -92,8 +92,6 @@
     }
     if (pauseBtn) {
       pauseBtn.setAttribute('aria-pressed', String(p));
-      pauseBtn.classList.toggle('text-brand-dark', p);
-      pauseBtn.classList.toggle('text-slate-500', !p);
     }
     if (stats) stats.setPaused(p);
     setStatus(p ? 'paused' : stream && stream.readyState === 1 ? 'live' : 'reconnecting');
@@ -143,10 +141,6 @@
   var statsView = document.getElementById('stats-view');
 
   function setTabActive(btn, on) {
-    btn.classList.toggle('bg-white', on);
-    btn.classList.toggle('shadow-xs', on);
-    btn.classList.toggle('text-slate-800', on);
-    btn.classList.toggle('text-slate-500', !on);
     btn.setAttribute('aria-selected', String(on));
     btn.tabIndex = on ? 0 : -1;
   }
@@ -180,9 +174,14 @@
     if (saved === 'stats') setView('stats');
   }
 
-  // ── Request detail modal ──────────────────────────────────────────────────
+  // ── Request inspector ─────────────────────────────────────────────────────
+  // Docked beside the table from xl up; a sheet with a backdrop below that.
   var backdrop = document.getElementById('log-detail-backdrop');
+  var panel = document.getElementById('log-inspector');
   var modal = document.getElementById('log-detail-modal');
+  var emptyNote = document.getElementById('ld-empty');
+  var docked = window.matchMedia('(min-width: 80rem)');
+  var selectedRow = null;
   var closeBtn = document.getElementById('log-detail-close');
   var feedbackRow = document.getElementById('ld-feedback-row');
   var feedbackStatus = document.getElementById('ld-feedback-status');
@@ -221,7 +220,7 @@
     var statusEl = document.getElementById('ld-status');
     if (statusEl) {
       statusEl.textContent = d.status;
-      statusEl.className = 'font-bold text-[15px] shrink-0 tabular-nums ' + statusColor(d.status);
+      statusEl.className = 'font-mono tabular-nums ' + statusColor(d.status);
     }
     setText('ld-ts', d.timestamp ? new Date(d.timestamp).toUTCString() : '');
     setText('ld-dur', d.duration_ms + 'ms' + (d.cache_status ? ' · cache ' + d.cache_status : ''));
@@ -266,7 +265,9 @@
 
     show('ld-threat-section', !!d.has_threat_score);
     if (d.has_threat_score) {
-      setText('ld-threat-score', d.threat_score + ' / 100');
+      setText('ld-threat-score', String(d.threat_score));
+      var ring = document.getElementById('ld-threat-ring');
+      if (ring) ring.setAttribute('stroke-dasharray', Math.max(0, Math.min(100, d.threat_score)) + ' 100');
       setText('ld-threat-breakdown',
         'autoban ' + d.threat_autoban + ' · bot ' + d.threat_bot + ' · asn ' + d.threat_asn +
         ' · geo ' + d.threat_geo + ' · ja4 ' + d.threat_ja4);
@@ -295,7 +296,7 @@
 
   function openDetail(row) {
     var id = row.dataset.logId;
-    if (!backdrop || loadingID === id) return; // ignore a double click while loading
+    if (!panel || loadingID === id) return; // ignore a double click while loading
     loadingID = id;
     row.setAttribute('aria-busy', 'true');
     fetch(adminPath + '/logs/' + id, { credentials: 'same-origin' })
@@ -304,11 +305,18 @@
         currentLogID = id;
         returnFocus = row;
         populateModal(d);
-        backdrop.classList.remove('hidden');
-        document.body.classList.add('overflow-hidden');
-        var body = modal && modal.querySelector('[data-modal-body]');
-        if (body) body.scrollTop = 0;
-        if (closeBtn) closeBtn.focus();
+        if (selectedRow) selectedRow.removeAttribute('aria-current');
+        selectedRow = row;
+        row.setAttribute('aria-current', 'true');
+        emptyNote.classList.add('hidden');
+        modal.classList.remove('hidden');
+        modal.scrollTop = 0;
+        panel.classList.remove('hidden');
+        if (!docked.matches) {
+          backdrop.classList.remove('hidden');
+          document.body.classList.add('overflow-hidden');
+          if (closeBtn) closeBtn.focus();
+        }
       })
       .catch(function () { say('Could not load that request. It may have been pruned; try again.'); })
       .finally(function () {
@@ -318,9 +326,15 @@
   }
 
   function closeDetail() {
-    if (!backdrop || backdrop.classList.contains('hidden')) return;
+    if (!panel || !currentLogID) return;
+    currentLogID = null;
+    panel.classList.add('hidden');
     backdrop.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
+    modal.classList.add('hidden');
+    emptyNote.classList.remove('hidden');
+    if (selectedRow) selectedRow.removeAttribute('aria-current');
+    selectedRow = null;
     if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
     returnFocus = null;
   }
@@ -373,13 +387,13 @@
     if (b) b.addEventListener('click', function () { pair[1](b); });
   });
 
-  if (backdrop) {
-    backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeDetail(); });
-    // Keep Tab inside the dialog while it is open.
-    backdrop.addEventListener('keydown', function (e) {
-      if (e.key !== 'Tab') return;
+  if (panel) {
+    backdrop.addEventListener('click', closeDetail);
+    // Keep Tab inside the sheet while it covers the page.
+    panel.addEventListener('keydown', function (e) {
+      if (e.key !== 'Tab' || backdrop.classList.contains('hidden')) return;
       var vis = Array.prototype.filter.call(
-        modal.querySelectorAll('button:not([disabled]), [href], [tabindex="0"]'),
+        panel.querySelectorAll('button:not([disabled]), [href], [tabindex="0"]'),
         function (el) { return el.offsetParent !== null; });
       if (!vis.length) return;
       var first = vis[0], last = vis[vis.length - 1];
