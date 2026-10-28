@@ -14,20 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [2.11.1] - 2026-10-28
+
 ### Added
 
 - (#212) Feature Request: Add Path-Based Varnish Cache Rules and Fix Static Asset Loading Issues
 
-## [2.11.0] - 2026-10-27
-
-### Added
-
-- (#193) Autoban on repeated 4xx responses (scanner detection)
-- (#194) Threat intel: CIDR ranges in feeds and CrowdSec LAPI source
-- (#195) Strict Content-Security-Policy for the admin UI
-- (#196) Multiple admin users with roles
-- (#197) OIDC single sign-on for the admin UI
-- (#198) Maintenance mode and waiting room per service
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.11.0...main
-[2.11.0]: https://github.com/sinhaparth5/palisade-waf/compare/v2.10.5...v2.11.0
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v2.11.1...main
+[2.11.1]: https://github.com/sinhaparth5/palisade-waf/compare/v2.11.0...v2.11.1
