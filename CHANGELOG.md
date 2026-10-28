@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Added
+
+- (#212) Feature Request: Add Path-Based Varnish Cache Rules and Fix Static Asset Loading Issues
+
 ## [2.11.0] - 2026-10-27
 
 ### Added

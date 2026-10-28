@@ -45,7 +45,7 @@ func TestServiceMutations(t *testing.T) {
 	mustNoErr(t, db.SetServiceRateLimit(id, 2.5, 7))
 	mustNoErr(t, db.SetServiceBotMode(id, "always"))
 	mustNoErr(t, db.SetServiceCacheSession(id, true, "sid"))
-	mustNoErr(t, db.SetServiceCacheTuning(id, 1, 2, 3, 4))
+	mustNoErr(t, db.SetServiceCacheTuning(id, 1, 2, 3, 4, "bypass /api/"))
 	mustNoErr(t, db.SetServiceTLS(id, "custom", "/c.pem", "/k.pem", "2030-01-01T00:00:00Z"))
 
 	s, err := db.GetService(id)
@@ -53,7 +53,7 @@ func TestServiceMutations(t *testing.T) {
 	if s.Name != "store" || s.Host != "store.test" || s.Prefix != "/s" || s.Backend != "http://10.0.0.2" ||
 		s.RateLimitRPS != 2.5 || s.RateLimitBurst != 7 || s.BotMode != "always" ||
 		!s.CacheBySession || s.SessionCookieName != "sid" ||
-		s.CacheTTLFloor != 1 || s.CacheTTLCeiling != 2 || s.CacheGrace != 3 || s.CacheKeep != 4 || s.TLSMode != "custom" {
+		s.CacheTTLFloor != 1 || s.CacheTTLCeiling != 2 || s.CacheGrace != 3 || s.CacheKeep != 4 || s.CacheRules != "bypass /api/" || s.TLSMode != "custom" {
 		t.Fatalf("service = %+v", s)
 	}
 

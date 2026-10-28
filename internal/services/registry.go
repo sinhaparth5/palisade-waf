@@ -68,6 +68,12 @@ func (t *timedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // time — including for requests that fall through to the fallback service
 // (e.g. favicon.ico, robots.txt) when nothing else matches. Bound both so a
 // down backend fails fast instead of stalling unrelated page loads.
+// errVarnishFetch is a 503 Varnish synthesized because its own fetch failed
+// (the VCL's vcl_backend_error marks it): an oversized backend header, a
+// fetch timeout, storage exhaustion. varnishlog -g request -q 'FetchError'
+// has the reason.
+var errVarnishFetch = errors.New("varnish fetch failed")
+
 var backendTransport = &http.Transport{
 	Proxy: http.ProxyFromEnvironment,
 	DialContext: (&net.Dialer{
@@ -220,7 +226,15 @@ func (r *Registry) Reload(db *storage.DB) error {
 			cacheBySession := s.CacheBySession
 			sessionCookieName := s.SessionCookieName
 			ttlFloor, ttlCeiling, grace, keep := s.CacheTTLFloor, s.CacheTTLCeiling, s.CacheGrace, s.CacheKeep
+			// The UI validates these on save; a bad stored row runs with none.
+			rules, err := ParseCacheRules(s.CacheRules)
+			if err != nil {
+				log.Printf("cache rules for service %q: %v", s.Name, err)
+			}
 			rp.Director = func(req *http.Request) { //nolint:staticcheck // SA1019: see above
+				// Matched on the service's own path (prefix already stripped),
+				// before the stock director joins the backend's base path.
+				rule := matchCacheRule(rules, req.URL.Path)
 				stock(req)
 				for _, hn := range spoofableHostHeaders {
 					req.Header.Del(hn)
@@ -240,10 +254,15 @@ func (r *Registry) Reload(db *storage.DB) error {
 				// WebSocket handshakes are GETs, but Varnish drops the
 				// Upgrade header, so the backend would see a plain GET and
 				// 404; any Upgrade request must bypass the cache too.
-				if (req.Method != http.MethodGet && req.Method != http.MethodHead) || req.Header.Get("Upgrade") != "" {
+				// A "bypass" cache rule skips Varnish the same way.
+				if (req.Method != http.MethodGet && req.Method != http.MethodHead) || req.Header.Get("Upgrade") != "" || (rule != nil && !rule.cache) {
 					return
 				}
 				req.Header.Set("X-Cache-Service", name)
+				if rule != nil {
+					// The VCL caches it like a static asset, cookies ignored.
+					req.Header.Set("X-Cache-Rule", "cache")
+				}
 				req.Header.Set("X-Waf-Backend", backendHost)
 				// Opt-in session-aware caching (admin toggle, off by default):
 				// partition the cache by this service's session cookie value
@@ -354,23 +373,41 @@ func (r *Registry) Reload(db *storage.DB) error {
 			continue
 		}
 		rp.Transport = &timedTransport{rt: backendTransport, name: name}
-		rp.ModifyResponse = clientModify
+		rp.ModifyResponse = func(resp *http.Response) error {
+			if resp.StatusCode == http.StatusServiceUnavailable && resp.Header.Get("X-Cache-Fetch-Error") != "" {
+				return errVarnishFetch
+			}
+			return clientModify(resp)
+		}
+		// Serves the request when Varnish can't. The request has been
+		// through the Director, so its path already has the backend's base
+		// path joined, as on the Varnish miss path.
+		fallback := newPool(s, healthOf, true, clientModify)
 		// Varnish is an accelerator, not a dependency: if varnishd is down
 		// (not installed, crashed, mid-restart) a cache-routed service
 		// would otherwise 502 while its backends are perfectly healthy.
-		// Fail open to the backends when the dial to Varnish itself fails;
-		// anything else (or a failure past the dial) is a real error.
+		// Fail open to the backends when the dial to Varnish itself fails or
+		// Varnish's own fetch failed (issue #212); anything else is a real
+		// error. The response says X-Cache: ERROR, so the request log and
+		// the cache card show which URLs Varnish couldn't serve.
 		rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 			var opErr *net.OpError
-			// Only GET/HEAD are routed to Varnish (see Director), and
-			// neither carries a body a failed dial could have consumed.
 			if errors.Is(err, ErrResponseBlocked) {
 				http.Error(w, "bad gateway", http.StatusBadGateway)
 				return
 			}
-			if errors.As(err, &opErr) && opErr.Op == "dial" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-				log.Printf("cache [%s]: varnish unreachable, serving from backend: %v", name, err)
-				bp.ServeHTTP(w, r)
+			// Only GET/HEAD are routed to Varnish (see Director), and
+			// neither carries a body a failed attempt could have consumed.
+			if errors.Is(err, errVarnishFetch) || (errors.As(err, &opErr) && opErr.Op == "dial" && (r.Method == http.MethodGet || r.Method == http.MethodHead)) {
+				log.Printf("cache [%s]: %s %s served from the backend: %v", name, r.Method, r.URL.Path, err)
+				for hn := range r.Header {
+					if strings.HasPrefix(hn, "X-Cache-") {
+						r.Header.Del(hn)
+					}
+				}
+				r.Header.Del("X-Waf-Backend")
+				w.Header().Set("X-Cache", "ERROR")
+				fallback.ServeHTTP(w, r)
 				return
 			}
 			log.Printf("proxy error [%s]: %v", name, err)
