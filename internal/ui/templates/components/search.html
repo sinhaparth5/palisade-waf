@@ -1,0 +1,30 @@
+{{/* Top bar search (issue #225); admin.js opens it and handles the keys. */}}
+{{define "site-search"}}
+<dialog id="site-search" aria-label="Search" class="mx-auto mt-[10vh] w-[min(640px,calc(100%-2rem))] border border-edge bg-canvas p-0 text-ink shadow-lg backdrop:bg-slate-900/55 backdrop:backdrop-blur-[2px]">
+  <div class="flex items-center gap-3 border-b border-edge px-4">
+    <i class="hgi hgi-stroke hgi-rounded hgi-search-01 text-base text-slate-500"></i>
+    <input id="site-search-input" type="search" name="q" autocomplete="off" spellcheck="false" aria-label="Search pages, services and rules"
+      placeholder="Search pages, services, rules…"
+      hx-get="{{.AdminPath}}/search" hx-trigger="input changed delay:150ms, search" hx-target="#site-search-results"
+      class="h-12 min-w-0 flex-1 bg-transparent text-[15px] outline-hidden placeholder:text-slate-400"/>
+    <kbd class="hidden font-mono text-[11px] text-slate-500 sm:inline">Esc</kbd>
+  </div>
+  <div id="site-search-results" class="max-h-[60vh] overflow-y-auto"></div>
+</dialog>
+{{end}}
+
+{{define "search-results"}}
+{{range .Groups}}
+<p class="label-mono flex items-center gap-2 px-4 pt-3 pb-1"><i class="hgi hgi-stroke hgi-rounded {{.Icon}}"></i>{{.Label}}</p>
+<ul>
+  {{range .Hits}}
+  <li><a href="{{.URL}}" class="flex items-baseline justify-between gap-4 px-4 py-2 no-underline hover:bg-surface focus:bg-surface focus:outline-hidden">
+    <span class="min-w-0 truncate text-ink">{{.Title}}</span>
+    <span class="shrink-0 truncate font-mono text-[12px] text-slate-500">{{.Detail}}</span>
+  </a></li>
+  {{end}}
+</ul>
+{{else}}
+{{if .Q}}<p class="px-4 py-6 text-center text-slate-500">No results for “{{.Q}}”.</p>{{end}}
+{{end}}
+{{end}}

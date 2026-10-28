@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Added
+
+- (#225) v3: Site-wide search in the admin top bar
+
 ## [3.0.0] - 2026-10-28
 
 ### Changed

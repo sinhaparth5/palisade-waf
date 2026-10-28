@@ -7,7 +7,7 @@
 
 {{define "base"}}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-pt-20">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -124,6 +124,9 @@
     </p>
     {{if not (can .Role "admin")}}<span class="tag shrink-0" title="Your role can read every page but not change settings"><span class="h-2 w-2 rounded-full bg-slate-400"></span>Read-only</span>{{end}}
     <div class="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap justify-end py-2">
+      <button id="site-search-open" type="button" aria-label="Search" aria-keyshortcuts="Control+K Meta+K /" class="flex h-11 items-center gap-2 rounded-sm border border-edge px-3 text-slate-600 hover:bg-surface hover:text-ink sm:h-9">
+        <i class="hgi hgi-stroke hgi-rounded hgi-search-01 text-base"></i><span class="hidden sm:inline">Search</span><kbd class="hidden font-mono text-[11px] text-slate-500 md:inline">Ctrl K</kbd>
+      </button>
       {{block "actions" .}}{{end}}
     </div>
   </header>
@@ -149,6 +152,7 @@
   </footer>
 </div>
 
+{{template "site-search" .}}
 <script src="{{.AdminPath}}/static/js/toast.min.js?v={{.Asset}}" defer></script>
 <script src="{{.AdminPath}}/static/js/notify.min.js?v={{.Asset}}" defer></script>
 <script src="{{.AdminPath}}/static/js/clipboard.min.js?v={{.Asset}}" defer></script>
