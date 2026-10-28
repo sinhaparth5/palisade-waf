@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Changed
+
+- (#228) v3: Restyle emails to match the v3 dashboard
+
 ### Added
 
 - (#225) v3: Site-wide search in the admin top bar
