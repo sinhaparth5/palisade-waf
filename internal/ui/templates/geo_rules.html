@@ -3,6 +3,7 @@
 
 <div class="flex flex-col gap-4">
 
+  {{if can .Role "admin"}}
   <!-- ── Primary action: the same full-width row-form every management page uses ── -->
   <div class="card border-t-4 border-t-edge p-5">
     {{template "panel-header" (map "Icon" "hgi-earth" "Title" "Add Geo Rule")}}
@@ -52,6 +53,7 @@
       <p>Per-app rules take priority over global. Allow rules bypass every other block.</p>
     </div>
   </div>
+  {{end}}
 
   <!-- ── Supporting panels sit under the primary form, never beside it ── -->
   <div class="grid grid-cols-1 items-start gap-4 md:grid-cols-2" data-stagger>
@@ -89,7 +91,7 @@
   <div class="card overflow-hidden h-fit">
     {{template "card-header" (map "Cat" "Firewall" "Title" "Active Geo Rules" "Badge" (printf "%d rules" (len .Rules)))}}
     <div id="geo-rules-body" class="flex flex-col px-2 pb-2">
-      {{template "geo-rules-rows" .Rules}}
+      {{template "geo-rules-rows" (map "Rules" .Rules "Role" .Role)}}
     </div>
   </div>
 
@@ -97,7 +99,7 @@
 {{end}}
 
 {{define "geo-rules-rows"}}
-{{range .}}
+{{range .Rules}}
 <div class="flex items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
   <div class="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-canvas flex items-center justify-center">
     <span class="{{flagClass .CountryCode}} w-10 h-10 bg-cover block"></span>
@@ -107,7 +109,7 @@
     <div class="text-[12px] text-slate-500 truncate">{{if .AppName}}{{.AppName}}{{else}}Global{{end}} · {{fmtTime .CreatedAt}}</div>
   </div>
   {{template "rule-type-badge" .RuleType}}
-  {{template "remove-btn" (map "URL" (printf "/admin/geo-rules/%d" .ID) "Target" "#geo-rules-body" "Confirm" (printf "Remove rule for %s?" .CountryCode))}}
+  {{if can $.Role "admin"}}{{template "remove-btn" (map "URL" (printf "/admin/geo-rules/%d" .ID) "Target" "#geo-rules-body" "Confirm" (printf "Remove rule for %s?" .CountryCode))}}{{end}}
 </div>
 {{else}}
 {{template "empty-state" (map "Icon" "hgi-earth" "Message" "No geo rules yet")}}

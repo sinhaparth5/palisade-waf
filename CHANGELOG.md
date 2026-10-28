@@ -17,6 +17,7 @@ rather than growing this file forever.
 ### Changed
 
 - (#215) v3: Redesign the admin UI (retro archival theme)
+- (#216) v3: Role-aware admin UI with read-only views for viewers
 
 ## [2.11.1] - 2026-10-28
 

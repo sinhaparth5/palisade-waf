@@ -50,7 +50,7 @@ func TestServicesRowsAreLabelsPlusEdit(t *testing.T) {
 		{Service: storage.Service{ID: 2, Name: "app", Prefix: "/api", Backend: "http://127.0.0.1:4000", TLSMode: "none", BotMode: "inherit"}},
 	}
 	var buf bytes.Buffer
-	if err := h.tmpls["services"].ExecuteTemplate(&buf, "services-rows", views); err != nil {
+	if err := h.tmpls["services"].ExecuteTemplate(&buf, "services-rows", map[string]any{"Services": views, "Role": "admin"}); err != nil {
 		t.Fatalf("execute services-rows: %v", err)
 	}
 	out := buf.String()
@@ -86,6 +86,7 @@ func TestServicesPageRendersEditModal(t *testing.T) {
 		"AlertCount": 0,
 		"Services":   []ServiceView{},
 		"PoolCerts":  nil,
+		"Role":       "admin",
 	}
 	var buf bytes.Buffer
 	if err := h.tmpls["services"].ExecuteTemplate(&buf, "base", data); err != nil {

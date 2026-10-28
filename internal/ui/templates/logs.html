@@ -12,12 +12,14 @@
   Back to live
 </a>
 {{end}}
+{{if can .Role "admin"}}
 <a id="export-link" aria-label="Export NDJSON"
    href="{{$.AdminPath}}/logs/export{{if or .FilterApp .FilterStatus .FilterFrom .FilterTo}}?app={{.FilterApp}}&status={{.FilterStatus}}&from={{.FilterFrom}}&to={{.FilterTo}}{{end}}"
    class="flex min-h-11 items-center gap-[6px] rounded-sm border border-edge bg-transparent px-4 py-2 font-mono text-[12px] uppercase tracking-[.04em] text-ink no-underline cursor-pointer hover:bg-surface">
   <i class="hgi hgi-stroke hgi-rounded hgi-download-02 text-[13px]"></i>
   <span class="hidden sm:inline">Export NDJSON</span>
 </a>
+{{end}}
 {{end}}
 
 {{define "content"}}
@@ -295,6 +297,7 @@
         <p class="flex items-center gap-2 font-mono text-[12px] uppercase text-red-600"><span class="h-2 w-2 rounded-full bg-danger"></span>Request blocked</p>
         <p id="ld-block-reason" class="mt-1 font-mono text-[12px] text-red-600"></p>
       </div>
+      {{if can .Role "admin"}}
       <div id="ld-feedback-row" class="hidden mt-2 flex flex-wrap items-center gap-2">
         <span class="w-full text-[11px] text-slate-500">Was this rule correct?</span>
         <button id="ld-feedback-fp" type="button" data-fp="1"
@@ -305,6 +308,7 @@
           class="rounded-sm border border-edge px-3 py-2 font-mono text-[11px] uppercase text-ink hover:bg-surface">Create exception</button>
         <span id="ld-feedback-status" class="w-full text-[11px] text-slate-500" aria-live="polite"></span>
       </div>
+      {{end}}
     </div>
 
     <!-- Overview -->

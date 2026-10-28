@@ -68,6 +68,13 @@ func setCSP(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 var funcs = template.FuncMap{
+	// can reports whether role may use routes declared for need, by the
+	// same order requireRole enforces (issue #216): {{if can $.Role "admin"}}.
+	// A missing role (nil) has no rank, so it gets read-only markup.
+	"can": func(role any, need string) bool {
+		r, _ := role.(string)
+		return roleRank[r] >= roleRank[need]
+	},
 	"flagClass":   func(code string) string { return "fi fi-" + strings.ToLower(code) },
 	"fmtTime":     func(t time.Time) string { return t.Format("02 Jan 15:04:05") },
 	"fmtTimeFull": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05 UTC") },
@@ -98,6 +105,8 @@ var funcs = template.FuncMap{
 	"sub":      func(a, b int) int { return a - b },
 	"isOdd":    func(i int) bool { return i%2 == 1 },
 	"contains": strings.Contains,
+	"aiPolicy": bot.ParseAIPolicy,
+	"join":     strings.Join,
 	"splitComma": func(s string) []string {
 		var out []string
 		for _, p := range strings.Split(s, ",") {
@@ -1596,7 +1605,7 @@ func (h *Handler) AddGeoRule(c echo.Context) error {
 	}
 	rules, _ := h.db.ListGeoRules()
 	h.scorer.ReloadGeoRules(rules)
-	return h.renderPartial(c, "geo_rules", "geo-rules-rows", rules)
+	return h.renderPartial(c, "geo_rules", "geo-rules-rows", map[string]any{"Rules": rules})
 }
 
 func (h *Handler) DeleteGeoRule(c echo.Context) error {
@@ -1612,7 +1621,7 @@ func (h *Handler) DeleteGeoRule(c echo.Context) error {
 	}
 	rules, _ := h.db.ListGeoRules()
 	h.scorer.ReloadGeoRules(rules)
-	return h.renderPartial(c, "geo_rules", "geo-rules-rows", rules)
+	return h.renderPartial(c, "geo_rules", "geo-rules-rows", map[string]any{"Rules": rules})
 }
 
 // ── WAF Rules ─────────────────────────────────────────────────────────────────
@@ -1977,7 +1986,22 @@ func (h *Handler) ServicesPage(c echo.Context) error {
 // ServicesRows re-renders just the services table body, polled periodically
 // by the page so the reachability dot updates live.
 func (h *Handler) ServicesRows(c echo.Context) error {
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
+}
+
+// servicesRows renders the service table fragment every service write swaps in.
+func (h *Handler) servicesRows(c echo.Context) error {
+	return h.renderPartial(c, "services", "services-rows", h.servicesRowsData(c))
+}
+
+// servicesRowsData is the services-rows input: the rows plus the viewer's
+// role, which picks the Edit or the read-only View button.
+func (h *Handler) servicesRowsData(c echo.Context) map[string]any {
+	role := ""
+	if u := currentUser(c); u != nil {
+		role = u.Role
+	}
+	return map[string]any{"Services": h.serviceViews(), "Role": role}
 }
 
 // wizardError redirects the swap to the wizard's own error box (instead of
@@ -2064,7 +2088,7 @@ func (h *Handler) AddService(c echo.Context) error {
 	w := c.Response().Writer
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, `<div id="wizard-error" hx-swap-oob="true"></div>`)
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 func (h *Handler) DeleteService(c echo.Context) error {
@@ -2078,7 +2102,7 @@ func (h *Handler) DeleteService(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return err
 	}
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
 }
 
 // ── Certificate Pool ──────────────────────────────────────────────────────────
@@ -2257,7 +2281,7 @@ func (h *Handler) tlsSaved(c echo.Context, extraEvents ...string) error {
 	w := c.Response().Writer
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, `<div id="tls-error" hx-swap-oob="true"></div>`)
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // UploadServiceTLS saves an admin-provided cert+key PEM pair for a
@@ -2415,7 +2439,7 @@ func (h *Handler) SetServiceRateLimit(c echo.Context) error {
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.Response().Header().Set("HX-Trigger", "rl-saved")
 	fmt.Fprint(w, `<div id="rl-error" hx-swap-oob="true"></div>`)
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -2703,7 +2727,7 @@ func (h *Handler) SetServiceBotMode(c echo.Context) error {
 	}
 	w := c.Response().Writer
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // SetServiceLargeJSUploads opts one service into streaming JavaScript request
@@ -2726,7 +2750,7 @@ func (h *Handler) SetServiceLargeJSUploads(c echo.Context) error {
 	}
 	w := c.Response().Writer
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // SetServiceHTTP3 opts one service's Host into HTTP/3. Takes effect on the
@@ -2744,7 +2768,7 @@ func (h *Handler) SetServiceHTTP3(c echo.Context) error {
 	}
 	w := c.Response().Writer
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // SetServiceBackends saves a service's backend list (one URL per line, the
@@ -2784,7 +2808,7 @@ func (h *Handler) SetServiceBackends(c echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "backends-saved")
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
 }
 
 // SetServiceHosts saves a host-matched service's extra hostnames (one per
@@ -2814,7 +2838,7 @@ func (h *Handler) SetServiceHosts(c echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "hosts-saved")
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
 }
 
 // aiPolicyForm reads the ai_<category> selects; anything else is dropped.
@@ -2841,7 +2865,7 @@ func (h *Handler) SetServiceAICrawlers(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
 }
 
 // SetServiceBreachCheck saves a service's leaked-password check (issue #188).
@@ -2878,7 +2902,7 @@ func (h *Handler) SetServiceBreachCheck(c echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "breach-saved")
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
 }
 
 // loginPathsMax caps a service's login protection list.
@@ -2915,7 +2939,7 @@ func (h *Handler) SetServiceLoginPaths(c echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "login-saved")
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
 }
 
 // SetServiceCompress turns response compression on or off for one service.
@@ -2932,7 +2956,7 @@ func (h *Handler) SetServiceCompress(c echo.Context) error {
 	}
 	w := c.Response().Writer
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // SetServiceSchema attaches (or clears) a JSON Schema used to validate this
@@ -2967,7 +2991,7 @@ func (h *Handler) SetServiceSchema(c echo.Context) error {
 	}
 	w := c.Response().Writer
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // openAPIMaxBytes caps an uploaded OpenAPI document.
@@ -3020,7 +3044,7 @@ func (h *Handler) SetServiceOpenAPI(c echo.Context) error {
 		h.reloadWAF()
 	}
 	c.Response().Header().Set("HX-Trigger", "openapi-saved")
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
 }
 
 // SetServiceMTLS saves a service's client-certificate policy (issue #191).
@@ -3060,7 +3084,7 @@ func (h *Handler) SetServiceMTLS(c echo.Context) error {
 	if m.CAPath == "" {
 		if m.Mode != "optional" && m.Mode != "required" {
 			c.Response().Header().Set("HX-Trigger", "mtls-saved")
-			return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+			return h.servicesRows(c)
 		}
 		return fail("Paste the CA certificate(s) that issue your client certificates.")
 	}
@@ -3071,7 +3095,7 @@ func (h *Handler) SetServiceMTLS(c echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "mtls-saved")
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
 }
 
 // SetServiceResponseInspect sets a service's response inspection mode
@@ -3097,7 +3121,7 @@ func (h *Handler) SetServiceResponseInspect(c echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "responses-saved")
-	return h.renderPartial(c, "services", "services-rows", h.serviceViews())
+	return h.servicesRows(c)
 }
 
 // SetServiceCache toggles routing one service's clean traffic through the
@@ -3116,7 +3140,7 @@ func (h *Handler) SetServiceCache(c echo.Context) error {
 	}
 	w := c.Response().Writer
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // SetServiceCacheSession configures opt-in session-aware Varnish caching for
@@ -3141,7 +3165,7 @@ func (h *Handler) SetServiceCacheSession(c echo.Context) error {
 	}
 	w := c.Response().Writer
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // parseOptionalSeconds parses a form field as a non-negative whole number of
@@ -3197,7 +3221,7 @@ func (h *Handler) SetServiceCacheTuning(c echo.Context) error {
 	}
 	w := c.Response().Writer
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.serviceViews())
+	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // PurgeServiceCache invalidates the objects Varnish holds for one service —
@@ -3862,6 +3886,12 @@ func (h *Handler) renderPartial(c echo.Context, page, tmplName string, data any)
 		return fmt.Errorf("template %q not found", page)
 	}
 	markAuditFailure(c, data)
+	// Swapped fragments gate their controls with can, like full pages.
+	if m, ok := data.(map[string]any); ok && m["Role"] == nil {
+		if u := currentUser(c); u != nil {
+			m["Role"] = u.Role
+		}
+	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	return t.ExecuteTemplate(c.Response().Writer, tmplName, data)
 }
