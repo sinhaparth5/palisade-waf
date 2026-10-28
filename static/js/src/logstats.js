@@ -136,8 +136,8 @@
       pct.textContent = (row[1] * 100 / sum).toFixed(1) + '%';
       line.append(name, count, pct);
       var bar = svgEl('svg', { 'class': 'mt-1 h-1 w-full', preserveAspectRatio: 'none', viewBox: '0 0 100 1' });
-      bar.appendChild(svgEl('rect', { width: 100, height: 1, 'class': 'fill-slate-100' }));
-      bar.appendChild(svgEl('rect', { width: Math.max(1, row[1] * 100 / top), height: 1, 'class': id === 'why' ? 'fill-red-500' : 'fill-brand' }));
+      bar.appendChild(svgEl('rect', { width: 100, height: 1, 'class': 'fill-slate-200' }));
+      bar.appendChild(svgEl('rect', { width: Math.max(1, row[1] * 100 / top), height: 1, 'class': id === 'why' ? 'fill-danger' : 'fill-ink' }));
       li.append(line, bar);
       list.appendChild(li);
     });
@@ -161,8 +161,8 @@
       tip.textContent = new Date(m * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
         ' — ' + v.n + ' requests, ' + v.b + ' blocked';
       g.appendChild(tip);
-      g.appendChild(svgEl('rect', { x: i + 0.1, y: 40 - h, width: 0.8, height: h, 'class': 'fill-brand' }));
-      if (hb > 0) g.appendChild(svgEl('rect', { x: i + 0.1, y: 40 - hb, width: 0.8, height: hb, 'class': 'fill-red-500' }));
+      g.appendChild(svgEl('rect', { x: i + 0.1, y: 40 - h, width: 0.8, height: h, 'class': 'fill-ink' }));
+      if (hb > 0) g.appendChild(svgEl('rect', { x: i + 0.1, y: 40 - hb, width: 0.8, height: hb, 'class': 'fill-danger' }));
       svg.appendChild(g);
     }
   }

@@ -1,20 +1,20 @@
 {{define "actions"}}
 {{if not .History}}
 <button id="pause-btn" type="button" aria-pressed="false"
-  class="flex items-center gap-[6px] border border-line bg-white rounded-md px-4 py-2 text-[14px] font-medium text-slate-500 cursor-pointer font-sans">
+  class="flex min-h-11 items-center gap-[6px] rounded-sm border border-edge bg-transparent aria-pressed:bg-ink aria-pressed:text-canvas px-4 py-2 font-mono text-[12px] uppercase tracking-[.04em] text-ink no-underline cursor-pointer hover:bg-surface">
   <i id="pause-icon" class="hgi hgi-stroke hgi-rounded hgi-pause text-[13px]"></i>
   <span id="pause-label" class="min-w-[3.25rem] text-left">Pause</span>
 </button>
 {{else}}
 <a href="{{$.AdminPath}}/logs"
-  class="flex items-center gap-[6px] border border-line bg-white rounded-md px-4 py-2 text-[14px] font-medium text-slate-500 cursor-pointer no-underline">
+  class="flex min-h-11 items-center gap-[6px] rounded-sm border border-edge bg-transparent px-4 py-2 font-mono text-[12px] uppercase tracking-[.04em] text-ink no-underline cursor-pointer hover:bg-surface">
   <i class="hgi hgi-stroke hgi-rounded hgi-signal-full-02 text-[13px] text-brand"></i>
   Back to live
 </a>
 {{end}}
 <a id="export-link"
    href="{{$.AdminPath}}/logs/export{{if or .FilterApp .FilterStatus .FilterFrom .FilterTo}}?app={{.FilterApp}}&status={{.FilterStatus}}&from={{.FilterFrom}}&to={{.FilterTo}}{{end}}"
-   class="flex items-center gap-[6px] border border-line bg-white rounded-md px-4 py-2 text-[14px] font-medium text-slate-500 hover:text-slate-700 no-underline transition-colors">
+   class="flex min-h-11 items-center gap-[6px] rounded-sm border border-edge bg-transparent px-4 py-2 font-mono text-[12px] uppercase tracking-[.04em] text-ink no-underline cursor-pointer hover:bg-surface">
   <i class="hgi hgi-stroke hgi-rounded hgi-download-02 text-[13px]"></i>
   Export NDJSON
 </a>
@@ -27,10 +27,10 @@
 
   <!-- From date picker -->
   <div class="min-w-0">
-    <span id="filter-from-label" class="block text-[11px] text-slate-500 mb-[6px] font-semibold uppercase tracking-[.04em]">From</span>
+    <span id="filter-from-label" class="label-mono block mb-[6px]">From</span>
     <input type="hidden" name="from" id="filter-from" value="{{.FilterFrom}}">
     <button type="button" id="filter-from-btn" aria-labelledby="filter-from-label filter-from-display"
-      class="flex min-h-11 w-full items-center gap-2 border-[1.5px] border-line rounded-lg px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[210px] hover:border-slate-300 transition-colors">
+      class="flex min-h-11 w-full items-center gap-2 border border-edge rounded-sm px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[210px] hover:bg-surface transition-colors">
       <i class="hgi hgi-stroke hgi-rounded hgi-calendar-02 text-[14px] text-slate-400 shrink-0"></i>
       <span id="filter-from-display" class="flex-1 text-left text-slate-400">Any date</span>
     </button>
@@ -38,10 +38,10 @@
 
   <!-- To date picker -->
   <div class="min-w-0">
-    <span id="filter-to-label" class="block text-[11px] text-slate-500 mb-[6px] font-semibold uppercase tracking-[.04em]">To</span>
+    <span id="filter-to-label" class="label-mono block mb-[6px]">To</span>
     <input type="hidden" name="to" id="filter-to" value="{{.FilterTo}}">
     <button type="button" id="filter-to-btn" aria-labelledby="filter-to-label filter-to-display"
-      class="flex min-h-11 w-full items-center gap-2 border-[1.5px] border-line rounded-lg px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[210px] hover:border-slate-300 transition-colors">
+      class="flex min-h-11 w-full items-center gap-2 border border-edge rounded-sm px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[210px] hover:bg-surface transition-colors">
       <i class="hgi hgi-stroke hgi-rounded hgi-calendar-02 text-[14px] text-slate-400 shrink-0"></i>
       <span id="filter-to-display" class="flex-1 text-left text-slate-400">Any date</span>
     </button>
@@ -49,15 +49,15 @@
 
   <!-- App dropdown -->
   <div class="relative min-w-0">
-    <span id="filter-app-label" class="block text-[11px] text-slate-500 mb-[6px] font-semibold uppercase tracking-[.04em]">App</span>
+    <span id="filter-app-label" class="label-mono block mb-[6px]">App</span>
     <input type="hidden" name="app" id="filter-app" value="{{.FilterApp}}">
     <button type="button" id="filter-app-btn" aria-labelledby="filter-app-label filter-app-display"
-      class="flex min-h-11 w-full items-center gap-2 border-[1.5px] border-line rounded-lg px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[145px] hover:border-slate-300 transition-colors">
+      class="flex min-h-11 w-full items-center gap-2 border border-edge rounded-sm px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[145px] hover:bg-surface transition-colors">
       <span id="filter-app-display" class="flex-1 text-left text-slate-700">All apps</span>
       <i class="hgi hgi-stroke hgi-rounded hgi-arrow-down-01 text-[11px] text-slate-400 shrink-0"></i>
     </button>
     <div id="filter-app-dropdown"
-      class="hidden absolute top-full left-0 mt-1 z-50 max-h-72 overflow-y-auto bg-white border border-line rounded-md py-1 min-w-full shadow-[0_8px_28px_rgba(0,0,0,.10)]">
+      class="hidden absolute top-full left-0 mt-1 z-50 max-h-72 overflow-y-auto bg-card border border-edge py-1 min-w-full shadow-[0_8px_28px_rgba(0,0,0,.12)]">
       <button type="button" class="w-full text-left px-3 py-[9px] text-[13px] text-slate-700 hover:bg-surface focus-visible:bg-surface cursor-pointer" data-value="" data-label="All apps">All apps</button>
       {{range .Apps}}
       <button type="button" class="w-full text-left px-3 py-[9px] text-[13px] text-slate-700 hover:bg-surface focus-visible:bg-surface cursor-pointer" data-value="{{.Name}}" data-label="{{.Name}}">{{.Name}}</button>
@@ -67,15 +67,15 @@
 
   <!-- Status dropdown -->
   <div class="relative min-w-0">
-    <span id="filter-status-label" class="block text-[11px] text-slate-500 mb-[6px] font-semibold uppercase tracking-[.04em]">Status</span>
+    <span id="filter-status-label" class="label-mono block mb-[6px]">Status</span>
     <input type="hidden" name="status" id="filter-status" value="{{.FilterStatus}}">
     <button type="button" id="filter-status-btn" aria-labelledby="filter-status-label filter-status-display"
-      class="flex min-h-11 w-full items-center gap-2 border-[1.5px] border-line rounded-lg px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[155px] hover:border-slate-300 transition-colors">
+      class="flex min-h-11 w-full items-center gap-2 border border-edge rounded-sm px-3 py-2 text-[13px] bg-white cursor-pointer xl:min-w-[155px] hover:bg-surface transition-colors">
       <span id="filter-status-display" class="flex-1 text-left text-slate-700">All statuses</span>
       <i class="hgi hgi-stroke hgi-rounded hgi-arrow-down-01 text-[11px] text-slate-400 shrink-0"></i>
     </button>
     <div id="filter-status-dropdown"
-      class="hidden absolute top-full left-0 mt-1 z-50 bg-white border border-line rounded-md py-1 min-w-[170px] shadow-[0_8px_28px_rgba(0,0,0,.10)]">
+      class="hidden absolute top-full left-0 mt-1 z-50 bg-card border border-edge py-1 min-w-[170px] shadow-[0_8px_28px_rgba(0,0,0,.12)]">
       <button type="button" class="w-full text-left px-3 py-[9px] text-[13px] text-slate-700 hover:bg-surface focus-visible:bg-surface cursor-pointer" data-value="" data-label="All statuses">All statuses</button>
       <button type="button" class="w-full text-left px-3 py-[9px] text-[13px] text-slate-700 hover:bg-surface focus-visible:bg-surface cursor-pointer" data-value="blocked" data-label="Blocked only">Blocked only</button>
       <button type="button" class="w-full text-left px-3 py-[9px] text-[13px] text-slate-700 hover:bg-surface focus-visible:bg-surface cursor-pointer" data-value="2xx" data-label="2xx success">2xx success</button>
@@ -91,7 +91,7 @@
     Filter
   </button>
   {{if .History}}
-  <a href="{{.AdminPath}}/logs" class="flex min-h-11 items-center px-2 text-[13px] text-slate-500 no-underline hover:text-slate-700">Clear filters</a>
+  <a href="{{.AdminPath}}/logs" class="flex min-h-11 items-center whitespace-nowrap px-2 font-mono text-[12px] uppercase text-slate-600 no-underline hover:text-ink">Clear filters</a>
   {{end}}
 </form>
 
@@ -114,20 +114,20 @@
   <span class="hidden sm:inline text-[12px] text-slate-500">Newest first · last 500 rows · click a row for details</span>
   <!-- Shown while new rows wait (paused, or scrolled away from the top). -->
   <button type="button" id="new-rows-pill"
-    class="hidden flex min-h-8 items-center gap-1.5 rounded-full bg-navy px-3 py-1 text-[12px] font-semibold text-white hover:bg-slate-800 transition-colors">
+    class="hidden flex min-h-8 items-center gap-1.5 rounded-sm bg-ink px-3 py-1 font-mono text-[11px] uppercase text-canvas hover:bg-slate-800 transition-colors">
     <i class="hgi hgi-stroke hgi-rounded hgi-arrow-up-01 text-[12px]"></i>
     <span><span id="new-rows-count">0</span> new · show</span>
   </button>
   <span id="logs-notice" class="text-[12px] text-red-600" aria-live="polite"></span>
   <span class="flex-1"></span>
-  <div class="inline-flex items-center rounded-md border border-line p-1 bg-surface" role="tablist" aria-label="Log view">
+  <div class="inline-flex items-center border border-edge p-[3px]" role="tablist" aria-label="Log view">
     <button type="button" id="view-table-btn" role="tab" aria-selected="true" aria-controls="log-card" tabindex="0"
-      class="flex min-h-9 items-center gap-[6px] px-3 py-[6px] text-[12px] font-medium rounded-sm bg-white text-slate-800 shadow-xs cursor-pointer transition-colors duration-150">
+      class="flex min-h-9 items-center gap-[6px] px-3 py-[6px] font-mono text-[11px] uppercase tracking-[.04em] rounded-md text-slate-600 aria-selected:bg-ink aria-selected:text-canvas cursor-pointer transition-colors duration-150">
       <i class="hgi hgi-stroke hgi-rounded hgi-menu-square text-[12px]"></i>
       Table
     </button>
     <button type="button" id="view-stats-btn" role="tab" aria-selected="false" aria-controls="stats-view" tabindex="-1"
-      class="flex min-h-9 items-center gap-[6px] px-3 py-[6px] text-[12px] font-medium rounded-sm text-slate-500 cursor-pointer transition-colors duration-150">
+      class="flex min-h-9 items-center gap-[6px] px-3 py-[6px] font-mono text-[11px] uppercase tracking-[.04em] rounded-md text-slate-600 aria-selected:bg-ink aria-selected:text-canvas cursor-pointer transition-colors duration-150">
       <i class="hgi hgi-stroke hgi-rounded hgi-analytics-01 text-[12px]"></i>
       Stats
     </button>
@@ -139,7 +139,7 @@
 <div id="log-card" class="card overflow-x-auto" role="tabpanel" aria-labelledby="view-table-btn">
 
   <!-- Column headers (table view only) -->
-  <div id="log-columns" class="flex min-w-[920px] items-center gap-[22px] px-6 py-3 bg-surface border-b border-line text-[11px] font-semibold text-slate-500 uppercase tracking-[.06em]">
+  <div id="log-columns" class="label-mono flex min-w-[920px] items-center gap-[22px] px-6 py-3 border-b border-edge">
     <span class="shrink-0 w-[104px]">Time</span>
     <span class="shrink-0 w-[94px]">App</span>
     <span class="shrink-0 w-[150px]">IP</span>
@@ -189,12 +189,12 @@
 <div class="flex items-center justify-center gap-3 mt-4">
   {{if gt .CurPage 1}}
   <a href="?from={{.FilterFrom}}&to={{.FilterTo}}&app={{.FilterApp}}&status={{.FilterStatus}}&mode=history&page={{sub .CurPage 1}}"
-     class="text-[13px] text-slate-500 border border-line rounded-md px-4 py-2 no-underline">← Prev</a>
+     class="rounded-sm border border-edge px-4 py-2 font-mono text-[12px] uppercase text-ink no-underline hover:bg-surface">← Prev</a>
   {{end}}
-  <span class="text-[13px] text-slate-500">Page {{.CurPage}} of {{.TotalPages}}</span>
+  <span class="font-mono text-[12px] uppercase text-slate-500">Page {{.CurPage}} of {{.TotalPages}}</span>
   {{if lt .CurPage .TotalPages}}
   <a href="?from={{.FilterFrom}}&to={{.FilterTo}}&app={{.FilterApp}}&status={{.FilterStatus}}&mode=history&page={{add .CurPage 1}}"
-     class="text-[13px] text-slate-500 border border-line rounded-md px-4 py-2 no-underline">Next →</a>
+     class="rounded-sm border border-edge px-4 py-2 font-mono text-[12px] uppercase text-ink no-underline hover:bg-surface">Next →</a>
   {{end}}
 </div>
 {{else}}
@@ -205,19 +205,19 @@
   <div class="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
     {{range $t := (splitComma "Requests,Unique visitors,Blocked,Not found (404),Server errors (5xx),Avg response")}}
     <div class="card p-4">
-      <p class="text-[11px] uppercase tracking-[0.08em] font-medium text-slate-500 mb-1">{{$t}}</p>
-      <p class="st-tile text-[24px] font-extrabold leading-none text-slate-900 tabular-nums">—</p>
+      <p class="label-mono mb-1">{{$t}}</p>
+      <p class="st-tile font-mono text-[26px] leading-none text-ink tabular-nums">—</p>
     </div>
     {{end}}
   </div>
   <div class="card mb-3 p-5">
     <div class="mb-3 flex items-baseline justify-between gap-4">
       <div>
-        <p class="text-[11px] uppercase tracking-[0.08em] font-medium text-slate-500 mb-[2px]">Last 60 minutes</p>
-        <h3 class="text-[16px] font-bold text-slate-900">Requests per minute</h3>
+        <p class="label-mono mb-[2px]">Last 60 minutes</p>
+        <h3 class="font-mono text-[15px] uppercase text-ink">Requests per minute</h3>
       </div>
-      <p class="whitespace-nowrap text-[12px] text-slate-500"><span class="inline-block h-2 w-2 rounded-xs bg-brand"></span> allowed
-        <span class="ml-3 inline-block h-2 w-2 rounded-xs bg-red-500"></span> blocked</p>
+      <p class="whitespace-nowrap text-[12px] text-slate-500"><span class="inline-block h-2 w-2 bg-ink"></span> allowed
+        <span class="ml-3 inline-block h-2 w-2 bg-danger"></span> blocked</p>
     </div>
     <svg id="st-timeline" viewBox="0 0 60 40" preserveAspectRatio="none" class="h-32 w-full" role="img" aria-label="Requests per minute over the last 60 minutes; hover a bar for exact counts"></svg>
   </div>
@@ -246,228 +246,132 @@
 <script src="{{.AdminPath}}/static/js/logstats.min.js?v={{.Asset}}" defer></script>
 <script src="{{.AdminPath}}/static/js/logs.min.js?v={{.Asset}}" defer></script>
 
-<!-- ── Request Detail Modal ──────────────────────────────────── -->
-<div id="log-detail-backdrop"
-     class="hidden fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/45 backdrop-blur-xs">
-  <div id="log-detail-modal" role="dialog" aria-modal="true" aria-labelledby="ld-path"
-       class="bg-white rounded-lg border border-line w-full max-w-2xl max-h-[88dvh] flex flex-col overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,.18)] motion-safe:starting:scale-[.98] motion-safe:starting:opacity-0 transition-[opacity,scale] duration-200 ease-out">
+{{end}}
 
-    <!-- Modal header bar -->
-    <div class="flex items-center gap-3 px-6 py-4 border-b border-canvas shrink-0">
-      <span id="ld-method" class="font-mono text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-[3px] rounded-sm shrink-0"></span>
-      <span id="ld-path"   class="font-mono text-[13px] text-slate-700 flex-1 truncate min-w-0"></span>
-      <span id="ld-status" class="font-bold text-[15px] shrink-0 tabular-nums"></span>
-      <button id="log-detail-close" aria-label="Close request details"
-              class="w-11 h-11 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg bg-surface border border-line text-slate-400 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors cursor-pointer shrink-0 ml-1">
-        <i class="hgi hgi-stroke hgi-rounded hgi-cancel-01 text-[13px]"></i>
-      </button>
+<!-- ── Request inspector ────────────────────────────────────
+     Docked to the right of the table from xl up (an empty prompt until a
+     row is picked); below xl it opens as a sheet over the page, with a
+     backdrop and a focus trap (logs.js). -->
+{{define "rightpanel"}}
+<div id="log-detail-backdrop" class="hidden fixed inset-0 z-[290] bg-black/45 xl:hidden"></div>
+<aside id="log-inspector" aria-labelledby="ld-heading"
+       class="hidden flex fixed inset-y-0 right-0 z-[300] w-full max-w-[420px] flex-col border-l border-edge bg-canvas xl:sticky xl:top-14 xl:z-auto xl:flex xl:h-[calc(100dvh-3.5rem)] xl:w-[380px] xl:max-w-none">
+
+  <div class="flex items-center justify-between gap-3 border-b border-edge px-5 py-3 shrink-0">
+    <h2 id="ld-heading" class="text-[15px] text-ink">Request inspector</h2>
+    <button id="log-detail-close" type="button" aria-label="Close request details"
+            class="flex h-11 w-11 items-center justify-center rounded-sm border border-edge text-ink hover:bg-surface xl:h-8 xl:w-8">
+      <i class="hgi hgi-stroke hgi-rounded hgi-cancel-01 text-[13px]"></i>
+    </button>
+  </div>
+
+  <p id="ld-empty" class="m-auto px-8 text-center font-mono text-[12px] uppercase tracking-[.04em] text-slate-500">Select a request to inspect it</p>
+
+  <div id="log-detail-modal" data-modal-body class="hidden flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain p-5">
+
+    <!-- Record -->
+    <div class="card">
+      <div class="border-b border-line px-4 py-3">
+        <p class="ld-label">Request ID</p>
+        <p id="ld-reqid" class="font-mono text-[13px] text-ink break-all select-all"></p>
+      </div>
+      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 px-4 py-3 text-[13px]">
+        <dt class="ld-label mb-0 self-center">Method</dt><dd id="ld-method" class="font-mono"></dd>
+        <dt class="ld-label mb-0 self-center">Status</dt><dd id="ld-status" class="font-mono tabular-nums"></dd>
+        <dt class="ld-label mb-0 self-center">Service</dt><dd id="ld-app"></dd>
+      </dl>
     </div>
 
-    <!-- Scrollable body -->
-    <div data-modal-body class="overflow-y-auto overscroll-contain p-4 sm:p-6 flex flex-col gap-6">
+    <!-- Title -->
+    <div>
+      <p id="ld-path" class="break-all font-mono text-[15px] leading-snug text-ink"></p>
+      <p id="ld-host" class="mt-1 font-mono text-[12px] text-slate-500 break-all"></p>
+    </div>
 
-      <!-- ① Overview -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-        <div>
-          <p class="ld-label">Timestamp (UTC)</p>
-          <p id="ld-ts" class="font-mono text-[13px] text-slate-700"></p>
-        </div>
-        <div>
-          <p class="ld-label">Duration</p>
-          <p id="ld-dur" class="font-mono text-[13px] text-slate-700"></p>
-        </div>
-        <div>
-          <p class="ld-label">App / Service</p>
-          <p id="ld-app" class="text-[13px] text-brand-dark font-semibold"></p>
-        </div>
-        <div>
-          <p class="ld-label">Country</p>
-          <p id="ld-country" class="text-[13px] text-slate-700 flex items-center gap-2"></p>
-        </div>
-        <div>
-          <p class="ld-label">Host</p>
-          <p id="ld-host" class="font-mono text-[13px] text-slate-700 truncate"></p>
-        </div>
-        <div>
-          <p class="ld-label">Query String</p>
-          <p id="ld-query" class="font-mono text-[12px] text-slate-500 break-all"></p>
-        </div>
-        <div class="sm:col-span-2">
-          <p class="ld-label">User Agent</p>
-          <p id="ld-ua" class="text-[12px] text-slate-600 break-all"></p>
-        </div>
-        <div class="sm:col-span-2">
-          <p class="ld-label">Request ID</p>
-          <p id="ld-reqid" class="font-mono text-[12px] text-slate-500 select-all"></p>
-        </div>
+    <!-- Security decision (blocked only) -->
+    <div id="ld-security" class="hidden">
+      <p class="ld-section-title">Security decision</p>
+      <div class="border border-red-300 bg-red-50 px-4 py-3">
+        <p class="flex items-center gap-2 font-mono text-[12px] uppercase text-red-600"><span class="h-2 w-2 rounded-full bg-danger"></span>Request blocked</p>
+        <p id="ld-block-reason" class="mt-1 font-mono text-[12px] text-red-600"></p>
       </div>
-
-      <!-- ② IP Addresses -->
-      <div>
-        <p class="ld-section-title">IP Addresses</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div class="bg-amber-50 border border-amber-100 rounded-lg p-4">
-            <p class="text-[10px] text-amber-600 font-semibold uppercase tracking-[.06em] mb-2">Real Client IP</p>
-            <p id="ld-real-ip" class="font-mono text-[15px] font-bold text-amber-700 break-all"></p>
-            <p class="text-[11px] text-amber-700/80 mt-1">CF-Connecting-IP / X-Forwarded-For</p>
-          </div>
-          <div class="bg-slate-50 border border-line rounded-lg p-4">
-            <p class="text-[10px] text-slate-500 font-semibold uppercase tracking-[.06em] mb-2">Proxy / CDN IP</p>
-            <p id="ld-proxy-ip" class="font-mono text-[15px] font-bold text-slate-600 break-all"></p>
-            <p class="text-[11px] text-slate-400 mt-1">direct TCP connection source</p>
-          </div>
-        </div>
+      <div id="ld-feedback-row" class="hidden mt-2 flex flex-wrap items-center gap-2">
+        <span class="w-full text-[11px] text-slate-500">Was this rule correct?</span>
+        <button id="ld-feedback-fp" type="button" data-fp="1"
+          class="rounded-sm border border-edge px-3 py-2 font-mono text-[11px] uppercase text-ink hover:bg-surface">False positive</button>
+        <button id="ld-feedback-tp" type="button" data-fp="0"
+          class="rounded-sm border border-edge px-3 py-2 font-mono text-[11px] uppercase text-ink hover:bg-surface">Correct block</button>
+        <button id="ld-exception" type="button"
+          class="rounded-sm border border-edge px-3 py-2 font-mono text-[11px] uppercase text-ink hover:bg-surface">Create exception</button>
+        <span id="ld-feedback-status" class="w-full text-[11px] text-slate-500" aria-live="polite"></span>
       </div>
+    </div>
 
-      <!-- ③ Network (ASN / ISP) -->
-      <div>
-        <p class="ld-section-title">Network</p>
-        <div class="bg-surface border border-line rounded-lg overflow-hidden">
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-line">
-            <i class="hgi hgi-stroke hgi-rounded hgi-router-01 text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">ASN</p>
-              <p id="ld-asn" class="font-mono text-[13px] text-slate-700"></p>
-            </div>
-          </div>
-          <div class="flex items-center gap-3 px-4 py-3">
-            <i class="hgi hgi-stroke hgi-rounded hgi-building-04 text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">ISP / Organization</p>
-              <p id="ld-org" class="text-[13px] text-slate-700"></p>
-            </div>
-          </div>
+    <!-- Overview -->
+    <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-line pt-4 text-[13px]">
+      <dt class="ld-label mb-0">Time (UTC)</dt><dd id="ld-ts" class="font-mono text-[12px]"></dd>
+      <dt class="ld-label mb-0">Duration</dt><dd id="ld-dur" class="font-mono text-[12px]"></dd>
+      <dt class="ld-label mb-0">Country</dt><dd id="ld-country" class="flex items-center gap-2"></dd>
+      <dt class="ld-label mb-0">Query</dt><dd id="ld-query" class="font-mono text-[12px] break-all"></dd>
+      <dt class="ld-label mb-0">User agent</dt><dd id="ld-ua" class="text-[12px] break-all"></dd>
+    </dl>
+
+    <!-- Client -->
+    <div class="border-t border-line pt-4">
+      <p class="ld-section-title">Client</p>
+      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13px]">
+        <dt class="ld-label mb-0" title="CF-Connecting-IP / X-Forwarded-For, from trusted peers only">Real IP</dt><dd id="ld-real-ip" class="font-mono break-all"></dd>
+        <dt class="ld-label mb-0" title="direct TCP connection source">Proxy IP</dt><dd id="ld-proxy-ip" class="font-mono break-all text-slate-600"></dd>
+        <dt class="ld-label mb-0">ASN</dt><dd id="ld-asn" class="font-mono"></dd>
+        <dt class="ld-label mb-0">Org</dt><dd id="ld-org"></dd>
+        <dt class="ld-label mb-0">Protocol</dt><dd id="ld-proto" class="font-mono"></dd>
+        <dt class="ld-label mb-0">TLS</dt><dd id="ld-tls" class="font-mono text-[12px] break-all"></dd>
+      </dl>
+      <dl id="ld-sni-row" class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 text-[13px]">
+        <dt class="ld-label mb-0">SNI</dt><dd id="ld-sni" class="font-mono break-all"></dd>
+      </dl>
+    </div>
+
+    <!-- Threat score (when this IP has one) -->
+    <div id="ld-threat-section" class="hidden border-t border-line pt-4">
+      <p class="ld-section-title">Threat score</p>
+      <div class="flex items-center gap-4">
+        <div class="relative h-16 w-16 shrink-0">
+          <svg viewBox="0 0 40 40" class="h-16 w-16 -rotate-90" aria-hidden="true">
+            <circle cx="20" cy="20" r="16" fill="none" stroke-width="4" class="stroke-slate-200"/>
+            <circle id="ld-threat-ring" cx="20" cy="20" r="16" fill="none" stroke-width="4" pathLength="100" stroke-dasharray="0 100" class="stroke-danger"/>
+          </svg>
+          <span id="ld-threat-score" class="absolute inset-0 flex items-center justify-center font-mono text-[13px]"></span>
         </div>
+        <p id="ld-threat-breakdown" class="font-mono text-[12px] leading-relaxed text-slate-600"></p>
       </div>
+    </div>
 
-      <!-- ④ Connection (protocol + TLS) -->
-      <div>
-        <p class="ld-section-title">Connection</p>
-        <div class="bg-surface border border-line rounded-lg overflow-hidden">
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-line">
-            <i class="hgi hgi-stroke hgi-rounded hgi-layers-01 text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">Protocol</p>
-              <p id="ld-proto" class="font-mono text-[13px] text-slate-700"></p>
-            </div>
-          </div>
-          <div id="ld-tls-row" class="flex items-center gap-3 px-4 py-3 border-b border-line">
-            <i class="hgi hgi-stroke hgi-rounded hgi-shield-key text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">TLS</p>
-              <p id="ld-tls" class="font-mono text-[13px] text-slate-700"></p>
-            </div>
-          </div>
-          <div id="ld-sni-row" class="flex items-center gap-3 px-4 py-3">
-            <i class="hgi hgi-stroke hgi-rounded hgi-tag-01 text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">SNI (server name)</p>
-              <p id="ld-sni" class="font-mono text-[13px] text-slate-700"></p>
-            </div>
-          </div>
-        </div>
-      </div>
+    <!-- Bot signals (when any) -->
+    <div id="ld-bot-section" class="hidden border-t border-line pt-4">
+      <p class="ld-section-title">Bot signals</p>
+      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13px]">
+        <dt class="ld-label mb-0">Anomaly</dt><dd id="ld-bot-score" class="font-mono"></dd>
+        <dt class="ld-label mb-0">JA4</dt><dd id="ld-ja4" class="font-mono text-[12px] break-all"></dd>
+        <dt class="ld-label mb-0">JA3</dt><dd id="ld-ja3" class="font-mono text-[12px] break-all"></dd>
+        <dt class="ld-label mb-0">Visitor</dt><dd id="ld-visitor" class="font-mono text-[12px] break-all"></dd>
+      </dl>
+    </div>
 
-      <!-- ⑤ Bot Analysis (hidden when no data) -->
-      <div id="ld-bot-section" class="hidden">
-        <p class="ld-section-title">Bot Analysis</p>
-        <div class="bg-surface border border-line rounded-lg overflow-hidden">
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-line">
-            <i class="hgi hgi-stroke hgi-rounded hgi-bot text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">Anomaly Score</p>
-              <p id="ld-bot-score" class="font-mono text-[13px] text-slate-700"></p>
-            </div>
-          </div>
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-line">
-            <i class="hgi hgi-stroke hgi-rounded hgi-finger-print text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">JA4 Fingerprint</p>
-              <p id="ld-ja4" class="font-mono text-[13px] text-slate-700 break-all"></p>
-            </div>
-          </div>
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-line">
-            <i class="hgi hgi-stroke hgi-rounded hgi-finger-print text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">JA3 Fingerprint (legacy)</p>
-              <p id="ld-ja3" class="font-mono text-[13px] text-slate-700 break-all"></p>
-            </div>
-          </div>
-          <div class="flex items-center gap-3 px-4 py-3">
-            <i class="hgi hgi-stroke hgi-rounded hgi-user-circle text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">Visitor ID (browser fingerprint)</p>
-              <p id="ld-visitor" class="font-mono text-[13px] text-slate-700 break-all"></p>
-            </div>
-          </div>
-        </div>
-      </div>
+    <!-- Headers -->
+    <div class="border-t border-line pt-4">
+      <p class="ld-section-title">Request headers</p>
+      <div id="ld-headers" class="card overflow-hidden text-[12px]"></div>
+    </div>
 
-      <!-- ⑤.5 Threat Score (hidden until this IP has a recorded score) -->
-      <div id="ld-threat-section" class="hidden">
-        <p class="ld-section-title">Threat Score</p>
-        <div class="bg-surface border border-line rounded-lg overflow-hidden">
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-line">
-            <i class="hgi hgi-stroke hgi-rounded hgi-shield-energy text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">Composite Score (0–100)</p>
-              <p id="ld-threat-score" class="font-mono text-[13px] text-slate-700"></p>
-            </div>
-          </div>
-          <div class="flex items-center gap-3 px-4 py-3">
-            <i class="hgi hgi-stroke hgi-rounded hgi-chart-breakout-square text-slate-400 text-[16px] shrink-0"></i>
-            <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-[.06em]">Breakdown</p>
-              <p id="ld-threat-breakdown" class="font-mono text-[13px] text-slate-700"></p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ⑥ Security (only when blocked) -->
-      <div id="ld-security" class="hidden">
-        <p class="ld-section-title">Security Decision</p>
-        <div class="bg-red-50 border border-red-100 rounded-lg p-4 flex items-start gap-3">
-          <i class="hgi hgi-stroke hgi-rounded hgi-security-block text-red-500 text-[22px] shrink-0 mt-[1px]"></i>
-          <div class="flex-1 min-w-0">
-            <p class="text-[13px] font-semibold text-red-700">Request Blocked</p>
-            <p id="ld-block-reason" class="text-[12px] text-red-500 mt-[3px]"></p>
-          </div>
-        </div>
-        <div id="ld-feedback-row" class="hidden mt-2 flex flex-wrap items-center gap-2">
-          <span class="text-[11px] text-slate-500">Was this rule correct?</span>
-          <button id="ld-feedback-fp" type="button" data-fp="1"
-            class="text-[12px] font-medium text-slate-600 hover:text-amber-700 border border-line hover:border-amber-300 rounded-lg px-3 py-2 transition-colors cursor-pointer bg-white">
-            False positive
-          </button>
-          <button id="ld-feedback-tp" type="button" data-fp="0"
-            class="text-[12px] font-medium text-slate-600 hover:text-green-700 border border-line hover:border-green-300 rounded-lg px-3 py-2 transition-colors cursor-pointer bg-white">
-            Correct block
-          </button>
-          <button id="ld-exception" type="button"
-            class="text-[12px] font-medium text-slate-600 hover:text-brand border border-line hover:border-brand rounded-lg px-3 py-2 transition-colors cursor-pointer bg-white">
-            Create exception
-          </button>
-          <span id="ld-feedback-status" class="text-[11px] text-slate-500" aria-live="polite"></span>
-        </div>
-      </div>
-
-      <!-- ⑥ Request Headers -->
-      <div>
-        <p class="ld-section-title">Request Headers</p>
-        <div id="ld-headers" class="bg-surface rounded-lg border border-line overflow-hidden text-[12px]"></div>
-      </div>
-
-    </div><!-- /body -->
-  </div><!-- /modal -->
-</div><!-- /backdrop -->
-
+  </div>
+</aside>
 {{end}}
 
 {{define "stat-panel"}}
 <div class="card p-5">
-  <p class="text-[11px] uppercase tracking-[0.08em] font-medium text-slate-500 mb-[2px]">{{.Cat}}</p>
-  <h3 class="mb-3 text-[16px] font-bold text-slate-900">{{.Title}}</h3>
+  <p class="label-mono mb-[2px]">{{.Cat}}</p>
+  <h3 class="mb-3 font-mono text-[15px] uppercase text-ink">{{.Title}}</h3>
   <ol id="st-{{.ID}}" class="space-y-2"><li class="text-[13px] text-slate-400">No requests yet</li></ol>
 </div>
 {{end}}
