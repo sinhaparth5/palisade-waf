@@ -113,6 +113,7 @@ func main() {
 	fs.Parse(os.Args[1:]) //nolint // ExitOnError: never returns an error to check
 
 	cfg := config.Defaults()
+	cfg.Version = version
 	cfg.ListenAddr = *listen
 	cfg.ListenAddrTLS = *listenTLS
 	cfg.ListenAddrH3 = *listenH3

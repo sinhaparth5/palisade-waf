@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Changed
+
+- (#215) v3: Redesign the admin UI (retro archival theme)
+
 ## [2.11.1] - 2026-10-28
 
 ### Added

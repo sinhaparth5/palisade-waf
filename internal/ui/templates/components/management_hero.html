@@ -1,17 +1,17 @@
 {{define "management-hero"}}
-<section class="relative mb-4 min-h-32 overflow-hidden rounded-2xl border border-sky-900/20 bg-navy text-white shadow-[0_14px_34px_rgba(16,42,67,.14)]">
+<section class="relative mb-4 min-h-32 overflow-hidden border border-edge bg-side text-side-ink">
   <img src="{{.AdminPath}}/static/imgs/{{.Image}}" alt="" aria-hidden="true"
        width="1600" height="{{if .Height}}{{.Height}}{{else}}700{{end}}" loading="lazy"
-       class="absolute inset-0 h-full w-full object-cover object-center opacity-80"/>
-  <div class="absolute inset-0 bg-linear-to-r from-navy via-navy/90 to-navy/15"></div>
+       class="absolute inset-0 h-full w-full object-cover object-center opacity-50 grayscale sepia-[.35]"/>
+  <div class="absolute inset-0 bg-linear-to-r from-side via-side/90 to-side/20"></div>
   <div class="relative z-10 flex min-h-32 max-w-2xl items-center gap-4 p-5 sm:p-6">
-    <div class="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-highlight shadow-inner backdrop-blur-xs sm:flex">
+    <div class="hidden h-12 w-12 shrink-0 items-center justify-center border border-side-line text-side-active sm:flex">
       <i class="hgi hgi-stroke hgi-rounded {{.Icon}} text-xl"></i>
     </div>
     <div>
-      <p class="mb-1 text-[10px] font-bold uppercase tracking-[.16em] text-white/60">{{.Eyebrow}}</p>
-      <h2 class="text-lg font-extrabold tracking-[-.02em] sm:text-xl">{{.Title}}</h2>
-      <p class="mt-1 max-w-xl text-[12px] leading-relaxed text-white/65 sm:text-[13px]">{{.Copy}}</p>
+      <p class="mb-1 font-mono text-[10px] uppercase tracking-[.16em] text-side-muted">{{.Eyebrow}}</p>
+      <h2 class="text-[17px] text-side-active sm:text-[19px]">{{.Title}}</h2>
+      <p class="mt-1 max-w-xl text-[12px] leading-relaxed text-side-ink sm:text-[13px]">{{.Copy}}</p>
     </div>
   </div>
 </section>

@@ -127,6 +127,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - JS source in `static/js/src/`, minified to `static/js/dist/` (embedded). No Node/npm in this repo.
 - Every page script tag carries `?v={{.Asset}}` (embedded assets have no cache headers; the stamp is a hash of the CSS).
 - Tailwind v4, CSS-first config in `static/css/tailwind.css`, compiled to committed `static/css/dist/tailwind.min.css`. **Re-run `make css` and commit when adding a class** anywhere under `internal/ui/` (templates and Go) or `static/js/src/`; classes elsewhere won't exist. After `make css`, a running browser may hold the old stylesheet.
+- v3 "ledger" theme (issue #215): colors come only from the `--fn-*` variables in `tailwind.css`. `@theme` resets the palette (`--color-*: initial`), so only slate/red/green/amber/purple/violet/blue/sky/cyan plus the named tokens (`edge`, `side-*`, `success`/`warning`/`info`/`danger`) exist; any other family (rose, teal, …) compiles to nothing. Status colors: `-500` = bright (dots, badges), `-600`+ = text-safe ink shade.
 - Use v4 names (`rounded-sm`, `shadow-xs`, `outline-hidden`, `bg-linear-to-*`), never v3 (`rounded`, `shadow`, `outline-none`, `bg-gradient-to-*`). Prefer `starting:` over JS animation.
 - No `style="..."` or `<style>` for anything Tailwind can express. JS toggles `classList`, never `element.style`; keep a permanent `flex`/`block` next to a toggled `hidden`.
 

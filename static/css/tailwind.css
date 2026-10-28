@@ -20,60 +20,97 @@
 /* Runtime-toggled classes in frontend JS (classList.add/toggle). */
 @source "../js/src";
 
-/* "Field notes" theme. Only the --fn-* variables change between light and
-   dark; every other token is derived from them, so the
-   existing slate/red/green/brand utilities in the templates re-theme
-   without touching markup. Three pen colours, one meaning each: accent
-   green = allowed/passed, stamp red = blocked/error, highlight lime =
-   "look here". Keep it that way. */
+/* "Ledger" theme (v3, issue #215): dark nav rail, cream workspace, hard
+   1px borders. Only the --fn-* variables change between light and dark;
+   every other token is derived from them, so the slate/red/green/amber/blue
+   utilities in the templates re-theme without touching markup. Four status
+   colours, one meaning each: success = allowed/healthy, warning =
+   challenged/degraded, info = waiting/informational, danger =
+   blocked/error. Each has a bright shade (-500: dots, badges, icons, large
+   text) and a darker "ink" shade (-600 and up: small text), because the
+   bright shades are under 4.5:1 on cream. */
 :root {
-  --fn-paper: oklch(97.2% .013 85);
-  --fn-paper-2: oklch(94.6% .018 85);
-  --fn-card: oklch(98.6% .009 85);
-  --fn-ink: oklch(24% .025 160);
-  --fn-ink-soft: oklch(41% .022 160);
-  --fn-highlight: oklch(89% .12 135);
-  --fn-accent: oklch(46% .1 150);
-  --fn-stamp: oklch(51% .18 28);
-  --fn-side: oklch(24% .025 160);
-  --fn-rule: color-mix(in oklab, var(--fn-ink) 16%, transparent);
+  --fn-paper: #E8DFCE;
+  --fn-paper-2: #E2D8C5;
+  --fn-card: #EFE8DA;
+  --fn-ink: #191816;
+  --fn-muted: #5F594F;
+  --fn-edge: #2A2926;
+  --fn-rule: color-mix(in oklab, var(--fn-edge) 22%, transparent);
+  --fn-side: #12130E;
+  --fn-side-ink: #D9D2C5;
+  --fn-side-muted: #8C867A;
+  --fn-side-line: #252620;
+  --fn-side-active: #E8E0D3;
+  --fn-success: #6AAC6F;
+  --fn-success-ink: #3D6E42;
+  --fn-warning: #D9A05B;
+  --fn-warning-ink: #85561A;
+  --fn-info: #5B88D9;
+  --fn-info-ink: #2E5AA3;
+  --fn-danger: #C84B31;
+  --fn-danger-ink: #A63A24;
 }
 /* Dark palette is opt-in via <html data-theme="dark">, set by the sidebar
    toggle (issue #134; base.html, motion.js).
    It must NOT follow prefers-color-scheme: variant utilities such as
    lg:bg-white are not remapped, so an automatic dark mode leaves white
-   panels under cream text (issue #126). */
+   panels under cream text (issue #126). The nav rail is dark in both. */
 :root[data-theme="dark"] {
-    --fn-paper: oklch(19.5% .012 160);
-    --fn-paper-2: oklch(23.5% .014 160);
-    --fn-card: oklch(22% .013 160);
-    --fn-ink: oklch(93% .016 90);
-    --fn-ink-soft: oklch(76% .016 90);
-    --fn-highlight: oklch(42% .09 140);
-    --fn-accent: oklch(80% .12 145);
-    --fn-stamp: oklch(72% .16 28);
-    --fn-side: oklch(15% .012 160);
+  --fn-paper: #171713;
+  --fn-paper-2: #1C1C17;
+  --fn-card: #1F1F1A;
+  --fn-ink: #E8DFCE;
+  --fn-muted: #A59D8F;
+  --fn-edge: #4A4840;
+  --fn-side: #0D0E0A;
+  --fn-success: #7DBE82;
+  --fn-success-ink: #7DBE82;
+  --fn-warning: #E0AE6E;
+  --fn-warning-ink: #E0AE6E;
+  --fn-info: #7FA4E6;
+  --fn-info-ink: #7FA4E6;
+  --fn-danger: #E07A61;
+  --fn-danger-ink: #E07A61;
 }
 
 @theme {
-  --color-brand: var(--fn-highlight);
-  --color-brand-dark: var(--fn-accent);
-  --color-brand-light: color-mix(in oklab, var(--fn-highlight) 55%, var(--fn-paper));
-  --color-brand-tint: color-mix(in oklab, var(--fn-highlight) 22%, var(--fn-paper));
+  /* Only the palette below exists; an unmapped family (rose, teal, …)
+     would ignore dark mode, so it compiles to nothing instead. */
+  --color-*: initial;
+  --color-white: #fff;
+  --color-black: #000;
+  /* brand = success: live dots, toggles, "healthy" */
+  --color-brand: var(--fn-success);
+  --color-brand-dark: var(--fn-success-ink);
+  --color-brand-light: color-mix(in oklab, var(--fn-success) 55%, var(--fn-paper));
+  --color-brand-tint: color-mix(in oklab, var(--fn-success) 18%, var(--fn-paper));
   --color-navy: var(--fn-side);
-  --color-slateblue: var(--fn-ink-soft);
+  --color-slateblue: var(--fn-muted);
   --color-canvas: var(--fn-paper);
   --color-surface: var(--fn-paper-2);
   --color-line: var(--fn-rule);
+  --color-edge: var(--fn-edge);
   --color-paper: var(--fn-paper);
   --color-paper-2: var(--fn-paper-2);
   --color-card: var(--fn-card);
   --color-ink: var(--fn-ink);
-  --color-ink-soft: var(--fn-ink-soft);
+  --color-ink-soft: var(--fn-muted);
+  --color-muted: var(--fn-muted);
   --color-rule: var(--fn-rule);
-  --color-highlight: var(--fn-highlight);
-  --color-accent: var(--fn-accent);
-  --color-stamp: var(--fn-stamp);
+  --color-highlight: var(--fn-warning);
+  --color-accent: var(--fn-success-ink);
+  --color-stamp: var(--fn-danger);
+  --color-side: var(--fn-side);
+  --color-side-ink: var(--fn-side-ink);
+  --color-side-muted: var(--fn-side-muted);
+  --color-side-line: var(--fn-side-line);
+  --color-side-active: var(--fn-side-active);
+  --color-success: var(--fn-success);
+  --color-warning: var(--fn-warning);
+  --color-info: var(--fn-info);
+  --color-danger: var(--fn-danger);
+  --color-danger-ink: var(--fn-danger-ink);
 
   /* slate = ink mixed into paper; flips with the mode automatically */
   --color-slate-50: color-mix(in oklab, var(--fn-ink) 4%, var(--fn-paper));
@@ -81,104 +118,108 @@
   --color-slate-200: color-mix(in oklab, var(--fn-ink) 14%, var(--fn-paper));
   --color-slate-300: color-mix(in oklab, var(--fn-ink) 24%, var(--fn-paper));
   --color-slate-400: color-mix(in oklab, var(--fn-ink) 42%, var(--fn-paper));
-  --color-slate-500: color-mix(in oklab, var(--fn-ink) 58%, var(--fn-paper));
-  --color-slate-600: color-mix(in oklab, var(--fn-ink) 70%, var(--fn-paper));
-  --color-slate-700: color-mix(in oklab, var(--fn-ink) 82%, var(--fn-paper));
-  --color-slate-800: color-mix(in oklab, var(--fn-ink) 92%, var(--fn-paper));
+  --color-slate-500: var(--fn-muted);
+  --color-slate-600: color-mix(in oklab, var(--fn-muted) 70%, var(--fn-ink));
+  --color-slate-700: color-mix(in oklab, var(--fn-muted) 45%, var(--fn-ink));
+  --color-slate-800: color-mix(in oklab, var(--fn-muted) 20%, var(--fn-ink));
   --color-slate-900: var(--fn-ink);
   --color-slate-950: var(--fn-ink);
 
-  /* red = stamp (blocked / error), green = accent (allowed / passed) */
-  --color-red-50: color-mix(in oklab, var(--fn-stamp) 8%, var(--fn-paper));
-  --color-red-100: color-mix(in oklab, var(--fn-stamp) 14%, var(--fn-paper));
-  --color-red-200: color-mix(in oklab, var(--fn-stamp) 28%, var(--fn-paper));
-  --color-red-300: color-mix(in oklab, var(--fn-stamp) 50%, var(--fn-paper));
-  --color-red-400: color-mix(in oklab, var(--fn-stamp) 80%, var(--fn-paper));
-  --color-red-500: var(--fn-stamp);
-  --color-red-600: var(--fn-stamp);
-  --color-red-700: color-mix(in oklab, var(--fn-stamp) 85%, var(--fn-ink));
-  --color-red-800: color-mix(in oklab, var(--fn-stamp) 70%, var(--fn-ink));
-  --color-red-900: color-mix(in oklab, var(--fn-stamp) 55%, var(--fn-ink));
-  --color-green-50: color-mix(in oklab, var(--fn-accent) 8%, var(--fn-paper));
-  --color-green-100: color-mix(in oklab, var(--fn-accent) 14%, var(--fn-paper));
-  --color-green-200: color-mix(in oklab, var(--fn-accent) 28%, var(--fn-paper));
-  --color-green-300: color-mix(in oklab, var(--fn-accent) 50%, var(--fn-paper));
-  --color-green-400: color-mix(in oklab, var(--fn-accent) 80%, var(--fn-paper));
-  --color-green-500: var(--fn-accent);
-  --color-green-600: var(--fn-accent);
-  --color-green-700: color-mix(in oklab, var(--fn-accent) 85%, var(--fn-ink));
-  --color-green-800: color-mix(in oklab, var(--fn-accent) 70%, var(--fn-ink));
-  --color-green-900: color-mix(in oklab, var(--fn-accent) 55%, var(--fn-ink));
+  /* red = danger, green = success, amber/purple/violet = warning,
+     blue/sky/cyan = info (mapped here rather than in markup so they flip
+     with dark mode like slate, issue #135). */
+  --color-red-50: color-mix(in oklab, var(--fn-danger) 8%, var(--fn-paper));
+  --color-red-100: color-mix(in oklab, var(--fn-danger) 14%, var(--fn-paper));
+  --color-red-200: color-mix(in oklab, var(--fn-danger) 28%, var(--fn-paper));
+  --color-red-300: color-mix(in oklab, var(--fn-danger) 50%, var(--fn-paper));
+  --color-red-400: color-mix(in oklab, var(--fn-danger) 80%, var(--fn-paper));
+  --color-red-500: var(--fn-danger);
+  --color-red-600: var(--fn-danger-ink);
+  --color-red-700: color-mix(in oklab, var(--fn-danger-ink) 85%, var(--fn-ink));
+  --color-red-800: color-mix(in oklab, var(--fn-danger-ink) 70%, var(--fn-ink));
+  --color-red-900: color-mix(in oklab, var(--fn-danger-ink) 55%, var(--fn-ink));
+  --color-green-50: color-mix(in oklab, var(--fn-success) 8%, var(--fn-paper));
+  --color-green-100: color-mix(in oklab, var(--fn-success) 14%, var(--fn-paper));
+  --color-green-200: color-mix(in oklab, var(--fn-success) 28%, var(--fn-paper));
+  --color-green-300: color-mix(in oklab, var(--fn-success) 50%, var(--fn-paper));
+  --color-green-400: color-mix(in oklab, var(--fn-success) 80%, var(--fn-paper));
+  --color-green-500: var(--fn-success);
+  --color-green-600: var(--fn-success-ink);
+  --color-green-700: color-mix(in oklab, var(--fn-success-ink) 85%, var(--fn-ink));
+  --color-green-800: color-mix(in oklab, var(--fn-success-ink) 70%, var(--fn-ink));
+  --color-green-900: color-mix(in oklab, var(--fn-success-ink) 55%, var(--fn-ink));
+  --color-amber-50: color-mix(in oklab, var(--fn-warning) 8%, var(--fn-paper));
+  --color-amber-100: color-mix(in oklab, var(--fn-warning) 14%, var(--fn-paper));
+  --color-amber-200: color-mix(in oklab, var(--fn-warning) 28%, var(--fn-paper));
+  --color-amber-300: color-mix(in oklab, var(--fn-warning) 50%, var(--fn-paper));
+  --color-amber-400: color-mix(in oklab, var(--fn-warning) 80%, var(--fn-paper));
+  --color-amber-500: var(--fn-warning);
+  --color-amber-600: var(--fn-warning-ink);
+  --color-amber-700: color-mix(in oklab, var(--fn-warning-ink) 85%, var(--fn-ink));
+  --color-amber-800: color-mix(in oklab, var(--fn-warning-ink) 70%, var(--fn-ink));
+  --color-amber-900: color-mix(in oklab, var(--fn-warning-ink) 55%, var(--fn-ink));
+  --color-purple-50: color-mix(in oklab, var(--fn-warning) 8%, var(--fn-paper));
+  --color-purple-100: color-mix(in oklab, var(--fn-warning) 14%, var(--fn-paper));
+  --color-purple-200: color-mix(in oklab, var(--fn-warning) 28%, var(--fn-paper));
+  --color-purple-300: color-mix(in oklab, var(--fn-warning) 50%, var(--fn-paper));
+  --color-purple-400: color-mix(in oklab, var(--fn-warning) 80%, var(--fn-paper));
+  --color-purple-500: var(--fn-warning);
+  --color-purple-600: var(--fn-warning-ink);
+  --color-purple-700: color-mix(in oklab, var(--fn-warning-ink) 85%, var(--fn-ink));
+  --color-purple-800: color-mix(in oklab, var(--fn-warning-ink) 70%, var(--fn-ink));
+  --color-purple-900: color-mix(in oklab, var(--fn-warning-ink) 55%, var(--fn-ink));
+  --color-violet-50: color-mix(in oklab, var(--fn-warning) 8%, var(--fn-paper));
+  --color-violet-100: color-mix(in oklab, var(--fn-warning) 14%, var(--fn-paper));
+  --color-violet-200: color-mix(in oklab, var(--fn-warning) 28%, var(--fn-paper));
+  --color-violet-300: color-mix(in oklab, var(--fn-warning) 50%, var(--fn-paper));
+  --color-violet-400: color-mix(in oklab, var(--fn-warning) 80%, var(--fn-paper));
+  --color-violet-500: var(--fn-warning);
+  --color-violet-600: var(--fn-warning-ink);
+  --color-violet-700: color-mix(in oklab, var(--fn-warning-ink) 85%, var(--fn-ink));
+  --color-violet-800: color-mix(in oklab, var(--fn-warning-ink) 70%, var(--fn-ink));
+  --color-violet-900: color-mix(in oklab, var(--fn-warning-ink) 55%, var(--fn-ink));
+  --color-blue-50: color-mix(in oklab, var(--fn-info) 8%, var(--fn-paper));
+  --color-blue-100: color-mix(in oklab, var(--fn-info) 14%, var(--fn-paper));
+  --color-blue-200: color-mix(in oklab, var(--fn-info) 28%, var(--fn-paper));
+  --color-blue-300: color-mix(in oklab, var(--fn-info) 50%, var(--fn-paper));
+  --color-blue-400: color-mix(in oklab, var(--fn-info) 80%, var(--fn-paper));
+  --color-blue-500: var(--fn-info);
+  --color-blue-600: var(--fn-info-ink);
+  --color-blue-700: color-mix(in oklab, var(--fn-info-ink) 85%, var(--fn-ink));
+  --color-blue-800: color-mix(in oklab, var(--fn-info-ink) 70%, var(--fn-ink));
+  --color-blue-900: color-mix(in oklab, var(--fn-info-ink) 55%, var(--fn-ink));
+  --color-sky-50: color-mix(in oklab, var(--fn-info) 8%, var(--fn-paper));
+  --color-sky-100: color-mix(in oklab, var(--fn-info) 14%, var(--fn-paper));
+  --color-sky-200: color-mix(in oklab, var(--fn-info) 28%, var(--fn-paper));
+  --color-sky-300: color-mix(in oklab, var(--fn-info) 50%, var(--fn-paper));
+  --color-sky-400: color-mix(in oklab, var(--fn-info) 80%, var(--fn-paper));
+  --color-sky-500: var(--fn-info);
+  --color-sky-600: var(--fn-info-ink);
+  --color-sky-700: color-mix(in oklab, var(--fn-info-ink) 85%, var(--fn-ink));
+  --color-sky-800: color-mix(in oklab, var(--fn-info-ink) 70%, var(--fn-ink));
+  --color-sky-900: color-mix(in oklab, var(--fn-info-ink) 55%, var(--fn-ink));
+  --color-cyan-50: color-mix(in oklab, var(--fn-info) 8%, var(--fn-paper));
+  --color-cyan-100: color-mix(in oklab, var(--fn-info) 14%, var(--fn-paper));
+  --color-cyan-200: color-mix(in oklab, var(--fn-info) 28%, var(--fn-paper));
+  --color-cyan-300: color-mix(in oklab, var(--fn-info) 50%, var(--fn-paper));
+  --color-cyan-400: color-mix(in oklab, var(--fn-info) 80%, var(--fn-paper));
+  --color-cyan-500: var(--fn-info);
+  --color-cyan-600: var(--fn-info-ink);
+  --color-cyan-700: color-mix(in oklab, var(--fn-info-ink) 85%, var(--fn-ink));
+  --color-cyan-800: color-mix(in oklab, var(--fn-info-ink) 70%, var(--fn-ink));
+  --color-cyan-900: color-mix(in oklab, var(--fn-info-ink) 55%, var(--fn-ink));
 
-  /* amber/purple/violet = highlighter ("look here": warnings, auto bans,
-     stricter modes); blue/sky/cyan = pencil (informational). Mapped here
-     rather than in markup so they keep to the three pens and flip with
-     dark mode like slate/red/green (issue #135). */
-  --color-amber-50: color-mix(in oklab, var(--fn-highlight) 16%, var(--fn-paper));
-  --color-amber-100: color-mix(in oklab, var(--fn-highlight) 28%, var(--fn-paper));
-  --color-amber-200: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-paper));
-  --color-amber-300: color-mix(in oklab, var(--fn-highlight) 65%, var(--fn-paper));
-  --color-amber-400: color-mix(in oklab, var(--fn-highlight) 85%, var(--fn-paper));
-  --color-amber-500: color-mix(in oklab, var(--fn-highlight) 70%, var(--fn-ink));
-  --color-amber-600: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-ink));
-  --color-amber-700: color-mix(in oklab, var(--fn-highlight) 30%, var(--fn-ink));
-  --color-amber-800: color-mix(in oklab, var(--fn-highlight) 20%, var(--fn-ink));
-  --color-amber-900: color-mix(in oklab, var(--fn-highlight) 12%, var(--fn-ink));
-  --color-purple-50: color-mix(in oklab, var(--fn-highlight) 16%, var(--fn-paper));
-  --color-purple-100: color-mix(in oklab, var(--fn-highlight) 28%, var(--fn-paper));
-  --color-purple-200: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-paper));
-  --color-purple-300: color-mix(in oklab, var(--fn-highlight) 65%, var(--fn-paper));
-  --color-purple-400: color-mix(in oklab, var(--fn-highlight) 85%, var(--fn-paper));
-  --color-purple-500: color-mix(in oklab, var(--fn-highlight) 70%, var(--fn-ink));
-  --color-purple-600: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-ink));
-  --color-purple-700: color-mix(in oklab, var(--fn-highlight) 30%, var(--fn-ink));
-  --color-purple-800: color-mix(in oklab, var(--fn-highlight) 20%, var(--fn-ink));
-  --color-purple-900: color-mix(in oklab, var(--fn-highlight) 12%, var(--fn-ink));
-  --color-violet-50: color-mix(in oklab, var(--fn-highlight) 16%, var(--fn-paper));
-  --color-violet-100: color-mix(in oklab, var(--fn-highlight) 28%, var(--fn-paper));
-  --color-violet-200: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-paper));
-  --color-violet-300: color-mix(in oklab, var(--fn-highlight) 65%, var(--fn-paper));
-  --color-violet-400: color-mix(in oklab, var(--fn-highlight) 85%, var(--fn-paper));
-  --color-violet-500: color-mix(in oklab, var(--fn-highlight) 70%, var(--fn-ink));
-  --color-violet-600: color-mix(in oklab, var(--fn-highlight) 45%, var(--fn-ink));
-  --color-violet-700: color-mix(in oklab, var(--fn-highlight) 30%, var(--fn-ink));
-  --color-violet-800: color-mix(in oklab, var(--fn-highlight) 20%, var(--fn-ink));
-  --color-violet-900: color-mix(in oklab, var(--fn-highlight) 12%, var(--fn-ink));
-  --color-blue-50: color-mix(in oklab, var(--fn-ink-soft) 6%, var(--fn-paper));
-  --color-blue-100: color-mix(in oklab, var(--fn-ink-soft) 11%, var(--fn-paper));
-  --color-blue-200: color-mix(in oklab, var(--fn-ink-soft) 20%, var(--fn-paper));
-  --color-blue-300: color-mix(in oklab, var(--fn-ink-soft) 35%, var(--fn-paper));
-  --color-blue-400: color-mix(in oklab, var(--fn-ink-soft) 55%, var(--fn-paper));
-  --color-blue-500: var(--fn-ink-soft);
-  --color-blue-600: var(--fn-ink-soft);
-  --color-blue-700: color-mix(in oklab, var(--fn-ink-soft) 80%, var(--fn-ink));
-  --color-blue-800: var(--fn-ink);
-  --color-blue-900: var(--fn-ink);
-  --color-sky-50: color-mix(in oklab, var(--fn-ink-soft) 6%, var(--fn-paper));
-  --color-sky-100: color-mix(in oklab, var(--fn-ink-soft) 11%, var(--fn-paper));
-  --color-sky-200: color-mix(in oklab, var(--fn-ink-soft) 20%, var(--fn-paper));
-  --color-sky-300: color-mix(in oklab, var(--fn-ink-soft) 35%, var(--fn-paper));
-  --color-sky-400: color-mix(in oklab, var(--fn-ink-soft) 55%, var(--fn-paper));
-  --color-sky-500: var(--fn-ink-soft);
-  --color-sky-600: var(--fn-ink-soft);
-  --color-sky-700: color-mix(in oklab, var(--fn-ink-soft) 80%, var(--fn-ink));
-  --color-sky-800: var(--fn-ink);
-  --color-sky-900: var(--fn-ink);
-  --color-cyan-50: color-mix(in oklab, var(--fn-ink-soft) 6%, var(--fn-paper));
-  --color-cyan-100: color-mix(in oklab, var(--fn-ink-soft) 11%, var(--fn-paper));
-  --color-cyan-200: color-mix(in oklab, var(--fn-ink-soft) 20%, var(--fn-paper));
-  --color-cyan-300: color-mix(in oklab, var(--fn-ink-soft) 35%, var(--fn-paper));
-  --color-cyan-400: color-mix(in oklab, var(--fn-ink-soft) 55%, var(--fn-paper));
-  --color-cyan-500: var(--fn-ink-soft);
-  --color-cyan-600: var(--fn-ink-soft);
-  --color-cyan-700: color-mix(in oklab, var(--fn-ink-soft) 80%, var(--fn-ink));
-  --color-cyan-800: var(--fn-ink);
-  --color-cyan-900: var(--fn-ink);
-
-  --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --font-display: 'Calistoga', Georgia, serif;
-  --font-hand: 'Caveat', cursive;
+
+  /* Square ledger corners: 2px tags and buttons, 4px badges and tabs;
+     cards are square via .card. rounded-full stays for dots and rings. */
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  --radius-2xl: 4px;
 }
 
 @layer base {
@@ -187,10 +228,11 @@
   *, ::before, ::after { border-color: var(--color-line); }
   button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
   html { color-scheme: light; }
-  h1, h2 { font-family: var(--font-display); font-weight: 400; letter-spacing: -.005em; }
+  /* Ledger headings: uppercase mono, like a card catalogue label. */
+  h1, h2 { font-family: var(--font-mono); font-weight: 500; text-transform: uppercase; letter-spacing: .02em; }
   body { min-width: 320px; }
   a, button, input, select, textarea { touch-action: manipulation; }
-  :focus-visible { outline: 3px solid color-mix(in oklab, var(--fn-accent) 40%, transparent); outline-offset: 2px; }
+  :focus-visible { outline: 3px solid color-mix(in oklab, var(--fn-info) 55%, transparent); outline-offset: 2px; }
   input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]), select, textarea { min-height: 44px; }
   /* The login page predates the --color-line token and was built on
      slate-200 default borders; keep its exact look (body carries
@@ -199,20 +241,16 @@
 }
 
 @layer components {
+  /* Ledger card: square, hard 1px edge. */
   .card {
     background: var(--fn-card);
-    border: 1px solid var(--fn-rule);
-    border-radius: 6px;
+    border: 1px solid var(--fn-edge);
+    border-radius: 0;
   }
   /* Hatched wall: 45deg rules, the brand mark (a palisade is a wall). */
   .hatch { background-image: repeating-linear-gradient(-45deg, var(--fn-rule) 0 1px, transparent 1px .5rem); }
-  /* Highlighter pen behind the lower half of a word. */
-  .hl { background: linear-gradient(transparent 55%, var(--fn-highlight) 55%); }
-  /* Handwritten margin note: captions and side notes only. */
-  .hand { font-family: var(--font-hand); font-weight: 500; }
-  /* Tilted card with a strip of tape on top. */
-  .taped { position: relative; transform: rotate(-.8deg); }
-  .taped::before { content: ""; position: absolute; top: -9px; left: 50%; width: 64px; height: 18px; transform: translateX(-50%) rotate(1.5deg); background: var(--fn-highlight); opacity: .85; }
+  /* Uppercase mono label: section titles, field names, table heads. */
+  .label-mono { font-family: var(--font-mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--fn-muted); }
   .table-scroll { width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
   .table-scroll > table { min-width: 680px; }
   .mobile-safe-modal { width: calc(100% - 2rem); max-height: calc(100dvh - 2rem); }
@@ -225,12 +263,12 @@
    admin CSP can forbid inline styles (issue #195). */
 @layer components {
   :root { --ease-out: cubic-bezier(.16, 1, .3, 1); --dur-fast: 150ms; --dur-base: 220ms; }
-  .btn-primary { min-height: 44px; background: var(--fn-ink); color: var(--fn-paper); border: none; cursor: pointer; border-radius: 6px; padding: 9px 18px; font-size: 14px; font-weight: 500; font-family: inherit; transition: background-color var(--dur-fast) ease, transform 100ms ease, box-shadow var(--dur-fast) ease; }
-  .btn-primary:hover { background: var(--fn-ink-soft); }
+  .btn-primary { min-height: 44px; background: var(--fn-ink); color: var(--fn-paper); border: 1px solid var(--fn-ink); cursor: pointer; border-radius: 2px; padding: 9px 18px; font-family: var(--font-mono); font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; transition: background-color var(--dur-fast) ease, transform 100ms ease, box-shadow var(--dur-fast) ease; }
+  .btn-primary:hover { background: color-mix(in oklab, var(--fn-ink) 82%, var(--fn-paper)); }
   .btn-primary:active { transform: scale(.97); }
   input, select { font-family: inherit; }
   .focus-green { transition: border-color .15s; }
-  .focus-green:focus { border-color: var(--fn-accent) !important; box-shadow: 0 0 0 3px color-mix(in oklab, var(--fn-accent) 18%, transparent); }
+  .focus-green:focus { border-color: var(--fn-edge) !important; box-shadow: 0 0 0 3px color-mix(in oklab, var(--fn-info) 25%, transparent); }
   @keyframes rise-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .anim-in { animation: rise-in var(--dur-base) var(--ease-out) both; }
   @keyframes modal-pop { from { opacity: 0; transform: scale(.96) translateY(4px); } to { opacity: 1; transform: none; } }
@@ -246,16 +284,16 @@
   @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
   .bot-icon:hover svg { animation: bob .5s ease-in-out; }
   .nudge { animation: shield-nudge .45s var(--ease-out); }
-  @keyframes row-flash { from { background-color: var(--fn-highlight); } }
+  @keyframes row-flash { from { background-color: color-mix(in oklab, var(--fn-warning) 35%, transparent); } }
   @media (prefers-reduced-motion: no-preference) { #log-feed[data-live-stream] > :first-child { animation: row-flash 1.1s ease-out; } }
-  @keyframes dot-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--fn-accent) 50%, transparent); } 70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--fn-accent) 0%, transparent); } 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--fn-accent) 0%, transparent); } }
+  @keyframes dot-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--fn-success) 50%, transparent); } 70% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--fn-success) 0%, transparent); } 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--fn-success) 0%, transparent); } }
   .live-dot { animation: dot-pulse 2.4s ease-out infinite; }
   @keyframes shield-nudge { 0%,100% { transform: rotate(0); } 30% { transform: rotate(-7deg); } 60% { transform: rotate(5deg); } }
   #brand-logo:hover img { animation: shield-nudge .45s var(--ease-out); }
   @keyframes shield-guard { 0% { transform: scale(1); } 35% { transform: scale(1.18); } 100% { transform: scale(1); } }
   :root[data-theme="dark"] .theme-icon-dark, :root:not([data-theme="dark"]) .theme-icon-light { display: none; }
   #brand-logo.guard { animation: shield-guard .5s var(--ease-out); }
-  #brand-logo.guard::after { content: ""; position: absolute; inset: -4px; border-radius: 10px; border: 2px solid var(--fn-highlight); opacity: 0; animation: guard-ring .5s var(--ease-out); }
+  #brand-logo.guard::after { content: ""; position: absolute; inset: -4px; border-radius: 10px; border: 2px solid var(--fn-side-active); opacity: 0; animation: guard-ring .5s var(--ease-out); }
   @keyframes guard-ring { 0% { opacity: .8; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.35); } }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0ms !important; }
@@ -267,7 +305,7 @@
   .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; transition: opacity 200ms ease-in; }
 
   /* Login page (formerly an inline <style> in login.html). */
-  .page-login { font-family: 'DM Sans', system-ui, sans-serif; }
+  .page-login { font-family: var(--font-sans); }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   .rise-in { animation: rise .35s cubic-bezier(.16, 1, .3, 1) both; }
   @media (prefers-reduced-motion: reduce) { .rise-in { animation: none; } }

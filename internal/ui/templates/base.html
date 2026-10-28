@@ -1,3 +1,10 @@
+{{define "nav-item"}}
+<a href="{{.Href}}" {{if eq .Page .Key}}aria-current="page"{{end}} class="flex min-h-10 items-center gap-3 rounded-md px-3 py-2 font-mono text-[13px] uppercase tracking-[.06em] no-underline transition-colors duration-150 {{if eq .Page .Key}}bg-side-active text-side{{else}}text-side-ink hover:bg-white/[.06]{{end}}">
+  <i class="hgi hgi-stroke hgi-rounded {{.Icon}} text-base"></i>
+  {{.Label}}
+</a>
+{{end}}
+
 {{define "base"}}
 <!DOCTYPE html>
 <html lang="en">
@@ -23,139 +30,128 @@
   <script src="{{.AdminPath}}/static/vendor/htmx.min.js?v={{.Asset}}" defer></script>
 
 </head>
-<body class="min-h-dvh bg-canvas text-slate-800 font-sans text-[14px] antialiased" data-admin-path="{{.AdminPath}}" data-csrf="{{.CSRF}}" hx-headers='{"X-CSRF-Token":"{{.CSRF}}"}'>
+<body class="min-h-dvh bg-canvas text-ink font-sans text-[14px] antialiased" data-admin-path="{{.AdminPath}}" data-csrf="{{.CSRF}}" hx-headers='{"X-CSRF-Token":"{{.CSRF}}"}'>
 
-<button id="mobile-nav-backdrop" type="button" tabindex="-1" aria-label="Close navigation" class="fixed inset-0 z-40 hidden bg-slate-950/50 backdrop-blur-[2px] lg:hidden"></button>
+<button id="mobile-nav-backdrop" type="button" tabindex="-1" aria-label="Close navigation" class="fixed inset-0 z-40 hidden bg-black/50 lg:hidden"></button>
 
-<!-- ── Sidebar Navigation ─────────────────────────────────── -->
-<aside id="primary-nav" aria-label="Primary navigation" class="fixed left-0 top-0 bottom-0 w-[280px] lg:w-[264px] bg-navy border-r border-white/10 flex flex-col z-50 -translate-x-full transition-transform duration-200 lg:translate-x-0">
+<!-- ── Navigation rail (dark in both themes) ─────────────── -->
+<aside id="primary-nav" aria-label="Primary navigation" class="fixed left-0 top-0 bottom-0 w-[280px] lg:w-[264px] bg-side text-side-ink border-r border-side-line flex flex-col z-50 -translate-x-full transition-transform duration-200 lg:translate-x-0">
 
   <!-- Brand -->
-  <div class="flex items-center gap-[10px] px-5 py-5 shrink-0 border-b border-white/10">
-    <div id="brand-logo" class="relative w-10 h-10 shrink-0 cursor-pointer select-none rounded-xl bg-white/10 p-1">
+  <div class="flex items-center gap-3 px-4 py-4 shrink-0 border-b border-side-line">
+    <div id="brand-logo" class="relative w-10 h-10 shrink-0 cursor-pointer select-none border border-side-line p-1">
       <img src="{{.AdminPath}}/static/imgs/logo.svg" alt="Palisade logo" class="w-full h-full block"/>
     </div>
-    <div class="min-w-0"><span class="block font-bold text-[15px] text-white truncate">Palisade</span><span class="block text-[10px] uppercase tracking-[.14em] text-white/50">Security console</span></div>
-    <button id="mobile-nav-close" type="button" aria-label="Close navigation" class="ml-auto flex h-11 w-11 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 lg:hidden"><i class="hgi hgi-stroke hgi-rounded hgi-cancel-01 text-lg"></i></button>
+    <div class="min-w-0 font-mono uppercase">
+      <span class="block text-[18px] leading-tight tracking-[.04em] text-side-active truncate">Palisade</span>
+      <span class="block text-[9px] leading-snug tracking-[.12em] text-side-muted">Web application<br/>firewall</span>
+    </div>
+    <button id="mobile-nav-close" type="button" aria-label="Close navigation" class="ml-auto flex h-11 w-11 items-center justify-center rounded-sm text-side-ink hover:bg-white/10 lg:hidden"><i class="hgi hgi-stroke hgi-rounded hgi-cancel-01 text-lg"></i></button>
+  </div>
+
+  <!-- Status -->
+  <div class="mx-3 mt-3 shrink-0 border border-side-line px-3 py-2 font-mono text-[11px] uppercase tracking-[.08em]">
+    <div class="flex items-center justify-between py-1">
+      <span class="text-side-muted">WAF engine</span>
+      {{if .WAFOn}}<span class="flex items-center gap-2 text-side-ink">On <span class="h-2 w-2 rounded-full bg-success"></span></span>
+      {{else}}<span class="flex items-center gap-2 text-side-ink">Off <span class="h-2 w-2 rounded-full bg-danger"></span></span>{{end}}
+    </div>
+    <div class="flex items-center justify-between border-t border-side-line py-1">
+      <span class="text-side-muted">Access</span>
+      <span class="text-side-ink">{{.Role}}</span>
+    </div>
   </div>
 
   <!-- Nav links -->
-  <nav class="flex-1 flex flex-col gap-1 px-3 pt-1 overflow-y-auto">
-    <a href="/admin" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "dashboard"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
-      <i class="hgi hgi-stroke hgi-rounded hgi-dashboard-square-01 text-base"></i>
-      Dashboard
-    </a>
-    <a href="/admin/logs" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "logs"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
-      <i class="hgi hgi-stroke hgi-rounded hgi-activity-01 text-base"></i>
-      Live Logs
-    </a>
-    <a href="/admin/ip-rules" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "ip_rules"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
-      <i class="hgi hgi-stroke hgi-rounded hgi-cancel-circle text-base"></i>
-      IP Rules
-    </a>
-    <a href="/admin/geo-rules" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "geo_rules"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
-      <i class="hgi hgi-stroke hgi-rounded hgi-earth text-base"></i>
-      Geo Rules
-    </a>
-    <a href="/admin/services" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "services"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
-      <i class="hgi hgi-stroke hgi-rounded hgi-settings-01 text-base"></i>
-      Services
-    </a>
-    <a href="/admin/certificates" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "certificates"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
-      <i class="hgi hgi-stroke hgi-rounded hgi-certificate-01 text-base"></i>
-      Certificates
-    </a>
-    <a href="/admin/waf-rules" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "waf_rules"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
-      <i class="hgi hgi-stroke hgi-rounded hgi-security-block text-base"></i>
-      WAF Rules
-    </a>
-    <a href="/admin/threat-intel" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "threat_intel"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
-      <i class="hgi hgi-stroke hgi-rounded hgi-database-01 text-base"></i>
-      Threat Intel
-    </a>
-    <a href="/admin/ai-usage" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "ai_usage"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
-      <i class="hgi hgi-stroke hgi-rounded hgi-artificial-intelligence-04 text-base"></i>
-      AI Usage
-    </a>
-    <a href="/admin/settings" class="flex min-h-11 items-center gap-3 px-4 py-[9px] rounded-lg text-[14px] font-medium no-underline transition-colors duration-150 {{if eq .Page "settings"}}bg-white/10 text-white font-semibold shadow-inner{{else}}text-white/70 hover:bg-white/[.06] hover:text-white{{end}}">
-      <i class="hgi hgi-stroke hgi-rounded hgi-user-account text-base"></i>
-      Settings
-    </a>
+  <p class="px-6 pt-4 pb-2 font-mono text-[10px] uppercase tracking-[.14em] text-side-muted">Navigation</p>
+  <nav class="flex-1 flex flex-col gap-0.5 px-3 overflow-y-auto">
+    {{template "nav-item" (map "Page" .Page "Key" "dashboard" "Href" .AdminPath "Icon" "hgi-dashboard-square-01" "Label" "Dashboard")}}
+    {{template "nav-item" (map "Page" .Page "Key" "logs" "Href" (print .AdminPath "/logs") "Icon" "hgi-activity-01" "Label" "Live Logs")}}
+    {{template "nav-item" (map "Page" .Page "Key" "services" "Href" (print .AdminPath "/services") "Icon" "hgi-settings-01" "Label" "Services")}}
+    {{template "nav-item" (map "Page" .Page "Key" "certificates" "Href" (print .AdminPath "/certificates") "Icon" "hgi-certificate-01" "Label" "Certificates")}}
+    {{template "nav-item" (map "Page" .Page "Key" "ip_rules" "Href" (print .AdminPath "/ip-rules") "Icon" "hgi-cancel-circle" "Label" "IP Rules")}}
+    {{template "nav-item" (map "Page" .Page "Key" "geo_rules" "Href" (print .AdminPath "/geo-rules") "Icon" "hgi-earth" "Label" "Geo Rules")}}
+    {{template "nav-item" (map "Page" .Page "Key" "waf_rules" "Href" (print .AdminPath "/waf-rules") "Icon" "hgi-security-block" "Label" "WAF Rules")}}
+    {{template "nav-item" (map "Page" .Page "Key" "threat_intel" "Href" (print .AdminPath "/threat-intel") "Icon" "hgi-database-01" "Label" "Threat Intel")}}
+    {{template "nav-item" (map "Page" .Page "Key" "ai_usage" "Href" (print .AdminPath "/ai-usage") "Icon" "hgi-artificial-intelligence-04" "Label" "AI Usage")}}
+    {{template "nav-item" (map "Page" .Page "Key" "settings" "Href" (print .AdminPath "/settings") "Icon" "hgi-user-account" "Label" "Settings")}}
   </nav>
 
   <!-- Account -->
-  <div class="px-3 pb-3 pt-2 border-t border-white/10 shrink-0">
-    <div class="flex items-center gap-3 px-3 py-[10px]">
-      <div class="w-8 h-8 rounded-full bg-navy flex items-center justify-center text-white shrink-0"><i class="hgi hgi-stroke hgi-rounded hgi-user text-[14px]"></i></div>
+  <div class="px-3 pb-3 pt-2 border-t border-side-line shrink-0">
+    <div class="flex items-center gap-2 px-1 py-2">
       <span class="flex-1 min-w-0" title="{{.UserEmail}}">
-        <span class="block text-[13px] font-semibold text-white truncate">{{.UserEmail}}</span>
-        <span class="block text-[11px] text-white/60 capitalize">{{.Role}}</span>
+        <span class="block text-[13px] font-medium text-side-active truncate">{{.UserEmail}}</span>
+        <span class="block font-mono text-[10px] uppercase tracking-[.1em] text-side-muted">Palisade {{.Version}}</span>
       </span>
       <div class="flex items-center gap-1 shrink-0">
       <!-- Theme -->
       <button id="theme-toggle" type="button" title="Toggle dark mode" aria-label="Dark mode" aria-pressed="false"
-              class="w-11 h-11 lg:w-9 lg:h-9 rounded-lg bg-white/[.06] border border-white/10 flex items-center justify-center text-slate-300 hover:bg-white/10 transition-colors cursor-pointer">
+              class="w-11 h-11 lg:w-9 lg:h-9 rounded-sm border border-side-line flex items-center justify-center text-side-ink hover:bg-white/10 transition-colors cursor-pointer">
         <i class="theme-icon-dark hgi hgi-stroke hgi-rounded hgi-moon-02 text-[14px]"></i>
         <i class="theme-icon-light hgi hgi-stroke hgi-rounded hgi-sun-03 text-[14px]"></i>
       </button>
       <!-- Logout -->
       <form action="{{.AdminPath}}/logout" method="POST" class="contents">
         <input type="hidden" name="_csrf" value="{{.CSRF}}">
-        <button type="submit" title="Sign out"
-                class="w-11 h-11 lg:w-9 lg:h-9 rounded-lg bg-white/[.06] border border-white/10 flex items-center justify-center text-white/70 hover:bg-red-500/20 hover:text-red-200 hover:border-red-300/30 transition-colors cursor-pointer">
+        <button type="submit" title="Sign out" aria-label="Sign out"
+                class="w-11 h-11 lg:w-9 lg:h-9 rounded-sm border border-side-line flex items-center justify-center text-side-ink hover:bg-danger/25 transition-colors cursor-pointer">
           <i class="hgi hgi-stroke hgi-rounded hgi-logout-02 text-[14px]"></i>
         </button>
       </form>
       <div class="relative shrink-0">
-        <button id="notif-btn" aria-label="Open notifications" class="w-11 h-11 lg:w-9 lg:h-9 rounded-lg bg-white/[.06] border border-white/10 flex items-center justify-center text-white/70 cursor-pointer relative hover:bg-white/10">
+        <button id="notif-btn" aria-label="Open notifications" class="w-11 h-11 lg:w-9 lg:h-9 rounded-sm border border-side-line flex items-center justify-center text-side-ink cursor-pointer relative hover:bg-white/10">
           <i class="hgi hgi-stroke hgi-rounded hgi-notification-03 text-[14px]"></i>
           {{if gt .AlertCount 0}}
-          <span id="notif-badge" class="absolute -top-[3px] -right-[3px] bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[17px] h-[17px] flex items-center justify-center px-[3px] border-2 border-white">{{if gt .AlertCount 9}}9+{{else}}{{.AlertCount}}{{end}}</span>
+          <span id="notif-badge" class="absolute -top-[5px] -right-[5px] bg-danger text-white font-mono text-[10px] font-bold rounded-full min-w-[17px] h-[17px] flex items-center justify-center px-[3px] border-2 border-side">{{if gt .AlertCount 9}}9+{{else}}{{.AlertCount}}{{end}}</span>
           {{end}}
         </button>
-        <div id="notif-panel" class="hidden fixed bottom-4 left-4 right-4 sm:absolute sm:bottom-12 sm:left-[calc(100%+16px)] sm:right-auto sm:w-[340px] bg-white border border-line rounded-xl shadow-[0_20px_50px_rgba(16,24,40,.18)] z-[100] text-slate-800"></div>
+        <div id="notif-panel" class="hidden fixed bottom-4 left-4 right-4 sm:absolute sm:bottom-12 sm:left-[calc(100%+16px)] sm:right-auto sm:w-[340px] bg-card border border-edge shadow-[0_20px_50px_rgba(0,0,0,.25)] z-[100] text-ink"></div>
       </div>
-      </div><!-- end flex gap-1 -->
+      </div>
     </div>
   </div>
 </aside>
 
-<!-- ── Page body ──────────────────────────────────────── -->
-<header class="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-white/95 px-4 backdrop-blur-lg lg:hidden">
-  <button id="mobile-nav-open" type="button" aria-label="Open navigation" aria-controls="primary-nav" aria-expanded="false" class="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface text-slate-700"><i class="hgi hgi-stroke hgi-rounded hgi-menu-01 text-xl"></i></button>
-  <img src="{{.AdminPath}}/static/imgs/logo.svg" alt="" class="h-8 w-8"/>
-  <div class="min-w-0"><span class="block text-[11px] uppercase tracking-[.12em] text-slate-500">Palisade</span><span class="block truncate text-[15px] font-bold text-slate-900">{{.Heading}}</span></div>
-</header>
+<!-- ── Workspace ───────────────────────────────────────── -->
+<div class="flex min-h-dvh flex-col lg:ml-[264px]">
 
-<div class="flex min-h-[calc(100dvh-4rem)] flex-col lg:ml-[264px] xl:flex-row">
-
-  <main id="main-content" class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
-    {{if eq .Role "viewer"}}
-    <div class="mb-5 flex items-center gap-2 rounded-md border border-line bg-surface px-4 py-3 text-[13px] text-slate-600">
-      <i class="hgi hgi-stroke hgi-rounded hgi-view text-base text-slate-500"></i>
-      You have read-only access. Changes are refused for viewers.
+  <!-- Top bar -->
+  <header class="sticky top-0 z-30 flex min-h-14 items-center gap-3 border-b border-edge bg-canvas px-4 sm:px-6 lg:px-8">
+    <button id="mobile-nav-open" type="button" aria-label="Open navigation" aria-controls="primary-nav" aria-expanded="false" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-edge text-ink lg:hidden"><i class="hgi hgi-stroke hgi-rounded hgi-menu-01 text-xl"></i></button>
+    <p class="font-mono text-[13px] uppercase tracking-[.06em] text-ink whitespace-nowrap">
+      <span id="clock-date">{{today}}</span><span id="clock-time" class="hidden sm:inline"></span>
+    </p>
+    <div class="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap justify-end py-2">
+      {{block "actions" .}}{{end}}
     </div>
-    {{end}}
-    <!-- Page header -->
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6 lg:mb-7">
-      <div>
-        <p class="text-[11px] uppercase tracking-[0.08em] text-slate-500 font-medium mb-1">Admin › {{.Heading}}</p>
-        <h1 class="text-[24px] sm:text-[28px] font-extrabold tracking-[-.025em] text-slate-900 leading-[1.2]">{{.Heading}}</h1>
+  </header>
+
+  <div class="flex flex-1 flex-col xl:flex-row">
+    <main id="main-content" class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">
+      {{if eq .Role "viewer"}}
+      <div class="mb-5 flex items-center gap-2 border border-edge bg-surface px-4 py-3 text-[13px] text-slate-600">
+        <i class="hgi hgi-stroke hgi-rounded hgi-view text-base text-slate-500"></i>
+        You have read-only access. Changes are refused for viewers.
       </div>
-      <div class="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0">
-        <div class="hidden sm:flex items-center gap-2 bg-white border border-line rounded-lg px-3 py-2.5 text-[13px] text-slate-700 shadow-xs">
-          <i class="hgi hgi-stroke hgi-rounded hgi-calendar-03 text-base text-slate-500"></i>
-          {{today}}
-        </div>
-        {{block "actions" .}}{{end}}
+      {{end}}
+      <div class="mb-6">
+        <p class="label-mono mb-1">Admin / {{.Heading}}</p>
+        <h1 class="text-[22px] sm:text-[26px] leading-tight text-ink">{{.Heading}}</h1>
       </div>
-    </div>
 
-    {{block "content" .}}{{end}}
-  </main>
+      {{block "content" .}}{{end}}
+    </main>
 
-  {{block "rightpanel" .}}{{end}}
+    {{block "rightpanel" .}}{{end}}
+  </div>
 
+  <!-- Status bar -->
+  <footer class="flex flex-wrap items-center gap-x-6 gap-y-1 bg-side px-4 py-2 font-mono text-[11px] uppercase tracking-[.08em] text-side-muted sm:px-6 lg:px-8">
+    <span>Database <span class="text-side-ink">{{if .DBDriver}}{{.DBDriver}}{{else}}sqlite{{end}}</span></span>
+    <span>WAF <span class="text-side-ink">{{if .WAFOn}}on{{else}}off{{end}}</span></span>
+    <span class="sm:ml-auto">Signed in <span class="text-side-ink">{{.Role}}</span></span>
+  </footer>
 </div>
 
 <script src="{{.AdminPath}}/static/js/toast.min.js?v={{.Asset}}" defer></script>
