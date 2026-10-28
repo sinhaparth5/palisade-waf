@@ -170,60 +170,75 @@ func (r *Reporter) SendLoginCode(code string) error {
 	return r.send(cfg, subject, text, html)
 }
 
-// Email palette: hex versions of the admin UI's "Field notes" oklch tokens
-// (static/css/tailwind.css, light mode). Same rule as the UI: green means
-// allowed, red means blocked, lime highlight means "look here".
+// Email palette: hex versions of the admin UI's v3 "ledger" tokens
+// (static/css/tailwind.css, light mode). Same meanings as the UI: success =
+// allowed, warning = look here, danger = blocked.
 const (
-	cPaper2    = "#f3ede0" // --fn-paper-2, page backdrop
-	cCard      = "#fdfaf4" // --fn-card
-	cInk       = "#15231b" // --fn-ink, also the header band (--fn-side)
-	cInkSoft   = "#404e46" // --fn-ink-soft
-	cMuted     = "#757b73" // slate-500 (ink 58% over paper)
-	cRule      = "#e0dbd0" // --fn-rule over paper
-	cHighlight = "#b8ed9c" // --fn-highlight, as in the logo
-	cAccent    = "#266739" // --fn-accent
-	cAllowed   = "#a9c9ae" // accent tint for allowed bars
-	cStamp     = "#b72822" // --fn-stamp
-	cStampTint = "#f6e3dd" // red-50
+	cPaper2     = "#e2d8c5" // --fn-paper-2, page backdrop
+	cPaper      = "#e8dfce" // --fn-paper
+	cCard       = "#efe8da" // --fn-card
+	cInk        = "#191816" // --fn-ink
+	cInkSoft    = "#46423b" // slate-700
+	cMuted      = "#5f594f" // --fn-muted (slate-500)
+	cEdge       = "#2a2926" // --fn-edge, card borders
+	cRule       = "#c4beb2" // --fn-rule over card
+	cSide       = "#12130e" // --fn-side, the header band
+	cSideInk    = "#e8e0d3" // --fn-side-active
+	cSideMuted  = "#8c867a" // --fn-side-muted
+	cSideLine   = "#252620" // --fn-side-line
+	cHighlight  = "#d9a05b" // --fn-warning (--color-highlight)
+	cLogoAccent = "#b8ed9c" // the lit stake in static/imgs/logo.svg
+	cAccent     = "#3d6e42" // --fn-success-ink
+	cAllowed    = "#6aac6f" // --fn-success
+	cStamp      = "#c84b31" // --fn-danger
+	cStampInk   = "#a63a24" // --fn-danger-ink
+	cStampTint  = "#e5d3c1" // red-50
 )
 
-// Font stacks mirror the UI (Calistoga headings, DM Sans body, JetBrains
-// Mono numbers). frame links the same Google Fonts; clients that drop the
-// link (Gmail) fall back to the system stack.
+// Font stacks mirror the UI (Space Grotesk body, JetBrains Mono headings,
+// labels and numbers). frame links the same Google Fonts; clients that drop
+// the link (Gmail) fall back to the system stack.
 const (
-	fontDisplay = `Calistoga,Georgia,serif`
-	fontStack   = `'DM Sans',-apple-system,'Segoe UI',Arial,sans-serif`
-	fontMono    = `'JetBrains Mono','SF Mono',Consolas,monospace`
+	fontStack = `'Space Grotesk',-apple-system,'Segoe UI',Arial,sans-serif`
+	fontMono  = `'JetBrains Mono','SF Mono',Consolas,monospace`
+	// labelStyle is the UI's .label-mono: small uppercase mono, muted.
+	labelStyle = `font:500 10px ` + fontMono + `;text-transform:uppercase;letter-spacing:.08em`
 )
 
-// frame wraps body rows in the shared shell: page backdrop, card, ink header
-// band with the logo, and a footer note. Inline styles and nested tables
-// only — email clients ignore stylesheets, and Gmail strips SVG, so the logo's
-// four stakes (static/imgs/logo.svg) are rebuilt as divs.
+// frame wraps body rows in the shared shell: page backdrop, a square card
+// with a hard 1px edge, the nav rail's dark header band with the logo, and a
+// footer note. Inline styles and nested tables only — email clients ignore
+// stylesheets, and Gmail strips SVG, so the logo's four stakes
+// (static/imgs/logo.svg) are rebuilt as divs.
 func frame(kicker, body, note string) string {
 	stake := func(h int, c string) string {
-		return fmt.Sprintf(`<td valign="bottom" style="padding-right:2px"><div style="width:6px;height:%dpx;background:%s;border-radius:3px 3px 0 0;font-size:0;line-height:0">&nbsp;</div></td>`, h, c)
+		return fmt.Sprintf(`<td valign="bottom" style="padding-right:2px"><div style="width:6px;height:%dpx;background:%s;font-size:0;line-height:0">&nbsp;</div></td>`, h, c)
 	}
-	return `<link href="https://fonts.googleapis.com/css2?family=Calistoga&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">` +
+	return `<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">` +
 		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:` + cPaper2 + `"><tr><td align="center" style="padding:32px 12px">` +
-		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:` + cCard + `;border:1px solid ` + cRule + `;border-radius:10px;overflow:hidden">` +
-		`<tr><td style="background:` + cInk + `;padding:20px 28px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
-		`<td valign="bottom" style="padding-right:12px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
-		stake(18, "#faf5ec") + stake(23, "#faf5ec") + stake(23, cHighlight) + stake(18, "#faf5ec") +
-		`</tr></table></td>` +
-		`<td valign="middle"><p style="margin:0;font:400 20px/1.1 ` + fontDisplay + `;color:#faf5ec">Palisade</p>` +
-		`<p style="margin:3px 0 0;font:500 10px ` + fontStack + `;color:#9fb0a5;text-transform:uppercase;letter-spacing:.14em">` + kicker + `</p></td>` +
+		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:` + cCard + `;border:1px solid ` + cEdge + `">` +
+		`<tr><td style="background:` + cSide + `;padding:18px 28px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
+		`<td valign="middle" style="padding-right:12px"><table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid ` + cSideLine + `"><tr><td style="padding:6px 5px 6px 7px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
+		stake(18, cSideInk) + stake(23, cSideInk) + stake(23, cLogoAccent) + stake(18, cSideInk) +
+		`</tr></table></td></tr></table></td>` +
+		`<td valign="middle"><p style="margin:0;font:500 18px/1.1 ` + fontMono + `;color:` + cSideInk + `;text-transform:uppercase;letter-spacing:.04em">Palisade</p>` +
+		`<p style="margin:4px 0 0;font:500 9px ` + fontMono + `;color:` + cSideMuted + `;text-transform:uppercase;letter-spacing:.12em">` + kicker + `</p></td>` +
 		`</tr></table></td></tr>` +
 		body +
-		`<tr><td style="padding:18px 28px 24px;border-top:1px solid ` + cRule + `;font:400 12px/1.6 ` + fontStack + `;color:` + cMuted + `">` +
+		`<tr><td style="padding:16px 28px 22px;border-top:1px solid ` + cEdge + `;font:400 12px/1.6 ` + fontStack + `;color:` + cMuted + `">` +
 		note + ` Sent by Palisade from ` + Sender + `.</td></tr>` +
 		`</table></td></tr></table>`
+}
+
+// heading is the email's title, styled like the UI's h1: uppercase mono.
+func heading(title string) string {
+	return `<p style="margin:0;font:500 22px/1.2 ` + fontMono + `;color:` + cInk + `;text-transform:uppercase;letter-spacing:.02em">` + title + `</p>`
 }
 
 // section is one titled block of the card body.
 func section(title, inner string) string {
 	return `<tr><td style="padding:24px 28px 0">` +
-		`<p style="margin:0 0 12px;font:400 17px ` + fontDisplay + `;color:` + cInk + `">` + title + `</p>` +
+		`<p style="margin:0 0 12px;font:500 11px ` + fontMono + `;color:` + cInk + `;text-transform:uppercase;letter-spacing:.08em">` + title + `</p>` +
 		inner + `</td></tr>`
 }
 
@@ -233,7 +248,7 @@ func bar(pct int, color string) string {
 	if pct < 100 {
 		rest = `<td style="background:` + cRule + `;font-size:0;line-height:0">&nbsp;</td>`
 	}
-	return fmt.Sprintf(`<table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="border-radius:3px;overflow:hidden"><tr>`+
+	return fmt.Sprintf(`<table role="presentation" width="100%%" cellpadding="0" cellspacing="0"><tr>`+
 		`<td width="%d%%" style="background:%s;height:5px;font-size:0;line-height:0">&nbsp;</td>%s</tr></table>`, max(pct, 1), color, rest)
 }
 
@@ -274,9 +289,9 @@ func composeLoginCode(code string, at time.Time) (subject, text, htm string) {
 	t.WriteString("If you didn't request it, someone knows your admin password — change it now.\n")
 
 	body := `<tr><td style="padding:26px 28px 24px">` +
-		`<p style="margin:0 0 6px;font:400 24px ` + fontDisplay + `;color:` + cInk + `">Your login code</p>` +
-		`<p style="margin:0 0 18px;font:400 14px/1.5 ` + fontStack + `;color:` + cInkSoft + `">Enter it on the Palisade sign-in page to finish logging in.</p>` +
-		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef8e3;border:1px dashed ` + cAccent + `;border-radius:8px"><tr><td align="center" style="padding:20px">` +
+		heading("Your login code") +
+		`<p style="margin:8px 0 18px;font:400 14px/1.5 ` + fontStack + `;color:` + cInkSoft + `">Enter it on the Palisade sign-in page to finish logging in.</p>` +
+		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:` + cPaper + `;border:1px dashed ` + cEdge + `"><tr><td align="center" style="padding:20px">` +
 		`<p style="margin:0;font:500 32px ` + fontMono + `;letter-spacing:.3em;color:` + cInk + `">` + html.EscapeString(code) + `</p>` +
 		`</td></tr></table></td></tr>`
 	note := `Requested ` + when + `. The code expires in 10 minutes and works once. If you didn't request it, someone knows your admin password — change it now.`
@@ -303,8 +318,8 @@ func composeReport(day string, rep, prev storage.DailyReport, det storage.Report
 	}{
 		{"WAF rules", cStamp, rep.WAFBlocked},
 		{"IP blocklist", cInk, rep.IPBlocked},
-		{"Geo rules", "#e0907f", rep.GeoBlocked},
-		{"Rate limited", "#8a958d", rep.RateLimited},
+		{"Geo rules", cHighlight, rep.GeoBlocked},
+		{"Rate limited", cSideMuted, rep.RateLimited},
 	}
 
 	// Plain text.
@@ -346,25 +361,25 @@ func composeReport(day string, rep, prev storage.DailyReport, det storage.Report
 
 	// Title and one-line summary, the key figure marked with the highlighter.
 	h.WriteString(`<tr><td style="padding:26px 28px 0">`)
-	h.WriteString(`<p style="margin:0;font:400 26px/1.2 ` + fontDisplay + `;color:` + cInk + `">Daily security report</p>`)
+	h.WriteString(heading("Daily security report"))
 	h.WriteString(`<p style="margin:4px 0 14px;font:500 12px ` + fontMono + `;color:` + cMuted + `">` + day + `</p>`)
-	fmt.Fprintf(&h, `<p style="margin:0;font:400 15px/1.6 %s;color:%s">Palisade stopped <span style="background:%s;color:%s;padding:1px 5px;border-radius:3px;font-weight:700">%d of %d requests</span> (%s) from %d unique IPs, and served %d bot challenges.</p>`,
+	fmt.Fprintf(&h, `<p style="margin:0;font:400 15px/1.6 %s;color:%s">Palisade stopped <span style="background:%s;color:%s;padding:1px 5px;font-weight:700">%d of %d requests</span> (%s) from %d unique IPs, and served %d bot challenges.</p>`,
 		fontStack, cInkSoft, cHighlight, cInk, rep.Blocked, rep.Total, pct(rep.Blocked, rep.Total), rep.UniqueBlockedIPs, rep.BotChallenged)
 	h.WriteString(`</td></tr>`)
 
 	// Headline tiles.
 	tile := func(label string, value int, color, sub, subColor string) string {
-		return fmt.Sprintf(`<td width="33%%" valign="top" style="padding:0 4px"><table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="border:1px solid %s;border-radius:8px;background:#ffffff"><tr><td style="padding:12px 14px">`+
-			`<p style="margin:0;font:500 10px %s;color:%s;text-transform:uppercase;letter-spacing:.1em">%s</p>`+
-			`<p style="margin:6px 0 2px;font:500 24px %s;color:%s">%d</p>`+
+		return fmt.Sprintf(`<td width="33%%" valign="top" style="padding:0 4px"><table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="border:1px solid %s;background:%s"><tr><td style="padding:12px 14px">`+
+			`<p style="margin:0;%s;color:%s">%s</p>`+
+			`<p style="margin:8px 0 4px;font:500 28px/1 %s;color:%s">%d</p>`+
 			`<p style="margin:0;font:400 11px %s;color:%s">%s</p></td></tr></table></td>`,
-			cRule, fontStack, cMuted, label, fontMono, color, value, fontStack, subColor, sub)
+			cEdge, cPaper, labelStyle, cMuted, label, fontMono, color, value, fontStack, subColor, sub)
 	}
 	totalDelta, _ := delta(rep.Total, prev.Total)
 	blockedDelta, blockedUp := delta(rep.Blocked, prev.Blocked)
 	blockedColor := cAccent
 	if blockedUp {
-		blockedColor = cStamp
+		blockedColor = cStampInk
 	}
 	h.WriteString(`<tr><td style="padding:20px 24px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>`)
 	h.WriteString(tile("Requests", rep.Total, cInk, cmp.Or(totalDelta, "&nbsp;"), cMuted))
@@ -386,7 +401,7 @@ func composeReport(day string, rep, prev storage.DailyReport, det storage.Report
 					blocked = 1
 				}
 				if a := total - blocked; a > 0 {
-					fmt.Fprintf(&c, `<div style="height:%dpx;background:%s;border-radius:2px 2px 0 0;font-size:0;line-height:0">&nbsp;</div>`, a, cAllowed)
+					fmt.Fprintf(&c, `<div style="height:%dpx;background:%s;font-size:0;line-height:0">&nbsp;</div>`, a, cAllowed)
 				}
 				if blocked > 0 {
 					fmt.Fprintf(&c, `<div style="height:%dpx;background:%s;font-size:0;line-height:0">&nbsp;</div>`, blocked, cStamp)
@@ -398,7 +413,7 @@ func composeReport(day string, rep, prev storage.DailyReport, det storage.Report
 		for i, p := range det.Hourly {
 			label, style := "&nbsp;", "color:"+cMuted
 			if p.Total > 0 && p.Hour.Equal(peak.Hour) {
-				label, style = p.Hour.Format("15"), "background:"+cHighlight+";color:"+cInk+";border-radius:2px"
+				label, style = p.Hour.Format("15"), "background:"+cHighlight+";color:"+cInk
 			} else if i%6 == 0 {
 				label = p.Hour.Format("15")
 			}
@@ -416,7 +431,7 @@ func composeReport(day string, rep, prev storage.DailyReport, det storage.Report
 	// Block breakdown: one stacked bar, then a legend with counts.
 	if staged := rep.WAFBlocked + rep.IPBlocked + rep.GeoBlocked + rep.RateLimited; staged > 0 {
 		var c strings.Builder
-		c.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-radius:4px;overflow:hidden"><tr>`)
+		c.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>`)
 		for _, s := range stages {
 			if s.n > 0 {
 				fmt.Fprintf(&c, `<td width="%d%%" style="background:%s;height:12px;font-size:0;line-height:0">&nbsp;</td>`, max(s.n*100/staged, 1), s.color)
@@ -449,7 +464,7 @@ func composeReport(day string, rep, prev storage.DailyReport, det storage.Report
 		return c.String()
 	}
 	col := func(title, inner string) string {
-		return `<td width="50%" valign="top" style="padding:0 4px"><p style="margin:0 0 4px;font:500 10px ` + fontStack + `;color:` + cMuted + `;text-transform:uppercase;letter-spacing:.1em">` + title + `</p>` + inner + `</td>`
+		return `<td width="50%" valign="top" style="padding:0 4px"><p style="margin:0 0 4px;` + labelStyle + `;color:` + cMuted + `">` + title + `</p>` + inner + `</td>`
 	}
 	h.WriteString(section("Who got blocked",
 		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>`+
@@ -477,9 +492,9 @@ func composeBanAlert(ip, reason string, at time.Time) (subject, text, htm string
 
 	var h strings.Builder
 	h.WriteString(`<tr><td style="padding:26px 28px 0">`)
-	h.WriteString(`<p style="margin:0 0 16px;font:400 24px ` + fontDisplay + `;color:` + cInk + `">An IP was banned</p>`)
-	h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:` + cStampTint + `;border-left:4px solid ` + cStamp + `;border-radius:6px"><tr><td style="padding:14px 18px">`)
-	h.WriteString(`<p style="margin:0;font:500 10px ` + fontStack + `;color:` + cStamp + `;text-transform:uppercase;letter-spacing:.12em">Blocked on every service</p>`)
+	h.WriteString(heading("An IP was banned"))
+	h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;background:` + cStampTint + `;border:1px solid ` + cEdge + `;border-left:4px solid ` + cStamp + `"><tr><td style="padding:14px 18px">`)
+	h.WriteString(`<p style="margin:0;` + labelStyle + `;color:` + cStampInk + `">Blocked on every service</p>`)
 	h.WriteString(`<p style="margin:6px 0 0;font:500 22px ` + fontMono + `;color:` + cInk + `">` + html.EscapeString(ip) + `</p>`)
 	h.WriteString(`</td></tr></table></td></tr>`)
 

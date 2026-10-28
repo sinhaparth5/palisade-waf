@@ -16,9 +16,9 @@ rather than growing this file forever.
 
 ## [3.0.1] - 2026-10-28
 
-### Added
+### Changed
 
-- (#225) v3: Site-wide search in the admin top bar
+- (#228) v3: Restyle emails to match the v3 dashboard
 
 [Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.1...main
 [3.0.1]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.0...v3.0.1
