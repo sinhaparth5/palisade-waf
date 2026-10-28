@@ -275,12 +275,13 @@ func TestServiceSettingHandlers(t *testing.T) {
 		{"/admin/services/cache-session/" + id, []string{"session_enabled", "1"}, 400},
 		{"/admin/services/cache-session/" + id, []string{"session_enabled", "1", "session_cookie_name", "sid"}, 200},
 		{"/admin/services/cache-session/x", nil, 400},
-		{"/admin/services/cache-tuning/" + id, []string{"ttl_floor", "60", "ttl_ceiling", "600", "grace", "10", "keep", ""}, 200},
 		{"/admin/services/cache-tuning/" + id, []string{"ttl_floor", "-1"}, 400},
 		{"/admin/services/cache-tuning/" + id, []string{"ttl_ceiling", "x"}, 400},
 		{"/admin/services/cache-tuning/" + id, []string{"grace", "x"}, 400},
 		{"/admin/services/cache-tuning/" + id, []string{"keep", "x"}, 400},
 		{"/admin/services/cache-tuning/" + id, []string{"ttl_floor", "100", "ttl_ceiling", "50"}, 400},
+		{"/admin/services/cache-tuning/" + id, []string{"ttl_floor", "60", "ttl_ceiling", "600", "grace", "10", "keep", "", "cache_rules", "cache /assets/\r\nbypass /api/"}, 200},
+		{"/admin/services/cache-tuning/" + id, []string{"cache_rules", "keep /assets/"}, 400},
 		{"/admin/services/cache-tuning/x", nil, 400},
 	} {
 		rec := env.do("POST", tc.path, form(tc.f...))
@@ -312,7 +313,7 @@ func TestServiceSettingHandlers(t *testing.T) {
 		t.Errorf("hosts = %v %q", got.HostAliases, got.CanonicalHost)
 	}
 	if got.BotMode != "always" || !got.AllowLargeJSUploads || !got.HTTP3Enabled || !got.CompressEnabled || len(got.ExtraBackends) != 1 || got.LBPolicy != "least_conn" || got.HealthPath != "/healthz" || got.SchemaMode != "enforce" || !got.CacheEnabled ||
-		!got.CacheBySession || got.SessionCookieName != "sid" || got.CacheTTLFloor != 60 || got.CacheTTLCeiling != 600 || got.CacheGrace != 10 {
+		!got.CacheBySession || got.SessionCookieName != "sid" || got.CacheTTLFloor != 60 || got.CacheTTLCeiling != 600 || got.CacheGrace != 10 || got.CacheRules != "cache /assets/\nbypass /api/" {
 		t.Errorf("service = %+v", got)
 	}
 	if env.count("waf") != 2 { // uploads + schema

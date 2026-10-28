@@ -110,6 +110,15 @@ sub vcl_recv {
         }
     }
 
+    # Per-service path rule (the Cache tab's "Path rules", issue #212): the
+    # WAF sets X-Cache-Rule only for a "cache" rule, after stripping any
+    # client copy ("bypass" rules never reach Varnish). Cached like a static
+    # asset: cookies ignored, Set-Cookie dropped, Cache-Control overridden.
+    if (req.http.X-Cache-Rule == "cache") {
+        unset req.http.Cookie;
+        return (hash);
+    }
+
     # Rule A: static assets — cache aggressively, ignore cookies entirely.
     if (req.url ~ "\.(png|jpg|jpeg|gif|webp|avif|css|js|mjs|ico|svg|woff2?|ttf|map)(\?.*)?$") {
         unset req.http.Cookie;
@@ -163,10 +172,14 @@ sub vcl_hash {
 }
 
 sub vcl_backend_response {
+    # Only vcl_backend_error may set this; a backend copy would make the WAF
+    # refetch a real 503.
+    unset beresp.http.X-Cache-Fetch-Error;
+
     # Static assets were requested cookie-less (Rule A), so any Set-Cookie on
     # them is a framework setting a cookie on every response, not per-user
     # content — drop it, or the check below makes every asset uncacheable.
-    if (bereq.url ~ "\.(png|jpg|jpeg|gif|webp|avif|css|js|mjs|ico|svg|woff2?|ttf|map)(\?.*)?$") {
+    if (bereq.url ~ "\.(png|jpg|jpeg|gif|webp|avif|css|js|mjs|ico|svg|woff2?|ttf|map)(\?.*)?$" || bereq.http.X-Cache-Rule == "cache") {
         unset beresp.http.Set-Cookie;
     }
 
@@ -187,7 +200,7 @@ sub vcl_backend_response {
     # permanent MISS (see #11). Since caching was an explicit admin choice
     # (the Cache toggle in /admin/services), it should win over a backend
     # default aimed at dynamic routes — so rewrite the header, not just ttl.
-    if (bereq.url ~ "\.(png|jpg|jpeg|gif|webp|avif|css|js|mjs|ico|svg|woff2?|ttf|map)(\?.*)?$") {
+    if (bereq.url ~ "\.(png|jpg|jpeg|gif|webp|avif|css|js|mjs|ico|svg|woff2?|ttf|map)(\?.*)?$" || bereq.http.X-Cache-Rule == "cache") {
         if (beresp.http.Cache-Control ~ "no-store|no-cache|private" || beresp.ttl < 120s) {
             set beresp.http.Cache-Control = "public, max-age=3600";
             set beresp.ttl = 1h;
@@ -242,6 +255,14 @@ sub vcl_backend_response {
     if (bereq.http.X-Cache-Keep) {
         set beresp.keep = std.duration(bereq.http.X-Cache-Keep + "s", 30s);
     }
+}
+
+sub vcl_backend_error {
+    # Varnish's own fetch failed (an oversized backend header, a timeout,
+    # no storage): mark the synthetic 503 so the WAF serves this request
+    # straight from the backend instead and logs it as X-Cache: ERROR. The
+    # built-in vcl_backend_error still runs after this.
+    set beresp.http.X-Cache-Fetch-Error = "1";
 }
 
 sub vcl_deliver {

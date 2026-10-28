@@ -39,7 +39,7 @@ sudo systemctl edit varnish
 ```ini
 [Service]
 ExecStart=
-ExecStart=/usr/sbin/varnishd -a 127.0.0.1:6081 -f /etc/varnish/default.vcl -s malloc,256m
+ExecStart=/usr/sbin/varnishd -a 127.0.0.1:6081 -f /etc/varnish/default.vcl -s malloc,256m -p http_resp_hdr_len=32k -p http_resp_size=64k -p http_req_hdr_len=32k -p http_req_size=64k -p workspace_backend=128k -p workspace_client=128k
 ```
 
 ```bash

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"palisade/internal/storage"
@@ -142,6 +143,107 @@ func TestParseVarnishStats(t *testing.T) {
 		}
 		if got != want {
 			t.Errorf("%s: got %+v, want %+v", name, got, want)
+		}
+	}
+}
+
+func TestParseCacheRules(t *testing.T) {
+	rules, err := ParseCacheRules("# static\ncache /assets/*\n\nbypass /api/\ncache /api/public/\r\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{
+		"/assets/a.png":    "cache",
+		"/api/users":       "bypass",
+		"/api/public/feed": "cache",
+		"/apix":            "",
+		"/":                "",
+		"/api/public":      "bypass",
+	} {
+		got := ""
+		if r := matchCacheRule(rules, path); r != nil {
+			got = map[bool]string{true: "cache", false: "bypass"}[r.cache]
+		}
+		if got != want {
+			t.Errorf("%s: got %q, want %q", path, got, want)
+		}
+	}
+	for _, bad := range []string{"cache", "keep /a", "cache assets/", "cache /a*b", "cache /a /b"} {
+		if _, err := ParseCacheRules(bad); err == nil {
+			t.Errorf("%q: accepted", bad)
+		}
+	}
+	if _, err := ParseCacheRules(strings.Repeat("cache /a\n", maxCacheRules+1)); err == nil {
+		t.Error("over the cap: accepted")
+	}
+}
+
+// TestCacheRulesAndFetchFallback runs the cache-routed proxy against a fake
+// Varnish: bypass rules skip it, cache rules tag the request, and a 503 that
+// Varnish marks as its own fetch failure is served from the backend instead.
+func TestCacheRulesAndFetchFallback(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("backend " + r.URL.Path + " rule=" + r.Header.Get("X-Cache-Rule")))
+	}))
+	defer backend.Close()
+	var seen []string
+	var seenRule string
+	varnish := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.Path)
+		seenRule = r.Header.Get("X-Cache-Rule")
+		switch r.URL.Path {
+		case "/base/fail.png":
+			w.Header().Set("X-Cache-Fetch-Error", "1")
+			w.WriteHeader(http.StatusServiceUnavailable)
+		case "/base/down":
+			w.WriteHeader(http.StatusServiceUnavailable) // the backend's own 503
+		default:
+			w.Header().Set("X-Cache", "MISS")
+			_, _ = w.Write([]byte("varnish"))
+		}
+	}))
+	defer varnish.Close()
+
+	db := openTestDB(t)
+	if err := db.AddService("shop", "shop.com", "", backend.URL+"/base", 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := db.ListServices()
+	if err := db.SetServiceCache(list[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetServiceCacheTuning(list[0].ID, 0, 0, 0, 0, "bypass /api/\ncache /api/public/"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetVarnishConfig(storage.VarnishConfig{Enabled: true, Addr: strings.TrimPrefix(varnish.URL, "http://")}); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rp, _ := reg.Proxy("shop")
+	cases := []struct {
+		path, wantBody, wantCache, wantSeen, wantRule string
+		wantCode                                      int
+	}{
+		{"/page", "varnish", "MISS", "/base/page", "", 200},
+		{"/api/users", "backend /base/api/users rule=", "", "", "", 200},
+		{"/api/public/feed", "varnish", "MISS", "/base/api/public/feed", "cache", 200},
+		{"/fail.png", "backend /base/fail.png rule=", "ERROR", "/base/fail.png", "", 200},
+		{"/down", "", "", "/base/down", "", 503},
+	}
+	for _, tc := range cases {
+		seen, seenRule = nil, ""
+		req := httptest.NewRequest(http.MethodGet, "http://shop.com"+tc.path, nil)
+		req.Header.Set("X-Cache-Rule", "cache") // a client copy must never survive
+		rec := httptest.NewRecorder()
+		rp.ServeHTTP(rec, req)
+		if rec.Code != tc.wantCode || rec.Header().Get("X-Cache") != tc.wantCache || (tc.wantBody != "" && rec.Body.String() != tc.wantBody) {
+			t.Errorf("%s: %d X-Cache=%q %q, want %d %q %q", tc.path, rec.Code, rec.Header().Get("X-Cache"), rec.Body.String(), tc.wantCode, tc.wantCache, tc.wantBody)
+		}
+		if got := strings.Join(seen, ","); got != tc.wantSeen || seenRule != tc.wantRule {
+			t.Errorf("%s: varnish saw %q rule=%q, want %q rule=%q", tc.path, got, seenRule, tc.wantSeen, tc.wantRule)
 		}
 	}
 }

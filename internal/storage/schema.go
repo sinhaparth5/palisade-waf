@@ -153,7 +153,8 @@ func (db *DB) schemaStatements() []string {
 			ai_crawler_policy TEXT NOT NULL DEFAULT '',
 			breach_action    TEXT NOT NULL DEFAULT '',
 			breach_fields    TEXT NOT NULL DEFAULT '',
-			response_inspect TEXT NOT NULL DEFAULT ''
+			response_inspect TEXT NOT NULL DEFAULT '',
+			cache_rules      TEXT NOT NULL DEFAULT ''
 		)`, pk, ts),
 
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS certificates (

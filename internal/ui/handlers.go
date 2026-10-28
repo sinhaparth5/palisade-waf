@@ -3231,7 +3231,11 @@ func (h *Handler) SetServiceCacheTuning(c echo.Context) error {
 	if ttlCeiling > 0 && ttlFloor > ttlCeiling {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "TTL floor cannot be greater than the ceiling"})
 	}
-	if err := h.db.SetServiceCacheTuning(id, ttlFloor, ttlCeiling, grace, keep); err != nil {
+	rules := strings.TrimSpace(strings.ReplaceAll(c.FormValue("cache_rules"), "\r\n", "\n"))
+	if _, err := services.ParseCacheRules(rules); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "cache rules " + err.Error()})
+	}
+	if err := h.db.SetServiceCacheTuning(id, ttlFloor, ttlCeiling, grace, keep, rules); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	if err := h.registry.Reload(h.db); err != nil {
@@ -3314,7 +3318,7 @@ func (h *Handler) ServicesCacheStats(c echo.Context) error {
 	rows := make([]map[string]any, 0, len(results))
 	for _, r := range results {
 		rows = append(rows, map[string]any{
-			"App": r.App, "Hits": r.Hits, "Misses": r.Misses, "Passes": r.Passes,
+			"App": r.App, "Hits": r.Hits, "Misses": r.Misses, "Passes": r.Passes, "Errors": r.Errors,
 			"Ratio": cacheRatio(uint64(r.Hits), uint64(r.Misses)),
 		})
 	}

@@ -321,6 +321,7 @@
     ttlCeilingInput.value = parseInt(d.ttlCeiling) > 0 ? d.ttlCeiling : '';
     graceInput.value = parseInt(d.grace) > 0 ? d.grace : '';
     keepInput.value = parseInt(d.keep) > 0 ? d.keep : '';
+    document.getElementById('svc-cache-rules').value = d.cacheRules || '';
 
     cachePurgeForm.reset();
     cachePurgeForm.setAttribute('hx-post', adminPath + '/services/cache-purge/' + d.id);

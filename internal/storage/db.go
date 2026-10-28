@@ -363,6 +363,7 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"services", "breach_action TEXT NOT NULL DEFAULT ''"},
 	{"services", "breach_fields TEXT NOT NULL DEFAULT ''"},
 	{"services", "response_inspect TEXT NOT NULL DEFAULT ''"},
+	{"services", "cache_rules TEXT NOT NULL DEFAULT ''"},
 }
 
 func (db *DB) migrate() error {
@@ -942,6 +943,9 @@ type Service struct {
 	// ResponseInspect runs CRS's outbound rules over the backend's text
 	// responses (issue #192): "" off, "log" or "block".
 	ResponseInspect string
+	// CacheRules are per-path Varnish overrides (issue #212), one
+	// "cache /path" or "bypass /path" per line; see services.ParseCacheRules.
+	CacheRules string
 	// Gate is the maintenance mode and waiting room (issue #198), filled
 	// from service_gate by services.Registry.Reload.
 	Gate ServiceGate
@@ -1291,10 +1295,11 @@ func (db *DB) SetServiceCacheSession(id int, enabled bool, cookieName string) er
 // which read these back as X-Cache-TTL-Floor/-Ceiling/-Grace/-Keep headers).
 // Each value is seconds; 0 means "unset", falling back to the VCL's own
 // defaults (a 1h floor for static assets, no ceiling, 30s grace/keep).
-func (db *DB) SetServiceCacheTuning(id, ttlFloor, ttlCeiling, grace, keep int) error {
+// rules are the per-path cache rules (Service.CacheRules).
+func (db *DB) SetServiceCacheTuning(id, ttlFloor, ttlCeiling, grace, keep int, rules string) error {
 	_, err := db.exec(
-		`UPDATE services SET cache_ttl_floor = ?, cache_ttl_ceiling = ?, cache_grace = ?, cache_keep = ? WHERE id = ?`,
-		ttlFloor, ttlCeiling, grace, keep, id,
+		`UPDATE services SET cache_ttl_floor = ?, cache_ttl_ceiling = ?, cache_grace = ?, cache_keep = ?, cache_rules = ? WHERE id = ?`,
+		ttlFloor, ttlCeiling, grace, keep, rules, id,
 	)
 	return err
 }
@@ -1440,12 +1445,12 @@ func (db *DB) SetCaptchaConfig(c CaptchaConfig) error {
 
 // serviceColumns is shared by ListServices/GetService so their SELECT list
 // and Scan args can't drift out of sync as columns are added.
-const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy, breach_action, breach_fields, response_inspect`
+const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy, breach_action, breach_fields, response_inspect, cache_rules`
 
 func (db *DB) scanService(row interface{ Scan(...any) error }) (Service, error) {
 	var s Service
 	var extra, aliases, login, breachFields string
-	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy, &s.BreachAction, &breachFields, &s.ResponseInspect)
+	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy, &s.BreachAction, &breachFields, &s.ResponseInspect, &s.CacheRules)
 	if extra != "" {
 		s.ExtraBackends = strings.Split(extra, "\n")
 	}
@@ -1560,6 +1565,7 @@ type CacheResult struct {
 	Hits   int
 	Misses int
 	Passes int
+	Errors int // Varnish failed; served from the backend (X-Cache: ERROR)
 }
 
 // CacheResultsSince groups cache verdicts per service for requests at or
@@ -1569,7 +1575,8 @@ func (db *DB) CacheResultsSince(since time.Time) ([]CacheResult, error) {
 		SELECT app_name,
 		       SUM(CASE WHEN cache_status = 'HIT'  THEN 1 ELSE 0 END),
 		       SUM(CASE WHEN cache_status = 'MISS' THEN 1 ELSE 0 END),
-		       SUM(CASE WHEN cache_status = 'PASS' THEN 1 ELSE 0 END)
+		       SUM(CASE WHEN cache_status = 'PASS' THEN 1 ELSE 0 END),
+		       SUM(CASE WHEN cache_status = 'ERROR' THEN 1 ELSE 0 END)
 		FROM requests
 		WHERE ts >= ? AND cache_status != ''
 		GROUP BY app_name
@@ -1581,7 +1588,7 @@ func (db *DB) CacheResultsSince(since time.Time) ([]CacheResult, error) {
 	var out []CacheResult
 	for rows.Next() {
 		var r CacheResult
-		if err := rows.Scan(&r.App, &r.Hits, &r.Misses, &r.Passes); err != nil {
+		if err := rows.Scan(&r.App, &r.Hits, &r.Misses, &r.Passes, &r.Errors); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -1897,7 +1904,7 @@ type LogFilter struct {
 	From        time.Time // ts >= From, if non-zero
 	To          time.Time // ts <= To, if non-zero
 	AppName     string    // exact match, if non-empty
-	StatusClass string    // "" | "2xx" | "3xx" | "4xx" | "5xx" | "blocked"
+	StatusClass string    // "" | "2xx" | "3xx" | "4xx" | "5xx" | "blocked" | "cache_error"
 	Limit       int
 	Offset      int
 }
@@ -1929,6 +1936,8 @@ func (f LogFilter) where() (string, []any) {
 		clause += " AND status >= 500"
 	case "blocked":
 		clause += " AND blocked = 1"
+	case "cache_error":
+		clause += " AND cache_status = 'ERROR'"
 	}
 	return clause, args
 }
