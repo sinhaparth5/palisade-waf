@@ -10,22 +10,22 @@
        <body> keeps this page's slate-200 default borders. -->
   <link rel="stylesheet" href="{{.AdminPath}}/static/css/tailwind.min.css?v={{.Asset}}"/>
 </head>
-<body class="page-login min-h-dvh bg-white lg:bg-brand-tint" data-admin-path="{{.AdminPath}}">
+<body class="page-login min-h-dvh bg-canvas" data-admin-path="{{.AdminPath}}">
 
   <div class="min-h-dvh w-full lg:flex lg:items-stretch lg:gap-8 lg:p-8">
 
     <!-- ── Form column ─────────────────────────────────────────────────────── -->
-    <div class="flex flex-1 flex-col lg:rounded-[32px] lg:bg-white lg:shadow-xs lg:border lg:border-slate-100 lg:overflow-hidden">
+    <div class="flex flex-1 flex-col lg:bg-card lg:border lg:border-edge lg:overflow-hidden">
 
       <!-- Art banner: mobile/tablet only, sits above the form -->
       <div class="relative h-52 sm:h-64 w-full shrink-0 overflow-hidden lg:hidden">
         <img src="{{.AdminPath}}/static/imgs/login-security-v2.webp" alt="" aria-hidden="true"
              width="1000" height="1250" fetchpriority="high"
-             class="absolute inset-0 h-full w-full object-cover object-center"/>
+             class="absolute inset-0 h-full w-full object-cover object-center grayscale-[.6] sepia-[.25]"/>
         <div class="absolute inset-0 bg-linear-to-t from-black/35 via-transparent to-transparent"></div>
         <span class="absolute left-5 bottom-4 flex items-center gap-2">
           <img src="{{.AdminPath}}/static/imgs/logo.svg" alt="" class="w-6 h-6 drop-shadow-sm"/>
-          <span class="text-white text-sm font-semibold tracking-wide drop-shadow-sm">Palisade</span>
+          <span class="font-mono text-white text-sm uppercase tracking-[.16em] drop-shadow-sm">Palisade</span>
         </span>
       </div>
 
@@ -35,14 +35,14 @@
           <!-- Brand (desktop only; mobile shows it on the art banner instead) -->
           <span class="hidden lg:flex items-center gap-2 mb-3">
             <img src="{{.AdminPath}}/static/imgs/logo.svg" alt="" class="w-6 h-6"/>
-            <span class="text-brand-dark text-sm font-bold tracking-wide">Palisade</span>
+            <span class="font-mono text-ink text-sm uppercase tracking-[.16em]">Palisade</span>
           </span>
 
           {{if .TOTPStage}}
-          <h1 class="text-slate-900 text-3xl sm:text-4xl font-extrabold leading-tight mb-2">Two-factor authentication</h1>
+          <h1 class="font-mono text-ink text-2xl sm:text-3xl font-medium uppercase tracking-[.04em] leading-tight mb-2">Two-factor authentication</h1>
           <p class="text-slate-500 text-sm sm:text-base mb-8">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
           {{else}}
-          <h1 class="text-slate-900 text-3xl sm:text-4xl font-extrabold leading-tight mb-2">Welcome back</h1>
+          <h1 class="font-mono text-ink text-2xl sm:text-3xl font-medium uppercase tracking-[.04em] leading-tight mb-2">Welcome back</h1>
           <p class="text-slate-500 text-sm sm:text-base mb-8">Sign in to manage your services, rules, and traffic.</p>
           {{end}}
 
@@ -63,7 +63,7 @@
           {{if .TOTPStage}}
           <form action="{{.AdminPath}}/login/totp" method="POST" novalidate>
             <div class="mb-2">
-              <label class="block text-slate-700 text-sm font-semibold mb-2" for="login-code">Authentication code</label>
+              <label class="field-label mb-2" for="login-code">Authentication code</label>
               <input
                 id="login-code"
                 name="code"
@@ -73,14 +73,10 @@
                 placeholder="123456"
                 autofocus
                 required
-                class="w-full rounded-lg border border-slate-200 bg-white
-                       text-slate-800 placeholder:text-slate-400 text-lg tracking-[0.25em] text-center
-                       px-4 py-3.5 outline-hidden transition
-                       focus:border-brand focus:ring-2 focus:ring-brand/20"/>
+                class="field text-lg tracking-[0.25em] text-center px-4 py-3.5"/>
             </div>
             <button type="submit"
-                    class="mt-6 w-full rounded-lg bg-brand-dark text-white text-base font-bold
-                           py-3.5 hover:bg-green-900 active:scale-[0.98] transition-all duration-150">
+                    class="btn-primary mt-6 w-full py-3.5">
               Verify
             </button>
           </form>
@@ -88,7 +84,7 @@
           {{if .PasskeysAvailable}}
           <div class="mt-5 text-center">
             <button type="button" id="pk-login-btn"
-                    class="w-full rounded-lg border border-slate-200 text-slate-700 text-sm font-semibold py-3 hover:bg-slate-50 transition cursor-pointer">
+                    class="btn-ghost w-full py-3 text-[12px]">
               Use a passkey instead
             </button>
             <p id="pk-login-status" class="mt-2 text-xs"></p>
@@ -97,7 +93,7 @@
 
           {{if .EmailAvailable}}
           <form action="{{.AdminPath}}/login/totp/email" method="POST" class="mt-5 text-center">
-            <button type="submit" class="text-brand-dark text-sm font-semibold hover:underline cursor-pointer bg-transparent border-none">
+            <button type="submit" class="font-mono text-ink text-[12px] uppercase tracking-[.06em] underline cursor-pointer bg-transparent border-none">
               Email me a recovery code
             </button>
           </form>
@@ -111,7 +107,7 @@
 
             <!-- Email -->
             <div class="mb-5">
-              <label class="block text-slate-700 text-sm font-semibold mb-2" for="login-email">Email</label>
+              <label class="field-label mb-2" for="login-email">Email</label>
               <input
                 id="login-email"
                 name="email"
@@ -119,16 +115,13 @@
                 autocomplete="email"
                 placeholder="admin@example.com"
                 required
-                class="w-full rounded-lg border border-slate-200 bg-white
-                       text-slate-800 placeholder:text-slate-400 text-sm
-                       px-4 py-3.5 outline-hidden transition
-                       focus:border-brand focus:ring-2 focus:ring-brand/20"/>
+                class="field px-4 py-3.5"/>
             </div>
 
             <!-- Password -->
             <div class="mb-2">
               <div class="flex items-center justify-between mb-2">
-                <label class="block text-slate-700 text-sm font-semibold" for="login-password">Password</label>
+                <label class="field-label mb-0" for="login-password">Password</label>
                 <span class="text-slate-400 text-xs cursor-default" title="Password resets aren't available yet. Contact whoever ran palisade setup.">Forgot password?</span>
               </div>
               <div class="relative">
@@ -139,10 +132,7 @@
                   autocomplete="current-password"
                   placeholder="Password"
                   required
-                  class="w-full rounded-lg border border-slate-200 bg-white
-                         text-slate-800 placeholder:text-slate-400 text-sm
-                         px-4 py-3.5 pr-12 outline-hidden transition
-                         focus:border-brand focus:ring-2 focus:ring-brand/20"/>
+                  class="field px-4 py-3.5 pr-12"/>
                 <button type="button" id="pw-toggle" aria-label="Show password" aria-pressed="false"
                         class="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-slate-600 transition rounded-md">
                   <svg id="pw-icon-off" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
@@ -158,18 +148,17 @@
 
             <!-- Submit -->
             <button type="submit"
-                    class="mt-6 w-full rounded-lg bg-brand-dark text-white text-base font-bold
-                           py-3.5 hover:bg-green-900 active:scale-[0.98] transition-all duration-150">
+                    class="btn-primary mt-6 w-full py-3.5">
               Sign in
             </button>
 
           </form>
           {{if .SSOName}}
           <div class="my-6 flex items-center gap-3 text-slate-400 text-xs" aria-hidden="true">
-            <span class="h-px flex-1 bg-slate-200"></span>or<span class="h-px flex-1 bg-slate-200"></span>
+            <span class="h-px flex-1 bg-line"></span>or<span class="h-px flex-1 bg-line"></span>
           </div>
           <a href="{{.AdminPath}}/login/sso"
-             class="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-700 text-sm font-semibold py-3.5 no-underline hover:bg-slate-50 transition">
+             class="btn-ghost w-full py-3.5 text-[12px] no-underline">
             Sign in with {{.SSOName}}
           </a>
           {{end}}
@@ -179,10 +168,10 @@
     </div><!-- /form column -->
 
     <!-- ── Art column: desktop only ────────────────────────────────────────── -->
-    <div class="relative hidden lg:block lg:w-[42%] xl:w-[45%] rounded-[32px] overflow-hidden">
+    <div class="relative hidden lg:block lg:w-[42%] xl:w-[45%] border border-edge overflow-hidden">
       <img src="{{.AdminPath}}/static/imgs/login-security-v2.webp" alt="" aria-hidden="true"
            width="1000" height="1250" fetchpriority="high"
-           class="absolute inset-0 h-full w-full object-cover object-center"/>
+           class="absolute inset-0 h-full w-full object-cover object-center grayscale-[.6] sepia-[.25]"/>
       <div class="absolute inset-0 bg-linear-to-t from-black/25 via-transparent to-transparent"></div>
     </div>
 

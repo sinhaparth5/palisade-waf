@@ -1,8 +1,8 @@
 {{define "notifications-panel"}}
 <div class="p-3">
   <div class="flex items-center justify-between px-[10px] pt-1 pb-2">
-    <p class="text-[12px] font-bold text-slate-500 uppercase tracking-wider">Recent Blocks</p>
-    <button id="notif-mark-read" type="button" class="text-[12px] font-semibold text-brand bg-transparent border-none cursor-pointer font-sans p-0">Mark all as read</button>
+    <p class="label-mono">Recent Blocks</p>
+    <button id="notif-mark-read" type="button" class="font-mono text-[11px] uppercase tracking-[.06em] text-ink underline bg-transparent border-none cursor-pointer p-0">Mark all as read</button>
   </div>
   {{range .Rows}}
   <div class="flex items-center gap-[10px] px-[10px] py-[10px] rounded-md">
@@ -17,6 +17,6 @@
   {{else}}
   <p class="text-[13px] text-slate-500 p-4 text-center">No blocked requests yet.</p>
   {{end}}
-  <a href="{{.AdminPath}}/logs?status=blocked&mode=history" class="block text-center text-[12px] text-brand font-semibold p-2 no-underline border-t border-canvas mt-1">View all blocked &rarr;</a>
+  <a href="{{.AdminPath}}/logs?status=blocked&mode=history" class="block text-center font-mono text-[11px] uppercase tracking-[.06em] text-ink p-2 no-underline border-t border-line mt-1">View all blocked &rarr;</a>
 </div>
 {{end}}
