@@ -35,7 +35,7 @@
   {{if .Calls}}
   <div class="table-scroll"><table class="w-full text-[13px]">
     <thead>
-      <tr class="text-slate-400 text-[11px] font-semibold uppercase tracking-wide bg-surface">
+      <tr class="label-mono border-b border-edge">
         <th class="px-5 py-3 text-left">Time</th>
         <th class="px-5 py-3 text-left">ASN</th>
         <th class="px-5 py-3 text-left">Organization</th>
@@ -46,17 +46,17 @@
     </thead>
     <tbody>
       {{range .Calls}}
-      <tr class="border-t border-canvas hover:bg-surface transition-colors duration-100">
+      <tr class="border-t border-line hover:bg-surface transition-colors duration-100">
         <td class="px-5 py-3 text-slate-500 whitespace-nowrap">{{fmtTime .Ts}}</td>
         <td class="px-5 py-3 font-mono text-slate-700">AS{{.ASN}}</td>
         <td class="px-5 py-3 text-slate-700 truncate max-w-[280px]" title="{{.Org}}">{{.Org}}</td>
         <td class="px-5 py-3">
           {{if .Error}}
-          <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-red-100 text-red-700" title="{{.Error}}">Error: {{truncate .Error 40}}</span>
+          <span class="tag" title="{{.Error}}"><span class="h-2 w-2 rounded-full bg-danger"></span>Error: {{truncate .Error 40}}</span>
           {{else if .Hosting}}
-          <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-amber-100 text-amber-700">Hosting/VPN</span>
+          <span class="tag"><span class="h-2 w-2 rounded-full bg-warning"></span>Hosting/VPN</span>
           {{else}}
-          <span class="text-[11px] font-semibold px-[10px] py-1 rounded-sm bg-green-100 text-green-700">Not hosting</span>
+          <span class="tag"><span class="h-2 w-2 rounded-full bg-success"></span>Not hosting</span>
           {{end}}
         </td>
         <td class="px-5 py-3 text-right font-mono text-slate-600">{{.InputTokens}} / {{.OutputTokens}}</td>

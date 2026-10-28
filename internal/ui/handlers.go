@@ -3223,9 +3223,9 @@ func (h *Handler) PurgeServiceCache(c echo.Context) error {
 		return c.HTML(http.StatusOK, `<span class="text-red-500">`+html.EscapeString(err.Error())+`</span>`)
 	}
 	if path != "" {
-		return c.HTML(http.StatusOK, `<span class="text-brand-dark">Purged `+html.EscapeString(path)+`*.</span>`)
+		return c.HTML(http.StatusOK, `<span class="text-green-600">Purged `+html.EscapeString(path)+`*.</span>`)
 	}
-	return c.HTML(http.StatusOK, `<span class="text-brand-dark">Purged.</span>`)
+	return c.HTML(http.StatusOK, `<span class="text-green-600">Purged.</span>`)
 }
 
 // cacheRatio formats hits as a share of cacheable lookups (hits+misses);
@@ -3423,7 +3423,7 @@ func (h *Handler) TestWebhook(c echo.Context) error {
 			`<span class="text-red-600 text-[13px]">Send failed: `+template.HTMLEscapeString(err.Error())+`</span>`)
 	}
 	return c.HTML(http.StatusOK,
-		`<span class="text-brand text-[13px] font-medium">Test alert sent.</span>`)
+		`<span class="text-green-600 text-[13px] font-medium">Test alert sent.</span>`)
 }
 
 // SaveEmailSettings persists the daily-report email settings (recipients and
@@ -3513,7 +3513,7 @@ func (h *Handler) TestEmailReport(c echo.Context) error {
 			`<span class="text-red-600 text-[13px]">Send failed: `+template.HTMLEscapeString(err.Error())+`</span>`)
 	}
 	return c.HTML(http.StatusOK,
-		`<span class="text-brand text-[13px] font-medium">Report sent. Check the inbox.</span>`)
+		`<span class="text-green-600 text-[13px] font-medium">Report sent. Check the inbox.</span>`)
 }
 
 // ExportLogs streams the filtered request log as NDJSON (one JSON object per
@@ -3692,7 +3692,7 @@ func (h *Handler) TestDBConnection(c echo.Context) error {
 	flags := fmt.Sprintf("--db-driver %s --db '%s'", driver, dsn)
 	return c.HTML(http.StatusOK, ""+
 		`<div class="flex flex-col gap-2">`+
-		`<span class="text-brand text-[13px] font-medium">Connected successfully.</span>`+
+		`<span class="text-green-600 text-[13px] font-medium">Connected successfully.</span>`+
 		`<p class="text-[12px] text-slate-500">Not applied yet — restart the server with these flags to switch to it:</p>`+
 		`<pre class="bg-slate-900 text-green-400 text-[11px] font-mono rounded-md px-3 py-2 overflow-x-auto">`+template.HTMLEscapeString(flags)+`</pre>`+
 		`</div>`)
@@ -3725,7 +3725,7 @@ func (h *Handler) MigrateDBConfig(c echo.Context) error {
 	}
 	return c.HTML(http.StatusOK, ""+
 		`<div class="flex flex-col gap-2">`+
-		`<span class="text-brand text-[13px] font-medium">Migrated `+fmt.Sprintf("%d", report.TotalRows)+` rows. Your current database is untouched.</span>`+
+		`<span class="text-green-600 text-[13px] font-medium">Migrated `+fmt.Sprintf("%d", report.TotalRows)+` rows. Your current database is untouched.</span>`+
 		migrationReportHTML(report)+
 		`<p class="text-[12px] text-slate-500">Not applied yet — restart the server with the flags above (from "Test connection") to switch to it.</p>`+
 		`</div>`)
