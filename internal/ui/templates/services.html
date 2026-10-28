@@ -4,24 +4,24 @@
 <div class="flex flex-col gap-4">
 
   <!-- ── Add Service Wizard ── -->
-  <div class="card h-fit border-t-2 border-t-brand p-5" id="service-wizard" data-step="1">
+  <div class="card h-fit border-t-4 border-t-edge p-5" id="service-wizard" data-step="1">
     {{template "panel-header" (map "Icon" "hgi-cloud-server" "Title" "Add Service" "Mb" "mb-0")}}
 
     <!-- Step indicator -->
     <div class="flex items-center gap-[6px] my-4 mb-6">
-      <div class="wizard-dot active flex-1 h-1 rounded-full bg-brand" data-dot="1"></div>
-      <div class="wizard-dot flex-1 h-1 rounded-full bg-line" data-dot="2"></div>
-      <div class="wizard-dot flex-1 h-1 rounded-full bg-line" data-dot="3"></div>
-      <div class="wizard-dot flex-1 h-1 rounded-full bg-line" data-dot="4"></div>
+      <div class="wizard-dot active flex-1 h-1 bg-ink" data-dot="1"></div>
+      <div class="wizard-dot flex-1 h-1 bg-line" data-dot="2"></div>
+      <div class="wizard-dot flex-1 h-1 bg-line" data-dot="3"></div>
+      <div class="wizard-dot flex-1 h-1 bg-line" data-dot="4"></div>
     </div>
 
     <form id="service-form" novalidate hx-post="/admin/services" hx-target="#services-body" hx-swap="innerHTML" data-reset="always">
 
       <!-- Step 1: Name -->
       <div class="wizard-step" data-step="1">
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Service Name</label>
+        <label class="field-label">Service Name</label>
         <input name="name" type="text" placeholder="e.g. blog, api, admin-panel"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+          class="field"/>
         <p class="step-error hidden text-[12px] text-red-500 mt-[6px]">This field is required.</p>
         <p class="text-[12px] text-slate-500 mt-[10px]">A friendly name to identify this backend in logs and rules.</p>
       </div>
@@ -31,40 +31,40 @@
         <label class="block text-[12px] text-slate-500 mb-[10px] font-medium">Match incoming requests by</label>
         <div class="flex gap-4 mb-4">
           <label class="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="match_type" value="host" checked class="accent-brand"/>
+            <input type="radio" name="match_type" value="host" checked class="accent-ink"/>
             <span class="text-[14px] font-medium text-slate-800">Host header</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
-            <input type="radio" name="match_type" value="prefix" class="accent-brand"/>
+            <input type="radio" name="match_type" value="prefix" class="accent-ink"/>
             <span class="text-[14px] font-medium text-slate-800">Path prefix</span>
           </label>
         </div>
         <input name="match_value" type="text" placeholder="blog.example.com or /api"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+          class="field"/>
         <p class="step-error hidden text-[12px] text-red-500 mt-[6px]">This field is required.</p>
         <p class="text-[12px] text-slate-500 mt-[10px]">Host matches the request's Host header exactly; prefix matches the start of the URL path.</p>
       </div>
 
       <!-- Step 3: Backend + optional rate limit -->
       <div class="wizard-step hidden" data-step="3">
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Backend URL</label>
+        <label class="field-label">Backend URL</label>
         <input name="backend" type="text" placeholder="http://127.0.0.1:3000"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] font-mono outline-hidden text-slate-800 bg-white"/>
+          class="field font-mono"/>
         <p class="step-error hidden text-[12px] text-red-500 mt-[6px]">This field is required.</p>
         <p class="text-[12px] text-slate-500 mt-[10px]">Where the WAF forwards allowed traffic once it's passed inspection.</p>
 
-        <div class="border-t border-canvas mt-5 pt-4">
+        <div class="border-t border-line mt-5 pt-4">
           <p class="text-[12px] text-slate-500 mb-3 font-medium">Rate Limit <span class="font-normal text-slate-400">(optional)</span></p>
           <div class="flex flex-col sm:flex-row gap-3">
             <div class="flex-1">
               <label class="block text-[11px] text-slate-400 mb-[5px]">Requests / second</label>
               <input name="rps" type="number" min="0" step="0.1" placeholder="e.g. 10"
-                class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+                class="field"/>
             </div>
             <div class="flex-1">
               <label class="block text-[11px] text-slate-400 mb-[5px]">Burst</label>
               <input name="burst" type="number" min="0" placeholder="auto (2× RPS)"
-                class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+                class="field"/>
             </div>
           </div>
           <p class="text-[12px] text-slate-400 mt-[8px]">Leave blank to use the global limit from Settings.</p>
@@ -97,7 +97,7 @@
   <!-- ── Services List ── -->
   <div class="card overflow-hidden">
     {{template "card-header" (map "Cat" "Routing" "Title" "Configured Services" "Badge" (printf "%d services" (len .Services)))}}
-    <div id="services-body" class="flex flex-col gap-1 px-2 pb-2" hx-get="/admin/services/rows" hx-trigger="every 15s" hx-swap="innerHTML">
+    <div id="services-body" class="flex flex-col px-2 pb-2" hx-get="/admin/services/rows" hx-trigger="every 15s" hx-swap="innerHTML">
       {{template "services-rows" .Services}}
     </div>
   </div>
@@ -116,21 +116,21 @@
 <div id="svc-modal-overlay" class="hidden flex fixed inset-0 bg-slate-900/[.55] backdrop-blur-[2px] z-[200] items-center justify-center p-4">
   <div class="card mobile-safe-modal max-w-[720px] overflow-y-auto p-4 sm:p-6">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-[16px] font-bold text-slate-900">Edit <span id="svc-modal-service-name" class="text-brand"></span></h2>
-      <button type="button" id="svc-modal-close" aria-label="Close service settings" class="bg-none border-none cursor-pointer text-slate-500 text-lg leading-none">&times;</button>
+      <h2 class="font-mono text-[15px] uppercase tracking-[.04em] text-ink">Edit <span id="svc-modal-service-name"></span></h2>
+      <button type="button" id="svc-modal-close" aria-label="Close service settings" class="flex h-9 w-9 items-center justify-center rounded-sm border border-edge text-ink text-lg leading-none cursor-pointer hover:bg-surface">&times;</button>
     </div>
 
     <!-- Tabs -->
-    <div id="svc-tabs" class="grid grid-cols-5 sm:grid-cols-9 gap-1 mb-5 bg-surface rounded-lg p-1">
-      <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-white shadow-sm text-slate-900" data-tab="ratelimit">Rate Limit</button>
-      <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="backends">Backends</button>
-      <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="hosts">Hosts</button>
-      <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="bot">Bot</button>
-      <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="uploads">Uploads</button>
-      <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="schema">Schema</button>
-      <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="cache">Cache</button>
-      <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="tls">TLS</button>
-      <button type="button" class="svc-tab-btn flex-1 py-[7px] rounded-sm text-[12px] font-semibold cursor-pointer font-sans border-none bg-transparent text-slate-500" data-tab="gate">Availability</button>
+    <div id="svc-tabs" role="tablist" class="flex flex-wrap gap-1 mb-5 border border-edge p-1">
+      <button type="button" class="svc-tab-btn flex-1 whitespace-nowrap px-2 py-[7px] rounded-sm font-mono text-[11px] uppercase tracking-[.04em] cursor-pointer border-none text-slate-500 hover:text-ink aria-selected:bg-ink aria-selected:text-canvas" role="tab" aria-selected="true" data-tab="ratelimit">Rate Limit</button>
+      <button type="button" class="svc-tab-btn flex-1 whitespace-nowrap px-2 py-[7px] rounded-sm font-mono text-[11px] uppercase tracking-[.04em] cursor-pointer border-none text-slate-500 hover:text-ink aria-selected:bg-ink aria-selected:text-canvas" role="tab" aria-selected="false" data-tab="backends">Backends</button>
+      <button type="button" class="svc-tab-btn flex-1 whitespace-nowrap px-2 py-[7px] rounded-sm font-mono text-[11px] uppercase tracking-[.04em] cursor-pointer border-none text-slate-500 hover:text-ink aria-selected:bg-ink aria-selected:text-canvas" role="tab" aria-selected="false" data-tab="hosts">Hosts</button>
+      <button type="button" class="svc-tab-btn flex-1 whitespace-nowrap px-2 py-[7px] rounded-sm font-mono text-[11px] uppercase tracking-[.04em] cursor-pointer border-none text-slate-500 hover:text-ink aria-selected:bg-ink aria-selected:text-canvas" role="tab" aria-selected="false" data-tab="bot">Bot</button>
+      <button type="button" class="svc-tab-btn flex-1 whitespace-nowrap px-2 py-[7px] rounded-sm font-mono text-[11px] uppercase tracking-[.04em] cursor-pointer border-none text-slate-500 hover:text-ink aria-selected:bg-ink aria-selected:text-canvas" role="tab" aria-selected="false" data-tab="uploads">Uploads</button>
+      <button type="button" class="svc-tab-btn flex-1 whitespace-nowrap px-2 py-[7px] rounded-sm font-mono text-[11px] uppercase tracking-[.04em] cursor-pointer border-none text-slate-500 hover:text-ink aria-selected:bg-ink aria-selected:text-canvas" role="tab" aria-selected="false" data-tab="schema">Schema</button>
+      <button type="button" class="svc-tab-btn flex-1 whitespace-nowrap px-2 py-[7px] rounded-sm font-mono text-[11px] uppercase tracking-[.04em] cursor-pointer border-none text-slate-500 hover:text-ink aria-selected:bg-ink aria-selected:text-canvas" role="tab" aria-selected="false" data-tab="cache">Cache</button>
+      <button type="button" class="svc-tab-btn flex-1 whitespace-nowrap px-2 py-[7px] rounded-sm font-mono text-[11px] uppercase tracking-[.04em] cursor-pointer border-none text-slate-500 hover:text-ink aria-selected:bg-ink aria-selected:text-canvas" role="tab" aria-selected="false" data-tab="tls">TLS</button>
+      <button type="button" class="svc-tab-btn flex-1 whitespace-nowrap px-2 py-[7px] rounded-sm font-mono text-[11px] uppercase tracking-[.04em] cursor-pointer border-none text-slate-500 hover:text-ink aria-selected:bg-ink aria-selected:text-canvas" role="tab" aria-selected="false" data-tab="gate">Availability</button>
     </div>
 
     <!-- ── Rate Limit tab ── -->
@@ -139,14 +139,14 @@
         <input type="hidden" name="service_id" id="rl-service-id"/>
         <div class="flex gap-3 mb-3">
           <div class="flex-1">
-            <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Requests / second</label>
+            <label class="field-label">Requests / second</label>
             <input id="rl-rps" name="rps" type="number" min="0" step="0.1" placeholder="e.g. 10"
-              class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+              class="field"/>
           </div>
           <div class="flex-1">
-            <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Burst</label>
+            <label class="field-label">Burst</label>
             <input id="rl-burst" name="burst" type="number" min="0" placeholder="auto (2× RPS)"
-              class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+              class="field"/>
           </div>
         </div>
         <p class="text-[12px] text-slate-400 mb-4 leading-[1.5]">Set 0 or leave blank to fall through to the global limit from Settings.</p>
@@ -159,19 +159,19 @@
     <div class="svc-tab hidden" data-tab="backends">
       <form id="svc-backends-form" hx-post="{{.AdminPath}}/services/backends/0" hx-target="#services-body" hx-swap="innerHTML">
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Requests are spread across every backend listed. A backend that stops answering leaves the rotation, and GET or HEAD requests that hit it are retried once on another backend.</p>
-        <label for="svc-backends" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Backends, one per line</label>
+        <label for="svc-backends" class="field-label">Backends, one per line</label>
         <textarea id="svc-backends" name="backends" rows="4" placeholder="http://10.0.0.5:3000&#10;http://10.0.0.6:3000"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] font-mono outline-hidden text-slate-800 bg-white mb-4"></textarea>
+          class="field text-[13px] font-mono mb-4"></textarea>
         <div class="flex flex-col gap-2 mb-4">
-          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-line hover:border-brand transition-colors has-[:checked]:border-brand has-[:checked]:bg-green-50">
-            <input type="radio" name="lb_policy" value="round_robin" class="mt-[3px] shrink-0 accent-brand"/>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-sm border border-line hover:border-edge transition-colors has-[:checked]:border-edge has-[:checked]:bg-surface">
+            <input type="radio" name="lb_policy" value="round_robin" class="mt-[3px] shrink-0 accent-ink"/>
             <div>
               <p class="text-[13px] font-semibold text-slate-800">Round robin</p>
               <p class="text-[12px] text-slate-500 mt-[2px]">Each backend takes the next request in turn.</p>
             </div>
           </label>
-          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-line hover:border-brand transition-colors has-[:checked]:border-brand has-[:checked]:bg-green-50">
-            <input type="radio" name="lb_policy" value="least_conn" class="mt-[3px] shrink-0 accent-brand"/>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-sm border border-line hover:border-edge transition-colors has-[:checked]:border-edge has-[:checked]:bg-surface">
+            <input type="radio" name="lb_policy" value="least_conn" class="mt-[3px] shrink-0 accent-ink"/>
             <div>
               <p class="text-[13px] font-semibold text-slate-800">Least connections</p>
               <p class="text-[12px] text-slate-500 mt-[2px]">Each request goes to the backend with the fewest requests in progress. Better when some requests are much slower than others.</p>
@@ -180,14 +180,14 @@
         </div>
         <div class="flex gap-3 mb-3">
           <div class="flex-1">
-            <label for="svc-health-path" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Health check path</label>
+            <label for="svc-health-path" class="field-label">Health check path</label>
             <input id="svc-health-path" name="health_path" type="text" placeholder="/healthz" autocomplete="off"
-              class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white font-mono"/>
+              class="field font-mono"/>
           </div>
           <div class="flex-1">
-            <label for="svc-health-interval" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Every (seconds)</label>
+            <label for="svc-health-interval" class="field-label">Every (seconds)</label>
             <input id="svc-health-interval" name="health_interval" type="number" min="1" max="3600" placeholder="10"
-              class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+              class="field"/>
           </div>
         </div>
         <p class="text-[12px] text-slate-400 mb-4 leading-[1.5]">With a path set, each backend is checked on that path and leaves the rotation until it answers 2xx or 3xx again. Leave it blank to judge backends by real traffic only: one that fails sits out for 10 seconds, then gets traffic again.</p>
@@ -200,12 +200,12 @@
     <div class="svc-tab hidden" data-tab="hosts">
       <form id="svc-hosts-form" hx-post="{{.AdminPath}}/services/hosts/0" hx-target="#services-body" hx-swap="innerHTML">
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Other hostnames that reach this service, such as <span class="font-mono">www.</span> in front of the main domain. They share every setting and rule, and automatic TLS issues certificates for them too.</p>
-        <label for="svc-host-aliases" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Extra hostnames, one per line</label>
+        <label for="svc-host-aliases" class="field-label">Extra hostnames, one per line</label>
         <textarea id="svc-host-aliases" name="aliases" rows="3" placeholder="www.example.com"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] font-mono outline-hidden text-slate-800 bg-white mb-4"></textarea>
-        <label for="svc-canonical-host" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Redirect the other names to</label>
+          class="field text-[13px] font-mono mb-4"></textarea>
+        <label for="svc-canonical-host" class="field-label">Redirect the other names to</label>
         <select id="svc-canonical-host" name="canonical"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white mb-4">
+          class="field mb-4">
           <option value="">Don't redirect, serve every name</option>
         </select>
         <div class="rounded-md border border-line bg-surface p-3 mb-4 text-[12px] text-slate-500 leading-[1.6]">
@@ -223,25 +223,25 @@
       <form id="bot-form" hx-post="{{.AdminPath}}/services/bot/0" hx-target="#services-body" hx-swap="innerHTML" data-admin-path="{{.AdminPath}}">
         <input type="hidden" name="service_id" id="bot-service-id"/>
 
-        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Choose how bot protection applies to this service. The global setting is configured on the <a href="{{.AdminPath}}/settings" class="text-brand underline">Settings</a> page.</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Choose how bot protection applies to this service. The global setting is configured on the <a href="{{.AdminPath}}/settings" class="text-ink underline">Settings</a> page.</p>
 
         <div class="flex flex-col gap-3 mb-5">
-          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-line hover:border-brand transition-colors has-[:checked]:border-brand has-[:checked]:bg-green-50">
-            <input type="radio" name="bot_mode" value="inherit" class="mt-[3px] shrink-0 accent-brand"/>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-sm border border-line hover:border-edge transition-colors has-[:checked]:border-edge has-[:checked]:bg-surface">
+            <input type="radio" name="bot_mode" value="inherit" class="mt-[3px] shrink-0 accent-ink"/>
             <div>
               <p class="text-[13px] font-semibold text-slate-800">Inherit global setting</p>
               <p class="text-[12px] text-slate-500 mt-[2px]">Use whatever is configured on the Settings page. This is the default.</p>
             </div>
           </label>
-          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-line hover:border-brand transition-colors has-[:checked]:border-brand has-[:checked]:bg-green-50">
-            <input type="radio" name="bot_mode" value="always" class="mt-[3px] shrink-0 accent-brand"/>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-sm border border-line hover:border-edge transition-colors has-[:checked]:border-edge has-[:checked]:bg-surface">
+            <input type="radio" name="bot_mode" value="always" class="mt-[3px] shrink-0 accent-ink"/>
             <div>
               <p class="text-[13px] font-semibold text-slate-800">Always challenge</p>
               <p class="text-[12px] text-slate-500 mt-[2px]">Every client must solve the JS challenge before reaching this service, regardless of their score. Useful for sensitive admin or API endpoints.</p>
             </div>
           </label>
-          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-line hover:border-brand transition-colors has-[:checked]:border-brand has-[:checked]:bg-green-50">
-            <input type="radio" name="bot_mode" value="off" class="mt-[3px] shrink-0 accent-brand"/>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-sm border border-line hover:border-edge transition-colors has-[:checked]:border-edge has-[:checked]:bg-surface">
+            <input type="radio" name="bot_mode" value="off" class="mt-[3px] shrink-0 accent-ink"/>
             <div>
               <p class="text-[13px] font-semibold text-slate-800">Disabled for this service</p>
               <p class="text-[12px] text-slate-500 mt-[2px]">No bot challenge for this service, even if globally enabled. Use for public APIs or monitoring endpoints hit by legitimate automation.</p>
@@ -253,36 +253,36 @@
       </form>
       <div id="bot-error" class="text-[12px] text-red-500 mt-[10px]"></div>
 
-      <form id="svc-ai-form" hx-post="{{.AdminPath}}/services/ai/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-canvas pt-5">
+      <form id="svc-ai-form" hx-post="{{.AdminPath}}/services/ai/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">AI crawlers</p>
-        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Overrides the default on the <a href="{{.AdminPath}}/settings" class="text-brand underline">Settings</a> page per category. Block refuses any client whose User-Agent names the category; Allow only skips the challenge for a crawler verified by its source address.</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Overrides the default on the <a href="{{.AdminPath}}/settings" class="text-ink underline">Settings</a> page per category. Block refuses any client whose User-Agent names the category; Allow only skips the challenge for a crawler verified by its source address.</p>
         <div class="mb-4">{{template "ai-crawler-policy" (map "Empty" "Inherit")}}</div>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
 
-      <form id="svc-login-form" hx-post="{{.AdminPath}}/services/login/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-canvas pt-5">
+      <form id="svc-login-form" hx-post="{{.AdminPath}}/services/login/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">Login protection</p>
-        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Against credential stuffing. Every client must solve the bot challenge before reaching these paths, even with bot protection disabled for this service, and each client may submit to them 5 times at once, then once every 12 seconds. Loading the page doesn't count. The challenge needs bot protection turned on in <a href="{{.AdminPath}}/settings" class="text-brand underline">Settings</a>; the limit always applies.</p>
-        <label for="svc-login-paths" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Login paths, one per line (empty = off)</label>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Against credential stuffing. Every client must solve the bot challenge before reaching these paths, even with bot protection disabled for this service, and each client may submit to them 5 times at once, then once every 12 seconds. Loading the page doesn't count. The challenge needs bot protection turned on in <a href="{{.AdminPath}}/settings" class="text-ink underline">Settings</a>; the limit always applies.</p>
+        <label for="svc-login-paths" class="field-label">Login paths, one per line (empty = off)</label>
         <textarea id="svc-login-paths" name="login_paths" rows="3" placeholder="/login&#10;/wp-login.php"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] font-mono outline-hidden text-slate-800 bg-white mb-4"></textarea>
+          class="field text-[13px] font-mono mb-4"></textarea>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
       <div id="svc-login-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
 
-      <form id="svc-breach-form" hx-post="{{.AdminPath}}/services/breach/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-canvas pt-5">
+      <form id="svc-breach-form" hx-post="{{.AdminPath}}/services/breach/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">Leaked password check</p>
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Checks passwords sent to the login paths above against known data breaches (Have I Been Pwned). Only the first 5 characters of the password's SHA-1 hash leave this server. If the lookup fails or takes over 300 ms, the login goes through unchecked. A hit is logged as <code class="font-mono">leaked_password</code>, counts toward autoban, and reaches the backend with <code class="font-mono">X-Palisade-Leaked-Password: 1</code> so the app can ask for a password reset.</p>
-        <label for="svc-breach-action" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Action</label>
+        <label for="svc-breach-action" class="field-label">Action</label>
         <select id="svc-breach-action" name="breach_action"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4">
+          class="field text-[13px] mb-4">
           <option value="">Off</option>
           <option value="log">Log and tell the backend</option>
           <option value="block">Block the login (403)</option>
         </select>
-        <label for="svc-breach-fields" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Password field names (empty = password, passwd, pass, pwd)</label>
+        <label for="svc-breach-fields" class="field-label">Password field names (empty = password, passwd, pass, pwd)</label>
         <input id="svc-breach-fields" name="breach_fields" type="text" autocomplete="off" placeholder="password"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] font-mono outline-hidden text-slate-800 bg-white mb-4"/>
+          class="field text-[13px] font-mono mb-4"/>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
       <div id="svc-breach-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
@@ -296,28 +296,28 @@
           {{template "toggle-switch" (map "Name" "maintenance" "ID" "svc-maintenance")}}
         </label>
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Visitors get a 503 maintenance page with <code class="font-mono">Retry-After</code> instead of a raw backend error. Trusted IPs and anyone who opened the bypass link still reach the backend, so the team can test the deploy.</p>
-        <label for="svc-maint-message" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Message (empty = a generic one)</label>
+        <label for="svc-maint-message" class="field-label">Message (empty = a generic one)</label>
         <textarea id="svc-maint-message" name="maint_message" rows="2" maxlength="500" placeholder="We're upgrading the database and will be back shortly."
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4"></textarea>
+          class="field text-[13px] mb-4"></textarea>
         <div class="grid grid-cols-2 gap-3 mb-4">
           <div>
-            <label for="svc-maint-start" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Starts (UTC, optional)</label>
-            <input id="svc-maint-start" name="maint_start" type="datetime-local" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white"/>
+            <label for="svc-maint-start" class="field-label">Starts (UTC, optional)</label>
+            <input id="svc-maint-start" name="maint_start" type="datetime-local" class="field text-[13px]"/>
           </div>
           <div>
-            <label for="svc-maint-end" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Ends (UTC, optional)</label>
-            <input id="svc-maint-end" name="maint_end" type="datetime-local" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white"/>
+            <label for="svc-maint-end" class="field-label">Ends (UTC, optional)</label>
+            <input id="svc-maint-end" name="maint_end" type="datetime-local" class="field text-[13px]"/>
           </div>
         </div>
         <div id="svc-bypass-wrap" class="hidden mb-4">
-          <p class="block text-[12px] text-slate-500 mb-[6px] font-medium">Bypass link (sets a cookie for 12 hours)</p>
+          <p class="field-label">Bypass link (sets a cookie for 12 hours)</p>
           <p id="svc-bypass-link" class="text-[12px] font-mono text-slate-700 bg-surface border border-line rounded-md px-3 py-2 wrap-anywhere"></p>
           <label class="flex items-center gap-2 mt-2 text-[12px] text-slate-600 cursor-pointer">
-            <input type="checkbox" name="new_bypass" value="1" class="accent-brand"/> Replace it (links already shared stop working)
+            <input type="checkbox" name="new_bypass" value="1" class="accent-ink"/> Replace it (links already shared stop working)
           </label>
         </div>
 
-        <div class="mt-6 border-t border-canvas pt-5">
+        <div class="mt-6 border-t border-line pt-5">
           <label class="flex items-center justify-between cursor-pointer py-2 mb-1">
             <span class="text-[13px] font-semibold text-slate-800">Waiting room</span>
             {{template "toggle-switch" (map "Name" "waiting_room" "ID" "svc-waiting-room")}}
@@ -325,19 +325,19 @@
           <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Lets a fixed number of visitors in at a time; the rest wait in line, first come first served, on a page that refreshes itself. Each place is tied to the visitor's browser and network, so it can't be shared. The queue lives in this Palisade's memory: a restart sends waiting visitors to the back.</p>
           <div class="grid grid-cols-2 gap-3 mb-4">
             <div>
-              <label for="svc-wr-max" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Max active visitors</label>
-              <input id="svc-wr-max" name="wr_max" type="number" min="1" placeholder="500" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white"/>
+              <label for="svc-wr-max" class="field-label">Max active visitors</label>
+              <input id="svc-wr-max" name="wr_max" type="number" min="1" placeholder="500" class="field text-[13px]"/>
             </div>
             <div>
-              <label for="svc-wr-idle" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Session length (minutes idle)</label>
-              <input id="svc-wr-idle" name="wr_idle" type="number" min="1" placeholder="10" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white"/>
+              <label for="svc-wr-idle" class="field-label">Session length (minutes idle)</label>
+              <input id="svc-wr-idle" name="wr_idle" type="number" min="1" placeholder="10" class="field text-[13px]"/>
             </div>
           </div>
-          <label for="svc-wr-message" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Queue page message (empty = a generic one)</label>
+          <label for="svc-wr-message" class="field-label">Queue page message (empty = a generic one)</label>
           <textarea id="svc-wr-message" name="wr_message" rows="2" maxlength="500" placeholder="Tickets go on sale at noon. Thanks for waiting!"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4"></textarea>
-          <label for="svc-wr-crawlers" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Verified search crawlers</label>
-          <select id="svc-wr-crawlers" name="wr_crawlers" class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4">
+            class="field text-[13px] mb-4"></textarea>
+          <label for="svc-wr-crawlers" class="field-label">Verified search crawlers</label>
+          <select id="svc-wr-crawlers" name="wr_crawlers" class="field text-[13px] mb-4">
             <option value="bypass">Let them through (never queued)</option>
             <option value="deny">Answer 503 until the rush is over</option>
           </select>
@@ -365,26 +365,26 @@
     <div class="svc-tab hidden" data-tab="schema">
       <form id="svc-schema-form" hx-post="{{.AdminPath}}/services/schema/0" hx-target="#services-body" hx-swap="innerHTML" data-admin-path="{{.AdminPath}}">
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Validate this service's JSON request bodies against a JSON Schema before they reach the backend — catches malformed or unexpected fields that generic WAF rules have no way to know are wrong for this specific endpoint. Complements the WAF, it doesn't replace it.</p>
-        <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">JSON Schema</label>
+        <label class="field-label">JSON Schema</label>
         <textarea id="svc-schema-text" name="schema" rows="8" placeholder='{"type": "object", "required": ["email"], "properties": {"email": {"type": "string", "format": "email"}}}'
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] font-mono outline-hidden text-slate-800 bg-white mb-4"></textarea>
+          class="field text-[13px] font-mono mb-4"></textarea>
         <div class="flex flex-col gap-2 mb-4">
-          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-line hover:border-brand transition-colors has-[:checked]:border-brand has-[:checked]:bg-green-50">
-            <input type="radio" name="mode" value="off" class="mt-[3px] shrink-0 accent-brand"/>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-sm border border-line hover:border-edge transition-colors has-[:checked]:border-edge has-[:checked]:bg-surface">
+            <input type="radio" name="mode" value="off" class="mt-[3px] shrink-0 accent-ink"/>
             <div>
               <p class="text-[13px] font-semibold text-slate-800">Off</p>
               <p class="text-[12px] text-slate-500 mt-[2px]">No schema validation. This is the default.</p>
             </div>
           </label>
-          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-line hover:border-brand transition-colors has-[:checked]:border-brand has-[:checked]:bg-green-50">
-            <input type="radio" name="mode" value="log" class="mt-[3px] shrink-0 accent-brand"/>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-sm border border-line hover:border-edge transition-colors has-[:checked]:border-edge has-[:checked]:bg-surface">
+            <input type="radio" name="mode" value="log" class="mt-[3px] shrink-0 accent-ink"/>
             <div>
               <p class="text-[13px] font-semibold text-slate-800">Log only</p>
               <p class="text-[12px] text-slate-500 mt-[2px]">Mismatches are recorded on the request log but never block traffic. Good for checking a new schema against real requests before enforcing it.</p>
             </div>
           </label>
-          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-md border border-line hover:border-brand transition-colors has-[:checked]:border-brand has-[:checked]:bg-green-50">
-            <input type="radio" name="mode" value="enforce" class="mt-[3px] shrink-0 accent-brand"/>
+          <label class="flex items-start gap-3 cursor-pointer p-3 rounded-sm border border-line hover:border-edge transition-colors has-[:checked]:border-edge has-[:checked]:bg-surface">
+            <input type="radio" name="mode" value="enforce" class="mt-[3px] shrink-0 accent-ink"/>
             <div>
               <p class="text-[13px] font-semibold text-slate-800">Enforce</p>
               <p class="text-[12px] text-slate-500 mt-[2px]">A JSON body that doesn't match the schema is rejected with 400 before it reaches the backend.</p>
@@ -395,17 +395,17 @@
       </form>
       <div id="svc-schema-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
 
-      <form id="svc-openapi-form" hx-post="{{.AdminPath}}/services/openapi/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-canvas pt-5">
+      <form id="svc-openapi-form" hx-post="{{.AdminPath}}/services/openapi/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">OpenAPI spec</p>
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Only the routes and methods your OpenAPI 3.x document declares get through. Required parameters, parameter types and JSON bodies are checked against it too. Paths are matched after the service prefix is stripped, and a <code class="font-mono">servers</code> base path such as <code class="font-mono">/v1</code> may be present or not. For routes it declares, the spec replaces the JSON Schema above. A violation is logged as <code class="font-mono">openapi_violation</code>.</p>
-        <label for="svc-openapi-file" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Load from file (JSON or YAML), or paste below</label>
+        <label for="svc-openapi-file" class="field-label">Load from file (JSON or YAML), or paste below</label>
         <input id="svc-openapi-file" type="file" accept=".json,.yaml,.yml,application/json,application/yaml"
           class="block w-full text-[12px] text-slate-600 mb-3 file:mr-3 file:rounded-md file:border file:border-line file:bg-white file:px-3 file:py-[6px] file:text-[12px] file:font-medium file:text-slate-600"/>
         <textarea id="svc-openapi-text" name="openapi_spec" rows="8" placeholder="openapi: 3.0.3&#10;paths:&#10;  /users/{id}:&#10;    get: {}"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] font-mono outline-hidden text-slate-800 bg-white mb-4"></textarea>
-        <label for="svc-openapi-mode" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Mode</label>
+          class="field text-[13px] font-mono mb-4"></textarea>
+        <label for="svc-openapi-mode" class="field-label">Mode</label>
         <select id="svc-openapi-mode" name="openapi_mode"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4">
+          class="field text-[13px] mb-4">
           <option value="off">Off (keep the spec, don't check)</option>
           <option value="log">Log only</option>
           <option value="enforce">Enforce: 404 unknown route, 405 method, 400 bad request</option>
@@ -414,12 +414,12 @@
       </form>
       <div id="svc-openapi-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
 
-      <form id="svc-responses-form" hx-post="{{.AdminPath}}/services/responses/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-canvas pt-5">
+      <form id="svc-responses-form" hx-post="{{.AdminPath}}/services/responses/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">Inspect responses</p>
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Checks the backend's replies for leaked SQL errors, stack traces, PHP/Java/IIS error pages and web shells with the OWASP CRS outbound rules. Logged as <code class="font-mono">response_leak</code>. Only HTML, plain text, JSON and XML up to 64 KiB are inspected; binary, streaming and larger responses pass through untouched. Each inspected response adds about 0.5 ms per KiB.</p>
-        <label for="svc-responses-mode" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Mode</label>
+        <label for="svc-responses-mode" class="field-label">Mode</label>
         <select id="svc-responses-mode" name="response_inspect"
-          class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-4">
+          class="field text-[13px] mb-4">
           <option value="">Off</option>
           <option value="log">Log only</option>
           <option value="block">Block: replace the response with a 502</option>
@@ -432,7 +432,7 @@
     <!-- ── Cache tab ── -->
     <div class="svc-tab hidden" data-tab="cache">
       <form id="svc-cache-form" hx-post="{{.AdminPath}}/services/cache/0" hx-target="#services-body" hx-swap="innerHTML" data-admin-path="{{.AdminPath}}">
-        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Route this service's clean, WAF-inspected traffic through the local Varnish cache to serve static assets from memory. Requires the Varnish integration to be enabled on the <a href="{{.AdminPath}}/settings" class="text-brand underline">Settings</a> page.</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Route this service's clean, WAF-inspected traffic through the local Varnish cache to serve static assets from memory. Requires the Varnish integration to be enabled on the <a href="{{.AdminPath}}/settings" class="text-ink underline">Settings</a> page.</p>
         <label class="flex items-center justify-between cursor-pointer py-2 mb-5">
           <span class="text-[13px] font-semibold text-slate-700">Cache this service</span>
           {{template "toggle-switch" (map "Name" "enabled" "ID" "svc-cache-enabled")}}
@@ -441,62 +441,62 @@
       </form>
       <div id="svc-cache-error" class="text-[12px] text-red-500 mt-[10px]"></div>
 
-      <div class="border-t border-canvas mt-5 pt-4">
+      <div class="border-t border-line mt-5 pt-4">
         <form id="svc-cache-session-form" hx-post="{{.AdminPath}}/services/cache-session/0" hx-target="#services-body" hx-swap="innerHTML" data-admin-path="{{.AdminPath}}">
           <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Also cache logged-in traffic, partitioned per session: each session gets its own cached copy instead of Varnish refusing to cache any request that carries a cookie. Off by default; short TTL (10s) once enabled.</p>
           <label class="flex items-center justify-between cursor-pointer py-2 mb-3">
             <span class="text-[13px] font-semibold text-slate-700">Cache by session</span>
             {{template "toggle-switch" (map "Name" "session_enabled" "ID" "svc-cache-session-enabled")}}
           </label>
-          <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Session cookie name</label>
+          <label class="field-label">Session cookie name</label>
           <input id="svc-cache-session-cookie" name="session_cookie_name" type="text" placeholder="e.g. session_id, connect.sid"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white mb-4"/>
+            class="field mb-4"/>
           <button type="submit" class="btn-primary w-full">Save</button>
         </form>
         <div id="svc-cache-session-error" class="text-[12px] text-red-500 mt-[10px]"></div>
       </div>
 
-      <div class="border-t border-canvas mt-5 pt-4">
+      <div class="border-t border-line mt-5 pt-4">
         <form id="svc-cache-tuning-form" hx-post="{{.AdminPath}}/services/cache-tuning/0" hx-target="#services-body" hx-swap="innerHTML" data-admin-path="{{.AdminPath}}">
           <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Override Varnish's defaults for this service. Leave blank to use the built-in behavior (1h floor for static assets, no ceiling, 30s grace/keep).</p>
           <div class="flex gap-3 mb-3">
             <div class="flex-1">
-              <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">TTL floor (s)</label>
+              <label class="field-label">TTL floor (s)</label>
               <input id="svc-cache-ttl-floor" name="ttl_floor" type="number" min="0" placeholder="e.g. 3600"
-                class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+                class="field"/>
             </div>
             <div class="flex-1">
-              <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">TTL ceiling (s)</label>
+              <label class="field-label">TTL ceiling (s)</label>
               <input id="svc-cache-ttl-ceiling" name="ttl_ceiling" type="number" min="0" placeholder="e.g. 86400"
-                class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+                class="field"/>
             </div>
           </div>
           <div class="flex gap-3 mb-4">
             <div class="flex-1">
-              <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Grace (s)</label>
+              <label class="field-label">Grace (s)</label>
               <input id="svc-cache-grace" name="grace" type="number" min="0" placeholder="30"
-                class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+                class="field"/>
             </div>
             <div class="flex-1">
-              <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Keep (s)</label>
+              <label class="field-label">Keep (s)</label>
               <input id="svc-cache-keep" name="keep" type="number" min="0" placeholder="30"
-                class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white"/>
+                class="field"/>
             </div>
           </div>
-          <label for="svc-cache-rules" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Path rules</label>
+          <label for="svc-cache-rules" class="field-label">Path rules</label>
           <textarea id="svc-cache-rules" name="cache_rules" rows="4" spellcheck="false" placeholder="cache /assets/&#10;cache /api/public/&#10;bypass /api/"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white font-mono"></textarea>
+            class="field text-[13px] font-mono"></textarea>
           <p class="text-[12px] text-slate-500 mt-[6px] mb-4 leading-[1.5]">One <span class="font-mono">cache /path</span> or <span class="font-mono">bypass /path</span> per line; the path is a prefix and the longest match wins. <span class="font-mono">cache</span> stores matching responses like static assets, shared by every visitor: cookies and <span class="font-mono">Set-Cookie</span> are dropped, so never use it for per-user pages. <span class="font-mono">bypass</span> sends requests straight to the backend. Unmatched paths keep the default behavior.</p>
           <button type="submit" class="btn-primary w-full">Save</button>
         </form>
         <div id="svc-cache-tuning-error" class="text-[12px] text-red-500 mt-[10px]"></div>
       </div>
 
-      <div class="border-t border-canvas mt-5 pt-4">
+      <div class="border-t border-line mt-5 pt-4">
         <p class="text-[12px] text-slate-500 mb-3 leading-[1.5]">Immediately evict what Varnish has cached for this service — everything, or only URLs under a path prefix. Useful right after deploying new content to its backend.</p>
         <form id="svc-cache-purge-form" hx-post="{{.AdminPath}}/services/cache-purge/0" hx-target="#svc-cache-purge-status" hx-swap="innerHTML" data-admin-path="{{.AdminPath}}">
           <input name="path" type="text" placeholder="/blog/ — leave blank to purge everything" autocomplete="off"
-            class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white mb-3 font-mono"/>
+            class="field mb-3 font-mono"/>
           <button type="submit" class="w-full py-[10px] rounded-md border border-line bg-white text-slate-700 text-[13px] font-medium cursor-pointer font-sans hover:border-slate-400 transition-colors duration-150">
             Purge cached content
           </button>
@@ -504,7 +504,7 @@
         <div id="svc-cache-purge-status" class="text-[12px] mt-[10px]"></div>
       </div>
 
-      <div class="border-t border-canvas mt-5 pt-4">
+      <div class="border-t border-line mt-5 pt-4">
         <form id="svc-compress-form" hx-post="{{.AdminPath}}/services/compress/0" hx-target="#services-body" hx-swap="innerHTML">
           <label class="flex items-center justify-between cursor-pointer py-2 mb-2">
             <span class="text-[13px] font-semibold text-slate-700">Compress responses</span>
@@ -521,15 +521,15 @@
     <div class="svc-tab hidden" data-tab="tls">
     <div class="flex gap-4 mb-4 flex-wrap">
       <label class="flex items-center gap-2 cursor-pointer">
-        <input type="radio" name="tls_action" value="pool" checked class="accent-brand"/>
+        <input type="radio" name="tls_action" value="pool" checked class="accent-ink"/>
         <span class="text-[14px] font-medium text-slate-800">Saved cert</span>
       </label>
       <label class="flex items-center gap-2 cursor-pointer">
-        <input type="radio" name="tls_action" value="upload" class="accent-brand"/>
+        <input type="radio" name="tls_action" value="upload" class="accent-ink"/>
         <span class="text-[14px] font-medium text-slate-800">Upload cert</span>
       </label>
       <label class="flex items-center gap-2 cursor-pointer">
-        <input type="radio" name="tls_action" value="auto" class="accent-brand"/>
+        <input type="radio" name="tls_action" value="auto" class="accent-ink"/>
         <span class="text-[14px] font-medium text-slate-800">Auto-issue</span>
       </label>
     </div>
@@ -538,9 +538,9 @@
     <form id="tls-pool-form" hx-post="{{.AdminPath}}/services/tls/pool" hx-target="#services-body" hx-swap="innerHTML">
       <input type="hidden" name="service_id" class="tls-service-id"/>
       {{if .PoolCerts}}
-      <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Select certificate</label>
+      <label class="field-label">Select certificate</label>
       <select name="cert_id"
-        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white mb-4">
+        class="field mb-4">
         {{range .PoolCerts}}
         <option value="{{.ID}}">{{.Name}}{{if .Domains}} · {{.Domains}}{{end}}</option>
         {{end}}
@@ -549,7 +549,7 @@
       {{else}}
       <div class="rounded-md bg-canvas border border-line p-4 text-center">
         <p class="text-[13px] text-slate-500 mb-3">No certificates in the pool yet.</p>
-        <a href="{{.AdminPath}}/certificates" class="text-[13px] text-brand font-medium no-underline hover:underline">Add a certificate →</a>
+        <a href="{{.AdminPath}}/certificates" class="text-[13px] text-ink underline hover:text-slate-600">Add a certificate →</a>
       </div>
       {{end}}
     </form>
@@ -557,12 +557,12 @@
     <!-- Manual upload -->
     <form id="tls-upload-form" class="hidden" hx-post="{{.AdminPath}}/services/tls/upload" hx-target="#services-body" hx-swap="innerHTML">
       <input type="hidden" name="service_id" class="tls-service-id"/>
-      <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Certificate (PEM)</label>
+      <label class="field-label">Certificate (PEM)</label>
       <textarea name="cert_pem" rows="4" placeholder="-----BEGIN CERTIFICATE-----"
-        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white mb-3 resize-y"></textarea>
-      <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Private Key (PEM)</label>
+        class="field text-[12px] font-mono mb-3 resize-y"></textarea>
+      <label class="field-label">Private Key (PEM)</label>
       <textarea name="key_pem" rows="4" placeholder="-----BEGIN PRIVATE KEY-----"
-        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white resize-y"></textarea>
+        class="field text-[12px] font-mono resize-y"></textarea>
       <button type="submit" class="btn-primary w-full mt-4">Save Certificate</button>
     </form>
 
@@ -575,7 +575,7 @@
 
     <div id="tls-error" class="text-[12px] text-red-500 mt-[10px]"></div>
 
-    <form id="svc-http3-form" hx-post="{{.AdminPath}}/services/http3/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-canvas pt-4">
+    <form id="svc-http3-form" hx-post="{{.AdminPath}}/services/http3/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-line pt-4">
       <label class="flex items-center justify-between cursor-pointer py-2 mb-2">
         <span class="text-[13px] font-semibold text-slate-700">HTTP/3 (QUIC)</span>
         {{template "toggle-switch" (map "Name" "enabled" "ID" "svc-http3-enabled")}}
@@ -588,38 +588,38 @@
     </form>
     <div id="svc-http3-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
 
-    <form id="svc-mtls-form" hx-post="{{.AdminPath}}/services/mtls/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-canvas pt-4">
+    <form id="svc-mtls-form" hx-post="{{.AdminPath}}/services/mtls/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-line pt-4">
       <p class="text-[13px] font-semibold text-slate-700 mb-1">Client certificates (mTLS)</p>
       <p class="text-[12px] text-slate-500 mb-3 leading-[1.5]">Only clients holding a certificate from your CA get through. A request without one gets 403, logged as <code class="font-mono">mtls_required</code>. The backend receives <code class="font-mono">X-Client-Cert-Verified</code>, <code class="font-mono">-Subject</code> and <code class="font-mono">-Fingerprint</code> (SHA-256); clients can't set these themselves. Revocation (CRL/OCSP) is not checked.</p>
       <p class="text-[12px] text-amber-700 bg-amber-50 border border-amber-100 rounded-md p-3 mb-3 leading-[1.5]">Clients must connect to Palisade directly. Behind Cloudflare's proxy, TLS ends at Cloudflare and no client certificate reaches this server.</p>
-      <label for="svc-mtls-mode" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Mode</label>
+      <label for="svc-mtls-mode" class="field-label">Mode</label>
       <select id="svc-mtls-mode" name="mtls_mode"
-        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[13px] outline-hidden text-slate-800 bg-white mb-3">
+        class="field text-[13px] mb-3">
         <option value="off">Off</option>
         <option value="optional">Optional: forward the result, never block</option>
         <option value="required">Required: 403 without a valid certificate</option>
       </select>
-      <label for="svc-mtls-ca" class="block text-[12px] text-slate-500 mb-[6px] font-medium">Client CA certificate(s), PEM</label>
+      <label for="svc-mtls-ca" class="field-label">Client CA certificate(s), PEM</label>
       <textarea id="svc-mtls-ca" name="mtls_ca" rows="4" placeholder="-----BEGIN CERTIFICATE-----"
-        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white mb-1 resize-y"></textarea>
+        class="field text-[12px] font-mono mb-1 resize-y"></textarea>
       <p id="svc-mtls-ca-note" class="hidden text-[12px] text-slate-500 mb-3">A CA is saved. Leave this empty to keep it.</p>
-      <label for="svc-mtls-allow" class="block text-[12px] text-slate-500 mb-[6px] mt-2 font-medium">Allowlist (optional, one per line)</label>
+      <label for="svc-mtls-allow" class="field-label mt-2">Allowlist (optional, one per line)</label>
       <textarea id="svc-mtls-allow" name="mtls_allow" rows="3" placeholder="subject CN, SAN DNS name or SHA-256 fingerprint"
-        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[12px] font-mono outline-hidden text-slate-800 bg-white mb-3 resize-y"></textarea>
+        class="field text-[12px] font-mono mb-3 resize-y"></textarea>
       <button type="submit" class="btn-primary w-full">Save</button>
     </form>
     <div id="svc-mtls-error" role="alert" aria-live="polite" class="text-[12px] text-red-500 mt-[10px]"></div>
 
-    <form id="tls-clear-form" hx-post="/admin/services/tls/clear" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-canvas pt-4">
+    <form id="tls-clear-form" hx-post="/admin/services/tls/clear" hx-target="#services-body" hx-swap="innerHTML" class="mt-4 border-t border-line pt-4">
       <input type="hidden" name="service_id" class="tls-service-id"/>
-      <button type="submit" class="w-full py-[10px] rounded-md border border-red-100 bg-white text-red-500 text-[13px] font-medium cursor-pointer font-sans">Disable TLS for this service</button>
+      <button type="submit" class="btn-ghost w-full py-[10px] border-red-300 text-red-600 hover:bg-red-50">Disable TLS for this service</button>
     </form>
     </div><!-- /TLS tab -->
 
     <!-- ── Danger zone ── -->
-    <div class="mt-5 border-t border-canvas pt-4">
+    <div class="mt-5 border-t border-line pt-4">
       <button type="button" id="svc-delete-btn" hx-target="#services-body" hx-swap="innerHTML"
-        class="w-full py-[10px] rounded-md border border-red-200 bg-red-50 text-red-600 text-[13px] font-semibold cursor-pointer font-sans hover:bg-red-100 transition-colors duration-150">
+        class="btn-ghost w-full py-[10px] border-red-300 bg-red-50 text-red-600 hover:bg-red-100">
         Remove this service
       </button>
     </div>
@@ -630,20 +630,20 @@
 <div id="acme-email-modal-overlay" class="hidden flex fixed inset-0 bg-slate-900/[.55] backdrop-blur-[2px] z-[200] items-center justify-center p-4">
   <div class="card mobile-safe-modal max-w-[400px] overflow-y-auto p-4 sm:p-6">
     <div class="flex items-center gap-3 mb-5">
-      <div class="w-9 h-9 rounded-md bg-brand-tint flex items-center justify-center shrink-0">
-        <i class="hgi hgi-stroke hgi-rounded hgi-certificate-01 text-base text-brand-dark"></i>
+      <div class="w-9 h-9 border border-edge flex items-center justify-center shrink-0">
+        <i class="hgi hgi-stroke hgi-rounded hgi-certificate-01 text-base text-ink"></i>
       </div>
       <div>
-        <h2 class="text-[16px] font-bold text-slate-900">Let's Encrypt email</h2>
+        <h2 class="font-mono text-[15px] uppercase tracking-[.04em] text-ink">Let's Encrypt email</h2>
         <p class="text-[12px] text-slate-500">Required to register your ACME account</p>
       </div>
-      <button type="button" id="acme-email-modal-close" class="ml-auto bg-none border-none cursor-pointer text-slate-500 text-lg leading-none">&times;</button>
+      <button type="button" id="acme-email-modal-close" aria-label="Close" class="ml-auto flex h-9 w-9 items-center justify-center rounded-sm border border-edge text-ink text-lg leading-none cursor-pointer hover:bg-surface">&times;</button>
     </div>
     <form id="acme-email-form" hx-post="/admin/settings/acme-email" hx-target="#services-body" hx-swap="innerHTML">
       <input type="hidden" name="service_id" id="acme-email-service-id"/>
-      <label class="block text-[12px] text-slate-500 mb-[6px] font-medium">Email address</label>
+      <label class="field-label">Email address</label>
       <input id="acme-email-input" name="email" type="email" placeholder="you@example.com" autocomplete="email"
-        class="focus-green w-full border-[1.5px] border-line rounded-md px-[14px] py-[10px] text-[14px] outline-hidden text-slate-800 bg-white mb-3"/>
+        class="field mb-3"/>
       <div id="acme-email-error" class="text-[12px] text-red-500 mb-3"></div>
       <p class="text-[12px] text-slate-400 mb-4 leading-[1.5]">Let's Encrypt sends renewal notices and important account alerts to this address. It is not shown publicly.</p>
       <button type="submit" class="btn-primary w-full">Save &amp; enable auto-TLS</button>
@@ -655,27 +655,27 @@
 
 {{define "cache-stats"}}
 {{if not .Enabled}}
-<p class="px-5 py-4 text-[13px] text-slate-500 sm:px-6">The Varnish integration is off. Enable it on the <a href="{{.AdminPath}}/settings" class="text-brand underline">Settings</a> page, then turn on caching per service.</p>
+<p class="px-5 py-4 text-[13px] text-slate-500 sm:px-6">The Varnish integration is off. Enable it on the <a href="{{.AdminPath}}/settings" class="text-ink underline">Settings</a> page, then turn on caching per service.</p>
 {{else}}
 {{if .StatsErr}}
 <p class="border-b border-line px-5 py-3 text-[12px] leading-[1.5] text-amber-700 sm:px-6">Varnish counters unavailable: <span class="font-mono">{{.StatsErr}}</span>. The WAF's service user needs read access to varnishd's shared memory (membership in the <span class="font-mono">varnish</span> group).</p>
 {{else}}
 <div class="grid grid-cols-2 gap-4 border-b border-line px-5 py-4 sm:grid-cols-4 sm:px-6">
   <div>
-    <p class="text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">Hit ratio</p>
-    <p class="text-[18px] font-bold text-slate-900">{{.Stats.Ratio}}</p>
+    <p class="label-mono">Hit ratio</p>
+    <p class="font-mono text-[18px] font-medium text-slate-900">{{.Stats.Ratio}}</p>
   </div>
   <div>
-    <p class="text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">Objects</p>
-    <p class="text-[18px] font-bold text-slate-900">{{.Stats.Objects}}</p>
+    <p class="label-mono">Objects</p>
+    <p class="font-mono text-[18px] font-medium text-slate-900">{{.Stats.Objects}}</p>
   </div>
   <div>
-    <p class="text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">Memory</p>
-    <p class="text-[18px] font-bold text-slate-900">{{.Stats.Used}} <span class="text-[12px] font-medium text-slate-500">/ {{.Stats.Total}}</span></p>
+    <p class="label-mono">Memory</p>
+    <p class="font-mono text-[18px] font-medium text-slate-900">{{.Stats.Used}} <span class="text-[12px] font-medium text-slate-500">/ {{.Stats.Total}}</span></p>
   </div>
   <div>
-    <p class="text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">Evicted</p>
-    <p class="text-[18px] font-bold {{if .Stats.Evicted}}text-amber-700{{else}}text-slate-900{{end}}">{{.Stats.Evicted}}</p>
+    <p class="label-mono">Evicted</p>
+    <p class="font-mono text-[18px] font-medium {{if .Stats.Evicted}}text-amber-700{{else}}text-slate-900{{end}}">{{.Stats.Evicted}}</p>
   </div>
 </div>
 {{if .Stats.Evicted}}
@@ -685,7 +685,7 @@
 {{if .Services}}
 <table class="w-full text-[13px]">
   <thead>
-    <tr class="border-b border-line text-left text-[11px] uppercase tracking-[0.06em] text-slate-500">
+    <tr class="label-mono border-b border-edge text-left">
       <th class="px-5 py-2 font-medium sm:px-6">Service</th>
       <th class="px-2 py-2 text-right font-medium">Hits</th>
       <th class="px-2 py-2 text-right font-medium">Misses</th>
@@ -696,7 +696,7 @@
   </thead>
   <tbody>
     {{range .Services}}
-    <tr class="border-b border-canvas last:border-b-0">
+    <tr class="border-b border-line last:border-b-0">
       <td class="px-5 py-2 font-semibold text-slate-900 sm:px-6">{{.App}}</td>
       <td class="px-2 py-2 text-right font-mono text-slate-700">{{.Hits}}</td>
       <td class="px-2 py-2 text-right font-mono text-slate-700">{{.Misses}}</td>
@@ -715,19 +715,19 @@
 
 {{define "services-rows"}}
 {{range .}}
-<div class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl hover:bg-surface transition-colors duration-150">
-  <div class="relative w-10 h-10 rounded-full bg-brand-tint flex items-center justify-center shrink-0">
-    <i class="hgi hgi-stroke hgi-rounded hgi-cloud-server text-base text-brand-dark"></i>
-    <span class="absolute -bottom-px -right-px w-3 h-3 rounded-full border-2 border-white {{if not .Known}}bg-slate-300{{else if .Healthy}}bg-brand{{else}}bg-red-500{{end}}"
+<div class="flex flex-col sm:flex-row sm:items-center gap-3 border-b border-line px-3 py-3 last:border-b-0 hover:bg-surface transition-colors duration-150">
+  <div class="relative w-10 h-10 border border-edge flex items-center justify-center shrink-0">
+    <i class="hgi hgi-stroke hgi-rounded hgi-cloud-server text-base text-ink"></i>
+    <span class="absolute -bottom-px -right-px w-3 h-3 rounded-full border-2 border-card {{if not .Known}}bg-slate-300{{else if .Healthy}}bg-success{{else}}bg-danger{{end}}"
       title="{{if not .Known}}no traffic seen yet, health unknown{{else if .Healthy}}reachable (last real request succeeded){{else}}unreachable (last real request failed){{end}}"></span>
   </div>
   <div class="flex-1 min-w-0">
     <div class="flex items-center gap-2">
-      <span class="text-[14px] font-semibold text-slate-900 truncate">{{.Name}}</span>
+      <span class="font-mono text-[14px] font-medium text-ink truncate">{{.Name}}</span>
       {{if .Host}}
-      <span class="text-[11px] font-semibold bg-blue-50 text-blue-500 px-2 py-px rounded-sm shrink-0">host</span>
+      <span class="tag shrink-0"><span class="h-2 w-2 rounded-full bg-info"></span>host</span>
       {{else}}
-      <span class="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-px rounded-sm shrink-0">prefix</span>
+      <span class="tag shrink-0"><span class="h-2 w-2 rounded-full bg-warning"></span>prefix</span>
       {{end}}
     </div>
     <div class="font-mono text-[12px] text-slate-500 truncate">{{if .Host}}{{.Host}}{{range .HostAliases}}, {{.}}{{end}}{{else}}{{.Prefix}}{{end}} &rarr; {{.Backend}}{{if .ExtraBackends}} +{{len .ExtraBackends}}{{end}}</div>
@@ -735,7 +735,7 @@
     <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1">
       {{range .Health}}
       <span class="inline-flex items-center gap-[5px] font-mono text-[11px] text-slate-500 min-w-0" title="{{if not .Known}}not reached or checked yet{{else if .Healthy}}in rotation{{else}}down, out of rotation{{end}}">
-        <span class="w-2 h-2 rounded-full shrink-0 {{if not .Known}}bg-slate-300{{else if .Healthy}}bg-brand{{else}}bg-red-500{{end}}"></span>
+        <span class="w-2 h-2 rounded-full shrink-0 {{if not .Known}}bg-slate-300{{else if .Healthy}}bg-success{{else}}bg-danger{{end}}"></span>
         <span class="truncate">{{.URL}}</span>
       </span>
       {{end}}
@@ -745,65 +745,65 @@
   <div class="flex items-center gap-2 flex-wrap sm:justify-end sm:shrink-0">
     {{if .Host}}
     {{if eq .TLSMode "custom"}}
-    <span class="text-[11px] font-semibold bg-green-100 text-green-600 px-2 py-[2px] rounded-sm">
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-success"></span>
       {{if .CertName}}{{.CertName}}{{else}}Custom{{if .TLSExpiresAt}} · exp {{shortDate .TLSExpiresAt}}{{end}}{{end}}
     </span>
     {{else if eq .TLSMode "auto"}}
-    <span class="text-[11px] font-semibold bg-blue-50 text-blue-500 px-2 py-[2px] rounded-sm">Auto (Let's Encrypt)</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-info"></span>Auto (Let's Encrypt)</span>
     {{else}}
-    <span class="text-[11px] font-semibold bg-slate-100 text-slate-500 px-2 py-[2px] rounded-sm">No TLS</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-slate-400"></span>No TLS</span>
     {{end}}
     {{end}}
     {{if gt .RateLimitRPS 0.0}}
-    <span class="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-[2px] rounded-sm">{{printf "%.0f" .RateLimitRPS}}/s</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-warning"></span>{{printf "%.0f" .RateLimitRPS}}/s</span>
     {{end}}
     {{if ne .BotMode "inherit"}}
-    <span class="text-[11px] font-semibold {{if eq .BotMode "always"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">Bot: {{.BotMode}}</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .BotMode "always"}}bg-warning{{else}}bg-slate-400{{end}}"></span>Bot: {{.BotMode}}</span>
     {{end}}
     {{if .CacheEnabled}}
-    <span class="text-[11px] font-semibold bg-sky-100 text-sky-600 px-2 py-[2px] rounded-sm">Cached</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-info"></span>Cached</span>
     {{end}}
     {{if .CacheBySession}}
-    <span class="text-[11px] font-semibold bg-sky-100 text-sky-600 px-2 py-[2px] rounded-sm">Cached (session)</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-info"></span>Cached (session)</span>
     {{end}}
     {{if .HTTP3Enabled}}
-    <span class="text-[11px] font-semibold bg-sky-100 text-sky-600 px-2 py-[2px] rounded-sm">HTTP/3</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-info"></span>HTTP/3</span>
     {{end}}
     {{if .CompressEnabled}}
-    <span class="text-[11px] font-semibold bg-sky-100 text-sky-600 px-2 py-[2px] rounded-sm">Compressed</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-info"></span>Compressed</span>
     {{end}}
     {{if .BreachAction}}
-    <span class="text-[11px] font-semibold bg-green-100 text-green-700 px-2 py-[2px] rounded-sm">Leaked passwords: {{.BreachAction}}</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-success"></span>Leaked passwords: {{.BreachAction}}</span>
     {{end}}
     {{if .AICrawlerPolicy}}
-    <span class="text-[11px] font-semibold bg-purple-100 text-purple-600 px-2 py-[2px] rounded-sm">AI crawlers: custom</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-warning"></span>AI crawlers: custom</span>
     {{end}}
     {{if .LoginPaths}}
-    <span class="text-[11px] font-semibold bg-green-100 text-green-700 px-2 py-[2px] rounded-sm">Login protected</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-success"></span>Login protected</span>
     {{end}}
     {{if .AllowLargeJSUploads}}
-    <span class="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-[2px] rounded-sm">Large JS uploads</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-warning"></span>Large JS uploads</span>
     {{end}}
     {{if ne .SchemaMode "off"}}
-    <span class="text-[11px] font-semibold {{if eq .SchemaMode "enforce"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">Schema: {{.SchemaMode}}</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .SchemaMode "enforce"}}bg-warning{{else}}bg-slate-400{{end}}"></span>Schema: {{.SchemaMode}}</span>
     {{end}}
     {{if and .OpenAPIMode (ne .OpenAPIMode "off")}}
-    <span class="text-[11px] font-semibold {{if eq .OpenAPIMode "enforce"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">OpenAPI: {{.OpenAPIMode}}</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .OpenAPIMode "enforce"}}bg-warning{{else}}bg-slate-400{{end}}"></span>OpenAPI: {{.OpenAPIMode}}</span>
     {{end}}
     {{if .ResponseInspect}}
-    <span class="text-[11px] font-semibold {{if eq .ResponseInspect "block"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">Responses: {{.ResponseInspect}}</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .ResponseInspect "block"}}bg-warning{{else}}bg-slate-400{{end}}"></span>Responses: {{.ResponseInspect}}</span>
     {{end}}
     {{if .Gate.Maintenance}}
-    <span class="text-[11px] font-semibold bg-amber-100 text-amber-700 px-2 py-[2px] rounded-sm">Maintenance{{if not .Gate.MaintStart.IsZero}} scheduled{{end}}</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-warning"></span>Maintenance{{if not .Gate.MaintStart.IsZero}} scheduled{{end}}</span>
     {{end}}
     {{if .Gate.WaitingRoom}}
-    <span class="text-[11px] font-semibold bg-slate-100 text-slate-500 px-2 py-[2px] rounded-sm">Waiting room: {{.Gate.MaxActive}}</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full bg-slate-400"></span>Waiting room: {{.Gate.MaxActive}}</span>
     {{end}}
     {{if and .MTLS.Mode (ne .MTLS.Mode "off")}}
-    <span class="text-[11px] font-semibold {{if eq .MTLS.Mode "required"}}bg-purple-100 text-purple-600{{else}}bg-slate-100 text-slate-500{{end}} px-2 py-[2px] rounded-sm">mTLS: {{.MTLS.Mode}}</span>
+    <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .MTLS.Mode "required"}}bg-warning{{else}}bg-slate-400{{end}}"></span>mTLS: {{.MTLS.Mode}}</span>
     {{end}}
     <span class="text-[12px] text-slate-400 whitespace-nowrap ml-1">{{fmtTime .CreatedAt}}</span>
-    <button type="button" class="svc-edit-btn inline-flex items-center gap-[5px] text-[12px] font-medium text-slate-600 bg-white border border-line rounded-md px-4 py-[6px] cursor-pointer font-sans hover:border-slate-400 transition-colors duration-150 ml-1"
+    <button type="button" class="svc-edit-btn btn-ghost ml-1"
       data-id="{{.ID}}" data-name="{{.Name}}" data-has-host="{{if .Host}}1{{else}}0{{end}}" data-host="{{.Host}}"
       data-aliases="{{range $i, $a := .HostAliases}}{{if $i}}&#10;{{end}}{{$a}}{{end}}" data-canonical="{{.CanonicalHost}}"
       data-ai="{{.AICrawlerPolicy}}" data-breach-action="{{.BreachAction}}" data-breach-fields="{{range $i, $f := .BreachFields}}{{if $i}} {{end}}{{$f}}{{end}}"
