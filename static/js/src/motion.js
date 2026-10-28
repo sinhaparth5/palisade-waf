@@ -62,8 +62,7 @@
     });
   }
 
-  // Stat numbers count up to their value (~600ms, ease-out). The target is
-  // remembered on the element so it can be replayed (see donut below).
+  // Stat numbers count up to their value (~600ms, ease-out).
   function countUp(el) {
     var target = parseInt(el.dataset.countupTarget || el.textContent.replace(/[^0-9]/g, ''), 10);
     if (isNaN(target) || target <= 0) return;
@@ -78,21 +77,6 @@
     requestAnimationFrame(tick);
   }
   if (!reduced) document.querySelectorAll('[data-countup]').forEach(countUp);
-
-  // Hidden: click the request-breakdown donut and it redraws itself —
-  // arcs sweep in again and the center number recounts.
-  var donut = document.getElementById('donut-ring');
-  if (donut && !reduced) {
-    var donutBox = donut.parentElement;
-    donutBox.addEventListener('click', function () {
-      donut.querySelectorAll('.donut-arc').forEach(function (arc) {
-        arc.classList.remove('donut-arc');
-        void arc.getBoundingClientRect();
-        arc.classList.add('donut-arc');
-      });
-      donutBox.querySelectorAll('[data-countup]').forEach(countUp);
-    });
-  }
 
   // Hidden: click the sidebar shield 5 times within 2s and the whole nav salutes.
   var logo = document.getElementById('brand-logo');

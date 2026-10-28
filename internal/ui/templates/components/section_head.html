@@ -1,0 +1,6 @@
+{{define "section-head"}}
+<div class="mb-3 flex items-end justify-between gap-3">
+  <h2 class="text-[15px] text-ink">{{.Title}}</h2>
+  {{if .Href}}<a href="{{.Href}}" class="label-mono no-underline hover:text-ink">{{if .Link}}{{.Link}}{{else}}View all{{end}}</a>{{end}}
+</div>
+{{end}}

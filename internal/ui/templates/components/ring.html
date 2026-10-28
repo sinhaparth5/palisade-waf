@@ -1,0 +1,7 @@
+{{define "ring"}}
+<svg viewBox="0 0 40 40" class="{{.Size}} -rotate-90" aria-hidden="true">
+  <circle cx="20" cy="20" r="16" fill="none" stroke-width="{{if .Width}}{{.Width}}{{else}}4{{end}}" class="{{if .Track}}{{.Track}}{{else}}stroke-slate-200{{end}}"/>
+  <circle cx="20" cy="20" r="16" fill="none" stroke-width="{{if .Width}}{{.Width}}{{else}}4{{end}}" pathLength="100"
+    stroke-dasharray="{{.Pct}} 100" class="{{.Stroke}} ring-arc"/>
+</svg>
+{{end}}
