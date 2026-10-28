@@ -1,7 +1,10 @@
 package storage
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -47,6 +50,7 @@ type AdminUser struct {
 	Disabled    bool
 	TOTPEnabled bool
 	SSO         bool // bound to an IdP identity (issue #197); has no password
+	Invited     bool // hasn't set a password from their invite link yet (issue #229)
 	CreatedAt   time.Time
 }
 
@@ -55,11 +59,12 @@ type AdminUser struct {
 func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
 
 const adminUserColumns = `id, email, role, disabled, totp_secret <> '',
-	(SELECT COUNT(*) FROM admin_sso_identities i WHERE i.user_id = admin_users.id) > 0, created_at`
+	(SELECT COUNT(*) FROM admin_sso_identities i WHERE i.user_id = admin_users.id) > 0,
+	(SELECT COUNT(*) FROM admin_user_invites v WHERE v.user_id = admin_users.id) > 0, created_at`
 
 func scanAdminUser(row interface{ Scan(...any) error }) (*AdminUser, error) {
 	var u AdminUser
-	err := row.Scan(&u.ID, &u.Email, &u.Role, &u.Disabled, &u.TOTPEnabled, &u.SSO, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.Role, &u.Disabled, &u.TOTPEnabled, &u.SSO, &u.Invited, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -267,6 +272,7 @@ func (db *DB) DeleteAdminUser(id int64) error {
 		`DELETE FROM sessions WHERE user_id = ?`,
 		`DELETE FROM webauthn_credentials WHERE user_id = ?`,
 		`DELETE FROM admin_sso_identities WHERE user_id = ?`,
+		`DELETE FROM admin_user_invites WHERE user_id = ?`,
 		`DELETE FROM admin_users WHERE id = ?`,
 	} {
 		if _, err := db.exec(q, id); err != nil {
@@ -380,4 +386,107 @@ func toAny(ss []string) []any {
 		out[i] = s
 	}
 	return out
+}
+
+// ── Password invites (issue #229) ────────────────────────────────────────────
+//
+// An invited user is an admin_users row with no password plus one
+// admin_user_invites row. The token goes out in the invite email; only its
+// SHA-256 is stored (it's 32 random bytes, so no bcrypt needed).
+
+// UserInviteTTL is how long an invite link works.
+const UserInviteTTL = 7 * 24 * time.Hour
+
+func hashInviteToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// InviteAdminUser creates a password-less user with role and returns its
+// id and invite token.
+func (db *DB) InviteAdminUser(email, role string) (int64, string, error) {
+	if !ValidRole(role) {
+		return 0, "", fmt.Errorf("invalid role %q", role)
+	}
+	email = NormalizeEmail(email)
+	if u, err := db.GetAdminUserByEmail(email); err != nil {
+		return 0, "", err
+	} else if u != nil {
+		return 0, "", ErrUserExists
+	}
+	id, err := db.insertReturningID(`INSERT INTO admin_users (email, password_hash, role, created_at) VALUES (?, '', ?, ?)`,
+		email, role, time.Now())
+	if err != nil {
+		return 0, "", err
+	}
+	token, err := db.setUserInvite(id)
+	return id, token, err
+}
+
+// RenewUserInvite gives a pending user a fresh token and expiry; the old
+// link stops working.
+func (db *DB) RenewUserInvite(id int64) (string, error) {
+	u, err := db.GetAdminUser(id)
+	if err != nil {
+		return "", err
+	}
+	if u == nil || !u.Invited {
+		return "", errors.New("that user has already set a password")
+	}
+	return db.setUserInvite(id)
+}
+
+func (db *DB) setUserInvite(id int64) (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(b)
+	if _, err := db.exec(`DELETE FROM admin_user_invites WHERE user_id = ?`, id); err != nil {
+		return "", err
+	}
+	_, err := db.exec(`INSERT INTO admin_user_invites (user_id, token_hash, expires_at) VALUES (?, ?, ?)`,
+		id, hashInviteToken(token), time.Now().UTC().Add(UserInviteTTL))
+	return token, err
+}
+
+// UserInvite returns the enabled user a live token belongs to, or nil for
+// an unknown, spent or expired one.
+func (db *DB) UserInvite(token string) (*AdminUser, error) {
+	var id int64
+	var expires time.Time
+	err := db.queryRow(`SELECT user_id, expires_at FROM admin_user_invites WHERE token_hash = ?`, hashInviteToken(token)).Scan(&id, &expires)
+	if err == sql.ErrNoRows || (err == nil && time.Now().After(expires)) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	u, err := db.GetAdminUser(id)
+	if u != nil && u.Disabled {
+		return nil, err
+	}
+	return u, err
+}
+
+// AcceptUserInvite spends a live token and sets the user's password.
+// Returns nil with no error when the token isn't live.
+func (db *DB) AcceptUserInvite(token, password string) (*AdminUser, error) {
+	u, err := db.UserInvite(token)
+	if err != nil || u == nil {
+		return nil, err
+	}
+	// Claim the token by deleting it, so two submits can't both spend it.
+	res, err := db.exec(`DELETE FROM admin_user_invites WHERE token_hash = ?`, hashInviteToken(token))
+	if err != nil {
+		return nil, err
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		return nil, nil
+	}
+	if err := db.UpdateAdminCredentials(u.ID, "", password); err != nil {
+		return nil, err
+	}
+	u.Invited = false
+	return u, nil
 }

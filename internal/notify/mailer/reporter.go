@@ -170,6 +170,22 @@ func (r *Reporter) SendLoginCode(code string) error {
 	return r.send(cfg, subject, text, html)
 }
 
+// SendInvite emails a new user their set-password link (issue #229). It
+// goes to that user's address, not the alert recipients, and only needs the
+// API token: inviting doesn't depend on the daily report being switched on.
+func (r *Reporter) SendInvite(to, inviter, role, link string) error {
+	cfg, err := r.db.GetEmailConfig()
+	if err != nil {
+		return err
+	}
+	if cfg.Token == "" {
+		return fmt.Errorf("email is not set up")
+	}
+	cfg.To = to
+	subject, text, html := composeInvite(inviter, role, link, r.now().Add(storage.UserInviteTTL))
+	return r.send(cfg, subject, text, html)
+}
+
 // Email palette: hex versions of the admin UI's v3 "ledger" tokens
 // (static/css/tailwind.css, light mode). Same meanings as the UI: success =
 // allowed, warning = look here, danger = blocked.
@@ -296,6 +312,32 @@ func composeLoginCode(code string, at time.Time) (subject, text, htm string) {
 		`</td></tr></table></td></tr>`
 	note := `Requested ` + when + `. The code expires in 10 minutes and works once. If you didn't request it, someone knows your admin password — change it now.`
 	return subject, t.String(), frame("Admin login code", body, note)
+}
+
+// composeInvite renders the invite email: who added the user, their role,
+// and the set-password link.
+func composeInvite(inviter, role, link string, expires time.Time) (subject, text, htm string) {
+	subject = "You've been added to Palisade"
+	until := expires.Format("2006-01-02 15:04 MST")
+
+	var t strings.Builder
+	t.WriteString("Palisade — you've been added\n\n")
+	fmt.Fprintf(&t, "%s added you to Palisade as %s.\n\n", inviter, role)
+	t.WriteString("Set your password here:\n" + link + "\n\n")
+	fmt.Fprintf(&t, "The link works once and expires %s.\n", until)
+	t.WriteString("If you weren't expecting this, ignore this email.\n")
+
+	body := `<tr><td style="padding:26px 28px 24px">` +
+		heading("You've been added") +
+		`<p style="margin:8px 0 18px;font:400 14px/1.5 ` + fontStack + `;color:` + cInkSoft + `"><b style="color:` + cInk + `">` + html.EscapeString(inviter) +
+		`</b> added you to Palisade as <b style="color:` + cInk + `">` + html.EscapeString(role) + `</b>. Set a password to sign in.</p>` +
+		`<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:` + cInk + `;border:1px solid ` + cInk + `">` +
+		`<a href="` + html.EscapeString(link) + `" style="display:inline-block;padding:11px 20px;font:500 13px ` + fontMono + `;color:` + cPaper + `;text-decoration:none;text-transform:uppercase;letter-spacing:.04em">Set your password</a>` +
+		`</td></tr></table>` +
+		`<p style="margin:18px 0 0;font:400 12px/1.5 ` + fontStack + `;color:` + cMuted + `">Or paste this link into your browser:<br><span style="font-family:` + fontMono + `;color:` + cInkSoft + `;word-break:break-all">` + html.EscapeString(link) + `</span></p>` +
+		`</td></tr>`
+	note := `The link works once and expires ` + until + `. If you weren't expecting this, ignore this email.`
+	return subject, t.String(), frame("Account invite", body, note)
 }
 
 // composeReport renders the plain-text and HTML bodies for one report window:

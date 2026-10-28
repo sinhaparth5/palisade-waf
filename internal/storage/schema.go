@@ -201,6 +201,14 @@ func (db *DB) schemaStatements() []string {
 			UNIQUE (issuer, subject)
 		)`,
 
+		// Password invites (issue #229), see users.go: one live set-password
+		// link per pending user, stored as the token's SHA-256.
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS admin_user_invites (
+			user_id    INTEGER PRIMARY KEY,
+			token_hash VARCHAR(64) NOT NULL UNIQUE,
+			expires_at %s NOT NULL
+		)`, ts),
+
 		// token is 32 random bytes hex-encoded (64 chars, see
 		// DB.CreateSession) — VARCHAR(64) fits exactly.
 		// One row per login. Only one row per user is ever live at a time

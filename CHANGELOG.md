@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Added
+
+- (#229) v3: Email new users a set-password invite link
+
 ## [3.0.1] - 2026-10-28
 
 ### Changed

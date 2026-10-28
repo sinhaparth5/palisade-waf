@@ -40,7 +40,10 @@
             <span class="font-mono text-ink text-sm uppercase tracking-[.16em]">Palisade</span>
           </span>
 
-          {{if .TOTPStage}}
+          {{if .InviteStage}}
+          <h1 class="font-mono text-ink text-2xl sm:text-3xl font-medium uppercase tracking-[.04em] leading-tight mb-2">Set your password</h1>
+          <p class="text-slate-500 text-sm sm:text-base mb-8">{{if .InviteEmail}}You were added to Palisade as <span class="text-ink">{{.InviteEmail}}</span>. Choose a password to finish.{{else}}Invite links work once, for 7 days.{{end}}</p>
+          {{else if .TOTPStage}}
           <h1 class="font-mono text-ink text-2xl sm:text-3xl font-medium uppercase tracking-[.04em] leading-tight mb-2">Two-factor authentication</h1>
           <p class="text-slate-500 text-sm sm:text-base mb-8">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
           {{else}}
@@ -62,7 +65,28 @@
           </div>
           {{end}}
 
-          {{if .TOTPStage}}
+          {{if .InviteStage}}
+          {{if .Token}}
+          <form action="{{.AdminPath}}/invite/{{.Token}}" method="POST" novalidate>
+            <input type="text" name="email" value="{{.InviteEmail}}" autocomplete="username" readonly hidden/>
+            <div class="mb-5">
+              <label class="field-label mb-2" for="invite-password">New password</label>
+              <input id="invite-password" name="password" type="password" autocomplete="new-password" placeholder="Min 8 characters" autofocus required minlength="8"
+                     class="field px-4 py-3.5"/>
+            </div>
+            <div class="mb-2">
+              <label class="field-label mb-2" for="invite-confirm">Confirm password</label>
+              <input id="invite-confirm" name="confirm_password" type="password" autocomplete="new-password" required minlength="8"
+                     class="field px-4 py-3.5"/>
+            </div>
+            <button type="submit" class="btn-primary mt-6 w-full py-3.5">Set password and sign in</button>
+          </form>
+          {{end}}
+          <p class="mt-4 text-center">
+            <a href="{{.AdminPath}}/login" class="text-slate-500 text-xs hover:text-slate-600">Back to sign in</a>
+          </p>
+
+          {{else if .TOTPStage}}
           <form action="{{.AdminPath}}/login/totp" method="POST" novalidate>
             <div class="mb-2">
               <label class="field-label mb-2" for="login-code">Authentication code</label>
