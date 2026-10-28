@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -19,6 +21,7 @@ func TestRouteRoles(t *testing.T) {
 	public := map[string]bool{
 		"POST /admin/login": true, "POST /admin/login/totp": true, "POST /admin/login/totp/email": true,
 		"POST /admin/login/webauthn/begin": true, "POST /admin/login/webauthn/finish": true,
+		"POST /admin/invite/:token": true,
 	}
 	params := strings.NewReplacer(":id", "1", ":token", "x")
 
@@ -71,10 +74,9 @@ func TestUsersCard(t *testing.T) {
 	env := newAdminEnv(t)
 
 	for _, tc := range []struct{ f []string }{
-		{[]string{"email", "nope", "password", "long-enough", "role", "viewer"}},
-		{[]string{"email", "v@example.com", "password", "short", "role", "viewer"}},
-		{[]string{"email", "v@example.com", "password", "long-enough", "role", "root"}},
-		{[]string{"email", testAdminEmail, "password", "long-enough", "role", "viewer"}},
+		{[]string{"email", "nope", "role", "viewer"}},
+		{[]string{"email", "v@example.com", "role", "root"}},
+		{[]string{"email", testAdminEmail, "role", "viewer"}},
 	} {
 		rec := env.do("POST", "/admin/settings/users", form(tc.f...))
 		if !strings.Contains(rec.Body.String(), "bg-red-50") {
@@ -85,7 +87,7 @@ func TestUsersCard(t *testing.T) {
 		t.Fatalf("invalid creates added users: %d", n)
 	}
 
-	env.do("POST", "/admin/settings/users", form("email", "Dev@Example.com", "password", "dev-password", "role", "viewer"))
+	env.do("POST", "/admin/settings/users", form("email", "Dev@Example.com", "role", "viewer"))
 	dev, _ := env.db.GetAdminUserByEmail("dev@example.com")
 	if dev == nil || dev.Role != storage.RoleViewer {
 		t.Fatalf("created user = %+v", dev)
@@ -194,5 +196,80 @@ func TestAccountLoginThrottle(t *testing.T) {
 	rec, s := login(env, "10.2.0.1", testAdminEmail, testAdminPassword)
 	if rec.Code != http.StatusTooManyRequests || s != "" {
 		t.Errorf("locked account login = %d (session %v), want 429", rec.Code, s != "")
+	}
+}
+
+// TestUserInvite: adding a user emails a set-password link (issue #229);
+// the link works once, then the user signs in with that password.
+func TestUserInvite(t *testing.T) {
+	env := newAdminEnv(t)
+	rec := env.do("POST", "/admin/settings/users", form("email", "new@example.com", "role", "admin"))
+	if !strings.Contains(rec.Body.String(), "Invite sent to new@example.com") || len(env.invites) != 1 {
+		t.Fatalf("no invite sent: %v\n%s", env.invites, rec.Body)
+	}
+	to, link, _ := strings.Cut(env.invites[0], " ")
+	_, path, _ := strings.Cut(link, "://example.com")
+	if to != "new@example.com" || !strings.HasPrefix(path, "/admin/invite/") {
+		t.Fatalf("invite = %q", env.invites[0])
+	}
+	u, _ := env.db.GetAdminUserByEmail(to)
+	if u == nil || !u.Invited || u.Role != storage.RoleAdmin {
+		t.Fatalf("invited user = %+v", u)
+	}
+	if ok, _ := env.db.CheckAdminLogin(to, ""); ok != nil {
+		t.Fatal("invited user signs in with an empty password")
+	}
+
+	public := func(method, p string, f url.Values) *httptest.ResponseRecorder { return env.doWith(method, p, f, "") }
+	if rec := public("GET", path, nil); rec.Code != 200 || !strings.Contains(rec.Body.String(), "Set your password") || rec.Header().Get("Referrer-Policy") != "no-referrer" {
+		t.Fatalf("invite page = %d %q", rec.Code, rec.Header().Get("Referrer-Policy"))
+	}
+	if rec := public("POST", path, form("password", "brand-new-pass", "confirm_password", "other-pass")); !strings.Contains(rec.Body.String(), "do not match") {
+		t.Error("mismatched passwords accepted")
+	}
+	rec = public("POST", path, form("password", "brand-new-pass", "confirm_password", "brand-new-pass"))
+	if rec.Code != 302 || rec.Header().Get("Location") != "/admin" {
+		t.Fatalf("set password = %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	if ok, _ := env.db.CheckAdminLogin(to, "brand-new-pass"); ok == nil || ok.Invited {
+		t.Fatalf("can't sign in after setting the password: %+v", ok)
+	}
+	// Spent.
+	for _, m := range []string{"GET", "POST"} {
+		if rec := public(m, path, form("password", "another-pass", "confirm_password", "another-pass")); rec.Code != 404 {
+			t.Errorf("spent link %s = %d, want 404", m, rec.Code)
+		}
+	}
+	if rec := env.do("POST", "/admin/settings/users/"+itoa(int(u.ID))+"/invite", nil); !strings.Contains(rec.Body.String(), "already set a password") {
+		t.Error("resend allowed after the password was set")
+	}
+}
+
+// Without working email the user is still created and the owner gets the
+// link once; resend replaces it, killing the old one.
+func TestUserInviteFallbackAndResend(t *testing.T) {
+	env := newAdminEnv(t)
+	env.inviteErr = errors.New("email is not set up")
+	rec := env.do("POST", "/admin/settings/users", form("email", "v@example.com", "role", "viewer"))
+	_, first, _ := strings.Cut(env.invites[0], " ")
+	if !strings.Contains(rec.Body.String(), `value="`+first+`"`) || !strings.Contains(rec.Body.String(), "email is not set up") {
+		t.Fatalf("link not shown on send failure:\n%s", rec.Body)
+	}
+	if strings.Contains(env.do("GET", "/admin/settings", nil).Body.String(), first) {
+		t.Error("link shown again on a later page load")
+	}
+
+	env.inviteErr = nil
+	u, _ := env.db.GetAdminUserByEmail("v@example.com")
+	env.do("POST", "/admin/settings/users/"+itoa(int(u.ID))+"/invite", nil)
+	_, second, _ := strings.Cut(env.invites[1], " ")
+	if second == first {
+		t.Fatal("resend reused the token")
+	}
+	for link, want := range map[string]int{first: 404, second: 200} {
+		_, p, _ := strings.Cut(link, "://example.com")
+		if rec := env.doWith("GET", p, nil, ""); rec.Code != want {
+			t.Errorf("GET %s = %d, want %d", p, rec.Code, want)
+		}
 	}
 }

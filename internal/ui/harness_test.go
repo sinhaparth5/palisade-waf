@@ -34,6 +34,9 @@ type adminEnv struct {
 	uid     int64 // the owner the session belongs to
 	calls   map[string]*atomic.Int32
 	backend *httptest.Server
+	// invites records each sendInvite call as "to link"; inviteErr fails it.
+	invites   []string
+	inviteErr error
 }
 
 const testAdminEmail, testAdminPassword = "admin@example.com", "correct horse battery"
@@ -79,6 +82,10 @@ func newAdminEnv(t *testing.T) *adminEnv {
 		func() error { report(); return nil },
 		func() error { webhook(); return nil },
 		func(string) error { loginCode(); return nil },
+		func(to, _, _, link string) error {
+			env.invites = append(env.invites, to+" "+link)
+			return env.inviteErr
+		},
 		reloadAutoban,
 		threatscore.New(db, func(string) int { return 0 }),
 		reloadAdaptive,

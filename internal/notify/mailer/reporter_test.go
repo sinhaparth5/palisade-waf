@@ -291,3 +291,28 @@ func TestComposeLoginCodeBody(t *testing.T) {
 		t.Error("plain-text body missing expiry note")
 	}
 }
+
+// SendInvite goes to the invited user, not the alert recipients, and needs
+// only the token: the daily report can stay off (issue #229).
+func TestSendInviteRecipient(t *testing.T) {
+	cfg := enabledConfig()
+	cfg.Enabled = false
+	r, _ := testReporter(&fakeStore{cfg: cfg}, time.Now())
+	var got storage.EmailConfig
+	var body string
+	r.send = func(c storage.EmailConfig, _, _, html string) error { got, body = c, html; return nil }
+	if err := r.SendInvite("new@example.com", "owner@example.com", "admin", "https://waf.example/admin/invite/t<o>k"); err != nil {
+		t.Fatal(err)
+	}
+	if got.To != "new@example.com" {
+		t.Errorf("sent to %q", got.To)
+	}
+	if !strings.Contains(body, "t&lt;o&gt;k") || strings.Contains(body, "t<o>k") {
+		t.Error("link not escaped in the HTML body")
+	}
+
+	r, _ = testReporter(&fakeStore{}, time.Now())
+	if err := r.SendInvite("new@example.com", "o", "admin", "l"); err == nil {
+		t.Error("sent without a token")
+	}
+}

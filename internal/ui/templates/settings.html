@@ -461,16 +461,20 @@
   {{if .UserErr}}
   <div class="rounded-md bg-red-50 border border-red-200 text-red-700 text-[13px] px-4 py-3 mb-4">{{.UserErr}}</div>
   {{end}}
+  {{if .UserNotice}}
+  <div class="rounded-md {{if .InviteLink}}bg-amber-50 border-amber-200 text-amber-700{{else}}bg-green-50 border-green-200 text-green-700{{end}} border text-[13px] px-4 py-3 mb-4">{{.UserNotice}}</div>
+  {{end}}
+  {{if .InviteLink}}
+  <div class="border border-edge bg-surface px-4 py-3 mb-4">
+    <label class="field-label" for="invite_link">Invite link: send it to them yourself, it isn't shown again</label>
+    <input id="invite_link" type="text" readonly value="{{.InviteLink}}" class="field font-mono text-[12px]"/>
+  </div>
+  {{end}}
 
   <form hx-post="{{.AdminPath}}/settings/users" hx-target="#users-card" hx-swap="outerHTML" class="flex flex-wrap items-end gap-3 mb-5">
     <div class="flex-1 min-w-[200px]">
       <label class="field-label" for="user_email">Email</label>
       <input id="user_email" name="email" type="email" placeholder="teammate@example.com" required autocomplete="off"
-        class="field"/>
-    </div>
-    <div class="flex-1 min-w-[180px]">
-      <label class="field-label" for="user_password">Initial password</label>
-      <input id="user_password" name="password" type="password" placeholder="Min 8 characters" required minlength="8" autocomplete="new-password"
         class="field"/>
     </div>
     <div class="shrink-0">
@@ -484,7 +488,7 @@
     </div>
     <button type="submit" class="btn-primary px-6 shrink-0">Add user</button>
   </form>
-  <p class="text-[11px] text-slate-500 -mt-3 mb-5">Hand the initial password over yourself; the user can change it under Account after signing in.</p>
+  <p class="text-[11px] text-slate-500 -mt-3 mb-5">They get an email with a link to set their own password; it works once, for 7 days. Without email set up under Alerts &amp; integrations, you get the link to send yourself.</p>
 
   {{if .SSOOn}}
   <form hx-post="{{.AdminPath}}/settings/users/invites" hx-target="#users-card" hx-swap="outerHTML" class="flex flex-wrap items-end gap-3 mb-2">
@@ -544,8 +548,9 @@
           <span class="min-w-0 wrap-anywhere">{{.Email}}</span>
           {{if eq .ID $.MyID}}<span class="tag shrink-0"><span class="h-2 w-2 rounded-full bg-success"></span>You</span>{{end}}
           {{if .Disabled}}<span class="tag shrink-0 border-line text-slate-500">Disabled</span>{{end}}
+          {{if .Invited}}<span class="tag shrink-0"><span class="h-2 w-2 rounded-full bg-warning"></span>Invited</span>{{end}}
         </div>
-        <div class="text-[12px] text-slate-500">{{if .SSO}}Single sign-on{{else if .TOTPEnabled}}2FA on{{else}}2FA off{{end}} · added {{fmtTime .CreatedAt}}</div>
+        <div class="text-[12px] text-slate-500">{{if .Invited}}Hasn't set a password yet{{else if .SSO}}Single sign-on{{else if .TOTPEnabled}}2FA on{{else}}2FA off{{end}} · added {{fmtTime .CreatedAt}}</div>
       </div>
       <div class="ml-[52px] sm:ml-0 flex flex-wrap items-center gap-2">
         <form hx-post="{{$.AdminPath}}/settings/users/{{.ID}}" hx-trigger="change" hx-target="#users-card" hx-swap="outerHTML" class="contents">
@@ -557,7 +562,13 @@
             <option value="owner" {{if eq .Role "owner"}}selected{{end}}>Owner</option>
           </select>
         </form>
-{{if not .SSO}}
+        {{if .Invited}}
+        <button hx-post="{{$.AdminPath}}/settings/users/{{.ID}}/invite" hx-target="#users-card" hx-swap="outerHTML"
+                class="btn-ghost shrink-0">
+          <i class="hgi hgi-stroke hgi-rounded hgi-mail-01 text-xs"></i>
+          Resend invite
+        </button>
+        {{else if not .SSO}}
         <button hx-post="{{$.AdminPath}}/settings/users/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML"
                 hx-confirm="Turn off two-factor authentication and remove every passkey for {{.Email}}? Their password still works."
                 hx-vals='{"action":"reset-2fa"}'

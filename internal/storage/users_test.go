@@ -155,3 +155,64 @@ func TestCheckAdminLoginAndCreate(t *testing.T) {
 		t.Error("invalid role accepted")
 	}
 }
+
+// TestUserInviteLifecycle: an invite token is single use, dies on expiry,
+// on disable and with its user (issue #229).
+func TestUserInviteLifecycle(t *testing.T) {
+	db := openTestDB(t)
+	id, token, err := db.InviteAdminUser("New@x.test", RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := db.InviteAdminUser("new@x.test", RoleViewer); !errors.Is(err, ErrUserExists) {
+		t.Errorf("duplicate invite err = %v", err)
+	}
+	if u, _ := db.UserInvite(token); u == nil || u.ID != id || !u.Invited {
+		t.Fatalf("UserInvite = %+v", u)
+	}
+	if u, _ := db.UserInvite("not-a-token"); u != nil {
+		t.Error("unknown token accepted")
+	}
+
+	// Disabled users can't redeem.
+	_ = db.SetAdminUserDisabled(id, true)
+	if u, _ := db.AcceptUserInvite(token, "password-1"); u != nil {
+		t.Error("disabled user redeemed an invite")
+	}
+	_ = db.SetAdminUserDisabled(id, false)
+
+	// Expired.
+	if _, err := db.exec(`UPDATE admin_user_invites SET expires_at = ? WHERE user_id = ?`, time.Now().Add(-time.Minute), id); err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := db.AcceptUserInvite(token, "password-1"); u != nil {
+		t.Error("expired invite redeemed")
+	}
+
+	token, err = db.RenewUserInvite(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u, err := db.AcceptUserInvite(token, "password-1"); err != nil || u == nil || u.Invited {
+		t.Fatalf("AcceptUserInvite = %+v, %v", u, err)
+	}
+	if u, _ := db.AcceptUserInvite(token, "password-2"); u != nil {
+		t.Error("invite redeemed twice")
+	}
+	if u, _ := db.CheckAdminLogin("new@x.test", "password-1"); u == nil {
+		t.Error("password from the invite doesn't work")
+	}
+	if _, err := db.RenewUserInvite(id); err == nil {
+		t.Error("renewed an invite for a user with a password")
+	}
+
+	// Deleting a pending user removes the invite row too.
+	id2, _, _ := db.InviteAdminUser("other@x.test", RoleAdmin)
+	if err := db.DeleteAdminUser(id2); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := db.queryRow(`SELECT COUNT(*) FROM admin_user_invites WHERE user_id = ?`, id2).Scan(&n); err != nil || n != 0 {
+		t.Errorf("invite rows after delete = %d, %v", n, err)
+	}
+}

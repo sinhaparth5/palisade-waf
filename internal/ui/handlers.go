@@ -155,6 +155,7 @@ type Handler struct {
 	sendReportNow   func() error
 	sendTestWebhook func() error
 	sendLoginCode   func(code string) error
+	sendInvite      func(to, inviter, role, link string) error
 	reloadAutoban   func()
 	reloadAdaptive  func()
 	scorer          *threatscore.Scorer
@@ -203,7 +204,7 @@ type dashboardService struct {
 // (proxy.Handler.Handle, the same func registered for the catch-all "/*"
 // route in main.go); see hostGuard for why the admin/API routes need to be
 // able to hand a request off to it.
-func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist, geoBl *geo.Blocker, registry *services.Registry, bc *LogBroadcaster, jsFS embed.FS, cssFS embed.FS, imgsFS embed.FS, reloadBot func(*challenge.Challenger), buildChallenger func(bool, int, int) *challenge.Challenger, reloadRateLimit func(), reloadWAF func(), syncThreatIntel func(int64), sendReportNow func() error, sendTestWebhook func() error, sendLoginCode func(string) error, reloadAutoban func(), scorer *threatscore.Scorer, reloadAdaptive func(), proxyHandle echo.HandlerFunc) (*Handler, error) {
+func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist, geoBl *geo.Blocker, registry *services.Registry, bc *LogBroadcaster, jsFS embed.FS, cssFS embed.FS, imgsFS embed.FS, reloadBot func(*challenge.Challenger), buildChallenger func(bool, int, int) *challenge.Challenger, reloadRateLimit func(), reloadWAF func(), syncThreatIntel func(int64), sendReportNow func() error, sendTestWebhook func() error, sendLoginCode func(string) error, sendInvite func(to, inviter, role, link string) error, reloadAutoban func(), scorer *threatscore.Scorer, reloadAdaptive func(), proxyHandle echo.HandlerFunc) (*Handler, error) {
 	sub, err := fs.Sub(jsFS, "static/js/dist")
 	if err != nil {
 		return nil, fmt.Errorf("sub static/js/dist: %w", err)
@@ -231,7 +232,7 @@ func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist,
 		sum := sha256.Sum256(b)
 		assetVer = hex.EncodeToString(sum[:])[:12]
 	}
-	h := &Handler{cfg: cfg, db: db, ipbl: ipbl, geoBl: geoBl, registry: registry, broadcaster: bc, staticJS: sub, staticCSS: cssSub, staticImgs: imgsSub, assetVer: assetVer, reloadBot: reloadBot, buildChallenger: buildChallenger, reloadRateLimit: reloadRateLimit, reloadWAF: reloadWAF, syncThreatIntel: syncThreatIntel, sendReportNow: sendReportNow, sendTestWebhook: sendTestWebhook, sendLoginCode: sendLoginCode, reloadAutoban: reloadAutoban, scorer: scorer, reloadAdaptive: reloadAdaptive, loginLimiter: newLoginLimiter(), accountLimiter: newLoginLimiter(), apiKeyLimiter: newLoginLimiter(), twoFA: newTwoFAStore(), passkeys: passkey.New(db), pkEnroll: newPkEnrollStore(), trustedNets: proxy.ParseTrustedProxyCIDRs(cfg.TrustedProxies), proxyHandle: proxyHandle}
+	h := &Handler{cfg: cfg, db: db, ipbl: ipbl, geoBl: geoBl, registry: registry, broadcaster: bc, staticJS: sub, staticCSS: cssSub, staticImgs: imgsSub, assetVer: assetVer, reloadBot: reloadBot, buildChallenger: buildChallenger, reloadRateLimit: reloadRateLimit, reloadWAF: reloadWAF, syncThreatIntel: syncThreatIntel, sendReportNow: sendReportNow, sendTestWebhook: sendTestWebhook, sendLoginCode: sendLoginCode, sendInvite: sendInvite, reloadAutoban: reloadAutoban, scorer: scorer, reloadAdaptive: reloadAdaptive, loginLimiter: newLoginLimiter(), accountLimiter: newLoginLimiter(), apiKeyLimiter: newLoginLimiter(), twoFA: newTwoFAStore(), passkeys: passkey.New(db), pkEnroll: newPkEnrollStore(), trustedNets: proxy.ParseTrustedProxyCIDRs(cfg.TrustedProxies), proxyHandle: proxyHandle}
 	if err := h.parseTemplates(); err != nil {
 		return nil, err
 	}
@@ -381,6 +382,9 @@ func (h *Handler) Register(e *echo.Echo) {
 	// OIDC single sign-on: redirect to the IdP, and its redirect back.
 	admin.GET("/login/sso", h.SSOStart)
 	admin.GET("/login/sso/callback", h.SSOCallback)
+	// Set-password page from an invite email (issue #229).
+	admin.GET("/invite/:token", h.InvitePage)
+	admin.POST("/invite/:token", h.InvitePost, bodyLimit)
 	// Static assets are public so the login page can load spirals/JS before auth.
 	admin.StaticFS("/static/js", h.staticJS)
 	admin.StaticFS("/static/css", h.staticCSS)
@@ -504,6 +508,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	as(storage.RoleOwner,
 		g.POST("/settings/users", h.CreateUser),
 		g.POST("/settings/users/:id", h.UpdateUser),
+		g.POST("/settings/users/:id/invite", h.ResendUserInvite),
 		g.DELETE("/settings/users/:id", h.DeleteUser),
 		g.POST("/settings/users/invites", h.CreateSSOInvite),
 		g.POST("/settings/users/invites/:id", h.RenewSSOInvite),

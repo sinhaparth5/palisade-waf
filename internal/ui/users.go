@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"errors"
 	"log"
 	"net/http"
@@ -80,25 +81,115 @@ func (h *Handler) renderUsersCard(c echo.Context, err error) error {
 	return h.renderPartial(c, "settings", "users-card", h.usersCardData(c, msg))
 }
 
-// CreateUser adds an account with an initial password the owner hands over
-// out of band; the new user changes it under Settings → Account.
+// CreateUser adds a password-less account and emails it a set-password
+// link (issue #229).
 func (h *Handler) CreateUser(c echo.Context) error {
 	email := storage.NormalizeEmail(c.FormValue("email"))
-	password := c.FormValue("password")
 	role := c.FormValue("role")
 	switch {
 	case !strings.Contains(email, "@"):
 		return h.renderUsersCard(c, errors.New("enter a valid email"))
-	case len(password) < 8:
-		return h.renderUsersCard(c, errors.New("initial password must be at least 8 characters"))
 	case !storage.ValidRole(role):
 		return h.renderUsersCard(c, errors.New("pick a role"))
 	}
-	if _, err := h.db.CreateAdminUser(email, password, role); err != nil {
+	id, token, err := h.db.InviteAdminUser(email, role)
+	if err != nil {
 		return h.renderUsersCard(c, err)
 	}
-	log.Printf("admin users: %s added %s as %s", currentUser(c).Email, email, role)
-	return h.renderUsersCard(c, nil)
+	log.Printf("admin users: %s invited %s as %s", currentUser(c).Email, email, role)
+	return h.sendUserInvite(c, id, token)
+}
+
+// ResendUserInvite replaces a pending user's link and sends it again.
+func (h *Handler) ResendUserInvite(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.String(http.StatusBadRequest, "invalid id")
+	}
+	token, err := h.db.RenewUserInvite(id)
+	if err != nil {
+		return h.renderUsersCard(c, err)
+	}
+	return h.sendUserInvite(c, id, token)
+}
+
+// sendUserInvite emails user id their link. When that fails (often: email
+// isn't set up) the user still exists, so the card shows the link once for
+// the owner to pass on, rather than an error.
+func (h *Handler) sendUserInvite(c echo.Context, id int64, token string) error {
+	u, err := h.db.GetAdminUser(id)
+	if err != nil || u == nil {
+		return h.renderUsersCard(c, cmp.Or(err, errors.New("user not found")))
+	}
+	link := c.Scheme() + "://" + c.Request().Host + h.cfg.Admin.Path + "/invite/" + token
+	data := h.usersCardData(c, "")
+	if err := h.sendInvite(u.Email, currentUser(c).Email, u.Role, link); err != nil {
+		log.Printf("admin users: invite email to %s failed: %v", u.Email, err)
+		data["UserNotice"] = "Added " + u.Email + ", but the invite email wasn't sent (" + err.Error() + ")."
+		data["InviteLink"] = link
+	} else {
+		data["UserNotice"] = "Invite sent to " + u.Email + "."
+	}
+	return h.renderPartial(c, "settings", "users-card", data)
+}
+
+// ── Invite page (public) ─────────────────────────────────────────────────────
+
+// InvitePage shows the set-password form for a live invite token.
+func (h *Handler) InvitePage(c echo.Context) error {
+	return h.renderInvite(c, "")
+}
+
+// InvitePost sets the invited user's password and signs them in.
+func (h *Handler) InvitePost(c echo.Context) error {
+	password := c.FormValue("password")
+	switch {
+	case len(password) < 8:
+		return h.renderInvite(c, "Password must be at least 8 characters.")
+	case password != c.FormValue("confirm_password"):
+		return h.renderInvite(c, "Passwords do not match.")
+	}
+	ip := h.clientIP(c.Request())
+	if _, locked := h.loginLimiter.blocked(ip); locked {
+		return h.renderLoginStatus(c, http.StatusTooManyRequests, "Too many failed attempts. Try again later.")
+	}
+	u, err := h.db.AcceptUserInvite(c.Param("token"), password)
+	if err != nil {
+		return err
+	}
+	if u == nil {
+		h.loginLimiter.fail(ip)
+		return h.renderInvite(c, "")
+	}
+	log.Printf("admin users: %s set their password from an invite (%s)", u.Email, ip)
+	return h.issueSession(c, u.ID)
+}
+
+// renderInvite renders the login page's set-password stage, or the dead-link
+// message when the token isn't live (unknown, spent and expired look alike).
+func (h *Handler) renderInvite(c echo.Context, errMsg string) error {
+	ip := h.clientIP(c.Request())
+	if _, locked := h.loginLimiter.blocked(ip); locked {
+		return h.renderLoginStatus(c, http.StatusTooManyRequests, "Too many failed attempts. Try again later.")
+	}
+	// The token is in the URL; keep it out of Referer headers.
+	c.Response().Header().Set("Referrer-Policy", "no-referrer")
+	data := map[string]any{"AdminPath": h.cfg.Admin.Path, "Asset": h.assetVer, "InviteStage": true, "Error": errMsg}
+	status := http.StatusOK
+	u, err := h.db.UserInvite(c.Param("token"))
+	if err != nil {
+		return err
+	}
+	if u == nil {
+		status = http.StatusNotFound
+		data["Error"] = "This invite link has expired or was already used. Ask whoever added you to resend it."
+	} else {
+		data["InviteEmail"] = u.Email
+		data["Token"] = c.Param("token")
+	}
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	c.Response().WriteHeader(status)
+	return h.tmpls["login"].ExecuteTemplate(c.Response(), "login", data)
 }
 
 // UpdateUser applies one owner action to a user: change role, disable,
