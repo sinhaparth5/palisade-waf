@@ -31,6 +31,9 @@ type Analysis struct {
 	// "block" applies to spoofers too; AIVerified gates "allow".
 	AICategory string
 	AIVerified bool
+	// LinkPreview: an unverified link-preview fetcher (crawler.preview) on a
+	// bodiless GET/HEAD. Skips the challenge only; never trusted otherwise.
+	LinkPreview bool
 }
 
 // Analyze scores r for bot-like characteristics. It only reads headers
@@ -62,6 +65,10 @@ func Analyze(r *http.Request, ip string, asnNum uint) Analysis {
 			return a
 		}
 		a.Signals = append(a.Signals, "unverified_crawler")
+		if c.preview && (r.Method == http.MethodGet || r.Method == http.MethodHead) && r.ContentLength == 0 {
+			a.LinkPreview = true
+			a.Signals = append(a.Signals, "link_preview")
+		}
 	}
 
 	switch ua {

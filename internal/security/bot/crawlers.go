@@ -22,6 +22,11 @@ type crawler struct {
 	asns  []uint         // origin ASNs from the bundled ASN database
 	cidrs []netip.Prefix // pinned source ranges
 	ai    string         // AI crawler category (AITraining etc.), "" for search/social crawlers
+	// preview marks a link-preview fetcher that runs on the sharer's own
+	// device, so it can't verify by source. Its UA alone skips the challenge
+	// for a bodiless GET/HEAD; every other stage (WAF, rate limit, autoban)
+	// still applies, so a spoofer only buys what a solved challenge would.
+	preview bool
 }
 
 // Slack, Discord and DuckDuckGo publish no reverse DNS or dedicated ASN for
@@ -37,9 +42,15 @@ var trustedCrawlers = []crawler{
 	{ua: []string{"baiduspider"}, rdns: []string{"baidu.com", "baidu.jp"}},
 	{ua: []string{"pinterest/"}, rdns: []string{"pinterest.com"}},
 	{ua: []string{"ahrefsbot", "ahrefssiteaudit"}, rdns: []string{"ahrefs.com", "ahrefs.net"}},
-	// Meta: Facebook and WhatsApp link previews.
-	{ua: []string{"facebookexternalhit", "facebot", "whatsapp/"}, asns: []uint{32934}},
-	{ua: []string{"twitterbot"}, asns: []uint{13414}},
+	// iMessage previews come from the sender's device too, with a UA naming
+	// Facebook and Twitter at once; listed first so it isn't taken for
+	// Meta's real fetcher ("facebookexternalhit/1.1 (+http://...)").
+	{ua: []string{"facebot twitterbot/"}, preview: true},
+	{ua: []string{"facebookexternalhit", "facebot"}, asns: []uint{32934}},
+	// WhatsApp builds link previews on the sender's phone (end-to-end
+	// encryption), from a mobile or home IP; Meta's ASN covers server fetches.
+	{ua: []string{"whatsapp/"}, asns: []uint{32934}, preview: true},
+	{ua: []string{"twitterbot"}, asns: []uint{13414, 35995, 63179}},
 	{ua: []string{"linkedinbot"}, asns: []uint{14413}},
 	{ua: []string{"telegrambot"}, asns: []uint{62041}},
 	{ua: []string{"ia_archiver", "archive.org_bot"}, asns: []uint{7941}},

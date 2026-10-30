@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Fixed
+
+- Let WhatsApp, iMessage and Twitter/X link previews through the bot challenge
+
 ## [3.0.2] - 2026-10-28
 
 ### Added
