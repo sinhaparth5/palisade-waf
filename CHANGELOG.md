@@ -14,15 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.0.3] - 2026-10-30
+
 ### Fixed
 
 - Let WhatsApp, iMessage and Twitter/X link previews through the bot challenge
 
-## [3.0.2] - 2026-10-28
-
-### Added
-
-- (#229) v3: Email new users a set-password invite link
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.2...main
-[3.0.2]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.1...v3.0.2
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.3...main
+[3.0.3]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.2...v3.0.3
