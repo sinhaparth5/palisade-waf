@@ -13,14 +13,16 @@ func TestAnalyze(t *testing.T) {
 	// Fake DNS: 66.249.66.1 is a real Googlebot (PTR + matching A record),
 	// 203.0.113.9 claims a googlebot.com PTR it doesn't forward-confirm.
 	ptr := map[string][]string{
-		"66.249.66.1": {"crawl-66-249-66-1.googlebot.com."},
-		"203.0.113.9": {"crawl.googlebot.com."},
-		"203.0.113.7": {"evilgooglebot.com."},
+		"66.249.66.1":  {"crawl-66-249-66-1.googlebot.com."},
+		"203.0.113.9":  {"crawl.googlebot.com."},
+		"203.0.113.7":  {"evilgooglebot.com."},
+		"66.249.88.69": {"google-proxy-66-249-88-69.google.com."},
 	}
 	fwd := map[string][]string{
-		"crawl-66-249-66-1.googlebot.com": {"66.249.66.1"},
-		"crawl.googlebot.com":             {"66.249.66.2"},
-		"evilgooglebot.com":               {"203.0.113.7"},
+		"crawl-66-249-66-1.googlebot.com":      {"66.249.66.1"},
+		"crawl.googlebot.com":                  {"66.249.66.2"},
+		"evilgooglebot.com":                    {"203.0.113.7"},
+		"google-proxy-66-249-88-69.google.com": {"66.249.88.69"},
 	}
 	lookupAddr = func(_ context.Context, ip string) ([]string, error) {
 		if n, ok := ptr[ip]; ok {
@@ -52,6 +54,8 @@ func TestAnalyze(t *testing.T) {
 		wantSignal  string
 	}{
 		{"googlebot verified by rdns", googleUA, "66.249.66.1", 0, nil, 0, false, true, "trusted_crawler"},
+		{"adsense infeed verified by rdns", "Mozilla/5.0 (Linux; Android 4.0.4) (KHTML, like Gecko; GoogleAdSenseInfeed) Chrome", "66.249.88.69", 15169, nil, 0, false, true, "trusted_crawler"},
+		{"adsense infeed spoofed", "Mozilla/5.0 (KHTML, like Gecko; GoogleAdSenseInfeed)", "198.51.100.1", 15169, browser, 0, false, false, "unverified_crawler"},
 		{"googlebot spoofed, no ptr", googleUA, "198.51.100.1", 0, browser, 0, false, false, "unverified_crawler"},
 		{"googlebot ptr not forward-confirmed", googleUA, "203.0.113.9", 0, browser, 0, false, false, "unverified_crawler"},
 		{"googlebot ptr suffix lookalike", googleUA, "203.0.113.7", 0, browser, 0, false, false, "unverified_crawler"},

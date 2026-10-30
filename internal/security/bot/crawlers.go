@@ -33,7 +33,8 @@ type crawler struct {
 // their fetchers, so they're deliberately absent: a UA-only entry would put
 // the spoofing hole straight back.
 var trustedCrawlers = []crawler{
-	{ua: []string{"googlebot", "google-inspectiontool", "googleother", "adsbot-google", "google-read-aloud", "mediapartners-google"},
+	{ua: []string{"googlebot", "google-inspectiontool", "googleother", "adsbot-google", "google-read-aloud", "mediapartners-google",
+		"googleadsenseinfeed", "google-adwords"},
 		rdns: []string{"googlebot.com", "google.com"}},
 	{ua: []string{"bingbot", "bingpreview", "msnbot", "adidxbot"}, rdns: []string{"search.msn.com"}},
 	{ua: []string{"applebot"}, rdns: []string{"applebot.apple.com"}},

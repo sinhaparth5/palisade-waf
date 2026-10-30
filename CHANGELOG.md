@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+### Fixed
+
+- Let Google AdSense and Ads crawlers through the bot challenge
+
 ## [3.0.3] - 2026-10-30
 
 ### Fixed
