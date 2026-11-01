@@ -15,6 +15,7 @@ rather than growing this file forever.
 ## [Unreleased]
 
 - (#232) CRS: vendor 4.25.2 LTS to pick up the October 2026 bypass fixes
+- (#233) Bot: verify Web Bot Auth (RFC 9421) signed agents
 ## [3.0.5] - 2026-11-01
 
 - Drop redundant and fingerprinting response headers

@@ -21,7 +21,10 @@ type crawler struct {
 	rdns  []string       // PTR suffixes, forward-confirmed (e.g. "googlebot.com")
 	asns  []uint         // origin ASNs from the bundled ASN database
 	cidrs []netip.Prefix // pinned source ranges
-	ai    string         // AI crawler category (AITraining etc.), "" for search/social crawlers
+	// sigAgents are Web Bot Auth key directory origins (issue #233); a valid
+	// signature from one verifies the crawler like a pinned range would.
+	sigAgents []string
+	ai        string // AI crawler category (AITraining etc.), "" for search/social crawlers
 	// preview marks a link-preview fetcher that runs on the sharer's own
 	// device, so it can't verify by source. Its UA alone skips the challenge
 	// for a bodiless GET/HEAD; every other stage (WAF, rate limit, autoban)
@@ -62,22 +65,26 @@ var trustedCrawlers = []crawler{
 	// --trusted-crawlers (merged into these entries by AddPinnedCrawlers).
 	// Until pinned they never verify, so "allow" can't be bought by a UA.
 	// Google-Extended and Applebot-Extended are robots.txt tokens, not UAs.
-	{ua: []string{"gptbot"}, ai: AITraining},
+	{ua: []string{"gptbot"}, sigAgents: openAIAgent, ai: AITraining},
 	{ua: []string{"claudebot", "anthropic-ai"}, ai: AITraining},
 	{ua: []string{"ccbot"}, ai: AITraining},
 	{ua: []string{"bytespider"}, ai: AITraining},
 	{ua: []string{"meta-externalagent"}, asns: []uint{32934}, ai: AITraining},
-	{ua: []string{"oai-searchbot"}, ai: AISearch},
+	{ua: []string{"oai-searchbot"}, sigAgents: openAIAgent, ai: AISearch},
 	{ua: []string{"claude-searchbot"}, ai: AISearch},
 	{ua: []string{"perplexitybot"}, ai: AISearch},
-	{ua: []string{"chatgpt-user"}, ai: AIUser},
+	{ua: []string{"chatgpt-user"}, sigAgents: openAIAgent, ai: AIUser},
 	{ua: []string{"claude-user"}, ai: AIUser},
 	{ua: []string{"perplexity-user"}, ai: AIUser},
 	{ua: []string{"meta-externalfetcher"}, asns: []uint{32934}, ai: AIUser},
 }
 
+// OpenAI signs its agents' requests (Signature-Agent "https://chatgpt.com").
+var openAIAgent = []string{"https://chatgpt.com"}
+
 // AddPinnedCrawlers trusts extra crawlers by source range, from the
-// --trusted-crawlers flag: "ua=cidr[,cidr];ua2=ip". Operator-specific, so it
+// --trusted-crawlers flag: "ua=cidr[,cidr];ua2=ip". An https://host value
+// is a Web Bot Auth signature agent instead of a range. Operator-specific, so it
 // stays out of the source (a self-hosted monitor's IP is the server's own).
 // Must run before serving: trustedCrawlers is read without a lock.
 func AddPinnedCrawlers(spec string) error {
@@ -100,7 +107,16 @@ func AddPinnedCrawlers(spec string) error {
 			c = &trustedCrawlers[len(trustedCrawlers)-1]
 		}
 		for r := range strings.SplitSeq(ranges, ",") {
-			p, err := parsePrefix(strings.TrimSpace(r))
+			r = strings.TrimSpace(r)
+			if strings.HasPrefix(r, "https://") {
+				o, err := parseSigAgent(r)
+				if err != nil {
+					return fmt.Errorf("trusted crawler %q: %w", ua, err)
+				}
+				c.sigAgents = append(slices.Clip(c.sigAgents), o)
+				continue
+			}
+			p, err := parsePrefix(r)
 			if err != nil {
 				return fmt.Errorf("trusted crawler %q: %w", ua, err)
 			}
