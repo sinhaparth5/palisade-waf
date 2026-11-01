@@ -14,13 +14,9 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.0.5] - 2026-11-01
+
 - Drop redundant and fingerprinting response headers
 
-## [3.0.4] - 2026-10-30
-
-### Fixed
-
-- Let Google AdSense and Ads crawlers through the bot challenge
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.4...main
-[3.0.4]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.3...v3.0.4
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.5...main
+[3.0.5]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.4...v3.0.5
