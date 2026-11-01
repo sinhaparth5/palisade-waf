@@ -55,6 +55,14 @@ func post(target, form string) func() *http.Request {
 	}
 }
 
+func postJSON(target, body string) func() *http.Request {
+	return func() *http.Request {
+		r := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		return browserReq(r)
+	}
+}
+
 func browserReq(r *http.Request) *http.Request {
 	r.Host = "app.example.com"
 	r.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0")
@@ -103,6 +111,28 @@ var vpatchCases = map[string]vpatchCase{
 	"CVE-2022-22965": {
 		exploit: post("/greeting", "class.module.classLoader.resources.context.parent.pipeline.first.pattern=x"),
 		benign:  post("/greeting", "name=alice&classroom=7b"),
+	},
+	"CVE-2025-32432": {
+		exploit: postJSON("/index.php?p=admin/actions/assets/generate-transform",
+			`{"assetId":11,"handle":{"width":123,"height":123,"as session":{"class":"craft\\behaviors\\FieldLayoutBehavior","__class":"GuzzleHttp\\Psr7\\FnStream"}}}`),
+		benign: postJSON("/index.php?p=admin/actions/assets/generate-transform", `{"assetId":11,"handle":"thumb"}`),
+	},
+	"CVE-2026-33017": {
+		exploit: postJSON("/api/v1/build_public_tmp/4f1c2b7e-9a3d-4e5f-8b6a-1c2d3e4f5a6b/flow",
+			`{"data":{"nodes":[{"id":"n1","data":{"node":{"template":{"code":{"value":"print(1)"}}}}}],"edges":[]},"inputs":null}`),
+		benign: postJSON("/api/v1/build_public_tmp/4f1c2b7e-9a3d-4e5f-8b6a-1c2d3e4f5a6b/flow", `{"inputs":{"input_value":"hello"}}`),
+	},
+	"CVE-2025-49113": {
+		exploit: get(`/?_task=settings&_remote=1&_from=edit-!%22%3Bi%3A0%3BO%3A16%3A%22Crypt_GPG_Engine%22&_id=&_uploadid=upload1&_action=upload`),
+		benign:  get("/?_task=settings&_remote=1&_from=edit-identity&_id=&_uploadid=upload1&_action=upload"),
+	},
+	"CVE-2016-3081": {
+		exploit: get("/login.action?method:%23_memberAccess%3d@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS,%23a%3d@java.lang.Runtime@getRuntime().exec(%23parameters.cmd[0])&cmd=id"),
+		benign:  get("/login.action?method:save=1&user=alice"),
+	},
+	"CVE-2025-11953": {
+		exploit: postJSON("/open-url", `{"url":"https://evil.example?|calc.exe"}`),
+		benign:  postJSON("/open-url", `{"url":"https://reactnative.dev/docs/getting-started?x=1#top"}`),
 	},
 }
 
