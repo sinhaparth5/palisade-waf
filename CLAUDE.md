@@ -83,6 +83,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 
 ## WAF
 
+- CRS is vendored in `internal/security/waf/crs/` (tag in `VERSION`), not the `coraza-coreruleset` module (stuck at v4.25.0). Update with `scripts/update-crs.sh <tag>`, stay on the LTS line, and add a `TestCRSBaseline` case per fixed bypass.
 - `@coraza.conf-recommended` sets `SecRuleEngine DetectionOnly`; any `SecRuleEngine On` must come **after** the CRS includes or nothing is blocked.
 - Body inspection is gated by Content-Type (`inspectionFor` in `waf/engine.go`). Without the gate, CRS 901340 makes Coraza parse binary bodies as URL-encoded forms (a 3.5 MiB PUT took 52s / 4.4 GiB). Multipart limit 12.5 MiB; everything else 128 KiB, enforced in `Check` because **Coraza ignores `SecRequestBodyNoFilesLimit`**. Uninspected bodies stream unread.
 - Rule exceptions and service-scoped custom rules are compiled in, so each affected service gets its own full CRS engine. `buildWAFAll` in `main.go` builds the default + per-service engines lazily, re-run on SIGHUP and UI saves; `ReloadWAF` swaps them atomically. `AllowLargeJSUploads` is a packaged exception (skip JS bodies, except 911100/920420).
