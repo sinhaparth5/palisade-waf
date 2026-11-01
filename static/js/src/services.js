@@ -146,6 +146,7 @@
   var schemaForm = document.getElementById('svc-schema-form');
   var schemaText = document.getElementById('svc-schema-text');
   var openapiForm = document.getElementById('svc-openapi-form');
+  var mcpForm = document.getElementById('svc-mcp-form');
   var mtlsForm = document.getElementById('svc-mtls-form');
   var responsesForm = document.getElementById('svc-responses-form');
   var openapiText = document.getElementById('svc-openapi-text');
@@ -290,6 +291,14 @@
       });
     }
 
+    mcpForm.setAttribute('hx-post', adminPath + '/services/mcp/' + d.id);
+    htmx.process(mcpForm);
+    document.getElementById('svc-mcp-mode').value = d.mcpMode || 'off';
+    document.getElementById('svc-mcp-path').value = d.mcpPath || '/mcp';
+    document.getElementById('svc-mcp-origins').value = d.mcpOrigins || '';
+    document.getElementById('svc-mcp-methods').value = d.mcpMethods || '';
+    document.getElementById('svc-mcp-tools').value = d.mcpTools || '';
+
     responsesForm.setAttribute('hx-post', adminPath + '/services/responses/' + d.id);
     htmx.process(responsesForm);
     document.getElementById('svc-responses-mode').value = d.responseInspect || '';
@@ -336,7 +345,7 @@
     deleteBtn.setAttribute('hx-confirm', 'Remove service ' + d.name + '?');
     htmx.process(deleteBtn);
 
-    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-gate-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
+    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-gate-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mcp-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.textContent = '';
     });
@@ -390,6 +399,7 @@
   document.body.addEventListener('breach-saved', closeModal);
   document.body.addEventListener('gate-saved', closeModal);
   document.body.addEventListener('openapi-saved', closeModal);
+  document.body.addEventListener('mcp-saved', closeModal);
   document.body.addEventListener('mtls-saved', closeModal);
   document.body.addEventListener('responses-saved', closeModal);
   openapiFile.addEventListener('change', function () {

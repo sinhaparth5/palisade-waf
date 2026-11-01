@@ -417,6 +417,27 @@
       </form>
       <div id="svc-openapi-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
 
+      <form id="svc-mcp-form" hx-post="{{.AdminPath}}/services/mcp/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
+        <p class="text-[13px] font-semibold text-slate-800 mb-1">MCP endpoint guard</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Structural checks for a Model Context Protocol server on Streamable HTTP. A browser <code class="font-mono">Origin</code> must be on the list (or, with none listed, match the request host), which stops DNS rebinding. POST bodies must be JSON-RPC 2.0, and only the listed methods and <code class="font-mono">tools/call</code> tool names get through; an empty list allows any. It does not detect prompt injection. Logged as <code class="font-mono">mcp_violation</code>.</p>
+        <label for="svc-mcp-path" class="field-label">Endpoint path (after the service prefix)</label>
+        <input id="svc-mcp-path" name="mcp_path" type="text" placeholder="/mcp" class="field text-[13px] font-mono mb-3"/>
+        <label for="svc-mcp-origins" class="field-label">Allowed origins, one per line</label>
+        <textarea id="svc-mcp-origins" name="mcp_origins" rows="2" placeholder="https://app.example.com" class="field text-[13px] font-mono mb-3"></textarea>
+        <label for="svc-mcp-methods" class="field-label">Allowed methods, one per line (<code class="font-mono">notifications/*</code> matches a namespace)</label>
+        <textarea id="svc-mcp-methods" name="mcp_methods" rows="3" placeholder="initialize&#10;notifications/*&#10;tools/list&#10;tools/call" class="field text-[13px] font-mono mb-3"></textarea>
+        <label for="svc-mcp-tools" class="field-label">Allowed tools, one per line</label>
+        <textarea id="svc-mcp-tools" name="mcp_tools" rows="2" placeholder="search_docs" class="field text-[13px] font-mono mb-3"></textarea>
+        <label for="svc-mcp-mode" class="field-label">Mode</label>
+        <select id="svc-mcp-mode" name="mcp_mode" class="field text-[13px] mb-4">
+          <option value="off">Off</option>
+          <option value="log">Log only</option>
+          <option value="enforce">Enforce: 403 origin, method or tool, 400 bad JSON-RPC</option>
+        </select>
+        <button type="submit" class="btn-primary w-full">Save</button>
+      </form>
+      <div id="svc-mcp-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
+
       <form id="svc-responses-form" hx-post="{{.AdminPath}}/services/responses/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">Inspect responses</p>
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Checks the backend's replies for leaked SQL errors, stack traces, PHP/Java/IIS error pages and web shells with the OWASP CRS outbound rules. Logged as <code class="font-mono">response_leak</code>. Only HTML, plain text, JSON and XML up to 64 KiB are inspected; binary, streaming and larger responses pass through untouched. Each inspected response adds about 0.5 ms per KiB.</p>
@@ -805,6 +826,9 @@
     {{if and .OpenAPIMode (ne .OpenAPIMode "off")}}
     <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .OpenAPIMode "enforce"}}bg-warning{{else}}bg-slate-400{{end}}"></span>OpenAPI: {{.OpenAPIMode}}</span>
     {{end}}
+    {{if .MCP.Mode}}
+    <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .MCP.Mode "enforce"}}bg-warning{{else}}bg-slate-400{{end}}"></span>MCP: {{.MCP.Mode}}</span>
+    {{end}}
     {{if .ResponseInspect}}
     <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .ResponseInspect "block"}}bg-warning{{else}}bg-slate-400{{end}}"></span>Responses: {{.ResponseInspect}}</span>
     {{end}}
@@ -829,6 +853,7 @@
       data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
       data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}"
       data-schema="{{.RequestSchema}}" data-schema-mode="{{.SchemaMode}}" data-openapi-mode="{{.OpenAPIMode}}"
+      data-mcp-mode="{{.MCP.Mode}}" data-mcp-path="{{.MCP.Path}}" data-mcp-origins="{{.MCP.Origins}}" data-mcp-methods="{{.MCP.Methods}}" data-mcp-tools="{{.MCP.Tools}}"
       data-response-inspect="{{.ResponseInspect}}" data-mtls-mode="{{.MTLS.Mode}}" data-mtls-ca="{{if .MTLS.CAPath}}1{{else}}0{{end}}" data-mtls-allow="{{.MTLS.Allow}}"
       data-maintenance="{{if .Gate.Maintenance}}1{{else}}0{{end}}" data-maint-message="{{.Gate.MaintMsg}}"
       data-maint-start="{{if not .Gate.MaintStart.IsZero}}{{.Gate.MaintStart.UTC.Format "2006-01-02T15:04"}}{{end}}"
@@ -896,6 +921,7 @@
   {{template "svc-kv" (map "K" "JSON Schema" "V" (or (and (ne .SchemaMode "off") .SchemaMode) "Off"))}}
   {{if .RequestSchema}}<pre class="my-2 max-h-48 overflow-auto border border-line bg-surface p-3 font-mono text-[12px] text-ink whitespace-pre-wrap">{{.RequestSchema}}</pre>{{end}}
   {{template "svc-kv" (map "K" "OpenAPI" "V" (or .OpenAPIMode "No spec"))}}
+  {{template "svc-kv" (map "K" "MCP guard" "V" (or .MCP.Mode "Off"))}}
   {{template "svc-kv" (map "K" "Inspect responses" "V" (or .ResponseInspect "Off"))}}
 
   {{template "svc-view-head" "Cache"}}

@@ -29,7 +29,8 @@ type Engine struct {
 	schema        *jsonschema.Schema
 	schemaEnforce bool
 
-	openapi *apiSpec // per-service OpenAPI positive model (issue #190) — see SetOpenAPI
+	openapi *apiSpec  // per-service OpenAPI positive model (issue #190) — see SetOpenAPI
+	mcp     *mcpGuard // per-service MCP endpoint guard (issue #234) — see SetMCP
 }
 
 type Result struct {
@@ -362,18 +363,28 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 	// for every operation it declares.
 	logAction := ""
 	declared := false
-	if e.openapi != nil {
-		path := opts.Path
-		if path == "" {
-			path = r.URL.Path
+	path := opts.Path
+	if path == "" {
+		path = r.URL.Path
+	}
+	if e.mcp != nil {
+		if status := e.mcp.check(r, path, body, hadBody); status != 0 {
+			if e.mcp.enforce {
+				return &Result{Blocked: true, Status: status, Action: "mcp_violation"}, nil
+			}
+			logAction = "mcp_violation:log"
 		}
+	}
+	if e.openapi != nil {
 		var status int
 		status, declared = e.openapi.check(r, path, body, hadBody, buffered)
 		if status != 0 {
 			if e.openapi.enforce {
 				return &Result{Blocked: true, Status: status, Action: "openapi_violation"}, nil
 			}
-			logAction = "openapi_violation:log"
+			if logAction == "" {
+				logAction = "openapi_violation:log"
+			}
 		}
 	}
 	if !declared && hadBody && buffered && e.schema != nil && isJSONMediaType(r.Header.Get("Content-Type")) {

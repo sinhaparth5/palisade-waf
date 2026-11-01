@@ -1046,7 +1046,7 @@ func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
 }
 
 func (db *DB) RemoveService(id int) error {
-	for _, t := range []string{"service_openapi", "service_mtls", "service_gate"} {
+	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_gate"} {
 		if _, err := db.exec(`DELETE FROM `+t+` WHERE service_id = ?`, id); err != nil {
 			return err
 		}
@@ -1263,6 +1263,46 @@ func (db *DB) ListServiceMTLS() (map[int]ServiceMTLS, error) {
 		var id int
 		var m ServiceMTLS
 		if err := rows.Scan(&id, &m.Mode, &m.CAPath, &m.Allow); err != nil {
+			return nil, err
+		}
+		out[id] = m
+	}
+	return out, rows.Err()
+}
+
+// ServiceMCP is a service's MCP endpoint guard (issue #234), see
+// waf.MCPConfig. Origins, Methods and Tools are newline-separated.
+type ServiceMCP struct {
+	Mode    string // "off", "log" or "enforce"
+	Path    string
+	Origins string
+	Methods string
+	Tools   string
+}
+
+// SetServiceMCP stores a service's MCP guard; mode "off" removes it.
+func (db *DB) SetServiceMCP(id int, m ServiceMCP) error {
+	if m.Mode != "log" && m.Mode != "enforce" {
+		_, err := db.exec(`DELETE FROM service_mcp WHERE service_id = ?`, id)
+		return err
+	}
+	_, err := db.exec(db.dialect.upsertUpdate("service_mcp", []string{"service_id", "mode", "path", "origins", "methods", "tools"}, "?, ?, ?, ?, ?, ?",
+		[]string{"service_id"}, []string{"mode", "path", "origins", "methods", "tools"}), id, m.Mode, m.Path, m.Origins, m.Methods, m.Tools)
+	return err
+}
+
+// ListServiceMCP returns every service's MCP guard by service id.
+func (db *DB) ListServiceMCP() (map[int]ServiceMCP, error) {
+	rows, err := db.query(`SELECT service_id, mode, path, origins, methods, tools FROM service_mcp`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]ServiceMCP{}
+	for rows.Next() {
+		var id int
+		var m ServiceMCP
+		if err := rows.Scan(&id, &m.Mode, &m.Path, &m.Origins, &m.Methods, &m.Tools); err != nil {
 			return nil, err
 		}
 		out[id] = m

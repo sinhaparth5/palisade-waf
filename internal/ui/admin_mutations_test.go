@@ -1001,6 +1001,38 @@ func TestSetServiceOpenAPI(t *testing.T) {
 	}
 }
 
+func TestSetServiceMCP(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("mcp", "mcp.example.com")
+	path := "/admin/services/mcp/" + itoa(svc.ID)
+
+	rec := env.do("POST", path, form("mcp_mode", "enforce", "mcp_path", "/mcp", "mcp_origins", "https://app.example.com",
+		"mcp_methods", "initialize\r\ntools/call", "mcp_tools", "search"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if rec.Header().Get("HX-Trigger") != "mcp-saved" || !strings.Contains(rec.Body.String(), "MCP: enforce") {
+		t.Fatalf("no mcp-saved trigger or badge: %s", rec.Body)
+	}
+	got, _ := env.db.ListServiceMCP()
+	if m := got[svc.ID]; m.Path != "/mcp" || m.Methods != "initialize\ntools/call" || m.Tools != "search" {
+		t.Errorf("stored %+v", m)
+	}
+
+	for _, bad := range [][]string{{"mcp_path", "mcp"}, {"mcp_path", "/mcp", "mcp_origins", "https://app.example.com/path"}, {"mcp_path", "/mcp", "mcp_origins", "app.example.com"}} {
+		rec = env.do("POST", path, form(append([]string{"mcp_mode", "log"}, bad...)...))
+		if rec.Header().Get("HX-Retarget") != "#svc-mcp-error" {
+			t.Errorf("%v: want inline error, got %s", bad, rec.Body)
+		}
+	}
+	if got, _ = env.db.ListServiceMCP(); got[svc.ID].Mode != "enforce" {
+		t.Error("rejected save changed the guard")
+	}
+
+	env.do("POST", path, form("mcp_mode", "off"))
+	if got, _ = env.db.ListServiceMCP(); len(got) != 0 {
+		t.Errorf("off should remove the guard: %+v", got)
+	}
+}
+
 func TestSetServiceMTLS(t *testing.T) {
 	t.Chdir(t.TempDir()) // the CA bundle is written relative to the working directory
 	env := newAdminEnv(t)

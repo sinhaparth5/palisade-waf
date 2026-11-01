@@ -480,6 +480,7 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/services/hosts/:id", h.SetServiceHosts),
 		g.POST("/services/schema/:id", h.SetServiceSchema),
 		g.POST("/services/openapi/:id", h.SetServiceOpenAPI),
+		g.POST("/services/mcp/:id", h.SetServiceMCP),
 		g.POST("/services/cache/:id", h.SetServiceCache),
 		g.POST("/services/cache-session/:id", h.SetServiceCacheSession),
 		g.POST("/services/cache-tuning/:id", h.SetServiceCacheTuning),
@@ -1962,6 +1963,7 @@ type ServiceView struct {
 	// table is polled.
 	OpenAPIMode string
 	MTLS        storage.ServiceMTLS // zero value when no client CA is stored
+	MCP         storage.ServiceMCP  // zero value when the MCP guard is off
 }
 
 func (h *Handler) serviceViews() []ServiceView {
@@ -1974,10 +1976,11 @@ func (h *Handler) serviceViews() []ServiceView {
 	}
 	modes, _ := h.db.ListServiceOpenAPIModes()
 	mtls, _ := h.db.ListServiceMTLS()
+	mcp, _ := h.db.ListServiceMCP()
 	out := make([]ServiceView, len(list))
 	for i, s := range list {
 		healthy, known := h.registry.IsHealthy(s.Name)
-		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID]}
+		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID], MCP: mcp[s.ID]}
 	}
 	return out
 }
@@ -3052,6 +3055,45 @@ func (h *Handler) SetServiceOpenAPI(c echo.Context) error {
 		h.reloadWAF()
 	}
 	c.Response().Header().Set("HX-Trigger", "openapi-saved")
+	return h.servicesRows(c)
+}
+
+// SetServiceMCP saves a service's MCP endpoint guard (issue #234). See
+// waf.Engine.SetMCP.
+func (h *Handler) SetServiceMCP(c echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-mcp-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	m := storage.ServiceMCP{
+		Mode:    c.FormValue("mcp_mode"),
+		Path:    strings.TrimSpace(c.FormValue("mcp_path")),
+		Origins: strings.Join(strings.Fields(c.FormValue("mcp_origins")), "\n"),
+		Methods: strings.Join(strings.Fields(c.FormValue("mcp_methods")), "\n"),
+		Tools:   strings.Join(strings.Fields(c.FormValue("mcp_tools")), "\n"),
+	}
+	if m.Mode == "log" || m.Mode == "enforce" {
+		if !strings.HasPrefix(m.Path, "/") {
+			return fail("The endpoint path must start with /.")
+		}
+		for _, o := range strings.Fields(m.Origins) {
+			if u, err := neturl.Parse(o); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || strings.TrimSuffix(u.Path, "/") != "" || u.RawQuery != "" || u.User != nil {
+				return fail("Origin " + o + " must look like https://app.example.com.")
+			}
+		}
+	}
+	if err := h.db.SetServiceMCP(id, m); err != nil {
+		return fail(err.Error())
+	}
+	if h.reloadWAF != nil {
+		h.reloadWAF()
+	}
+	c.Response().Header().Set("HX-Trigger", "mcp-saved")
 	return h.servicesRows(c)
 }
 

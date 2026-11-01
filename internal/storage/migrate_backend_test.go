@@ -43,6 +43,9 @@ func TestMigrateConfigTo(t *testing.T) {
 	if err := source.SetServiceMTLS(1, ServiceMTLS{Mode: "required", CAPath: "certs/services/a/client-ca.pem"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := source.SetServiceMCP(1, ServiceMCP{Mode: "enforce", Path: "/mcp", Tools: "search"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := source.SetServiceOpenAPI(1, "openapi: 3.0.3", "log"); err != nil {
 		t.Fatal(err)
 	}
