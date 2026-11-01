@@ -124,3 +124,5 @@ func selfSigned(t *testing.T) tls.Certificate {
 	}
 	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
 }
+
+# Automated fix for issue #232: CRS: vendor 4.25.2 LTS to pick up the October 2026 bypass fixes
