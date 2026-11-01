@@ -330,6 +330,17 @@ func (db *DB) schemaStatements() []string {
 			allow_list TEXT NOT NULL
 		)`,
 
+		// MCP endpoint guard per service (issue #234). Lists are
+		// newline-separated.
+		`CREATE TABLE IF NOT EXISTS service_mcp (
+			service_id INTEGER PRIMARY KEY,
+			mode       VARCHAR(16) NOT NULL,
+			path       TEXT NOT NULL,
+			origins    TEXT NOT NULL,
+			methods    TEXT NOT NULL,
+			tools      TEXT NOT NULL
+		)`,
+
 		// Maintenance mode and waiting room per service (issue #198).
 		// Schedule bounds are RFC 3339 text, "" for none.
 		`CREATE TABLE IF NOT EXISTS service_gate (

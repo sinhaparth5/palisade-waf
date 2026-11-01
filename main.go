@@ -190,6 +190,7 @@ func main() {
 			schema       string
 			schemaMode   string
 			openapi      storage.ServiceOpenAPI
+			mcp          storage.ServiceMCP
 		}
 		serviceSet := make(map[string]wafServiceOpts, len(svcNames))
 		for _, name := range svcNames {
@@ -203,14 +204,19 @@ func main() {
 		if err != nil {
 			return nil, nil, err
 		}
+		mcps, err := db.ListServiceMCP()
+		if err != nil {
+			return nil, nil, err
+		}
 		for _, svc := range services {
-			spec := specs[svc.ID]
-			if svc.AllowLargeJSUploads || (spec.Mode != "" && spec.Mode != "off") || (svc.SchemaMode != "" && svc.SchemaMode != "off" && svc.RequestSchema != "") {
+			spec, mcp := specs[svc.ID], mcps[svc.ID]
+			if svc.AllowLargeJSUploads || mcp.Mode != "" || (spec.Mode != "" && spec.Mode != "off") || (svc.SchemaMode != "" && svc.SchemaMode != "off" && svc.RequestSchema != "") {
 				serviceSet[svc.Name] = wafServiceOpts{
 					allowLargeJS: svc.AllowLargeJSUploads,
 					schema:       svc.RequestSchema,
 					schemaMode:   svc.SchemaMode,
 					openapi:      spec,
+					mcp:          mcp,
 				}
 			}
 		}
@@ -249,6 +255,8 @@ func main() {
 			if err := eng.SetOpenAPI(opts.openapi.Spec, opts.openapi.Mode); err != nil {
 				log.Printf("waf: service %q: invalid OpenAPI spec, ignoring: %v", name, err)
 			}
+			eng.SetMCP(waf.MCPConfig{Mode: opts.mcp.Mode, Path: opts.mcp.Path,
+				Origins: strings.Fields(opts.mcp.Origins), Methods: strings.Fields(opts.mcp.Methods), Tools: strings.Fields(opts.mcp.Tools)})
 			byService[name] = eng
 		}
 		return defaultEngine, byService, nil
