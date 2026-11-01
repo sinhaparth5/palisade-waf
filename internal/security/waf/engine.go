@@ -11,7 +11,6 @@ import (
 
 	"palisade/internal/config"
 
-	coreruleset "github.com/corazawaf/coraza-coreruleset/v4"
 	"github.com/corazawaf/coraza/v3"
 	"github.com/kaptinlin/jsonschema"
 )
@@ -106,7 +105,7 @@ func NewWithDirectives(cfg config.WAFConfig, disabledRuleIDs []int, extra string
 		return &Engine{enabled: false}, nil
 	}
 
-	// Base directives + OWASP CRS (embedded via coraza-coreruleset).
+	// Base directives + OWASP CRS (vendored in crs/, see crs.go).
 	//
 	// Our own overrides must come AFTER the includes: @coraza.conf-recommended
 	// sets "SecRuleEngine DetectionOnly" (and "SecResponseBodyAccess On") as a
@@ -136,7 +135,7 @@ SecDebugLogLevel 0
 	}
 
 	wafCfg := coraza.NewWAFConfig().
-		WithRootFS(coreruleset.FS).
+		WithRootFS(crsFS).
 		WithDirectives(directives)
 
 	// Load any extra custom rules on top of CRS.
