@@ -181,6 +181,16 @@ func TestComposeBanAlertIncludesIPAndReason(t *testing.T) {
 	}
 }
 
+func TestComposeScriptAlert(t *testing.T) {
+	subject, text, html := composeScriptAlert("shop", "https://evil.example", "/<cart>", time.Now())
+	if !strings.Contains(subject, "https://evil.example") {
+		t.Errorf("subject %q", subject)
+	}
+	if !strings.Contains(text, "/<cart>") || !strings.Contains(html, "/&lt;cart&gt;") || strings.Contains(html, "/<cart>") {
+		t.Error("page missing or unescaped")
+	}
+}
+
 func TestComposeReportIncludesCounts(t *testing.T) {
 	hourly := make([]storage.HourlyPoint, 24)
 	for i := range hourly {

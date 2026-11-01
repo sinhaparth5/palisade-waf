@@ -334,6 +334,11 @@
                  {{if contains .WebhookEvents "challenged"}}checked{{end}}>
           <span class="text-[13px] text-slate-700">Bot challenges</span>
         </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" name="webhook_events" value="scripts" class="accent-ink"
+                 {{if contains .WebhookEvents "scripts"}}checked{{end}}>
+          <span class="text-[13px] text-slate-700">New script sources (CSP)</span>
+        </label>
       </div>
     </div>
 

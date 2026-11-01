@@ -152,6 +152,21 @@ func (r *Reporter) SendBanAlert(ip, reason string) error {
 	return r.send(cfg, subject, text, html)
 }
 
+// SendScriptAlert emails a notice that a service's report-only CSP saw a
+// new script source (issue #235). Skipped like SendBanAlert when email
+// alerts are off.
+func (r *Reporter) SendScriptAlert(service, source, page string) error {
+	cfg, err := r.db.GetEmailConfig()
+	if err != nil {
+		return err
+	}
+	if !cfg.Enabled || cfg.Token == "" || cfg.To == "" {
+		return nil
+	}
+	subject, text, html := composeScriptAlert(service, source, page, r.now())
+	return r.send(cfg, subject, text, html)
+}
+
 // SendLoginCode emails a one-time 2FA recovery code to the configured
 // recipients, for an admin who can't produce an authenticator code at login.
 // Unlike SendBanAlert this is not silently skipped when cfg.Enabled is off:
@@ -554,4 +569,39 @@ func composeBanAlert(ip, reason string, at time.Time) (subject, text, htm string
 	h.WriteString(`<tr><td style="padding:0 0 24px"></td></tr>`)
 
 	return subject, t.String(), frame("Automatic IP ban", h.String(), "The ban is a global block rule on the IP Rules page — remove it there to lift it.")
+}
+
+// composeScriptAlert renders the notice for a new script source.
+func composeScriptAlert(service, source, page string, at time.Time) (subject, text, htm string) {
+	subject = fmt.Sprintf("New script source on %s: %s", service, source)
+	when := at.Format("2006-01-02 15:04 MST")
+
+	var t strings.Builder
+	fmt.Fprintf(&t, "Palisade — new script source\n\n")
+	fmt.Fprintf(&t, "Service:     %s\n", service)
+	fmt.Fprintf(&t, "Source:      %s\n", source)
+	fmt.Fprintf(&t, "First page:  %s\n", page)
+	fmt.Fprintf(&t, "Seen at:     %s\n\n", when)
+	t.WriteString("A browser reported a script the service's report-only CSP does not allow. If you didn't add it, check the page for injected code.\n")
+
+	var h strings.Builder
+	h.WriteString(`<tr><td style="padding:26px 28px 0">`)
+	h.WriteString(heading("A new script source appeared"))
+	h.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;background:` + cStampTint + `;border:1px solid ` + cEdge + `;border-left:4px solid ` + cStamp + `"><tr><td style="padding:14px 18px">`)
+	h.WriteString(`<p style="margin:0;` + labelStyle + `;color:` + cStampInk + `">` + html.EscapeString(service) + `</p>`)
+	h.WriteString(`<p style="margin:6px 0 0;font:500 18px ` + fontMono + `;color:` + cInk + `;word-break:break-all">` + html.EscapeString(source) + `</p>`)
+	h.WriteString(`</td></tr></table></td></tr>`)
+
+	var d strings.Builder
+	d.WriteString(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0">`)
+	for _, row := range []struct{ label, value string }{{"First page", page}, {"Seen at", when}} {
+		fmt.Fprintf(&d, `<tr><td width="110" style="padding:9px 0;border-bottom:1px solid %s;font:400 13px %s;color:%s">%s</td>`+
+			`<td style="padding:9px 0;border-bottom:1px solid %s;font:500 13px %s;color:%s">%s</td></tr>`,
+			cRule, fontStack, cMuted, row.label, cRule, fontStack, cInk, html.EscapeString(row.value))
+	}
+	d.WriteString(`</table>`)
+	h.WriteString(section("Details", d.String()))
+	h.WriteString(`<tr><td style="padding:0 0 24px"></td></tr>`)
+
+	return subject, t.String(), frame("Script inventory", h.String(), "The source is now in the service's script inventory and won't alert again.")
 }

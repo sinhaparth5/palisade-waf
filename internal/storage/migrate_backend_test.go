@@ -46,6 +46,12 @@ func TestMigrateConfigTo(t *testing.T) {
 	if err := source.SetServiceMCP(1, ServiceMCP{Mode: "enforce", Path: "/mcp", Tools: "search"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := source.SetServiceCSP(1, "script-src 'self'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.AddCSPScript(1, CSPScript{Origin: "https://cdn.example.com", Page: "/", FirstSeen: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
 	if err := source.SetServiceOpenAPI(1, "openapi: 3.0.3", "log"); err != nil {
 		t.Fatal(err)
 	}

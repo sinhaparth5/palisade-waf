@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"palisade/internal/security/bot"
+	"palisade/internal/security/csp"
 	"palisade/internal/security/ratelimit"
 	"palisade/internal/storage"
 
@@ -128,6 +129,7 @@ type Registry struct {
 	honeypots []string                      // see Honeypot
 	trusted   []netip.Prefix                // see Trusted
 	aiDefault bot.AIPolicy                  // global AI crawler policy, see AIAction
+	csp       map[int]string                // service id -> name, for services with a report-only CSP
 
 	healthMu sync.RWMutex
 	health   map[string]*backendHealth // service name + "\x00" + backend URL
@@ -188,6 +190,11 @@ func (r *Registry) Reload(db *storage.DB) error {
 	for i := range list {
 		list[i].Gate = gates[list[i].ID]
 	}
+	cspPolicies, err := db.ListServiceCSP()
+	if err != nil {
+		return err
+	}
+	cspNames := map[int]string{}
 
 	proxies := make(map[string]http.Handler, len(list))
 	direct := make(map[string]http.Handler, len(list))
@@ -335,12 +342,22 @@ func (r *Registry) Reload(db *storage.DB) error {
 		// Toward the client: response inspection (issue #192) sees the
 		// backend's own bytes, before compression re-encodes them.
 		compress := s.CompressEnabled
+		var cspHeader, cspEndpoints string
+		if p := cspPolicies[s.ID]; p != "" {
+			cspNames[s.ID] = name
+			cspHeader, cspEndpoints = csp.Header(s.ID, p)
+		}
 		clientModify := func(resp *http.Response) error {
 			if err := runResponseHook(resp); err != nil {
 				return err
 			}
 			if compress {
 				compressResponse(resp)
+			}
+			// Report-only CSP (issue #235): only documents run a policy.
+			if cspHeader != "" && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
+				resp.Header.Add("Content-Security-Policy-Report-Only", cspHeader)
+				resp.Header.Add("Reporting-Endpoints", cspEndpoints)
 			}
 			return modify(resp)
 		}
@@ -474,6 +491,7 @@ func (r *Registry) Reload(db *storage.DB) error {
 	r.autoHosts = autoHosts
 	r.hosts = hosts
 	r.mtls = mtls
+	r.csp = cspNames
 	r.mu.Unlock()
 
 	// Stop old janitor goroutines after the swap so in-flight checks still work.
@@ -1081,4 +1099,13 @@ func (r *Registry) HostPolicy() autocert.HostPolicy {
 		}
 		return nil
 	}
+}
+
+// CSPService returns the name of service id if it has a report-only CSP
+// (issue #235); the report collector drops reports for any other id.
+func (r *Registry) CSPService(id int) (string, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	name, ok := r.csp[id]
+	return name, ok
 }

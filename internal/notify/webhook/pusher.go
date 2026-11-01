@@ -152,7 +152,7 @@ func signPayload(secret string, body []byte) string {
 
 // shouldSend returns true if the entry's event category is in the
 // comma-separated events string. Categories: "blocked", "challenged",
-// "proxied". "all" matches everything.
+// "proxied", "scripts". "all" matches everything.
 func (p *Pusher) shouldSend(events string, entry storage.RequestLog) bool {
 	category := eventCategory(entry)
 	for _, e := range strings.Split(events, ",") {

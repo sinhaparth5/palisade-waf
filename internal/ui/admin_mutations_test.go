@@ -1033,6 +1033,36 @@ func TestSetServiceMCP(t *testing.T) {
 	}
 }
 
+func TestSetServiceCSP(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("shop", "shop.example.com")
+	path := "/admin/services/csp/" + itoa(svc.ID)
+
+	rec := env.do("POST", path, form("csp_mode", "report", "csp_policy", ""))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if rec.Header().Get("HX-Trigger") != "csp-saved" || !strings.Contains(rec.Body.String(), "CSP: 0 script sources") {
+		t.Fatalf("no csp-saved trigger or badge: %s", rec.Body)
+	}
+	if got, _ := env.db.ListServiceCSP(); got[svc.ID] != "script-src 'self'" {
+		t.Errorf("empty policy should store the default, got %q", got[svc.ID])
+	}
+	if _, ok := env.h.registry.CSPService(svc.ID); !ok {
+		t.Error("registry not reloaded")
+	}
+
+	for _, bad := range []string{"script-src 'self'; report-uri https://evil.example", "script-src 'self' \u00e9", strings.Repeat("a", 4097)} {
+		rec = env.do("POST", path, form("csp_mode", "report", "csp_policy", bad))
+		if rec.Header().Get("HX-Retarget") != "#svc-csp-error" {
+			t.Errorf("%.40q: want inline error, got %s", bad, rec.Body)
+		}
+	}
+
+	env.do("POST", path, form("csp_mode", "off"))
+	if got, _ := env.db.ListServiceCSP(); len(got) != 0 {
+		t.Errorf("off should remove the policy: %+v", got)
+	}
+}
+
 func TestSetServiceMTLS(t *testing.T) {
 	t.Chdir(t.TempDir()) // the CA bundle is written relative to the working directory
 	env := newAdminEnv(t)
