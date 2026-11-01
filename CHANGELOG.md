@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- Drop redundant and fingerprinting response headers
+
 ## [3.0.4] - 2026-10-30
 
 ### Fixed
