@@ -96,9 +96,14 @@ func TestSecurityMiddlewareHeaders(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
-	for _, h := range []string{"X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Permissions-Policy", "Cross-Origin-Opener-Policy", "X-WAF-Engine"} {
+	for _, h := range []string{"X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Permissions-Policy", "Cross-Origin-Opener-Policy"} {
 		if rec.Header().Get(h) == "" {
 			t.Errorf("missing %s", h)
+		}
+	}
+	for _, h := range []string{"X-WAF-Engine", "X-XSS-Protection"} {
+		if rec.Header().Get(h) != "" {
+			t.Errorf("%s should not be sent", h)
 		}
 	}
 	if rec.Header().Get("Strict-Transport-Security") != "" {

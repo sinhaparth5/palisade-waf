@@ -3,7 +3,7 @@ package proxy
 import "github.com/labstack/echo/v4"
 
 // SecurityMiddleware sets hardening HTTP headers on every response:
-// standard browser security directives plus Palisade identification headers.
+// standard browser security directives (Server: Palisade is set by the handler).
 // Applied globally so blocked responses, admin UI pages, and proxied responses
 // all carry the same baseline security posture.
 func SecurityMiddleware() echo.MiddlewareFunc {
@@ -14,10 +14,9 @@ func SecurityMiddleware() echo.MiddlewareFunc {
 			// ── Browser hardening ─────────────────────────────────────────────────
 			h.Set("X-Content-Type-Options", "nosniff")
 			h.Set("X-Frame-Options", "SAMEORIGIN")
-			h.Set("X-XSS-Protection", "1; mode=block")
 			h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 			h.Set("Permissions-Policy",
-				"camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()")
+				"camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 			h.Set("Cross-Origin-Opener-Policy", "same-origin")
 
 			// HSTS: only advertise over TLS to avoid breaking plain-HTTP dev setups.
@@ -25,9 +24,6 @@ func SecurityMiddleware() echo.MiddlewareFunc {
 			if c.Request().TLS != nil {
 				h.Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 			}
-
-			// ── Palisade identification ─────────────────────────────────────────
-			h.Set("X-WAF-Engine", "Palisade")
 
 			return next(c)
 		}

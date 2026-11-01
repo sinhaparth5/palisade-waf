@@ -225,7 +225,6 @@ func (h *Handler) Handle(c echo.Context) error {
 
 	reqID := generateRequestID()
 	w.Header().Set("X-Request-ID", reqID)
-	w.Header().Set("X-WAF-Request-ID", reqID)
 
 	clientIP := h.realIP(r)
 	app := h.registry.Match(r.Host, r.URL.Path)
@@ -575,7 +574,6 @@ func (h *Handler) Handle(c echo.Context) error {
 		r.URL.RawPath = ""
 	}
 
-	w.Header().Set("X-WAF-Status", "inspected")
 	rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 	// A clone, so the request log keeps the headers the client really sent.
 	out := r.Clone(r.Context())

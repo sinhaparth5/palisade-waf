@@ -870,6 +870,9 @@ sub vcl_deliver {
     # Internal partition marker (see vcl_backend_response) — not for clients.
     unset resp.http.X-Cache-Service;
     unset resp.http.X-Cache-Url;
+    # Don't advertise Varnish or its transaction ids.
+    unset resp.http.Via;
+    unset resp.http.X-Varnish;
 }
 VCL
 

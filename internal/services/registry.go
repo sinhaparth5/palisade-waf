@@ -321,6 +321,12 @@ func (r *Registry) Reload(db *storage.DB) error {
 				"Permissions-Policy",
 				"Cross-Origin-Opener-Policy",
 				"Strict-Transport-Security",
+				// Stack/version fingerprints from the backend or Varnish.
+				"X-Powered-By",
+				"X-AspNet-Version",
+				"X-AspNetMvc-Version",
+				"Via",
+				"X-Varnish",
 			} {
 				resp.Header.Del(h)
 			}
