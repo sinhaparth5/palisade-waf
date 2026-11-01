@@ -18,6 +18,7 @@ rather than growing this file forever.
 - (#233) Bot: verify Web Bot Auth (RFC 9421) signed agents
 - (#234) WAF: MCP endpoint guard (Origin check, JSON-RPC method allowlist)
 - (#235) CSP report-only and third-party script inventory
+- (#236) Virtual patches for 2026 CISA KEV web CVEs
 ## [3.0.5] - 2026-11-01
 
 - Drop redundant and fingerprinting response headers
