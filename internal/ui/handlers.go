@@ -481,6 +481,7 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/services/schema/:id", h.SetServiceSchema),
 		g.POST("/services/openapi/:id", h.SetServiceOpenAPI),
 		g.POST("/services/mcp/:id", h.SetServiceMCP),
+		g.POST("/services/csp/:id", h.SetServiceCSP),
 		g.POST("/services/cache/:id", h.SetServiceCache),
 		g.POST("/services/cache-session/:id", h.SetServiceCacheSession),
 		g.POST("/services/cache-tuning/:id", h.SetServiceCacheTuning),
@@ -1964,6 +1965,8 @@ type ServiceView struct {
 	OpenAPIMode string
 	MTLS        storage.ServiceMTLS // zero value when no client CA is stored
 	MCP         storage.ServiceMCP  // zero value when the MCP guard is off
+	CSP         string              // report-only policy, "" when off
+	Scripts     []storage.CSPScript // script sources its reports named
 }
 
 func (h *Handler) serviceViews() []ServiceView {
@@ -1977,10 +1980,12 @@ func (h *Handler) serviceViews() []ServiceView {
 	modes, _ := h.db.ListServiceOpenAPIModes()
 	mtls, _ := h.db.ListServiceMTLS()
 	mcp, _ := h.db.ListServiceMCP()
+	cspPolicies, _ := h.db.ListServiceCSP()
+	scripts, _ := h.db.ListCSPScripts()
 	out := make([]ServiceView, len(list))
 	for i, s := range list {
 		healthy, known := h.registry.IsHealthy(s.Name)
-		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID], MCP: mcp[s.ID]}
+		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID], MCP: mcp[s.ID], CSP: cspPolicies[s.ID], Scripts: scripts[s.ID]}
 	}
 	return out
 }
@@ -3094,6 +3099,49 @@ func (h *Handler) SetServiceMCP(c echo.Context) error {
 		h.reloadWAF()
 	}
 	c.Response().Header().Set("HX-Trigger", "mcp-saved")
+	return h.servicesRows(c)
+}
+
+// defaultCSP reports every script not served from the page's own origin.
+const defaultCSP = "script-src 'self'"
+
+// SetServiceCSP saves a service's report-only CSP (issue #235). The report
+// directives are appended by services.Registry, so the policy can't carry
+// its own.
+func (h *Handler) SetServiceCSP(c echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-csp-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	policy := ""
+	if c.FormValue("csp_mode") == "report" {
+		policy = strings.Join(strings.Fields(c.FormValue("csp_policy")), " ")
+		if policy == "" {
+			policy = defaultCSP
+		}
+		lower := strings.ToLower(policy)
+		switch {
+		case len(policy) > 4096:
+			return fail("The policy is too long (4096 characters max).")
+		case strings.Contains(lower, "report-uri") || strings.Contains(lower, "report-to"):
+			return fail("Leave out report-uri and report-to; Palisade adds them.")
+		case strings.IndexFunc(policy, func(r rune) bool { return r < 0x20 || r > 0x7e }) >= 0:
+			return fail("The policy may only contain printable ASCII.")
+		}
+		policy = strings.TrimSuffix(policy, ";")
+	}
+	if err := h.db.SetServiceCSP(id, policy); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return fail(err.Error())
+	}
+	c.Response().Header().Set("HX-Trigger", "csp-saved")
 	return h.servicesRows(c)
 }
 

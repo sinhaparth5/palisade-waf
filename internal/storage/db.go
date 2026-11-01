@@ -1046,7 +1046,7 @@ func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
 }
 
 func (db *DB) RemoveService(id int) error {
-	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_gate"} {
+	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_gate", "service_csp", "csp_scripts"} {
 		if _, err := db.exec(`DELETE FROM `+t+` WHERE service_id = ?`, id); err != nil {
 			return err
 		}

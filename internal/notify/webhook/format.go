@@ -8,12 +8,20 @@ import (
 	"palisade/internal/storage"
 )
 
+// ActionNewScript marks the alert for a script source a service's
+// report-only CSP saw for the first time (issue #235). Host carries the
+// source and Path the page that loaded it; it is not a request.
+const ActionNewScript = "csp_new_script"
+
 // eventCategory classifies entry the same way shouldSend filters on it:
 // "blocked", "challenged" (prefix match — issue #16's adaptive enforcement
 // also logs as "bot_challenge:adaptive"), or "proxied" otherwise. Shared by
 // the event filter and the Slack/Discord formatters so the two never
 // classify the same entry differently.
 func eventCategory(entry storage.RequestLog) string {
+	if entry.Action == ActionNewScript {
+		return "scripts"
+	}
 	if entry.Blocked {
 		return "blocked"
 	}
@@ -31,6 +39,8 @@ func categoryTitle(category string) string {
 		return "Request blocked"
 	case "challenged":
 		return "Bot challenge issued"
+	case "scripts":
+		return "New script source"
 	default:
 		return "Request proxied"
 	}
@@ -44,7 +54,7 @@ func slackColor(category string) string {
 	switch category {
 	case "blocked":
 		return "#dc2626"
-	case "challenged":
+	case "challenged", "scripts":
 		return "#d97706"
 	default:
 		return "#16a34a"
@@ -55,7 +65,7 @@ func discordColor(category string) int {
 	switch category {
 	case "blocked":
 		return 0xdc2626
-	case "challenged":
+	case "challenged", "scripts":
 		return 0xd97706
 	default:
 		return 0x16a34a
@@ -79,6 +89,12 @@ func buildSlackPayload(entry storage.RequestLog) ([]byte, error) {
 		{"type": "mrkdwn", "text": fmt.Sprintf("*Path*\n%s %s", orDash(entry.Method), orDash(entry.Path))},
 		{"type": "mrkdwn", "text": fmt.Sprintf("*Status*\n%d", entry.Status)},
 		{"type": "mrkdwn", "text": fmt.Sprintf("*Action*\n%s", orDash(entry.Action))},
+	}
+	if category == "scripts" {
+		fields = []map[string]any{
+			{"type": "mrkdwn", "text": fmt.Sprintf("*Source*\n%s", orDash(entry.Host))},
+			{"type": "mrkdwn", "text": fmt.Sprintf("*Page*\n%s", orDash(entry.Path))},
+		}
 	}
 	if entry.AppName != "" {
 		fields = append(fields, map[string]any{"type": "mrkdwn", "text": fmt.Sprintf("*Service*\n%s", entry.AppName)})
@@ -122,6 +138,12 @@ func buildDiscordPayload(entry storage.RequestLog) ([]byte, error) {
 		{"name": "Path", "value": fmt.Sprintf("%s %s", orDash(entry.Method), orDash(entry.Path)), "inline": true},
 		{"name": "Status", "value": fmt.Sprintf("%d", entry.Status), "inline": true},
 		{"name": "Action", "value": orDash(entry.Action), "inline": true},
+	}
+	if category == "scripts" {
+		fields = []map[string]any{
+			{"name": "Source", "value": orDash(entry.Host), "inline": true},
+			{"name": "Page", "value": orDash(entry.Path), "inline": true},
+		}
 	}
 	if entry.AppName != "" {
 		fields = append(fields, map[string]any{"name": "Service", "value": entry.AppName, "inline": true})

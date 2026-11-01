@@ -32,6 +32,7 @@ func TestEventCategory(t *testing.T) {
 		{"challenged", sampleEntry(false, "bot_challenge"), "challenged"},
 		{"challenged adaptive", sampleEntry(false, "bot_challenge:adaptive"), "challenged"},
 		{"proxied", sampleEntry(false, ""), "proxied"},
+		{"new script", sampleEntry(false, ActionNewScript), "scripts"},
 	}
 	for _, tc := range cases {
 		if got := eventCategory(tc.entry); got != tc.want {

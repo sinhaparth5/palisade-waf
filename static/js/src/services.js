@@ -147,6 +147,7 @@
   var schemaText = document.getElementById('svc-schema-text');
   var openapiForm = document.getElementById('svc-openapi-form');
   var mcpForm = document.getElementById('svc-mcp-form');
+  var cspForm = document.getElementById('svc-csp-form');
   var mtlsForm = document.getElementById('svc-mtls-form');
   var responsesForm = document.getElementById('svc-responses-form');
   var openapiText = document.getElementById('svc-openapi-text');
@@ -299,6 +300,11 @@
     document.getElementById('svc-mcp-methods').value = d.mcpMethods || '';
     document.getElementById('svc-mcp-tools').value = d.mcpTools || '';
 
+    cspForm.setAttribute('hx-post', adminPath + '/services/csp/' + d.id);
+    htmx.process(cspForm);
+    document.getElementById('svc-csp-mode').value = d.csp ? 'report' : 'off';
+    document.getElementById('svc-csp-policy').value = d.csp || "script-src 'self'";
+
     responsesForm.setAttribute('hx-post', adminPath + '/services/responses/' + d.id);
     htmx.process(responsesForm);
     document.getElementById('svc-responses-mode').value = d.responseInspect || '';
@@ -345,7 +351,7 @@
     deleteBtn.setAttribute('hx-confirm', 'Remove service ' + d.name + '?');
     htmx.process(deleteBtn);
 
-    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-gate-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mcp-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
+    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-gate-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mcp-error', 'svc-csp-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.textContent = '';
     });
@@ -400,6 +406,7 @@
   document.body.addEventListener('gate-saved', closeModal);
   document.body.addEventListener('openapi-saved', closeModal);
   document.body.addEventListener('mcp-saved', closeModal);
+  document.body.addEventListener('csp-saved', closeModal);
   document.body.addEventListener('mtls-saved', closeModal);
   document.body.addEventListener('responses-saved', closeModal);
   openapiFile.addEventListener('change', function () {

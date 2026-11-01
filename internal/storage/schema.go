@@ -341,6 +341,20 @@ func (db *DB) schemaStatements() []string {
 			tools      TEXT NOT NULL
 		)`,
 
+		// Report-only CSP per service and the script sources its reports
+		// named (issue #235). origin is a scheme://host or a CSP keyword.
+		`CREATE TABLE IF NOT EXISTS service_csp (
+			service_id INTEGER PRIMARY KEY,
+			policy     TEXT NOT NULL
+		)`,
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS csp_scripts (
+			service_id INTEGER NOT NULL,
+			origin     VARCHAR(255) NOT NULL,
+			page       TEXT NOT NULL,
+			first_seen %s NOT NULL,
+			PRIMARY KEY (service_id, origin)
+		)`, ts),
+
 		// Maintenance mode and waiting room per service (issue #198).
 		// Schedule bounds are RFC 3339 text, "" for none.
 		`CREATE TABLE IF NOT EXISTS service_gate (

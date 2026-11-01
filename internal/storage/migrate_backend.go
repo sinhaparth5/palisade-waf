@@ -30,7 +30,7 @@ type MigrationTableResult struct {
 // admin_users (credentials, TOTP), admin_sso_identities, certificates, api_keys, waf_disabled_rules,
 // waf_service_rule_exceptions, waf_custom_rules, threat_intel_sources + their synced
 // threat_intel_ips, webhook_config, ip_threat_scores, ja4_reputation, service_openapi,
-// service_mtls (the CA files it points at stay on disk), service_mcp, service_gate.
+// service_mtls (the CA files it points at stay on disk), service_mcp, service_gate, service_csp, csp_scripts.
 //
 // Deliberately NOT migrated: requests (the access/request log — could be
 // millions of rows on a long-running install; disposable operational
@@ -103,6 +103,8 @@ func (db *DB) MigrateConfigTo(targetDriver, targetDSN string) (MigrationReport, 
 		{"service_mtls", migrateServiceMTLSTable, false},
 		{"service_mcp", migrateServiceMCPTable, false},
 		{"service_gate", migrateServiceGateTable, false},
+		{"service_csp", migrateServiceCSPTable, false},
+		{"csp_scripts", migrateCSPScriptsTable, false},
 		{"ip_rules", migrateIPRulesTable, true},
 		{"geo_rules", migrateGeoRulesTable, true},
 		{"api_keys", migrateAPIKeysTable, true},

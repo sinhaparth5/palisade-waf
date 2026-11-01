@@ -42,6 +42,7 @@ import (
 	"palisade/internal/security/blocklist"
 	"palisade/internal/security/bot"
 	"palisade/internal/security/challenge"
+	"palisade/internal/security/csp"
 	"palisade/internal/security/geo"
 	ja3pkg "palisade/internal/security/ja3"
 	ja4pkg "palisade/internal/security/ja4"
@@ -526,6 +527,18 @@ func main() {
 		c.Response().Header().Set("Cache-Control", "public, max-age=86400")
 		return c.Blob(http.StatusOK, "image/svg+xml", data)
 	})
+
+	// Report-only CSP reports (issue #235). Registered here, so they are
+	// never challenged or proxied; the collector rate limits per client.
+	proxyCIDRs := proxy.ParseTrustedProxyCIDRs(cfg.TrustedProxies)
+	cspCollector := csp.New(db, registry.CSPService, func(r *http.Request) string { return proxy.ClientIP(r, proxyCIDRs) },
+		func(service, source, page string) {
+			webhookPusher.Push(storage.RequestLog{Timestamp: time.Now(), AppName: service, Host: source, Path: page, Action: webhook.ActionNewScript})
+			if err := emailReporter.SendScriptAlert(service, source, page); err != nil {
+				log.Printf("csp: script alert email: %v", err)
+			}
+		})
+	e.POST(csp.ReportPath, echo.WrapHandler(cspCollector))
 
 	proxy.RegisterProbes(e, db)
 
