@@ -52,14 +52,15 @@ func Analyze(r *http.Request, ip string, asnNum uint) Analysis {
 	// up to the AI crawler policy (issue #187), not to verification alone.
 	if c := matchCrawler(uaLow); c != nil && c.ai != "" {
 		a.AICategory = c.ai
-		a.AIVerified = verifyCrawler(c, ip, asnNum)
+		a.AIVerified = verifyCrawler(c, ip, asnNum) || webBotAuthVerified(r, c)
 		if a.AIVerified {
 			a.Signals = append(a.Signals, "ai_crawler")
 		} else {
 			a.Signals = append(a.Signals, "unverified_crawler")
 		}
 	} else if c != nil {
-		if verifyCrawler(c, ip, asnNum) {
+		// Only operator pins give a non-AI crawler signature agents.
+		if verifyCrawler(c, ip, asnNum) || webBotAuthVerified(r, c) {
 			a.IsTrustedCrawler = true
 			a.Signals = append(a.Signals, "trusted_crawler")
 			return a
