@@ -136,3 +136,48 @@ func TestWebBotAuthFetch(t *testing.T) {
 		}
 	}
 }
+
+func TestSignatureBaseComponents(t *testing.T) {
+	r := httptest.NewRequest("POST", "https://Example.COM/a%20b?x=1&y", nil)
+	r.Header.Add("X-Thing", " one ")
+	r.Header.Add("X-Thing", "two")
+	r.Header.Set("Signature-Agent", `a="https://chatgpt.com";type=directory`)
+	params := `("@method" "@path" "@query" "@target-uri" "x-thing" "signature-agent";key="a");created=1;tag="web-bot-auth"`
+	in, err := parseSFDict("s=" + params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, key, ok := signatureBase(r, in["s"], parseSigAgentHeader(r.Header.Get("Signature-Agent")))
+	want := `"@method": POST
+"@path": /a%20b
+"@query": ?x=1&y
+"@target-uri": https://example.com/a%20b?x=1&y
+"x-thing": one, two
+"signature-agent";key="a": "https://chatgpt.com";type=directory
+"@signature-params": ` + params
+	if !ok || key != "a" || got != want {
+		t.Fatalf("ok=%v key=%q\n%s\nwant\n%s", ok, key, got, want)
+	}
+
+	for name, p := range map[string]string{
+		"no authority":      `("signature-agent";key="a")`,
+		"missing header":    `("@authority" "x-none" "signature-agent";key="a")`,
+		"unknown derived":   `("@authority" "@status" "signature-agent";key="a")`,
+		"two agents":        `("@authority" "signature-agent";key="a" "signature-agent";key="a")`,
+		"agent not sent":    `("@authority" "signature-agent";key="b")`,
+		"header with param": `("@authority" "x-thing";sf "signature-agent";key="a")`,
+	} {
+		in, err := parseSFDict("s=" + p)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if _, _, ok := signatureBase(r, in["s"], parseSigAgentHeader(r.Header.Get("Signature-Agent"))); ok {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	for _, bad := range []string{`s`, `s=(`, `s="unterminated`, `s=:abc`, `s=1;`, `s=1 x`, `s=("a"x)`} {
+		if _, err := parseSFDict(bad); err == nil {
+			t.Errorf("parseSFDict(%q) accepted", bad)
+		}
+	}
+}
