@@ -3,6 +3,22 @@
 A terminal client for a Palisade server, over the REST API with a bearer key.
 A read-only key is enough.
 
+## Install
+
+The installer fetches the release binary and checks it against the signed
+`checksums.txt`:
+
+```bash
+# Just the CLI, e.g. on a workstation (~/.local/bin; /usr/local/bin as root):
+curl -fsSL https://waf-install.astrareconslabs.com/palisade-waf/install.sh | PALISADE_CLI_ONLY=1 bash
+# With the WAF on a server (later upgrades keep both on the same version):
+curl -fsSL https://waf-install.astrareconslabs.com/palisade-waf/install.sh | sudo PALISADE_CLI=1 bash
+```
+
+The CLI carries the WAF's version (`palisade-cli --version`); use the one
+matching your server. Only linux/amd64 is built. It needs OpenSSL 3
+(`libssl3`) on the machine running it.
+
 ## Build
 
 Needs CMake 3.24+, a C++20 compiler and OpenSSL 3 headers (`libssl-dev`).
@@ -13,6 +29,8 @@ cmake -S cli -B cli/build -G Ninja
 cmake --build cli/build
 ctest --test-dir cli/build
 ```
+
+Local builds report version `dev`; pass `-DPALISADE_VERSION=v3.2.0` to set it.
 
 ## Use
 
@@ -26,9 +44,6 @@ palisade-cli logs -f    # follow new requests (same filters apply)
 palisade-cli stats      # totals, top blocked IPs, countries and rules
 palisade-cli rules bans # also: ip, geo, custom, exceptions, vpatches
 ```
-
-Release builds attach `palisade-cli-linux-amd64` (listed in `checksums.txt`).
-It needs OpenSSL 3 (`libssl3`) on the machine running it.
 
 In the interactive view, `1`–`4` switch between Services, Logs, Stats and
 Rules (`r` refreshes; in Rules, `←`/`→` move between the list picker and its

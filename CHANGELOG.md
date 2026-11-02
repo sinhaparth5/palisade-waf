@@ -18,6 +18,7 @@ rather than growing this file forever.
 - (#244) Palisade CLI: skeleton, config and services view
 - (#245) Palisade CLI: logs view and live tail
 - (#246) Palisade CLI: stats dashboard, rules and bans views
+- (#253) Install the CLI from install.sh and version it with the WAF
 
 ## [3.1.0] - 2026-11-01
 
