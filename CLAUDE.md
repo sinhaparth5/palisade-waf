@@ -130,7 +130,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 
 **JS/CSS**
 - JS source in `static/js/src/`, minified to `static/js/dist/` (embedded). No Node/npm in this repo.
-- Every page script tag carries `?v={{.Asset}}` (embedded assets have no cache headers; the stamp is a hash of the CSS).
+- Every page script/stylesheet tag carries `?v={{.Asset}}`: the stamp hashes every embedded asset, and a matching `?v=` gets `Cache-Control: immutable` for a year (`ui/static.go`, issue #255). An asset loaded without the stamp is never cached that way. `{admin}/static/*` is gzipped except fonts/images.
 - Tailwind v4, CSS-first config in `static/css/tailwind.css`, compiled to committed `static/css/dist/tailwind.min.css`. **Re-run `make css` and commit when adding a class** anywhere under `internal/ui/` (templates and Go) or `static/js/src/`; classes elsewhere won't exist. After `make css`, a running browser may hold the old stylesheet.
 - v3 "ledger" theme (issue #215): colors come only from the `--fn-*` variables in `tailwind.css`. `@theme` resets the palette (`--color-*: initial`), so only slate/red/green/amber/purple/violet/blue/sky/cyan plus the named tokens (`edge`, `side-*`, `success`/`warning`/`info`/`danger`) exist; any other family (rose, teal, …) compiles to nothing. Status colors: `-500` = bright (dots, badges), `-600`+ = text-safe ink shade. Text must pass WCAG AA on cream: `text-slate-500`+ and `text-<status>-600`+ only; `slate-300/400` and status `-400/-500` are for borders, dots, fills and placeholders.
 - Use v4 names (`rounded-sm`, `shadow-xs`, `outline-hidden`, `bg-linear-to-*`), never v3 (`rounded`, `shadow`, `outline-none`, `bg-gradient-to-*`). Prefer `starting:` over JS animation.
