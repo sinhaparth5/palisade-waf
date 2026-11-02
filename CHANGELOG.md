@@ -17,6 +17,7 @@ rather than growing this file forever.
 - (#243) Read-only REST API endpoints for the CLI
 - (#244) Palisade CLI: skeleton, config and services view
 - (#245) Palisade CLI: logs view and live tail
+- (#246) Palisade CLI: stats dashboard, rules and bans views
 
 ## [3.1.0] - 2026-11-01
 

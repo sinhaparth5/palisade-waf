@@ -371,6 +371,9 @@ func TestRequestQueries(t *testing.T) {
 	if top, _ := db.GetTopBlockedCountries(5, 24); len(top) != 1 || top[0].Country != "CN" || top[0].Count != 2 {
 		t.Errorf("top blocked countries = %+v", top)
 	}
+	if top, _ := db.GetTopBlockedIPs(5, 24); len(top) != 1 || top[0].IP != "1.1.1.1" || top[0].Count != 2 {
+		t.Errorf("top blocked ips = %+v", top)
+	}
 	if n, _ := db.CountBlockedSince(now.Add(-time.Hour)); n != 2 {
 		t.Errorf("blocked since = %d", n)
 	}
