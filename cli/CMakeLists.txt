@@ -30,7 +30,7 @@ FetchContent_Declare(httplib
 FetchContent_MakeAvailable(ftxui json httplib)
 find_package(OpenSSL 3 REQUIRED)
 
-add_library(palisade_core STATIC src/config.cpp src/api.cpp src/logs.cpp)
+add_library(palisade_core STATIC src/config.cpp src/api.cpp src/logs.cpp src/views.cpp)
 target_include_directories(palisade_core PUBLIC src SYSTEM PUBLIC ${httplib_SOURCE_DIR})
 target_compile_definitions(palisade_core PUBLIC CPPHTTPLIB_OPENSSL_SUPPORT
   PALISADE_CLI_VERSION="${PROJECT_VERSION}")
@@ -48,3 +48,6 @@ add_test(NAME config_test COMMAND config_test)
 add_executable(logs_test tests/logs_test.cpp)
 target_link_libraries(logs_test PRIVATE palisade_core)
 add_test(NAME logs_test COMMAND logs_test)
+add_executable(views_test tests/views_test.cpp)
+target_link_libraries(views_test PRIVATE palisade_core)
+add_test(NAME views_test COMMAND views_test)

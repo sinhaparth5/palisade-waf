@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "logs.hpp"
+#include "views.hpp"
 
 using namespace ftxui;
 using nlohmann::json;
@@ -167,6 +168,39 @@ int run_tui(Api& api) {
     });
   };
 
+  // Stats tab.
+  std::vector<std::string> stats_text;
+  bool stats_loaded = false;
+  auto load_stats = [&] {
+    stats_loaded = true;
+    try {
+      stats_text = stats_lines(api.get("/stats"));
+      status = "stats loaded";
+    } catch (const std::exception& e) {
+      status = e.what();
+    }
+  };
+
+  // Rules tab: a view picker on the left, that view's rows on the right.
+  std::vector<std::string> view_names;
+  for (const auto& v : kRuleViews) view_names.push_back(v.label);
+  int view_sel = 0, rule_sel = 0;
+  bool rules_loaded = false;
+  std::vector<std::string> rule_text;
+  auto load_rules = [&] {
+    rules_loaded = true;
+    const auto& v = kRuleViews[view_sel];
+    try {
+      rule_text = rule_lines(v, api.get(v.path));
+      status = std::string(v.label) + ": " + std::to_string(rule_text.size() - 1) + " rows";
+      if (rule_text.size() == 2 && rule_text[1] == "(none)") status = std::string(v.label) + ": none";
+    } catch (const std::exception& e) {
+      rule_text.clear();
+      status = e.what();
+    }
+    rule_sel = 0;
+  };
+
   // Request detail modal.
   bool show_detail = false;
   std::vector<std::string> detail_lines;
@@ -235,7 +269,23 @@ int run_tui(Api& api) {
     return vbox({bar, separator(), body | flex});
   });
 
-  auto tabs = Container::Tab({services_view, logs_view}, &tab);
+  auto stats_view = Renderer([&] {
+    Elements els;
+    for (const auto& l : stats_text) els.push_back(l.empty() || l[0] == ' ' ? text(l) : text(l) | bold);
+    return vbox(els) | vscroll_indicator | frame;
+  });
+
+  MenuOption view_opt;
+  view_opt.on_change = [&] { load_rules(); };
+  auto view_menu = Menu(&view_names, &view_sel, view_opt);
+  auto rule_menu = Menu(&rule_text, &rule_sel);
+  auto rules_body = Container::Horizontal({view_menu, rule_menu});
+  auto rules_view = Renderer(rules_body, [&] {
+    return hbox({view_menu->Render() | size(WIDTH, EQUAL, 20), separator(),
+                 rule_menu->Render() | vscroll_indicator | frame | flex});
+  });
+
+  auto tabs = Container::Tab({services_view, logs_view, stats_view, rules_view}, &tab);
   auto detail_menu = Menu(&detail_lines, &detail_sel);
   auto detail_view = Renderer(detail_menu, [&] {
     return window(text(detail_title) | bold, detail_menu->Render() | vscroll_indicator | frame) |
@@ -243,12 +293,14 @@ int run_tui(Api& api) {
   });
 
   auto main_view = Renderer(tabs, [&] {
-    std::string keys = tab == 0 ? "↑↓ select  r refresh  2 logs  q quit "
+    std::string keys = tab == 0   ? "↑↓ select  r refresh  2 logs  q quit "
+                       : tab == 2 ? "r refresh  q quit "
+                       : tab == 3 ? "↑↓ select  ←→ list/rows  r refresh  q quit "
                        : tailing ? "enter details  f filter  b blocked  t stop tail  1 services  q quit "
                                  : "enter details  f filter  b blocked  n/p page  t live tail  r refresh  q quit ";
     return vbox({
         hbox({text(" Palisade ") | bold | inverted, tab_label("1 Services", tab == 0),
-              tab_label("2 Logs", tab == 1)}),
+              tab_label("2 Logs", tab == 1), tab_label("3 Stats", tab == 2), tab_label("4 Rules", tab == 3)}),
         separator(),
         tabs->Render() | flex,
         separator(),
@@ -287,9 +339,23 @@ int run_tui(Api& api) {
       log_menu->TakeFocus();
       return true;
     }
-    if (tab == 0) {
-      if (e == Event::Character('r')) load_services();
-      return e == Event::Character('r');
+    if (e == Event::Character('3')) {
+      tab = 2;
+      if (!stats_loaded) load_stats();
+      return true;
+    }
+    if (e == Event::Character('4')) {
+      tab = 3;
+      if (!rules_loaded) load_rules();
+      view_menu->TakeFocus();
+      return true;
+    }
+    if (tab != 1) {
+      if (e != Event::Character('r')) return false;
+      if (tab == 0) load_services();
+      if (tab == 2) load_stats();
+      if (tab == 3) load_rules();
+      return true;
     }
     if (e == Event::Character('f')) {
       ip_in->TakeFocus();

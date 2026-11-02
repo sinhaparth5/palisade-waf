@@ -11,6 +11,7 @@
 #include "config.hpp"
 #include "logs.hpp"
 #include "tui.hpp"
+#include "views.hpp"
 
 namespace {
 
@@ -23,6 +24,8 @@ Usage:
   palisade-cli services        list services
   palisade-cli logs [--blocked] [--ip IP] [--service NAME] [--limit N] [-f]
                                recent requests, newest first; -f follows live
+  palisade-cli stats           traffic totals, top blocked IPs, countries and rules
+  palisade-cli rules ip|bans|geo|custom|exceptions|vpatches
   palisade-cli --version
 
 Config: ~/.config/palisade/config.toml (0600). PALISADE_URL, PALISADE_ADMIN_PATH
@@ -128,6 +131,20 @@ int logs(Api& api, const std::vector<std::string>& args) {
   return 0;
 }
 
+int print_lines(const std::vector<std::string>& lines) {
+  for (const auto& l : lines) std::cout << l << "\n";
+  return 0;
+}
+
+int rules(Api& api, const std::vector<std::string>& args) {
+  const RuleView* v = args.size() == 1 ? find_rule_view(args[0]) : nullptr;
+  if (!v) {
+    std::cerr << "rules: pick one of ip, bans, geo, custom, exceptions, vpatches\n";
+    return 2;
+  }
+  return print_lines(rule_lines(*v, api.get(v->path)));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -158,6 +175,8 @@ int main(int argc, char** argv) {
     if (cmd.empty()) return run_tui(api);
     if (cmd == "services") return list_services(api);
     if (cmd == "logs") return logs(api, {args.begin() + 1, args.end()});
+    if (cmd == "stats") return print_lines(stats_lines(api.get("/stats")));
+    if (cmd == "rules") return rules(api, {args.begin() + 1, args.end()});
   } catch (const std::exception& e) {
     std::cerr << e.what() << "\n";
     return 1;

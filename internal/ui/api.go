@@ -725,11 +725,16 @@ func (h *Handler) APIStats(c echo.Context) error {
 	if err != nil {
 		return apiError(c, http.StatusInternalServerError, err.Error())
 	}
+	ips, err := h.db.GetTopBlockedIPs(10, 24)
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
 	return c.JSON(http.StatusOK, map[string]any{
 		"totals":                totals,
 		"at_a_glance":           glance,
 		"top_rules":             rules,
 		"top_blocked_countries": countries,
+		"top_blocked_ips":       ips,
 	})
 }
 

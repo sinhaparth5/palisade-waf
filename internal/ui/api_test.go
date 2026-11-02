@@ -394,6 +394,7 @@ func TestAPIReadOnlyViews(t *testing.T) {
 		{fmt.Sprintf("/admin/api/v1/logs/%d", id), `"[redacted]"`, http.StatusOK},
 		{"/admin/api/v1/logs/999999", "not found", http.StatusNotFound},
 		{"/admin/api/v1/stats", `"BlockedAll":1`, http.StatusOK},
+		{"/admin/api/v1/stats", `"top_blocked_ips":[{"IP":"203.0.113.7","Count":1}]`, http.StatusOK},
 		{"/admin/api/v1/geo-rules", "", http.StatusOK},
 		{"/admin/api/v1/rule-exceptions", `"global"`, http.StatusOK},
 		{"/admin/api/v1/vpatches", "CVE-", http.StatusOK},

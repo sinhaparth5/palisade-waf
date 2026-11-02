@@ -185,10 +185,21 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      # The CLI links the system OpenSSL 3 (libssl3) dynamically, so it uses the
+      # host's trust store; libstdc++ is static so older distros can run it.
+      - name: Build CLI
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev ninja-build
+          cmake -S cli -B cli/build -G Ninja -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
+          cmake --build cli/build
+          ctest --test-dir cli/build --output-on-failure
+
       - name: Build release artifacts
         run: |
           make dist VERSION="${GITHUB_REF_NAME}"
+          cp cli/build/palisade-cli dist/palisade-cli-linux-amd64
           make checksums
+          (cd dist && sha256sum palisade-cli-linux-amd64 >> checksums.txt)
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
@@ -316,6 +327,7 @@ jobs:
             dist/${{ env.PACKAGE_NAME }}-linux-amd64
             dist/${{ env.PACKAGE_NAME }}-linux-arm64
             dist/${{ env.PACKAGE_NAME }}-windows-amd64.exe
+            dist/palisade-cli-linux-amd64
             dist/checksums.txt
             dist/checksums.txt.sigstore.json
             dist/${{ env.PACKAGE_NAME }}.spdx.json

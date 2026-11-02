@@ -2111,6 +2111,39 @@ func (db *DB) GetTopBlockedCountries(limit, hours int) ([]CountryCount, error) {
 	return out, rows.Err()
 }
 
+// IPCount is one entry in a top-blocked-IPs breakdown.
+type IPCount struct {
+	IP    string
+	Count int
+}
+
+// GetTopBlockedIPs returns the client IPs with the most blocked requests in
+// the last `hours` hours, descending, capped at `limit`.
+func (db *DB) GetTopBlockedIPs(limit, hours int) ([]IPCount, error) {
+	since := time.Now().UTC().Add(-time.Duration(hours) * time.Hour)
+	rows, err := db.query(`
+		SELECT real_ip, COUNT(*) AS c
+		FROM requests
+		WHERE blocked = 1 AND ts >= ?
+		GROUP BY real_ip
+		ORDER BY c DESC
+		LIMIT ?`, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []IPCount
+	for rows.Next() {
+		var ic IPCount
+		if err := rows.Scan(&ic.IP, &ic.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, ic)
+	}
+	return out, rows.Err()
+}
+
 // GetTopCountries returns the countries with the most total requests (blocked
 // or allowed) in the last `hours` hours, descending, capped at `limit`.
 func (db *DB) GetTopCountries(limit, hours int) ([]CountryCount, error) {
