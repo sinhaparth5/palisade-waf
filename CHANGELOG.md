@@ -15,6 +15,7 @@ rather than growing this file forever.
 ## [Unreleased]
 
 - (#243) Read-only REST API endpoints for the CLI
+- (#244) Palisade CLI: skeleton, config and services view
 
 ## [3.1.0] - 2026-11-01
 

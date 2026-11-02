@@ -1,0 +1,41 @@
+name: CLI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cli/**'
+      - '.github/workflows/cli.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'cli/**'
+      - '.github/workflows/cli.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev ninja-build
+
+      - name: Configure
+        run: cmake -S cli -B cli/build -G Ninja
+
+      - name: Build
+        run: cmake --build cli/build
+
+      - name: Test
+        run: ctest --test-dir cli/build --output-on-failure
+
+      - name: Smoke
+        run: cli/build/palisade-cli --version
