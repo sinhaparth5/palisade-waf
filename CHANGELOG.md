@@ -14,19 +14,13 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-11-02
+
 - (#243) Read-only REST API endpoints for the CLI
 - (#244) Palisade CLI: skeleton, config and services view
 - (#245) Palisade CLI: logs view and live tail
 - (#246) Palisade CLI: stats dashboard, rules and bans views
 - (#253) Install the CLI from install.sh and version it with the WAF
 
-## [3.1.0] - 2026-11-01
-
-- (#232) CRS: vendor 4.25.2 LTS to pick up the October 2026 bypass fixes
-- (#233) Bot: verify Web Bot Auth (RFC 9421) signed agents
-- (#234) WAF: MCP endpoint guard (Origin check, JSON-RPC method allowlist)
-- (#235) CSP report-only and third-party script inventory
-- (#236) Virtual patches for 2026 CISA KEV web CVEs
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.1.0...main
-[3.1.0]: https://github.com/sinhaparth5/palisade-waf/compare/v3.0.5...v3.1.0
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.0...main
+[3.2.0]: https://github.com/sinhaparth5/palisade-waf/compare/v3.1.0...v3.2.0
