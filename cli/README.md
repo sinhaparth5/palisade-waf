@@ -19,9 +19,16 @@ ctest --test-dir cli/build
 ```bash
 # Create a key in Settings → API keys, then paste it at the prompt:
 palisade-cli login --url https://waf.example.com --admin-path /admin
-palisade-cli            # interactive view (↑↓ select, r refresh, q quit)
+palisade-cli            # interactive view
 palisade-cli services   # plain list
+palisade-cli logs --blocked --ip 203.0.113.9 --service shop --limit 100
+palisade-cli logs -f    # follow new requests (same filters apply)
 ```
+
+In the interactive view, `1` and `2` switch between Services and Logs. In
+Logs: `enter` opens a request (headers arrive already redacted), `f` edits
+the IP/service filters (enter applies, esc leaves), `b` toggles blocked
+only, `n`/`p` page, `t` toggles the live tail (newest 500 kept), `q` quits.
 
 The config lives at `~/.config/palisade/config.toml` (mode 0600).
 `PALISADE_URL`, `PALISADE_ADMIN_PATH` and `PALISADE_API_KEY` override it.

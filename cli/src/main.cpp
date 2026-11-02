@@ -1,6 +1,7 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -8,6 +9,7 @@
 
 #include "api.hpp"
 #include "config.hpp"
+#include "logs.hpp"
 #include "tui.hpp"
 
 namespace {
@@ -19,6 +21,8 @@ Usage:
   palisade-cli login --url https://waf.example.com [--admin-path /admin] [--allow-http]
                                save the server and an API key (read from stdin)
   palisade-cli services        list services
+  palisade-cli logs [--blocked] [--ip IP] [--service NAME] [--limit N] [-f]
+                               recent requests, newest first; -f follows live
   palisade-cli --version
 
 Config: ~/.config/palisade/config.toml (0600). PALISADE_URL, PALISADE_ADMIN_PATH
@@ -91,6 +95,39 @@ int list_services(Api& api) {
   return 0;
 }
 
+int logs(Api& api, const std::vector<std::string>& args) {
+  LogFilter f;
+  int limit = 50;
+  bool follow = false;
+  for (size_t i = 0; i < args.size(); i++) {
+    if (args[i] == "--blocked") f.blocked = true;
+    else if (args[i] == "-f" || args[i] == "--follow") follow = true;
+    else if (args[i] == "--ip" && i + 1 < args.size()) f.ip = args[++i];
+    else if (args[i] == "--service" && i + 1 < args.size()) f.app = args[++i];
+    else if (args[i] == "--limit" && i + 1 < args.size()) limit = std::atoi(args[++i].c_str());
+    else {
+      std::cerr << "logs: unknown argument " << args[i] << "\n" << kUsage;
+      return 2;
+    }
+  }
+  if (follow) {
+    Api::Stop never;
+    api.stream(
+        "/logs/stream", [&](const nlohmann::json& ev) {
+          if (log_matches(f, ev)) std::cout << log_line(ev) << std::endl;
+        },
+        never);
+    return 0;
+  }
+  if (limit < 1) {
+    std::cerr << "logs: --limit must be a positive number\n";
+    return 2;
+  }
+  for (const auto& row : api.get(logs_path(f, limit, 0)).value("logs", nlohmann::json::array()))
+    std::cout << log_line(row) << "\n";
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -120,6 +157,7 @@ int main(int argc, char** argv) {
     Api api(c);
     if (cmd.empty()) return run_tui(api);
     if (cmd == "services") return list_services(api);
+    if (cmd == "logs") return logs(api, {args.begin() + 1, args.end()});
   } catch (const std::exception& e) {
     std::cerr << e.what() << "\n";
     return 1;
