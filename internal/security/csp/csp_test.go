@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"palisade/internal/storage"
 )
@@ -117,9 +118,9 @@ func TestCollector(t *testing.T) {
 	if n := len(store.rows[1]); n > 45 {
 		t.Errorf("rate limit let %d sources through", n)
 	}
-	select {
+	select { // alerts run on their own goroutine
 	case <-alerts:
-	default:
+	case <-time.After(2 * time.Second):
 		t.Error("no alert for flood sources at all")
 	}
 }
