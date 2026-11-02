@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#255) Compress and cache admin UI static assets
+
 ## [3.2.0] - 2026-11-02
 
 - (#243) Read-only REST API endpoints for the CLI
