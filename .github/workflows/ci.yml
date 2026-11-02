@@ -190,7 +190,8 @@ jobs:
       - name: Build CLI
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev ninja-build
-          cmake -S cli -B cli/build -G Ninja -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
+          cmake -S cli -B cli/build -G Ninja -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" \
+            -DPALISADE_VERSION="${GITHUB_REF_NAME}"
           cmake --build cli/build
           ctest --test-dir cli/build --output-on-failure
 

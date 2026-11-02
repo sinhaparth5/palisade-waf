@@ -10,6 +10,13 @@
 # Private project — pass a personal access token:
 #   curl -fsSL ... | sudo GITHUB_TOKEN=ghp_xxxx bash
 #
+# Also install the terminal client (palisade-cli, linux/amd64 only):
+#   curl -fsSL ... | sudo PALISADE_CLI=1 bash
+#
+# Only the terminal client, e.g. on a workstation (no root needed; installs to
+# ~/.local/bin, or /usr/local/bin as root):
+#   curl -fsSL ... | PALISADE_CLI_ONLY=1 bash
+#
 # Dry-run (prints every action, writes nothing):
 #   DRY_RUN=1 bash install.sh
 #
@@ -50,6 +57,8 @@ GITHUB_REPO="sinhaparth5/palisade-waf"
 DRY_RUN="${DRY_RUN:-0}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 PALISADE_VERSION="${PALISADE_VERSION:-}"
+PALISADE_CLI="${PALISADE_CLI:-0}"
+PALISADE_CLI_ONLY="${PALISADE_CLI_ONLY:-0}"
 
 BINARY_NAME="palisade"
 SERVICE_USER="palisade"
@@ -59,6 +68,8 @@ ASSET_NAME="palisade-waf"
 # the unit's LogsDirectory= (owned by the service user), so the name must match.
 ACCESS_LOG_PATH="/var/log/palisade/access.log"
 INSTALL_PATH="/usr/local/bin/${BINARY_NAME}"
+CLI_NAME="palisade-cli"
+CLI_PATH="/usr/local/bin/${CLI_NAME}"
 UNIT_PATH="/etc/systemd/system/${BINARY_NAME}.service"
 PRUNE_SERVICE_PATH="/etc/systemd/system/${BINARY_NAME}-prune.service"
 PRUNE_TIMER_PATH="/etc/systemd/system/${BINARY_NAME}-prune.timer"
@@ -78,7 +89,7 @@ if [ "$DRY_RUN" = "1" ]; then
 	echo
 fi
 
-if [ "$DRY_RUN" != "1" ] && [ "$(id -u)" -ne 0 ]; then
+if [ "$DRY_RUN" != "1" ] && [ "$PALISADE_CLI_ONLY" != "1" ] && [ "$(id -u)" -ne 0 ]; then
 	err "Run as root (e.g. with sudo)."
 	exit 1
 fi
@@ -104,6 +115,40 @@ curl_get() {
 	else
 		curl -fsSL "$@"
 	fi
+}
+
+# fetch_checksums: download the release's checksums.txt into $WORKDIR and,
+# when cosign is installed, verify its signature. The signature covers
+# checksums.txt, which covers every binary. Optional because cosign is rarely
+# installed, and older releases have no bundle.
+fetch_checksums() {
+	curl_get "${DOWNLOAD_BASE}/checksums.txt" -o "${WORKDIR}/checksums.txt"
+	if command -v cosign >/dev/null 2>&1; then
+		if curl_get "${DOWNLOAD_BASE}/checksums.txt.sigstore.json" -o "${WORKDIR}/checksums.txt.sigstore.json" 2>/dev/null; then
+			step "Verifying checksums.txt signature (cosign)"
+			cosign verify-blob "${WORKDIR}/checksums.txt" \
+				--bundle "${WORKDIR}/checksums.txt.sigstore.json" \
+				--certificate-identity "https://github.com/${GITHUB_REPO}/.github/workflows/ci.yml@refs/tags/${PALISADE_VERSION}" \
+				--certificate-oidc-issuer https://token.actions.githubusercontent.com ||
+				{ err "checksums.txt signature does not verify, refusing to install"; exit 1; }
+		else
+			warn "${PALISADE_VERSION} has no signature bundle, skipping the cosign check"
+		fi
+	fi
+}
+
+# fetch_verified ASSET: download one release asset into $WORKDIR and check it
+# against its own line in checksums.txt (an asset with no line fails).
+fetch_verified() {
+	local asset="$1"
+	if ! awk -v f="$asset" '$2 == f || $2 == "*" f { found = 1 } END { exit !found }' "${WORKDIR}/checksums.txt"; then
+		err "${PALISADE_VERSION} has no ${asset}"
+		return 1
+	fi
+	step "Downloading ${asset}"
+	curl_get "${DOWNLOAD_BASE}/${asset}" -o "${WORKDIR}/${asset}"
+	step "Verifying SHA256"
+	(cd "$WORKDIR" && awk -v f="$asset" '$2 == f || $2 == "*" f' checksums.txt | sha256sum --check -)
 }
 
 run() {
@@ -180,7 +225,40 @@ if [ -z "$PALISADE_VERSION" ]; then
 fi
 
 ASSET="${ASSET_NAME}-linux-${ARCH}"
+CLI_ASSET="${CLI_NAME}-linux-${ARCH}"
 DOWNLOAD_BASE="https://github.com/${GITHUB_REPO}/releases/download/${PALISADE_VERSION}"
+
+# ── CLI only ──────────────────────────────────────────────────────────────────
+# Just the terminal client: no service user, unit, database or Varnish. It
+# talks to the server over HTTPS, so this is usually a workstation.
+if [ "$PALISADE_CLI_ONLY" = "1" ]; then
+	if [ "$ARCH" != "amd64" ]; then
+		err "${CLI_NAME} is only built for linux/amd64."
+		exit 1
+	fi
+	if [ "$(id -u)" -ne 0 ]; then
+		CLI_PATH="${HOME}/.local/bin/${CLI_NAME}"
+	fi
+	step "Installing ${CLI_NAME} ${PALISADE_VERSION} to ${CLI_PATH}"
+	if [ "$DRY_RUN" = "1" ]; then
+		detail "[DRY RUN] Would download and verify ${DOWNLOAD_BASE}/${CLI_ASSET}"
+		exit 0
+	fi
+	WORKDIR="$(mktemp -d)"
+	trap 'rm -rf "$WORKDIR"' EXIT
+	fetch_checksums
+	fetch_verified "${CLI_ASSET}"
+	mkdir -p "$(dirname "${CLI_PATH}")"
+	install -m 0755 "${WORKDIR}/${CLI_ASSET}" "${CLI_PATH}"
+	ok "$("${CLI_PATH}" --version 2>/dev/null || echo "${CLI_NAME} ${PALISADE_VERSION}") installed"
+	case ":${PATH}:" in
+		*":$(dirname "${CLI_PATH}"):"*) ;;
+		*) warn "$(dirname "${CLI_PATH}") is not on your PATH" ;;
+	esac
+	detail "It needs OpenSSL 3 (libssl3). Connect it with an API key from Settings → API keys:"
+	value "${CLI_NAME} login --url https://waf.example.com --admin-path /admin"
+	exit 0
+fi
 
 if [ "$IS_UPGRADE" = "1" ]; then
 	step "Upgrading ${BINARY_NAME} to ${PALISADE_VERSION} (linux/${ARCH})"
@@ -317,31 +395,30 @@ else
 	WORKDIR="$(mktemp -d)"
 	trap 'rm -rf "$WORKDIR"' EXIT
 
-	curl_get "${DOWNLOAD_BASE}/checksums.txt" -o "${WORKDIR}/checksums.txt"
-
-	# The signature covers checksums.txt, which covers the binary. Optional
-	# because cosign is rarely installed, and older releases have no bundle.
-	if command -v cosign >/dev/null 2>&1; then
-		if curl_get "${DOWNLOAD_BASE}/checksums.txt.sigstore.json" -o "${WORKDIR}/checksums.txt.sigstore.json" 2>/dev/null; then
-			step "Verifying checksums.txt signature (cosign)"
-			cosign verify-blob "${WORKDIR}/checksums.txt" \
-				--bundle "${WORKDIR}/checksums.txt.sigstore.json" \
-				--certificate-identity "https://github.com/${GITHUB_REPO}/.github/workflows/ci.yml@refs/tags/${PALISADE_VERSION}" \
-				--certificate-oidc-issuer https://token.actions.githubusercontent.com ||
-				{ err "checksums.txt signature does not verify, refusing to install"; exit 1; }
-		else
-			warn "${PALISADE_VERSION} has no signature bundle, skipping the cosign check"
-		fi
-	fi
-
-	step "Downloading ${ASSET}"
-	curl_get "${DOWNLOAD_BASE}/${ASSET}" -o "${WORKDIR}/${ASSET}"
-
-	step "Verifying SHA256"
-	(cd "$WORKDIR" && sha256sum --check --ignore-missing checksums.txt)
+	fetch_checksums
+	fetch_verified "${ASSET}"
 
 	step "Installing to ${INSTALL_PATH}"
 	install -m 0755 "${WORKDIR}/${ASSET}" "${INSTALL_PATH}"
+fi
+
+# ── Terminal client (optional) ────────────────────────────────────────────────
+# Asked for with PALISADE_CLI=1, or already installed: an upgrade keeps it on
+# the same version as the server it talks to. Never fails the WAF install.
+CLI_INSTALLED=0
+if [ "$PALISADE_CLI" = "1" ] || [ -f "${CLI_PATH}" ]; then
+	if [ "$ARCH" != "amd64" ]; then
+		warn "${CLI_NAME} is only built for linux/amd64, skipping it"
+	elif [ "$DRY_RUN" = "1" ]; then
+		step "[DRY RUN] Would download and verify ${DOWNLOAD_BASE}/${CLI_ASSET}"
+	elif fetch_verified "${CLI_ASSET}"; then
+		step "Installing to ${CLI_PATH}"
+		install -m 0755 "${WORKDIR}/${CLI_ASSET}" "${CLI_PATH}"
+		CLI_INSTALLED=1
+	else
+		warn "skipping ${CLI_NAME}"
+	fi
+	echo
 fi
 
 # ── Resolve database driver/DSN ───────────────────────────────────────────────
@@ -954,6 +1031,7 @@ ROWS+=(
 	"$(row 'Access log' "${ACCESS_LOG_PATH}")"
 	"$(row 'Flags' "${FLAGS_FILE}")"
 )
+[ "$CLI_INSTALLED" = "1" ] && ROWS+=("$(row 'CLI' "${CLI_NAME} login --url ${DASHBOARD_URL%/admin}")")
 
 CONTENT_W=${#BOX_TITLE}
 for r in "${ROWS[@]}"; do

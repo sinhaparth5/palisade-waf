@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
-project(palisade-cli VERSION 0.1.0 LANGUAGES CXX)
+project(palisade-cli LANGUAGES CXX)
+
+# Same version as the WAF: the release job passes the tag (-DPALISADE_VERSION=v3.2.0).
+set(PALISADE_VERSION "dev" CACHE STRING "Version printed by palisade-cli --version")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,7 +36,7 @@ find_package(OpenSSL 3 REQUIRED)
 add_library(palisade_core STATIC src/config.cpp src/api.cpp src/logs.cpp src/views.cpp)
 target_include_directories(palisade_core PUBLIC src SYSTEM PUBLIC ${httplib_SOURCE_DIR})
 target_compile_definitions(palisade_core PUBLIC CPPHTTPLIB_OPENSSL_SUPPORT
-  PALISADE_CLI_VERSION="${PROJECT_VERSION}")
+  PALISADE_CLI_VERSION="${PALISADE_VERSION}")
 target_link_libraries(palisade_core PUBLIC nlohmann_json::nlohmann_json OpenSSL::SSL OpenSSL::Crypto)
 target_compile_options(palisade_core PRIVATE -Wall -Wextra -Wpedantic)
 
