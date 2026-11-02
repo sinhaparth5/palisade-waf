@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"palisade/internal/config"
 	"palisade/internal/security/blocklist"
@@ -46,6 +48,7 @@ func newTestAPIHandler(t *testing.T) (*Handler, *echo.Echo) {
 		ipbl:          ipbl,
 		registry:      registry,
 		apiKeyLimiter: newLoginLimiter(),
+		broadcaster:   NewLogBroadcaster(),
 	}
 	e := echo.New()
 	h.RegisterAPI(e)
@@ -361,5 +364,83 @@ func TestAPIMetricsBearerAuth(t *testing.T) {
 				t.Error("body is not Prometheus exposition")
 			}
 		})
+	}
+}
+
+func TestAPIReadOnlyViews(t *testing.T) {
+	h, e := newTestAPIHandler(t)
+	key := createTestKey(t, h, true)
+	id, err := h.db.InsertRequest(storage.RequestLog{
+		Timestamp: time.Now(), AppName: "shop", RealIP: "203.0.113.7", Method: "GET",
+		Path: "/x", Status: 403, Blocked: true, RuleID: 942100, Action: "blocked",
+		HeadersJSON: `{"Cookie":"[redacted]"}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		path, want string
+		status     int
+	}{
+		{"/admin/api/v1/logs", `"total":1`, http.StatusOK},
+		{"/admin/api/v1/logs?ip=203.0.113.7&status=blocked", `"total":1`, http.StatusOK},
+		{"/admin/api/v1/logs?ip=198.51.100.1", `"total":0`, http.StatusOK},
+		{"/admin/api/v1/logs?app=other", `"logs":[]`, http.StatusOK},
+		{"/admin/api/v1/logs?from=2020-01-01T00:00:00Z&limit=10", `"total":1`, http.StatusOK},
+		{"/admin/api/v1/logs?from=yesterday", "RFC 3339", http.StatusBadRequest},
+		{"/admin/api/v1/logs?limit=0", "invalid limit", http.StatusBadRequest},
+		{"/admin/api/v1/logs?offset=-1", "invalid offset", http.StatusBadRequest},
+		{fmt.Sprintf("/admin/api/v1/logs/%d", id), `"[redacted]"`, http.StatusOK},
+		{"/admin/api/v1/logs/999999", "not found", http.StatusNotFound},
+		{"/admin/api/v1/stats", `"BlockedAll":1`, http.StatusOK},
+		{"/admin/api/v1/geo-rules", "", http.StatusOK},
+		{"/admin/api/v1/rule-exceptions", `"global"`, http.StatusOK},
+		{"/admin/api/v1/vpatches", "CVE-", http.StatusOK},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			rec := apiRequest(e, http.MethodGet, tc.path, key, nil)
+			if rec.Code != tc.status {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tc.status, rec.Body)
+			}
+			if !strings.Contains(rec.Body.String(), tc.want) {
+				t.Errorf("body missing %q: %s", tc.want, rec.Body)
+			}
+		})
+	}
+	if rec := apiRequest(e, http.MethodGet, "/admin/api/v1/stats", "", nil); rec.Code != http.StatusUnauthorized {
+		t.Errorf("no key: status = %d, want 401", rec.Code)
+	}
+}
+
+func TestAPILogsStream(t *testing.T) {
+	h, e := newTestAPIHandler(t)
+	key := createTestKey(t, h, true)
+	srv := httptest.NewServer(e)
+	defer srv.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/admin/api/v1/logs/stream", nil)
+	req.Header.Set("Authorization", "Bearer "+key)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("status %d, type %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+
+	// Subscribed before the headers were sent, so this can't be missed.
+	h.broadcaster.Broadcast(storage.RequestLog{ID: 7, RealIP: "203.0.113.9", HeadersJSON: `{"Secret":"x"}`})
+	line, err := bufio.NewReader(resp.Body).ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(line, "data: {") || !strings.Contains(line, "203.0.113.9") {
+		t.Fatalf("event = %q", line)
+	}
+	if strings.Contains(line, "Secret") {
+		t.Fatalf("headers leaked into the stream: %q", line)
 	}
 }

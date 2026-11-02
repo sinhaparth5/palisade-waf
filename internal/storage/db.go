@@ -1944,6 +1944,7 @@ type LogFilter struct {
 	From        time.Time // ts >= From, if non-zero
 	To          time.Time // ts <= To, if non-zero
 	AppName     string    // exact match, if non-empty
+	IP          string    // exact real_ip match, if non-empty
 	StatusClass string    // "" | "2xx" | "3xx" | "4xx" | "5xx" | "blocked" | "cache_error"
 	Limit       int
 	Offset      int
@@ -1964,6 +1965,10 @@ func (f LogFilter) where() (string, []any) {
 	if f.AppName != "" {
 		clause += " AND app_name = ?"
 		args = append(args, f.AppName)
+	}
+	if f.IP != "" {
+		clause += " AND real_ip = ?"
+		args = append(args, f.IP)
 	}
 	switch f.StatusClass {
 	case "2xx":

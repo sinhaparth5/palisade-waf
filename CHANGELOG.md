@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#243) Read-only REST API endpoints for the CLI
+
 ## [3.1.0] - 2026-11-01
 
 - (#232) CRS: vendor 4.25.2 LTS to pick up the October 2026 bypass fixes
