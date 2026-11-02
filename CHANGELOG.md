@@ -14,15 +14,9 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.2.1] - 2026-11-02
+
 - (#255) Compress and cache admin UI static assets
 
-## [3.2.0] - 2026-11-02
-
-- (#243) Read-only REST API endpoints for the CLI
-- (#244) Palisade CLI: skeleton, config and services view
-- (#245) Palisade CLI: logs view and live tail
-- (#246) Palisade CLI: stats dashboard, rules and bans views
-- (#253) Install the CLI from install.sh and version it with the WAF
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.0...main
-[3.2.0]: https://github.com/sinhaparth5/palisade-waf/compare/v3.1.0...v3.2.0
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.1...main
+[3.2.1]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.0...v3.2.1
