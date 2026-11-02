@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -134,6 +135,15 @@ func (h *Handler) RegisterAPI(e *echo.Echo) {
 	api.GET("/bans", h.APIListBans)
 	api.POST("/bans", h.APICreateBan, h.requireWrite)
 	api.DELETE("/bans/:id", h.APIDeleteBan, h.requireWrite)
+
+	// Read-only views for terminal clients (issue #243).
+	api.GET("/logs", h.APIListLogs)
+	api.GET("/logs/stream", h.APILogsStream)
+	api.GET("/logs/:id", h.LogDetail) // headers were redacted at capture
+	api.GET("/stats", h.APIStats)
+	api.GET("/geo-rules", h.APIListGeoRules)
+	api.GET("/rule-exceptions", h.APIListRuleExceptions)
+	api.GET("/vpatches", h.APIListVPatches)
 
 	// Same exposition as the session-authed /metrics, reachable with a bearer
 	// key so a Prometheus scrape job can authenticate (a read-only key is enough).
@@ -604,4 +614,161 @@ func (h *Handler) APIDeleteBan(c echo.Context) error {
 		return apiError(c, http.StatusInternalServerError, err.Error())
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+// ── Read-only views (issue #243) ─────────────────────────────────────────────
+
+const (
+	apiLogsDefaultLimit = 50
+	apiLogsMaxLimit     = 500
+	apiStreamPing       = 30 * time.Second // under Cloudflare's 100s idle cut
+)
+
+// APIListLogs pages request logs newest first. Query: app, ip, status
+// (2xx|3xx|4xx|5xx|blocked|cache_error), from/to (RFC 3339), limit, offset.
+func (h *Handler) APIListLogs(c echo.Context) error {
+	f := storage.LogFilter{
+		AppName:     c.QueryParam("app"),
+		IP:          c.QueryParam("ip"),
+		StatusClass: c.QueryParam("status"),
+		Limit:       apiLogsDefaultLimit,
+	}
+	for _, p := range []struct {
+		name string
+		dst  *time.Time
+	}{{"from", &f.From}, {"to", &f.To}} {
+		if v := c.QueryParam(p.name); v != "" {
+			t, err := time.Parse(time.RFC3339, v)
+			if err != nil {
+				return apiError(c, http.StatusBadRequest, p.name+" must be RFC 3339")
+			}
+			*p.dst = t
+		}
+	}
+	if v := c.QueryParam("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return apiError(c, http.StatusBadRequest, "invalid limit")
+		}
+		f.Limit = min(n, apiLogsMaxLimit)
+	}
+	if v := c.QueryParam("offset"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return apiError(c, http.StatusBadRequest, "invalid offset")
+		}
+		f.Offset = n
+	}
+	rows, total, err := h.db.ListRequestsFiltered(f)
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	if rows == nil {
+		rows = []storage.LogRow{}
+	}
+	return c.JSON(http.StatusOK, map[string]any{"total": total, "logs": rows})
+}
+
+// APILogsStream sends each new request log as a JSON server-sent event,
+// with a comment line every apiStreamPing so idle proxies keep it open.
+func (h *Handler) APILogsStream(c echo.Context) error {
+	w := c.Response().Writer
+	rc := http.NewResponseController(w) // unlike echo's Flush, never panics
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	// Subscribe before the headers go out, so nothing logged after the
+	// client sees 200 is missed.
+	ch := h.broadcaster.Subscribe()
+	defer h.broadcaster.Unsubscribe(ch)
+	w.WriteHeader(http.StatusOK)
+	_ = rc.Flush()
+	ping := time.NewTicker(apiStreamPing)
+	defer ping.Stop()
+
+	for {
+		select {
+		case entry, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			b, err := json.Marshal(entry) // HeadersJSON is json:"-"
+			if err != nil {
+				continue
+			}
+			fmt.Fprintf(w, "data: %s\n\n", b)
+		case <-ping.C:
+			fmt.Fprint(w, ": ping\n\n")
+		case <-c.Request().Context().Done():
+			return nil
+		}
+		_ = rc.Flush()
+	}
+}
+
+// APIStats returns the dashboard numbers: totals, the last-minute strip,
+// top firing rules and top blocked countries (last 24h).
+func (h *Handler) APIStats(c echo.Context) error {
+	totals, err := h.db.GetStats()
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	glance, err := h.db.GetAtAGlanceStats()
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	rules, err := h.db.GetTopFiringRules(10)
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	countries, err := h.db.GetTopBlockedCountries(10, 24)
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"totals":                totals,
+		"at_a_glance":           glance,
+		"top_rules":             rules,
+		"top_blocked_countries": countries,
+	})
+}
+
+func (h *Handler) APIListGeoRules(c echo.Context) error {
+	rules, err := h.db.ListGeoRules()
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, rules)
+}
+
+// APIListRuleExceptions returns the globally disabled rules and the
+// per-service exceptions.
+func (h *Handler) APIListRuleExceptions(c echo.Context) error {
+	global, err := h.db.ListDisabledWAFRules()
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	perService, err := h.db.ListWAFServiceExceptions()
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, map[string]any{"global": global, "services": perService})
+}
+
+// APIListVPatches returns the shipped virtual patches with hit counts and
+// where each is switched off.
+func (h *Handler) APIListVPatches(c echo.Context) error {
+	disabled, err := h.db.ListDisabledWAFRules()
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	exceptions, err := h.db.ListWAFServiceExceptions()
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	views, err := h.vpatchViews(disabled, exceptions)
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, views)
 }
