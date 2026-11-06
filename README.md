@@ -14,7 +14,7 @@
 **Palisade** is a web application firewall you can `scp` to a server: a WAF and reverse proxy in a single Go binary, built on [OWASP Coraza](https://github.com/corazawaf/coraza) and the OWASP Core Rule Set, with a built-in admin dashboard. It uses one binary, one SQLite file, CLI flags for bootstrap settings, and dashboard-managed runtime settings. There is no config file, external database, or Node toolchain. Docker is available for local development but is not required.
 
 <div align="center">
-  <img src="static/waf-flow-diagram.png" alt="Request flow: Client to Palisade WAF + Proxy to Backend App(s), with SQLite and the Admin Dashboard attached" width="760">
+  <img src="static/waf-flow-diagram.png" alt="Request flow: Client to Palisade WAF + Proxy to Backend App(s), with the config and logs database (SQLite, MySQL or Postgres) and the Admin Dashboard attached" width="760">
 </div>
 
 ## Features
