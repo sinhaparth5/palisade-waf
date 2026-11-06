@@ -34,5 +34,23 @@ jobs:
       - name: Generate embedded assets
         run: go generate ./...
 
+      # IGNORE lists advisories reviewed as not applicable. govulncheck has no
+      # ignore flag, so the JSON output is filtered and any other called
+      # vulnerability still fails the job.
+      #   GO-2026-6872, GO-2026-6875: echo v4 (no fix; v5.4+ only). They cover
+      #   Echo's c.RealIP() and middleware.Proxy defaults; Palisade uses
+      #   neither (client IP is proxy.ClientIP, the proxy is httputil). Drop
+      #   these when moving to echo v5.
       - name: Run govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+        env:
+          IGNORE: GO-2026-6872 GO-2026-6875
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -format json ./... > vuln.json
+          called=$(jq -r 'select(.finding.trace[0].function != null) | .finding.osv' vuln.json | sort -u)
+          bad=$(comm -23 <(echo "$called") <(tr ' ' '\n' <<<"$IGNORE" | sort -u) | sed '/^$/d')
+          [ -n "$called" ] && echo "Called (incl. ignored): $called"
+          if [ -n "$bad" ]; then
+            echo "::error::Unignored vulnerabilities: $bad"
+            go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... || true
+            exit 1
+          fi
