@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"palisade/internal/security/waf"
 	"palisade/internal/storage"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -114,6 +115,16 @@ var _ = promauto.NewCounterFunc(prometheus.CounterOpts{
 	}
 	return float64(currentDB.LogDropped())
 })
+
+var _ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
+	Name: "palisade_waf_inspections_in_flight",
+	Help: "Large request bodies being inspected by the WAF right now (capped at the CPU count).",
+}, func() float64 { return float64(waf.InspectionsInFlight()) })
+
+var _ = promauto.NewCounterFunc(prometheus.CounterOpts{
+	Name: "palisade_waf_inspections_shed_total",
+	Help: "Requests answered 503 because every body-inspection slot stayed busy.",
+}, func() float64 { return float64(waf.InspectionsShed()) })
 
 var _ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
 	Name: "palisade_services_total",

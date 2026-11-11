@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"palisade/internal/config"
 
@@ -278,6 +281,49 @@ func inspectionFor(contentType string) bodyInspection {
 	}
 }
 
+// ErrBusy means every body-inspection slot stayed taken for inspectWait: the
+// handler answers 503 with Retry-After rather than queue without bound.
+var ErrBusy = errors.New("waf: body inspection at capacity")
+
+// Inspecting a large body is CPU-bound and allocates far more than the body
+// itself (BENCHMARKS.md: ~400 ms and ~150 MiB for 64 KiB of JSON), so only as
+// many as there are CPUs run at once, across all engines (#261). Bodies up to
+// heavyBody cost about as much as a bodiless request and are not counted, so
+// a flood of large bodies can't shed ordinary form posts.
+const heavyBody = 8 << 10
+
+var (
+	inspectWait  = 2 * time.Second // var so tests can shorten it
+	inspectSlots = make(chan struct{}, max(2, runtime.GOMAXPROCS(0)))
+	inspectShed  atomic.Uint64
+)
+
+// InspectionsInFlight is the number of large-body inspections running now.
+func InspectionsInFlight() int { return len(inspectSlots) }
+
+// InspectionsShed counts requests refused with ErrBusy.
+func InspectionsShed() uint64 { return inspectShed.Load() }
+
+// acquireInspect takes a slot, waiting up to wait. The slot is taken only
+// after the body is buffered, so a client trickling its upload holds none.
+func acquireInspect(r *http.Request, wait time.Duration) bool {
+	select {
+	case inspectSlots <- struct{}{}:
+		return true
+	default:
+	}
+	t := time.NewTimer(wait)
+	defer t.Stop()
+	select {
+	case inspectSlots <- struct{}{}:
+		return true
+	case <-t.C:
+	case <-r.Context().Done():
+	}
+	inspectShed.Add(1)
+	return false
+}
+
 // Check runs r through the WAF using clientIP as the real remote address.
 // A body the rule engine will inspect is buffered so the proxy can read it
 // again afterwards; one it will not (see inspectionFor) is left on the socket
@@ -415,6 +461,12 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 		}
 	}
 
+	if len(body) > heavyBody {
+		if !acquireInspect(r, inspectWait) {
+			return nil, ErrBusy
+		}
+		defer func() { <-inspectSlots }()
+	}
 	result, err := e.evaluate(r, clientIP, body, hadBody && mode != inspectSkip)
 	if err != nil {
 		return nil, err

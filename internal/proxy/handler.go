@@ -509,6 +509,15 @@ func (h *Handler) Handle(c echo.Context) error {
 		metrics.RecordRequest(appName, strconv.Itoa(http.StatusBadRequest), time.Since(start).Seconds())
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "incomplete request body"})
 	}
+	if errors.Is(err, waf.ErrBusy) {
+		// Too many large bodies being inspected at once (#261). Logged
+		// unblocked so shed clients are never scored by autoban.
+		mark("waf")
+		metrics.RecordRequest(appName, strconv.Itoa(http.StatusServiceUnavailable), time.Since(start).Seconds())
+		h.logChallenged(r, appName, clientIP, http.StatusServiceUnavailable, "waf_busy", time.Since(start), meta)
+		c.Response().Header().Set("Retry-After", "1")
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "busy, retry shortly"})
+	}
 	if err != nil {
 		mark("waf")
 		log.Printf("waf error: %v", err)
