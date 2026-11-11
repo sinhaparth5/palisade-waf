@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.2.2] - 2026-11-11
+
 - (#259) Keep autoban and threat scoring running when the request log falls behind
 - (#289) Reuse reverse proxy copy buffers
 - (#288) Stop dashboard queries from scanning the whole request log
@@ -21,9 +23,5 @@ rather than growing this file forever.
 - (#261) Limit concurrent WAF body inspections
 - (#269) Store admin session tokens hashed
 
-## [3.2.1] - 2026-11-02
-
-- (#255) Compress and cache admin UI static assets
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.1...main
-[3.2.1]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.0...v3.2.1
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.2...main
+[3.2.2]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.1...v3.2.2
