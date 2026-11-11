@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"palisade/internal/security/ratelimit"
@@ -32,12 +33,24 @@ const logQueueSize = 10000
 // write wait its turn.
 const slowWriteThreshold = 500 * time.Millisecond
 
+// logBatchMax caps how many queued entries runLogWriter commits in one
+// transaction. The writer never waits to fill a batch: it takes whatever is
+// already queued, so a quiet server still writes row by row with no delay.
+const logBatchMax = 500
+
+// dropLogInterval spaces out the "dropping" log line: under a flood one line
+// per dropped entry would itself be a load problem.
+const dropLogInterval = 5 * time.Second
+
 type DB struct {
 	conn          *sqlx.DB
 	dialect       dialect
-	logQueue      chan RequestLog
+	logQueue      chan RequestLog // request path -> runLogWorker (in-memory hooks)
+	writeQueue    chan RequestLog // runLogWorker -> runLogWriter (batched inserts)
 	logDone       chan struct{}
-	logMu         sync.RWMutex // guards logClosed against a send on the closed logQueue
+	logDropped    atomic.Uint64 // entries that never reached the requests table
+	dropLogged    atomic.Int64  // unix nanos of the last "dropping" log line
+	logMu         sync.RWMutex  // guards logClosed against a send on the closed logQueue
 	logClosed     bool
 	broadcastFn   func(RequestLog)
 	webhookFn     func(RequestLog)
@@ -55,7 +68,7 @@ type DB struct {
 func (db *DB) Go(fn func()) { db.bg.Go(fn) }
 
 // SetAutobanFn registers a callback invoked (from the log worker goroutine)
-// after each successful DB insert. Used to feed blocked events to the
+// for every queued entry, before and regardless of the DB insert (entry.ID is 0). Used to feed blocked events to the
 // automatic IP banner without coupling storage to the autoban package.
 // The callback must be fast — it runs on the single log worker goroutine.
 func (db *DB) SetAutobanFn(fn func(RequestLog)) {
@@ -77,7 +90,7 @@ func (db *DB) SetBroadcastFn(fn func(RequestLog)) {
 }
 
 // SetAccessLogFn registers a callback invoked (from the log worker goroutine)
-// after each successful DB insert. Used to feed the nginx-style access.log
+// for every queued entry, before and regardless of the DB insert (entry.ID is 0). Used to feed the nginx-style access.log
 // writer without coupling storage to the accesslog package.
 func (db *DB) SetAccessLogFn(fn func(RequestLog)) {
 	db.accessLogFn = fn
@@ -93,7 +106,7 @@ func (db *DB) SetWarehouseFn(fn func(RequestLog)) {
 }
 
 // SetThreatScoreFn registers a callback invoked (from the log worker
-// goroutine) after each successful DB insert. Used to feed the unified
+// goroutine) for every queued entry, before and regardless of the DB insert (entry.ID is 0). Used to feed the unified
 // per-IP threat-score subsystem without coupling storage to the
 // threatscore package.
 func (db *DB) SetThreatScoreFn(fn func(RequestLog)) {
@@ -165,60 +178,179 @@ func OpenWithDriver(driverName, dsn string) (*DB, error) {
 	}
 
 	db := &DB{
-		conn:     conn,
-		dialect:  d,
-		logQueue: make(chan RequestLog, logQueueSize),
-		logDone:  make(chan struct{}),
+		conn:       conn,
+		dialect:    d,
+		logQueue:   make(chan RequestLog, logQueueSize),
+		writeQueue: make(chan RequestLog, logQueueSize),
+		logDone:    make(chan struct{}),
 	}
 	if err := db.migrate(); err != nil {
 		return nil, err
 	}
 	go db.runLogWorker()
+	go db.runLogWriter()
 	return db, nil
 }
 
-// runLogWorker drains logQueue on a single dedicated goroutine, so a slow or
-// momentarily-contended write never blocks the request path that produced
-// it (see QueueRequest). Exits once logQueue is closed and drained.
+// runLogWorker is stage one of the log pipeline (issue #259). It drains
+// logQueue on one goroutine, runs the hooks that only need memory (autoban,
+// threat score, access log) and hands the entry to runLogWriter. Scoring so
+// never waits on the database: a slow or failing write loses log rows, not
+// bans. Exits once logQueue is closed and drained.
 func (db *DB) runLogWorker() {
-	defer close(db.logDone)
+	defer close(db.writeQueue)
 	for entry := range db.logQueue {
-		writeStart := time.Now()
-		id, err := db.InsertRequest(entry)
-		dur := time.Since(writeStart)
-		if err != nil {
-			log.Printf("storage: async request log write failed after %s: %v", dur, err)
-		} else {
-			if dur >= slowWriteThreshold {
-				log.Printf("storage: slow request log write, took %s (queue depth now %d)", dur, db.QueueDepth())
+		if db.autobanFn != nil {
+			db.autobanFn(entry)
+		}
+		if db.threatScoreFn != nil {
+			db.threatScoreFn(entry)
+		}
+		if db.accessLogFn != nil {
+			db.accessLogFn(entry)
+		}
+		select {
+		case db.writeQueue <- entry:
+		default:
+			db.dropped(1, "write queue full")
+		}
+	}
+}
+
+// runLogWriter is stage two: it writes queued entries in batches and then
+// runs the hooks that need the row id (live log, webhook, warehouse). Exits
+// once writeQueue is closed and drained.
+func (db *DB) runLogWriter() {
+	defer close(db.logDone)
+	batch := make([]RequestLog, 0, logBatchMax)
+	for entry := range db.writeQueue {
+		batch = append(batch[:0], entry)
+	fill:
+		for len(batch) < logBatchMax {
+			select {
+			case e, ok := <-db.writeQueue:
+				if !ok {
+					break fill
+				}
+				batch = append(batch, e)
+			default:
+				break fill
 			}
-			entry.ID = int(id)
+		}
+
+		writeStart := time.Now()
+		db.insertRequestBatch(batch)
+		if dur := time.Since(writeStart); dur >= slowWriteThreshold {
+			log.Printf("storage: slow request log write, %d rows took %s (queue depth now %d)", len(batch), dur, db.QueueDepth())
+		}
+		for _, e := range batch {
+			if e.ID == 0 {
+				continue // not stored
+			}
 			if db.broadcastFn != nil {
-				db.broadcastFn(entry)
+				db.broadcastFn(e)
 			}
 			if db.webhookFn != nil {
-				db.webhookFn(entry)
-			}
-			if db.autobanFn != nil {
-				db.autobanFn(entry)
-			}
-			if db.threatScoreFn != nil {
-				db.threatScoreFn(entry)
-			}
-			if db.accessLogFn != nil {
-				db.accessLogFn(entry)
+				db.webhookFn(e)
 			}
 			if db.warehouseFn != nil {
-				db.warehouseFn(entry)
+				db.warehouseFn(e)
 			}
 		}
 	}
 }
 
-// QueueRequest enqueues a request log entry to be written by the background
-// worker instead of blocking the caller on the DB write. If the queue is
-// completely full (sustained traffic far beyond what this WAF is sized for),
-// the entry is dropped rather than blocking the request that triggered it.
+// insertRequestBatch stores batch in one transaction and sets each entry's
+// ID. If the transaction fails (Postgres aborts it on the first bad row) the
+// rows are retried one by one, so a single bad entry costs only itself.
+func (db *DB) insertRequestBatch(batch []RequestLog) {
+	if len(batch) > 1 && db.insertRequestTx(batch) == nil {
+		return
+	}
+	failed := 0
+	var lastErr error
+	for i := range batch {
+		id, err := db.InsertRequest(batch[i])
+		if err != nil {
+			failed++
+			lastErr = err
+			batch[i].ID = 0
+			continue
+		}
+		batch[i].ID = int(id)
+	}
+	if failed > 0 {
+		db.dropped(failed, "write failed: "+lastErr.Error())
+	}
+}
+
+// insertRequestTx is the batch path: one prepared INSERT run once per row
+// inside a single transaction, which keeps a real row id per entry on every
+// dialect.
+// ponytail: still one round trip per row on a remote database; a multi-row
+// VALUES insert if that is ever the bottleneck.
+func (db *DB) insertRequestTx(batch []RequestLog) (err error) {
+	tx, err := db.conn.Beginx()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	q := insertRequestSQL
+	if db.dialect.name == "postgres" {
+		q += " RETURNING id"
+	}
+	stmt, err := tx.Preparex(db.conn.Rebind(q))
+	if err != nil {
+		return err
+	}
+	defer stmt.Close() //nolint:errcheck // the transaction owns the statement
+	ids := make([]int64, len(batch))
+	for i := range batch {
+		args := insertRequestArgs(batch[i])
+		if db.dialect.name == "postgres" {
+			err = stmt.QueryRow(args...).Scan(&ids[i])
+		} else {
+			var res sql.Result
+			if res, err = stmt.Exec(args...); err == nil {
+				ids[i], err = res.LastInsertId()
+			}
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	for i := range batch {
+		batch[i].ID = int(ids[i])
+	}
+	return nil
+}
+
+// dropped counts n entries that will never reach the requests table and
+// logs about it at most once per dropLogInterval.
+func (db *DB) dropped(n int, why string) {
+	total := db.logDropped.Add(uint64(n)) //nolint:gosec // n is a small positive batch count
+	now := time.Now().UnixNano()
+	last := db.dropLogged.Load()
+	if now-last >= int64(dropLogInterval) && db.dropLogged.CompareAndSwap(last, now) {
+		log.Printf("storage: dropping request log entries (%s), %d dropped since start", why, total)
+	}
+}
+
+// LogDropped returns how many request-log entries were dropped instead of
+// stored since startup. Backs the palisade_log_dropped_total metric.
+func (db *DB) LogDropped() uint64 { return db.logDropped.Load() }
+
+// QueueRequest enqueues a request log entry for the background pipeline
+// instead of blocking the caller on the DB write. If the first-stage queue
+// is full (the in-memory hooks themselves can't keep up) the entry is
+// dropped rather than blocking the request that triggered it.
 func (db *DB) QueueRequest(entry RequestLog) {
 	// A handler can outlive a timed-out graceful shutdown and log after Close.
 	db.logMu.RLock()
@@ -229,15 +361,15 @@ func (db *DB) QueueRequest(entry RequestLog) {
 	select {
 	case db.logQueue <- entry:
 	default:
-		log.Printf("storage: request log queue full (>%d), dropping entry", logQueueSize)
+		db.dropped(1, "log queue full")
 	}
 }
 
-// QueueDepth returns the number of entries currently buffered in logQueue,
-// waiting to be written by the background worker. Used by the /metrics
-// endpoint to surface logging backpressure.
+// QueueDepth returns the number of entries buffered in the log pipeline,
+// waiting to be scored or written. Used by the /metrics endpoint to surface
+// logging backpressure.
 func (db *DB) QueueDepth() int {
-	return len(db.logQueue)
+	return len(db.logQueue) + len(db.writeQueue)
 }
 
 // exec, query, and queryRow are the rebinding equivalents of db.conn's own
@@ -1557,15 +1689,16 @@ func (db *DB) MigrateConfigApps(apps []ConfigApp) error {
 	return db.setMeta(metaKeyServicesMigrated, "1")
 }
 
-// InsertRequest writes one request log entry and returns the new row ID.
-func (db *DB) InsertRequest(r RequestLog) (int64, error) {
-	return db.insertReturningID(`
+const insertRequestSQL = `
 		INSERT INTO requests
 			(ts, app_name, real_ip, proxy_ip, country, method, host, path, query,
 			 status, blocked, rule_id, action, user_agent, duration_ms, headers_json,
 			 request_id, proto, tls_version, tls_cipher, tls_sni, asn_num, org,
 			 ja3_hash, ja4, visitor_id, bot_score, cache_status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+func insertRequestArgs(r RequestLog) []any {
+	return []any{
 		r.Timestamp.UTC(),
 		r.AppName,
 		r.RealIP,
@@ -1594,7 +1727,12 @@ func (db *DB) InsertRequest(r RequestLog) (int64, error) {
 		r.VisitorID,
 		r.BotScore,
 		r.CacheStatus,
-	)
+	}
+}
+
+// InsertRequest writes one request log entry and returns the new row ID.
+func (db *DB) InsertRequest(r RequestLog) (int64, error) {
+	return db.insertReturningID(insertRequestSQL, insertRequestArgs(r)...)
 }
 
 // CacheResult counts one service's Varnish verdicts (requests.cache_status)

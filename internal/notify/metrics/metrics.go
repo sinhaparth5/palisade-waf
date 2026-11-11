@@ -97,12 +97,22 @@ func SetLimiter(l interface{ TrackedIPs() int }) { currentLimiter = l }
 
 var _ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
 	Name: "palisade_log_queue_depth",
-	Help: "Current number of request-log entries buffered waiting to be written to SQLite.",
+	Help: "Current number of request-log entries buffered waiting to be scored or written to the database.",
 }, func() float64 {
 	if currentDB == nil {
 		return 0
 	}
 	return float64(currentDB.QueueDepth())
+})
+
+var _ = promauto.NewCounterFunc(prometheus.CounterOpts{
+	Name: "palisade_log_dropped_total",
+	Help: "Request-log entries dropped instead of stored (queue full or write failed). Scoring and the access log still saw them unless the first queue was full.",
+}, func() float64 {
+	if currentDB == nil {
+		return 0
+	}
+	return float64(currentDB.LogDropped())
 })
 
 var _ = promauto.NewGaugeFunc(prometheus.GaugeOpts{

@@ -815,8 +815,8 @@ func (h *Handler) logChallenged(r *http.Request, appName, clientIP string, statu
 // writeLog must not block on the database — QueueRequest hands the entry to
 // a background worker (see storage.DB.runLogWorker) so a slow or contended
 // write never holds open the HTTP connection of the request that caused it.
-// Broadcasting to the live-log SSE stream happens inside the worker after the
-// DB insert so rows get their real row ID before being pushed to the browser.
+// Autoban and threat score see the entry before the insert; broadcasting to
+// the live-log SSE stream happens after it, so rows carry their real row ID.
 func (h *Handler) writeLog(entry storage.RequestLog) {
 	metrics.RecordRequest(entry.AppName, strconv.Itoa(entry.Status), float64(entry.Duration)/1000)
 	if h.db != nil {

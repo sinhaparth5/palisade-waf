@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -459,5 +460,57 @@ func TestBackupTo(t *testing.T) {
 	mustNoErr(t, err)
 	if fi, err := os.Stat(out); err != nil || fi.Size() == 0 {
 		t.Fatalf("backup file: %v", err)
+	}
+}
+
+// A stalled database must not stop scoring (issue #259): with nothing
+// draining the write queue, every entry still reaches the in-memory hooks
+// and the overflow is counted, not silently lost.
+func TestLogWorkerScoresWhenWritesStall(t *testing.T) {
+	db := &DB{
+		logQueue:   make(chan RequestLog, 8),
+		writeQueue: make(chan RequestLog, 1), // no runLogWriter: writes are stuck
+	}
+	var scored, threat, access int
+	db.SetAutobanFn(func(RequestLog) { scored++ })
+	db.SetThreatScoreFn(func(RequestLog) { threat++ })
+	db.SetAccessLogFn(func(RequestLog) { access++ })
+
+	const n = 5
+	for range n {
+		db.QueueRequest(RequestLog{RealIP: "203.0.113.9", Blocked: true})
+	}
+	close(db.logQueue)
+	db.runLogWorker() // returns once the queue is drained
+
+	if scored != n || threat != n || access != n {
+		t.Errorf("hooks saw autoban=%d threat=%d access=%d, want %d each", scored, threat, access, n)
+	}
+	if got := db.LogDropped(); got != n-1 {
+		t.Errorf("LogDropped = %d, want %d", got, n-1)
+	}
+}
+
+func TestInsertRequestBatch(t *testing.T) {
+	db := openTestDB(t)
+	batch := make([]RequestLog, 3)
+	for i := range batch {
+		batch[i] = RequestLog{Timestamp: time.Now(), AppName: "batch", Path: "/" + strconv.Itoa(i), Status: 200}
+	}
+	db.insertRequestBatch(batch)
+
+	seen := map[int]bool{}
+	for _, e := range batch {
+		got, err := db.GetRequestByID(e.ID)
+		if err != nil || got == nil || got.Path != e.Path {
+			t.Fatalf("row %d: got %+v, err %v, want path %s", e.ID, got, err, e.Path)
+		}
+		seen[e.ID] = true
+	}
+	if len(seen) != len(batch) {
+		t.Errorf("ids not distinct: %v", seen)
+	}
+	if db.LogDropped() != 0 {
+		t.Errorf("LogDropped = %d, want 0", db.LogDropped())
 	}
 }
