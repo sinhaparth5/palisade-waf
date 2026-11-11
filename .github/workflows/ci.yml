@@ -189,8 +189,9 @@ jobs:
       # host's trust store; libstdc++ is static so older distros can run it.
       - name: Build CLI
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev ninja-build
-          cmake -S cli -B cli/build -G Ninja -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" \
+          # libssl-dev ships on the runner image; no apt step, so a dead
+          # Ubuntu mirror can't fail a release. Default Makefile generator.
+          cmake -S cli -B cli/build -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" \
             -DPALISADE_VERSION="${GITHUB_REF_NAME}"
           cmake --build cli/build
           ctest --test-dir cli/build --output-on-failure
