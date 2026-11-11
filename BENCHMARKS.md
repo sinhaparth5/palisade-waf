@@ -60,6 +60,32 @@ Java (952) about 1.7 ms each, SQL (951) and Ruby (956) next to nothing. That
 is why it stops at 64 KiB. With it off, the request path is unchanged: the
 `Handle` benchmarks and allocations match `main`.
 
+## Dashboard queries
+
+`BenchmarkDashboardQueries` (`internal/storage`) times the dashboard's
+queries over a request log spread across 30 days, 10% of it blocked. SQLite
+only.
+
+```bash
+BENCH_ROWS=1000000 go test ./internal/storage/ -run '^$' -bench DashboardQueries -benchtime 5x
+```
+
+2026-11-11, 1M rows, same machine as above. Before and after #288:
+
+| Query | Before | After |
+|---|---|---|
+| `Stats` | 543 ms | 27 ms |
+| `AtAGlance` | 2,646 ms | 215 ms |
+| `HourlyTraffic` | 55 ms | 37 ms |
+| `TopFiringRules` | 154 ms | unchanged |
+| `RuleHitCounts` | 143 ms | unchanged |
+| `TopCountries` | 37 ms | unchanged |
+
+`Stats` and `AtAGlance` used to aggregate the whole table; they now read
+only today's and yesterday's rows through the `ts` index, plus two all-time
+counts answered from an index. The two rule queries still visit every
+blocked row, because the all-time hit counts they show need them.
+
 ## Load test
 
 Throughput and p50/p95/p99 latency against a real binary. Run everything on

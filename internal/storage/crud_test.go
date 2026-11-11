@@ -514,3 +514,25 @@ func TestInsertRequestBatch(t *testing.T) {
 		t.Errorf("LogDropped = %d, want 0", db.LogDropped())
 	}
 }
+
+// GetHourlyTraffic reads rows in index order, not time order, so it must
+// sort its buckets (#288).
+func TestHourlyTrafficSorted(t *testing.T) {
+	db := openTestDB(t)
+	now := time.Now().UTC()
+	for _, r := range []RequestLog{
+		{Timestamp: now.Add(-5 * time.Hour), Blocked: true},
+		{Timestamp: now},
+		{Timestamp: now.Add(-3 * time.Hour)},
+		{Timestamp: now.Add(-3 * time.Hour), Blocked: true},
+	} {
+		_, err := db.InsertRequest(r)
+		mustNoErr(t, err)
+	}
+	pts, err := db.GetHourlyTraffic(24)
+	mustNoErr(t, err)
+	if len(pts) != 3 || !pts[0].Hour.Before(pts[1].Hour) || !pts[1].Hour.Before(pts[2].Hour) ||
+		pts[0].Blocked != 1 || pts[1].Total != 2 || pts[1].Blocked != 1 || pts[2].Total != 1 {
+		t.Errorf("hourly = %+v", pts)
+	}
+}
