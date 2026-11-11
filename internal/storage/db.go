@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1913,15 +1914,17 @@ func (db *DB) GetStats() (Stats, error) {
 	now := time.Now().UTC()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
-	row := db.queryRow(`
-		SELECT
-			COALESCE(SUM(CASE WHEN ts >= ? THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN ts >= ? AND blocked = 1 THEN 1 ELSE 0 END), 0),
-			COUNT(*),
-			COALESCE(SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END), 0)
-		FROM requests`, startOfDay, startOfDay)
-
-	err := row.Scan(&s.TotalToday, &s.BlockedToday, &s.TotalAll, &s.BlockedAll)
+	// Three bounded queries instead of one pass over the whole table (#288):
+	// today's rows by the ts index, the all-time counts from an index alone.
+	if err := db.queryRow(`
+		SELECT COUNT(*), COALESCE(SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END), 0)
+		FROM requests WHERE ts >= ?`, startOfDay).Scan(&s.TotalToday, &s.BlockedToday); err != nil {
+		return s, err
+	}
+	if err := db.queryRow(`SELECT COUNT(*) FROM requests`).Scan(&s.TotalAll); err != nil {
+		return s, err
+	}
+	err := db.queryRow(`SELECT COUNT(*) FROM requests WHERE blocked = 1`).Scan(&s.BlockedAll)
 	return s, err
 }
 
@@ -1950,7 +1953,7 @@ func (db *DB) GetAtAGlanceStats() (AtAGlanceStats, error) {
 			COALESCE(SUM(CASE WHEN ts >= ? AND ts < ? AND rule_id > 0 AND blocked = 1 THEN 1 ELSE 0 END), 0),
 			COUNT(DISTINCT CASE WHEN ts >= ? AND visitor_id != '' THEN visitor_id END),
 			COUNT(DISTINCT CASE WHEN ts >= ? AND ts < ? AND visitor_id != '' THEN visitor_id END)
-		FROM requests`,
+		FROM requests WHERE ts >= ?`,
 		thisMinute,
 		prevMinute, thisMinute,
 		thisLatency,
@@ -1961,6 +1964,7 @@ func (db *DB) GetAtAGlanceStats() (AtAGlanceStats, error) {
 		startOfPrevDay, startOfDay,
 		startOfDay,
 		startOfPrevDay, startOfDay,
+		startOfPrevDay, // nothing older is counted; lets the ts index bound the scan (#288)
 	).Scan(
 		&s.RequestsLastMinute,
 		&s.RequestsPrevMinute,
@@ -2179,7 +2183,10 @@ type HourlyPoint struct {
 // NULL bucket.
 func (db *DB) GetHourlyTraffic(hours int) ([]HourlyPoint, error) {
 	since := time.Now().UTC().Add(-time.Duration(hours) * time.Hour)
-	rows, err := db.query(`SELECT ts, blocked FROM requests WHERE ts >= ? ORDER BY ts ASC`, since)
+	// "blocked IN (0, 1)" is always true; it lets the (blocked, ts) index
+	// answer the query without touching the table (#288). Buckets are sorted
+	// below, so no ORDER BY.
+	rows, err := db.query(`SELECT ts, blocked FROM requests WHERE blocked IN (0, 1) AND ts >= ?`, since)
 	if err != nil {
 		return nil, err
 	}
@@ -2209,6 +2216,7 @@ func (db *DB) GetHourlyTraffic(hours int) ([]HourlyPoint, error) {
 		return nil, err
 	}
 
+	slices.SortFunc(order, time.Time.Compare)
 	points := make([]HourlyPoint, 0, len(order))
 	for _, hour := range order {
 		points = append(points, *buckets[hour])
