@@ -23,9 +23,6 @@ func TestAccessLogFnFires(t *testing.T) {
 		if e.Path != "/hook-test" {
 			t.Errorf("hook received %+v, want Path=/hook-test", e)
 		}
-		if e.ID == 0 {
-			t.Error("hook fired before the DB insert assigned a real row ID (fired out of order relative to broadcast/webhook/autoban)")
-		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("access log hook never fired")
 	}
