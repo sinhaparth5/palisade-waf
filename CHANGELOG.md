@@ -15,6 +15,7 @@ rather than growing this file forever.
 ## [Unreleased]
 
 - (#259) Keep autoban and threat scoring running when the request log falls behind
+- (#289) Reuse reverse proxy copy buffers
 
 ## [3.2.1] - 2026-11-02
 

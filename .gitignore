@@ -13,3 +13,5 @@ coverage.out
 junit.xml
 bench.txt
 /cli/build/
+.vscode/
+.idea/

@@ -75,6 +75,18 @@ func (t *timedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // has the reason.
 var errVarnishFetch = errors.New("varnish fetch failed")
 
+// copyBuffers is shared by every reverse proxy (#289). Without a BufferPool,
+// httputil.ReverseProxy allocates a fresh 32 KiB buffer per response.
+type copyBuffers struct{ sync.Pool }
+
+func (p *copyBuffers) Get() []byte  { return *p.Pool.Get().(*[]byte) }
+func (p *copyBuffers) Put(b []byte) { p.Pool.Put(&b) }
+
+var proxyBuffers = &copyBuffers{sync.Pool{New: func() any {
+	b := make([]byte, 32*1024)
+	return &b
+}}}
+
 var backendTransport = &http.Transport{
 	Proxy: http.ProxyFromEnvironment,
 	DialContext: (&net.Dialer{
@@ -396,6 +408,7 @@ func (r *Registry) Reload(db *storage.DB) error {
 			continue
 		}
 		rp.Transport = &timedTransport{rt: backendTransport, name: name}
+		rp.BufferPool = proxyBuffers
 		rp.ModifyResponse = func(resp *http.Response) error {
 			if resp.StatusCode == http.StatusServiceUnavailable && resp.Header.Get("X-Cache-Fetch-Error") != "" {
 				return errVarnishFetch
