@@ -1,6 +1,7 @@
 package autoban
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ type fakeStore struct {
 	notes map[string]string // ip → note
 
 	expiredBefore time.Time // last ExpireAutobans cutoff
+	failAdds      int       // AddIPRuleWithNote fails this many times first
 }
 
 func newFakeStore() *fakeStore {
@@ -37,6 +39,10 @@ func (f *fakeStore) GetIPRuleType(appName, ip string) (string, error) {
 func (f *fakeStore) AddIPRuleWithNote(appName, ip, ruleType, note string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.failAdds > 0 {
+		f.failAdds--
+		return errors.New("db down")
+	}
 	f.rules[appName+":"+ip] = ruleType
 	f.notes[ip] = note
 	return nil
@@ -489,6 +495,65 @@ func TestBadStatusScores(t *testing.T) {
 			}
 			if tc.ban && !strings.Contains(db.banNote(ip), "10 bad responses (404)") {
 				t.Errorf("note = %q, want the bad-response count", db.banNote(ip))
+			}
+		})
+	}
+}
+
+// A ban must be in the in-memory blocklist before the DB is touched, and a
+// failing DB write is retried without lifting it (#260).
+func TestBanAppliesInMemoryBeforeDB(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	const ip = "203.0.113.9"
+	attack := func(b *Banner) {
+		for range 5 {
+			b.Record(blockedEvent(ip, "deny", 942100, now))
+		}
+	}
+
+	for _, tc := range []struct {
+		name         string
+		failAdds     int
+		memoryRule   bool // the in-memory list already has a rule: hold says no
+		dbRule       string
+		wantHeld     bool // still held when ban returns
+		wantDBBlock  bool
+		wantNotified int
+		wantSleeps   int
+	}{
+		{name: "db healthy", wantDBBlock: true, wantNotified: 1},
+		{name: "db fails twice", failAdds: 2, wantDBBlock: true, wantNotified: 1, wantSleeps: 2},
+		{name: "db never recovers", failAdds: 99, wantHeld: true, wantNotified: 1, wantSleeps: len(banRetry)},
+		{name: "existing rule in memory", memoryRule: true},
+		{name: "existing rule only in db", dbRule: "allow"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := newFakeStore()
+			db.failAdds = tc.failAdds
+			if tc.dbRule != "" {
+				db.rules[":"+ip] = tc.dbRule
+			}
+			b, notified := testBanner(db, now)
+			held, sleeps := false, 0
+			b.SetMemoryBan(func(string) bool {
+				if db.rules[":"+ip] == "block" {
+					t.Error("DB written before the in-memory ban")
+				}
+				held = !tc.memoryRule
+				return held
+			}, func(string) { held = false })
+			b.sleep = func(time.Duration) bool {
+				if !held {
+					t.Error("ban lifted while the DB write was being retried")
+				}
+				sleeps++
+				return true
+			}
+			attack(b)
+
+			if held != tc.wantHeld || (db.rules[":"+ip] == "block") != tc.wantDBBlock ||
+				len(*notified) != tc.wantNotified || sleeps != tc.wantSleeps {
+				t.Errorf("held=%v dbRule=%q notified=%d sleeps=%d", held, db.rules[":"+ip], len(*notified), sleeps)
 			}
 		})
 	}

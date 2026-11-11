@@ -29,6 +29,9 @@ type IPBlocklist struct {
 	// sorted range set, not a CIDR scan: feeds and CrowdSec can hold 100k+
 	// ranges (issue #194).
 	intel rangeSet
+	// held are autobans applied here before their rule reached the DB
+	// (#260); Reload re-applies them so a rule edit can't drop one.
+	held map[string]struct{}
 }
 
 func NewIPBlocklist(db *storage.DB) (*IPBlocklist, error) {
@@ -71,8 +74,65 @@ func (bl *IPBlocklist) Reload(db *storage.DB) error {
 	bl.exact = exact
 	bl.appCIDRs = appCIDRs
 	bl.globalCIDRs = globalCIDRs
+	for key := range bl.held {
+		if !bl.hasGlobal(key) {
+			bl.blockGlobal(key)
+		}
+	}
 	bl.mu.Unlock()
 	return nil
+}
+
+// Hold blocks key (an IP or CIDR) globally at once, before the caller has
+// written the rule to the DB, and keeps it across Reload until Release. It
+// reports false, changing nothing, when a global rule for exactly that key
+// already exists: that rule wins.
+func (bl *IPBlocklist) Hold(key string) bool {
+	bl.mu.Lock()
+	defer bl.mu.Unlock()
+	if bl.hasGlobal(key) {
+		return false
+	}
+	if bl.held == nil {
+		bl.held = make(map[string]struct{})
+	}
+	bl.held[key] = struct{}{}
+	bl.blockGlobal(key)
+	return true
+}
+
+// Release stops re-applying a held block. Call it once the rule is in the DB
+// (or turned out not to be wanted), then Reload.
+func (bl *IPBlocklist) Release(key string) {
+	bl.mu.Lock()
+	delete(bl.held, key)
+	bl.mu.Unlock()
+}
+
+// hasGlobal reports whether a global rule for exactly key exists. Caller
+// holds bl.mu.
+func (bl *IPBlocklist) hasGlobal(key string) bool {
+	if _, ok := bl.exact[":"+key]; ok {
+		return true
+	}
+	for _, r := range bl.globalCIDRs {
+		if r.network.String() == key {
+			return true
+		}
+	}
+	return false
+}
+
+// blockGlobal adds a global block for key. Caller holds bl.mu for writing.
+func (bl *IPBlocklist) blockGlobal(key string) {
+	if _, network, err := net.ParseCIDR(key); err == nil {
+		bl.globalCIDRs = append(bl.globalCIDRs, cidrRule{network: network, ruleType: "block"})
+		return
+	}
+	if bl.exact == nil {
+		bl.exact = make(map[string]string)
+	}
+	bl.exact[":"+key] = "block"
 }
 
 // ReloadIntel re-reads all threat-intel IPs from the DB and swaps the

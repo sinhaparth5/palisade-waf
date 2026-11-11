@@ -152,3 +152,39 @@ func BenchmarkIntelLookup(b *testing.B) {
 		bl.Check(fmt.Sprintf("1.%d.%d.7", (i/256)%256, i%256), "")
 	}
 }
+
+// A held block takes effect at once, survives Reload while the DB has no
+// rule for it, and never displaces an existing rule (#260).
+func TestHoldAndRelease(t *testing.T) {
+	db := openDB(t)
+	if err := db.AddIPRule("", "198.51.100.7", "allow"); err != nil {
+		t.Fatal(err)
+	}
+	bl, err := NewIPBlocklist(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked := func(ip string) bool { b, _ := bl.Check(ip, "app"); return b }
+
+	if bl.Hold("198.51.100.7") || blocked("198.51.100.7") {
+		t.Error("hold displaced an admin allow rule")
+	}
+	for _, tc := range []struct{ key, ip string }{
+		{"203.0.113.9", "203.0.113.9"},
+		{"2001:db8:1:2::/64", "2001:db8:1:2::beef"},
+	} {
+		if !bl.Hold(tc.key) || !blocked(tc.ip) {
+			t.Errorf("%s: not blocked right after Hold", tc.key)
+		}
+		if bl.Hold(tc.key) {
+			t.Errorf("%s: second Hold should report the existing rule", tc.key)
+		}
+		if err := bl.Reload(db); err != nil || !blocked(tc.ip) {
+			t.Errorf("%s: held block lost on Reload (err %v)", tc.key, err)
+		}
+		bl.Release(tc.key)
+		if err := bl.Reload(db); err != nil || blocked(tc.ip) {
+			t.Errorf("%s: still blocked after Release and Reload (err %v)", tc.key, err)
+		}
+	}
+}

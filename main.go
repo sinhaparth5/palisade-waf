@@ -363,6 +363,7 @@ func main() {
 		}
 	})
 	defer banner.Stop()
+	banner.SetMemoryBan(ipbl.Hold, ipbl.Release)
 	db.SetAutobanFn(banner.Record)
 
 	// Unified per-IP threat score: a composite read model (issue #12)

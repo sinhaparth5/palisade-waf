@@ -88,6 +88,12 @@ type Banner struct {
 	db     store
 	reload func()                  // swaps the in-memory blocklist after a ban
 	notify func(ip, reason string) // emails the ban alert (may be slow — runs async)
+	// hold blocks an IP in memory before the DB write and reports false when
+	// an existing rule wins; release ends that once the DB has the answer
+	// (#260). Both nil: the ban only exists once the DB write succeeds.
+	hold    func(ip string) bool
+	release func(ip string)
+	sleep   func(time.Duration) bool // false when stopped; injectable for tests
 
 	mu     sync.Mutex
 	cfg    storage.AutobanConfig
@@ -114,9 +120,24 @@ func New(db *storage.DB, reload func(), notify func(ip, reason string)) *Banner 
 		now:    time.Now,
 		spawn:  func(fn func()) { go fn() },
 	}
+	b.sleep = func(d time.Duration) bool {
+		select {
+		case <-time.After(d):
+			return true
+		case <-b.stop:
+			return false
+		}
+	}
 	b.ReloadConfig()
 	go b.janitor()
 	return b
+}
+
+// SetMemoryBan makes bans take effect in the in-memory blocklist before
+// they are written to the DB, so a slow or failing database can't delay one
+// (#260). Call it before the first Record.
+func (b *Banner) SetMemoryBan(hold func(ip string) bool, release func(ip string)) {
+	b.hold, b.release = hold, release
 }
 
 // Stop shuts down the janitor goroutine.
@@ -254,21 +275,45 @@ func (b *Banner) Record(e storage.RequestLog) {
 	b.spawn(func() { b.ban(key, reason) })
 }
 
-// ban writes the block rule, reloads the blocklist, and sends the alert.
-func (b *Banner) ban(ip, reason string) {
-	// An existing rule for this IP — an admin allow (or an earlier ban that
-	// survived a restart) — always wins over the automatic ban.
-	if rt, err := b.db.GetIPRuleType("", ip); err != nil {
-		log.Printf("autoban: rule lookup for %s: %v", ip, err)
-		return
-	} else if rt != "" {
-		return
-	}
+// banRetry spaces out retries of a ban's DB write.
+// ponytail: gives up after about 13 minutes; the ban then lasts only until
+// restart. Add a persistent retry queue if that ever matters.
+var banRetry = []time.Duration{time.Second, 5 * time.Second, 30 * time.Second, 2 * time.Minute, 10 * time.Minute}
 
-	note := "Auto-banned — " + reason
-	if err := b.db.AddIPRuleWithNote("", ip, "block", note); err != nil {
+// ban blocks the IP in memory first (when SetMemoryBan was called), then
+// writes the block rule, reloads the blocklist, and sends the alert.
+func (b *Banner) ban(ip, reason string) {
+	held := b.hold != nil
+	if held && !b.hold(ip) {
+		return // an existing rule for this IP wins
+	}
+	for try := 0; ; try++ {
+		exists, err := b.persist(ip, reason)
+		if err == nil {
+			if held {
+				b.release(ip)
+			}
+			if exists {
+				// The DB has a rule the in-memory list didn't; it wins, and
+				// the reload drops the block held above.
+				if held && b.reload != nil {
+					b.reload()
+				}
+				return
+			}
+			break
+		}
 		log.Printf("autoban: ban %s: %v", ip, err)
-		return
+		if !held {
+			return
+		}
+		if try == len(banRetry) {
+			log.Printf("autoban: %s stays banned in memory only, until restart", ip)
+			break
+		}
+		if !b.sleep(banRetry[try]) {
+			return
+		}
 	}
 	if b.reload != nil {
 		b.reload()
@@ -277,6 +322,17 @@ func (b *Banner) ban(ip, reason string) {
 	if b.notify != nil {
 		b.notify(ip, reason)
 	}
+}
+
+// persist writes the block rule unless a rule for this IP already exists —
+// an admin allow, or an earlier ban that survived a restart — which always
+// wins over the automatic ban.
+func (b *Banner) persist(ip, reason string) (exists bool, err error) {
+	rt, err := b.db.GetIPRuleType("", ip)
+	if err != nil || rt != "" {
+		return rt != "", err
+	}
+	return false, b.db.AddIPRuleWithNote("", ip, "block", "Auto-banned — "+reason)
 }
 
 // janitor prunes stale history and old dedupe markers once a minute so the
