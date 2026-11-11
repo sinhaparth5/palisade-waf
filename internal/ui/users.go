@@ -143,11 +143,15 @@ func (h *Handler) InvitePage(c echo.Context) error {
 // InvitePost sets the invited user's password and signs them in.
 func (h *Handler) InvitePost(c echo.Context) error {
 	password := c.FormValue("password")
-	switch {
-	case len(password) < 8:
-		return h.renderInvite(c, "Password must be at least 8 characters.")
-	case password != c.FormValue("confirm_password"):
+	if password != c.FormValue("confirm_password") {
 		return h.renderInvite(c, "Passwords do not match.")
+	}
+	var email string
+	if u, _ := h.db.UserInvite(c.Param("token")); u != nil {
+		email = u.Email
+	}
+	if err := ValidateAdminPassword(c.Request().Context(), h.pwBreach, email, password); err != nil {
+		return h.renderInvite(c, err.Error())
 	}
 	ip := h.clientIP(c.Request())
 	if _, locked := h.loginLimiter.blocked(ip); locked {

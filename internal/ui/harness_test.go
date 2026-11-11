@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"crypto/sha1" //nolint:gosec // HIBP's range API is keyed by SHA-1
 	"embed"
+	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,9 +15,11 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"golang.org/x/crypto/bcrypt"
 
 	"palisade/internal/config"
 	"palisade/internal/security/blocklist"
+	"palisade/internal/security/breach"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
 	"palisade/internal/security/threatscore"
@@ -40,6 +45,12 @@ type adminEnv struct {
 }
 
 const testAdminEmail, testAdminPassword = "admin@example.com", "correct horse battery"
+
+// breachedTestPassword is the one password the harness's fake HIBP lists.
+const breachedTestPassword = "correct-horse-battery"
+
+// bcrypt at the production cost would add about a quarter second per account.
+func init() { storage.PasswordCost = bcrypt.MinCost }
 
 func newAdminEnv(t *testing.T) *adminEnv {
 	t.Helper()
@@ -95,6 +106,17 @@ func newAdminEnv(t *testing.T) *adminEnv {
 		t.Fatal(err)
 	}
 	env.h = h
+	// Never call the real HIBP from tests: a local range server that lists
+	// exactly one password, breachedTestPassword.
+	hibp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sum := sha1.Sum([]byte(breachedTestPassword)) //nolint:gosec // HIBP's range API is keyed by SHA-1
+		hx := strings.ToUpper(hex.EncodeToString(sum[:]))
+		if strings.HasSuffix(r.URL.Path, hx[:5]) {
+			fmt.Fprintf(w, "%s:42\r\n", hx[5:])
+		}
+	}))
+	t.Cleanup(hibp.Close)
+	h.pwBreach = breach.New(hibp.URL + "/")
 	env.e = echo.New()
 	h.Register(env.e)
 	h.RegisterAPI(env.e)

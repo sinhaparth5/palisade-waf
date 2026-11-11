@@ -109,6 +109,11 @@ func (db *DB) CountAdminUsers() (int, error) {
 	return n, err
 }
 
+// PasswordCost is the bcrypt cost for admin passwords (issue #273). Older
+// hashes are upgraded by CheckAdminLogin. A variable only so tests can lower
+// it; nothing else may change it.
+var PasswordCost = 12
+
 // CreateAdminUser adds an account with an initial password.
 func (db *DB) CreateAdminUser(email, password, role string) (int64, error) {
 	if !ValidRole(role) {
@@ -120,7 +125,7 @@ func (db *DB) CreateAdminUser(email, password, role string) (int64, error) {
 	} else if u != nil {
 		return 0, ErrUserExists
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), PasswordCost)
 	if err != nil {
 		return 0, fmt.Errorf("hash password: %w", err)
 	}
@@ -134,7 +139,7 @@ func (db *DB) CreateAdminUser(email, password, role string) (int64, error) {
 // login for an unknown or disabled email costs the same bcrypt time as a
 // real one and timing can't enumerate accounts.
 var dummyHash = sync.OnceValue(func() []byte {
-	h, _ := bcrypt.GenerateFromPassword([]byte("palisade-dummy"), bcrypt.DefaultCost)
+	h, _ := bcrypt.GenerateFromPassword([]byte("palisade-dummy"), PasswordCost)
 	return h
 })
 
@@ -156,6 +161,13 @@ func (db *DB) CheckAdminLogin(email, password string) (*AdminUser, error) {
 	}
 	if bcrypt.CompareHashAndPassword(hash, []byte(password)) != nil || u == nil || u.Disabled {
 		return nil, nil
+	}
+	// Upgrade a hash made at a lower cost, now that the password is known.
+	// Best effort: the login is valid either way.
+	if cost, err := bcrypt.Cost(hash); err == nil && cost < PasswordCost {
+		if nh, err := bcrypt.GenerateFromPassword([]byte(password), PasswordCost); err == nil {
+			_ = db.setUserField(u.ID, "password_hash", string(nh))
+		}
 	}
 	return u, nil
 }
@@ -201,7 +213,7 @@ func (db *DB) UpdateAdminCredentials(id int64, email, newPassword string) error 
 		}
 	}
 	if newPassword != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), PasswordCost)
 		if err != nil {
 			return fmt.Errorf("hash password: %w", err)
 		}

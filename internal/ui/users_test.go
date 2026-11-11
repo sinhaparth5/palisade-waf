@@ -227,6 +227,15 @@ func TestUserInvite(t *testing.T) {
 	if rec := public("POST", path, form("password", "brand-new-pass", "confirm_password", "other-pass")); !strings.Contains(rec.Body.String(), "do not match") {
 		t.Error("mismatched passwords accepted")
 	}
+	// One password rule on every path (issue #273).
+	for pw, want := range map[string]string{
+		"elevenchars":        "at least 12",
+		breachedTestPassword: "known data breach",
+	} {
+		if rec := public("POST", path, form("password", pw, "confirm_password", pw)); !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("invite password %q: want %q in the page", pw, want)
+		}
+	}
 	rec = public("POST", path, form("password", "brand-new-pass", "confirm_password", "brand-new-pass"))
 	if rec.Code != 302 || rec.Header().Get("Location") != "/admin" {
 		t.Fatalf("set password = %d %s", rec.Code, rec.Header().Get("Location"))

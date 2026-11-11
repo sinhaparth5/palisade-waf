@@ -312,16 +312,16 @@ if [ "$IS_UPGRADE" = "0" ] && [ "$DRY_RUN" != "1" ]; then
 	done
 
 	while true; do
-		read -rsp "${C_CYAN}  Password:${C_RESET} " ADMIN_PASSWORD
+		read -rsp "${C_CYAN}  Password (min 12 characters):${C_RESET} " ADMIN_PASSWORD
 		echo
 		read -rsp "${C_CYAN}  Confirm: ${C_RESET} " ADMIN_PASSWORD_CONFIRM
 		echo
-		if [ "$ADMIN_PASSWORD" = "$ADMIN_PASSWORD_CONFIRM" ] && [ -n "$ADMIN_PASSWORD" ]; then
+		if [ "$ADMIN_PASSWORD" = "$ADMIN_PASSWORD_CONFIRM" ] && [ "${#ADMIN_PASSWORD}" -ge 12 ] && [ "$ADMIN_PASSWORD" != "$ADMIN_EMAIL" ]; then
 			break
 		elif [ "$ADMIN_PASSWORD" != "$ADMIN_PASSWORD_CONFIRM" ]; then
 			printf "  %sPasswords don't match — try again.%s\n" "$C_RED" "$C_RESET"
 		else
-			printf '  %sPassword cannot be empty.%s\n' "$C_RED" "$C_RESET"
+			printf '  %sPassword must be at least 12 characters and not your email.%s\n' "$C_RED" "$C_RESET"
 		fi
 	done
 

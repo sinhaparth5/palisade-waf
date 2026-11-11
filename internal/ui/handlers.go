@@ -28,6 +28,7 @@ import (
 	"palisade/internal/proxy"
 	"palisade/internal/security/blocklist"
 	"palisade/internal/security/bot"
+	"palisade/internal/security/breach"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
 	"palisade/internal/security/passkey"
@@ -164,6 +165,7 @@ type Handler struct {
 	twoFA           *twoFAStore
 	passkeys        *passkey.Manager
 	pkEnroll        *pkEnrollStore
+	pwBreach        *breach.Checker // HIBP lookup for new admin passwords
 	trustedNets     []*net.IPNet
 	adminAllow      []*net.IPNet // --admin-allow; empty = any client
 	proxyHandle     echo.HandlerFunc
@@ -222,7 +224,7 @@ func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist,
 	// Embedded assets only change with the binary, and StaticFS sends no
 	// validators, so the ?v= stamp is what moves browsers to a new build.
 	assetVer := assetStamp(sub, cssSub, imgsSub, vendorFS)
-	h := &Handler{cfg: cfg, db: db, ipbl: ipbl, geoBl: geoBl, registry: registry, broadcaster: bc, staticJS: sub, staticCSS: cssSub, staticImgs: imgsSub, assetVer: assetVer, reloadBot: reloadBot, buildChallenger: buildChallenger, reloadRateLimit: reloadRateLimit, reloadWAF: reloadWAF, syncThreatIntel: syncThreatIntel, sendReportNow: sendReportNow, sendTestWebhook: sendTestWebhook, sendLoginCode: sendLoginCode, sendInvite: sendInvite, reloadAutoban: reloadAutoban, scorer: scorer, reloadAdaptive: reloadAdaptive, loginLimiter: newLoginLimiter(), accountLimiter: newLoginLimiter(), apiKeyLimiter: newLoginLimiter(), twoFA: newTwoFAStore(), passkeys: passkey.New(db), pkEnroll: newPkEnrollStore(), trustedNets: proxy.ParseTrustedProxyCIDRs(cfg.TrustedProxies), adminAllow: proxy.ParseTrustedProxyCIDRs(cfg.Admin.Allow), proxyHandle: proxyHandle}
+	h := &Handler{cfg: cfg, db: db, ipbl: ipbl, geoBl: geoBl, registry: registry, broadcaster: bc, staticJS: sub, staticCSS: cssSub, staticImgs: imgsSub, assetVer: assetVer, reloadBot: reloadBot, buildChallenger: buildChallenger, reloadRateLimit: reloadRateLimit, reloadWAF: reloadWAF, syncThreatIntel: syncThreatIntel, sendReportNow: sendReportNow, sendTestWebhook: sendTestWebhook, sendLoginCode: sendLoginCode, sendInvite: sendInvite, reloadAutoban: reloadAutoban, scorer: scorer, reloadAdaptive: reloadAdaptive, loginLimiter: newLoginLimiter(), accountLimiter: newLoginLimiter(), apiKeyLimiter: newLoginLimiter(), twoFA: newTwoFAStore(), passkeys: passkey.New(db), pkEnroll: newPkEnrollStore(), pwBreach: breach.New(""), trustedNets: proxy.ParseTrustedProxyCIDRs(cfg.TrustedProxies), adminAllow: proxy.ParseTrustedProxyCIDRs(cfg.Admin.Allow), proxyHandle: proxyHandle}
 	if err := h.parseTemplates(); err != nil {
 		return nil, err
 	}
@@ -3922,8 +3924,14 @@ func (h *Handler) ChangeCredentials(c echo.Context) error {
 	if newPassword != "" && newPassword != confirmPassword {
 		return renderErr("New passwords do not match.")
 	}
-	if newPassword != "" && len(newPassword) < 8 {
-		return renderErr("New password must be at least 8 characters.")
+	if newPassword != "" {
+		email := newEmail
+		if email == "" {
+			email = me.Email
+		}
+		if err := ValidateAdminPassword(c.Request().Context(), h.pwBreach, email, newPassword); err != nil {
+			return renderErr(err.Error())
+		}
 	}
 	if err := h.db.UpdateAdminCredentials(me.ID, newEmail, newPassword); errors.Is(err, storage.ErrUserExists) {
 		return renderErr("Another user already has that email.")

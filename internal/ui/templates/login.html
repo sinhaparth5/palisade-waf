@@ -71,12 +71,12 @@
             <input type="text" name="email" value="{{.InviteEmail}}" autocomplete="username" readonly hidden/>
             <div class="mb-5">
               <label class="field-label mb-2" for="invite-password">New password</label>
-              <input id="invite-password" name="password" type="password" autocomplete="new-password" placeholder="Min 8 characters" autofocus required minlength="8"
+              <input id="invite-password" name="password" type="password" autocomplete="new-password" placeholder="Min 12 characters" autofocus required minlength="12"
                      class="field px-4 py-3.5"/>
             </div>
             <div class="mb-2">
               <label class="field-label mb-2" for="invite-confirm">Confirm password</label>
-              <input id="invite-confirm" name="confirm_password" type="password" autocomplete="new-password" required minlength="8"
+              <input id="invite-confirm" name="confirm_password" type="password" autocomplete="new-password" required minlength="12"
                      class="field px-4 py-3.5"/>
             </div>
             <button type="submit" class="btn-primary mt-6 w-full py-3.5">Set password and sign in</button>

@@ -42,6 +42,7 @@ import (
 	"palisade/internal/security/autoban"
 	"palisade/internal/security/blocklist"
 	"palisade/internal/security/bot"
+	"palisade/internal/security/breach"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/csp"
 	"palisade/internal/security/geo"
@@ -1147,6 +1148,15 @@ func runSetup(args []string) {
 	}
 	defer db.Close()
 
+	// Only a password that will actually be stored is judged: a re-run on
+	// an existing install must stay a no-op (SeedAdmin skips it).
+	if n, err := db.CountAdminUsers(); err != nil {
+		log.Fatalf("setup: %v", err)
+	} else if n == 0 {
+		if err := ui.ValidateAdminPassword(context.Background(), breach.New(""), *adminEmail, password); err != nil {
+			log.Fatalf("setup: %v", err)
+		}
+	}
 	if err := db.SeedAdmin(*adminEmail, password); err != nil {
 		log.Fatalf("setup: %v", err)
 	}

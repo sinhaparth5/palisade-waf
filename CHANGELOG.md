@@ -16,6 +16,7 @@ rather than growing this file forever.
 - (#270) Block cloud metadata addresses at connect time for every outbound request
 - (#271) Restrict the admin UI by source IP or a separate listener
 - (#272) Bound slow request bodies and per-client connections
+- (#273) Reject weak and breached admin passwords
 
 ## [3.2.2] - 2026-11-11
 

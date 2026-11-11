@@ -712,7 +712,9 @@ func TestChangeCredentialsAndBackup(t *testing.T) {
 	}{
 		{[]string{"current_password", "wrong"}, "Current password is incorrect"},
 		{[]string{"current_password", testAdminPassword, "new_password", "abcdefgh", "confirm_password", "x"}, "do not match"},
-		{[]string{"current_password", testAdminPassword, "new_password", "short", "confirm_password", "short"}, "at least 8"},
+		{[]string{"current_password", testAdminPassword, "new_password", "elevenchars", "confirm_password", "elevenchars"}, "at least 12"},
+		{[]string{"current_password", testAdminPassword, "new_email", "someone@example.com", "new_password", "Someone@Example.com", "confirm_password", "Someone@Example.com"}, "must not be your email"},
+		{[]string{"current_password", testAdminPassword, "new_password", breachedTestPassword, "confirm_password", breachedTestPassword}, "known data breach"},
 	} {
 		if rec := env.do("POST", "/admin/settings/credentials", form(tc.f...)); !strings.Contains(rec.Body.String(), tc.want) {
 			t.Errorf("credentials %q: %s", tc.want, rec.Body)

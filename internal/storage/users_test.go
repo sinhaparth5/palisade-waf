@@ -216,3 +216,29 @@ func TestUserInviteLifecycle(t *testing.T) {
 		t.Errorf("invite rows after delete = %d, %v", n, err)
 	}
 }
+
+// TestLoginRehashesOldCost: a hash made at a lower bcrypt cost is upgraded by
+// the next successful login, and only by a successful one (issue #273).
+func TestLoginRehashesOldCost(t *testing.T) {
+	db := openTestDB(t)
+	id := testUser(t, db)
+	defer func(c int) { PasswordCost = c }(PasswordCost)
+	PasswordCost++
+
+	cost := func() int {
+		h, err := db.userField(id, "password_hash")
+		mustNoErr(t, err)
+		c, err := bcrypt.Cost([]byte(h))
+		mustNoErr(t, err)
+		return c
+	}
+	if u, _ := db.CheckAdminLogin("owner@x.test", "wrong-password"); u != nil || cost() != PasswordCost-1 {
+		t.Fatalf("failed login: user=%v cost=%d, want no user and the old cost", u, cost())
+	}
+	if u, _ := db.CheckAdminLogin("owner@x.test", "owner-password"); u == nil || cost() != PasswordCost {
+		t.Fatalf("login: user=%v cost=%d, want cost %d", u, cost(), PasswordCost)
+	}
+	if u, _ := db.CheckAdminLogin("owner@x.test", "owner-password"); u == nil {
+		t.Error("password stopped working after the rehash")
+	}
+}
