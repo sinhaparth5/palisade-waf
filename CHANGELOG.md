@@ -18,6 +18,7 @@ rather than growing this file forever.
 - (#289) Reuse reverse proxy copy buffers
 - (#288) Stop dashboard queries from scanning the whole request log
 - (#260) Apply automatic bans in memory before persisting them
+- (#261) Limit concurrent WAF body inspections
 
 ## [3.2.1] - 2026-11-02
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	"palisade/internal/config"
 )
@@ -461,5 +462,46 @@ func TestSetRequestSchemaOffClearsSchema(t *testing.T) {
 	}
 	if res.Blocked {
 		t.Fatalf("schema still enforced after SetRequestSchema(off): %+v", res)
+	}
+}
+
+// With every inspection slot taken, a large body is refused with ErrBusy
+// while a small one still passes (#261).
+func TestInspectionSlots(t *testing.T) {
+	e := newTestEngine(t)
+	defer func(d time.Duration) { inspectWait = d }(inspectWait)
+	inspectWait = 10 * time.Millisecond
+
+	check := func(body string) error {
+		r := httptest.NewRequest("POST", "http://app.example.com/api", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Cookie", "s=1") // keep the verdict cache out of it
+		_, err := e.Check(r, "203.0.113.9")
+		return err
+	}
+	large := `{"a":"` + strings.Repeat("x", heavyBody) + `"}`
+
+	for range cap(inspectSlots) {
+		inspectSlots <- struct{}{}
+	}
+	shed := InspectionsShed()
+	if err := check(large); !errors.Is(err, ErrBusy) {
+		t.Errorf("large body with no free slot: err = %v, want ErrBusy", err)
+	}
+	if err := check(`{"a":1}`); err != nil {
+		t.Errorf("small body should not need a slot: %v", err)
+	}
+	if got := InspectionsShed() - shed; got != 1 {
+		t.Errorf("shed = %d, want 1", got)
+	}
+	for range cap(inspectSlots) {
+		<-inspectSlots
+	}
+
+	if err := check(large); err != nil {
+		t.Errorf("large body with free slots: %v", err)
+	}
+	if n := InspectionsInFlight(); n != 0 {
+		t.Errorf("in flight after checks = %d, want 0", n)
 	}
 }
