@@ -43,6 +43,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 --certs ./certs   --waf-rules dir   --geo-db path (empty = bundled)   --retention 30 (0 = forever)
 --prune-interval 0 (Docker passes 24h)   --tls-cert/--tls-key   --access-log path (+ -max-size-mb, -max-backups)
 --db-key-file path (encrypt secrets at rest)   --warehouse-url (ClickHouse HTTP endpoint)
+--admin-allow ip,cidr (who may reach /admin)   --admin-listen addr (plain-HTTP admin-only listener)
 ```
 
 **Subcommands**: `prune [--retention d] [--vacuum]`, `setup --admin-email ...` (password on stdin, idempotent), `build-dsn --driver ...` (password on stdin; correctly escapes DSNs), `gencert --hosts ...`, `healthcheck [--url]` (scratch image has no curl), `--version`.
@@ -79,7 +80,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - **HTTP/3**: `--listen-h3` + per-service opt-in, both gated by `Registry.HTTP3Host` (Host-matched services only). `Allow0RTT` must stay explicitly `false` (quic-go enables it when `QUICConfig` is nil).
 - TLS certs by SNI: per-service custom cert → autocert (if in `HostPolicy()`) → global fallback. Uploaded keys live under `certs/services/<name>/`, not the DB. The base `tls.Config` must list `h2` in `NextProtos` or `http.Server` silently serves HTTP/1.1 only.
 - **mTLS** (`services/mtls.go`, table `service_mtls`, CA at `certs/services/<name>/client-ca.pem`): `GetConfigForClient` only *requests* a cert (`RequestClientCert`, tickets off) for SNI names with a policy; `CheckClientCert` verifies per request against the **Host**'s policy, so SNI/Host mismatch can't bypass it. Required + no valid cert → 403 `mtls_required`, before the IP blocklist, trusted IPs included. `X-Client-Cert-*` are stripped and re-set on `r` itself, so the request log shows the fingerprint. No CRL/OCSP.
-- `hostGuard` sends admin-path requests on a service host to the proxy, so the admin UI never appears on customer domains.
+- `hostGuard` sends admin-path requests on a service host to the proxy, so the admin UI never appears on customer domains. It also enforces `--admin-allow` (client IP via `proxy.ClientIP`) and `--admin-listen` (issue #271): a refused request goes to the proxy pipeline as well, so every admin route must stay inside a group that uses `hostGuard`. The admin listener (`ui.AdminListener`) is plain HTTP, serves only the admin path and never proxies.
 
 ## WAF
 

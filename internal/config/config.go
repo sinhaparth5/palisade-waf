@@ -54,7 +54,9 @@ type DBConfig struct {
 }
 
 type AdminConfig struct {
-	Path string // URL path prefix for the admin UI (always "/admin")
+	Path   string   // URL path prefix for the admin UI (always "/admin")
+	Allow  []string // --admin-allow: client IPs/CIDRs that may reach it; empty = any
+	Listen string   // --admin-listen: serve it only on this address; empty = the public listener
 }
 
 type RateLimitConfig struct {

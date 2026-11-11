@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"embed"
 	"encoding/hex"
@@ -164,6 +165,7 @@ type Handler struct {
 	passkeys        *passkey.Manager
 	pkEnroll        *pkEnrollStore
 	trustedNets     []*net.IPNet
+	adminAllow      []*net.IPNet // --admin-allow; empty = any client
 	proxyHandle     echo.HandlerFunc
 	accountLimiter  *loginLimiter     // per-account login throttle, next to the per-IP loginLimiter
 	routeRoles      map[string]string // "METHOD /admin/path" → minimum role, filled by Register
@@ -220,7 +222,7 @@ func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist,
 	// Embedded assets only change with the binary, and StaticFS sends no
 	// validators, so the ?v= stamp is what moves browsers to a new build.
 	assetVer := assetStamp(sub, cssSub, imgsSub, vendorFS)
-	h := &Handler{cfg: cfg, db: db, ipbl: ipbl, geoBl: geoBl, registry: registry, broadcaster: bc, staticJS: sub, staticCSS: cssSub, staticImgs: imgsSub, assetVer: assetVer, reloadBot: reloadBot, buildChallenger: buildChallenger, reloadRateLimit: reloadRateLimit, reloadWAF: reloadWAF, syncThreatIntel: syncThreatIntel, sendReportNow: sendReportNow, sendTestWebhook: sendTestWebhook, sendLoginCode: sendLoginCode, sendInvite: sendInvite, reloadAutoban: reloadAutoban, scorer: scorer, reloadAdaptive: reloadAdaptive, loginLimiter: newLoginLimiter(), accountLimiter: newLoginLimiter(), apiKeyLimiter: newLoginLimiter(), twoFA: newTwoFAStore(), passkeys: passkey.New(db), pkEnroll: newPkEnrollStore(), trustedNets: proxy.ParseTrustedProxyCIDRs(cfg.TrustedProxies), proxyHandle: proxyHandle}
+	h := &Handler{cfg: cfg, db: db, ipbl: ipbl, geoBl: geoBl, registry: registry, broadcaster: bc, staticJS: sub, staticCSS: cssSub, staticImgs: imgsSub, assetVer: assetVer, reloadBot: reloadBot, buildChallenger: buildChallenger, reloadRateLimit: reloadRateLimit, reloadWAF: reloadWAF, syncThreatIntel: syncThreatIntel, sendReportNow: sendReportNow, sendTestWebhook: sendTestWebhook, sendLoginCode: sendLoginCode, sendInvite: sendInvite, reloadAutoban: reloadAutoban, scorer: scorer, reloadAdaptive: reloadAdaptive, loginLimiter: newLoginLimiter(), accountLimiter: newLoginLimiter(), apiKeyLimiter: newLoginLimiter(), twoFA: newTwoFAStore(), passkeys: passkey.New(db), pkEnroll: newPkEnrollStore(), trustedNets: proxy.ParseTrustedProxyCIDRs(cfg.TrustedProxies), adminAllow: proxy.ParseTrustedProxyCIDRs(cfg.Admin.Allow), proxyHandle: proxyHandle}
 	if err := h.parseTemplates(); err != nil {
 		return nil, err
 	}
@@ -332,13 +334,53 @@ const sessionTouchThrottle = time.Minute
 // other request to that service, landing on the real backend's own
 // /admin/login if it has one. The admin UI and API stay reachable on any
 // Host nothing else claims, e.g. this server's bare listen IP.
+//
+// It also enforces --admin-allow and --admin-listen (issue #271). A request
+// those rule out goes to the proxy pipeline too, so the admin UI looks like
+// it isn't there: an unmatched host gets a logged 404 that autoban counts.
 func (h *Handler) hostGuard(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		if h.registry.IsServiceHost(c.Request().Host) {
+		r := c.Request()
+		if r.Context().Value(adminListenerKey{}) != nil {
+			// The admin listener never proxies.
+			if !h.adminAllowed(r) {
+				return echo.ErrNotFound
+			}
+			return next(c)
+		}
+		if h.cfg.Admin.Listen != "" || !h.adminAllowed(r) || h.registry.IsServiceHost(r.Host) {
 			return h.proxyHandle(c)
 		}
 		return next(c)
 	}
+}
+
+// adminAllowed applies --admin-allow to the resolved client IP.
+func (h *Handler) adminAllowed(r *http.Request) bool {
+	if len(h.adminAllow) == 0 {
+		return true
+	}
+	ip := net.ParseIP(h.clientIP(r))
+	for _, n := range h.adminAllow {
+		if ip != nil && n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+type adminListenerKey struct{}
+
+// AdminListener wraps the Echo handler for the --admin-listen server: it
+// marks requests as arriving there and serves nothing outside the admin path.
+func AdminListener(base string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != base && !strings.HasPrefix(r.URL.Path, base+"/") {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), adminListenerKey{}, true)))
+	})
 }
 
 // Register mounts all admin routes on e under cfg.Admin.Path.

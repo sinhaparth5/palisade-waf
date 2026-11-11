@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"strings"
@@ -96,6 +97,8 @@ func main() {
 	listenTLS := fs.String("listen-tls", "", "HTTPS listen address (empty = HTTP only)")
 	listenH3 := fs.String("listen-h3", "", "HTTP/3 (QUIC) UDP listen address, e.g. :443; needs --listen-tls; services opt in individually (empty = off)")
 	trustedProxies := fs.String("trusted-proxies", "", "comma-separated trusted proxy IPs or CIDRs for X-Forwarded-For/X-Real-IP")
+	adminAllow := fs.String("admin-allow", "", "comma-separated client IPs or CIDRs that may reach the admin UI, API and metrics; everyone else gets a 404 (empty = any)")
+	adminListen := fs.String("admin-listen", "", "serve the admin UI only on this plain-HTTP address, e.g. 127.0.0.1:9090, and remove it from the public listener (empty = public listener)")
 	trustedCrawlers := fs.String("trusted-crawlers", "", "extra crawlers that skip the bot challenge, pinned by source: ua=cidr[,cidr];ua2=ip, or ua=https://host to verify Web Bot Auth signatures (empty = none)")
 	dbPath := fs.String("db", "waf.db", "database path (sqlite) or DSN (mysql/postgres)")
 	dbDriver := fs.String("db-driver", "sqlite", "database driver: sqlite, mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)")
@@ -122,6 +125,17 @@ func main() {
 		log.Fatalf("--listen-h3 needs --listen-tls: browsers only discover HTTP/3 from an HTTPS response")
 	}
 	cfg.TrustedProxies = splitCSV(*trustedProxies)
+	cfg.Admin.Allow = splitCSV(*adminAllow)
+	cfg.Admin.Listen = *adminListen
+	// An entry that doesn't parse would be skipped, and an empty list means
+	// "any client", so a typo must stop startup rather than open the UI.
+	for _, a := range cfg.Admin.Allow {
+		if _, err := netip.ParsePrefix(a); err != nil {
+			if _, err := netip.ParseAddr(a); err != nil {
+				log.Fatalf("--admin-allow: %q is not an IP or CIDR", a)
+			}
+		}
+	}
 	if err := bot.AddPinnedCrawlers(*trustedCrawlers); err != nil {
 		log.Fatalf("--trusted-crawlers: %v", err)
 	}
@@ -564,17 +578,35 @@ func main() {
 
 	appCount := len(registry.List())
 
+	// --admin-listen: bound here so a taken port fails startup.
+	var extra []shutdowner
+	if cfg.Admin.Listen != "" {
+		ln, err := net.Listen("tcp", cfg.Admin.Listen)
+		if err != nil {
+			log.Fatalf("--admin-listen: %v", err)
+		}
+		adminSrv := &http.Server{Handler: ui.AdminListener(cfg.Admin.Path, e)}
+		hardenServer(adminSrv)
+		go func() {
+			if err := adminSrv.Serve(ln); err != nil && err != http.ErrServerClosed {
+				log.Printf("admin listener: %v", err)
+			}
+		}()
+		extra = append(extra, adminSrv)
+		log.Printf("admin UI on http://%s%s only (plain HTTP)", cfg.Admin.Listen, cfg.Admin.Path)
+	}
+
 	// TLS only starts when --listen-tls is provided. Certificate config
 	// (ACME email, per-service certs) lives entirely in the DB.
 	if cfg.ListenAddrTLS != "" {
-		if err := startTLS(e, cfg, registry, db, appCount); err != nil && err != http.ErrServerClosed {
+		if err := startTLS(e, cfg, registry, db, appCount, extra...); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("tls server: %v", err)
 		}
 		return
 	}
 	log.Printf("palisade listening on %s (plain HTTP, waf=%v, apps=%d)",
 		cfg.ListenAddr, cfg.WAF.Enabled, appCount)
-	done := shutdownOnSignal(e)
+	done := shutdownOnSignal(e, extra...)
 	if err := e.Start(cfg.ListenAddr); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server: %v", err)
 	}
@@ -586,7 +618,7 @@ func main() {
 // on cfg.ListenAddr (ACME challenge handler + HTTPS redirect) and HTTPS on
 // cfg.ListenAddrTLS. Per-service custom certs take priority over autocert by
 // SNI (see services.Registry.GetCertificateFunc).
-func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db *storage.DB, appCount int) error {
+func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db *storage.DB, appCount int, extra ...shutdowner) error {
 	email, _ := db.GetAcmeEmail()
 	primaryDomain, _ := db.GetPrimaryDomain()
 
@@ -703,7 +735,7 @@ func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db 
 	}
 	s.TLSConfig = base
 
-	servers := []shutdowner{redirectServer}
+	servers := append([]shutdowner{redirectServer}, extra...)
 	if cfg.ListenAddrH3 != "" {
 		h3, err := startHTTP3(e, cfg.ListenAddrH3, s.TLSConfig, registry)
 		if err != nil {

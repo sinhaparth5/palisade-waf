@@ -554,6 +554,12 @@ else
 #
 # Example:
 # PALISADE_FLAGS=--trusted-proxies 10.0.0.0/8,192.168.0.0/16 --prune-interval 24h
+#
+# Hide the admin UI, API and metrics from the internet (off by default):
+#   --admin-allow 203.0.113.7,10.8.0.0/24   only these client IPs reach /admin;
+#                                           everyone else gets a 404
+#   --admin-listen 127.0.0.1:9090           serve /admin only on this plain-HTTP
+#                                           address (SSH tunnel or VPN interface)
 PALISADE_FLAGS=
 FLAGS
 	run chmod 600 "${FLAGS_FILE}"
