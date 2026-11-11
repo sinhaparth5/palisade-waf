@@ -91,6 +91,7 @@ func newPool(s storage.Service, health func(raw string) *backendHealth, stripPat
 		u := &upstream{raw: raw, base: base, health: health(raw)}
 		u.rp = httputil.NewSingleHostReverseProxy(target)
 		u.rp.Transport = &timedTransport{rt: backendTransport, name: s.Name}
+		u.rp.BufferPool = proxyBuffers
 		u.rp.ModifyResponse = func(resp *http.Response) error {
 			u.health.markUp()
 			return modify(resp)
