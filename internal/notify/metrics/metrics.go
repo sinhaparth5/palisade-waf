@@ -126,6 +126,17 @@ var _ = promauto.NewCounterFunc(prometheus.CounterOpts{
 	Help: "Requests answered 503 because every body-inspection slot stayed busy.",
 }, func() float64 { return float64(waf.InspectionsShed()) })
 
+var _ = promauto.NewCounterFunc(prometheus.CounterOpts{
+	Name: "palisade_waf_body_timeouts_total",
+	Help: "Requests answered 408 because the client sent an inspected body too slowly.",
+}, func() float64 { return float64(waf.BodyTimeouts()) })
+
+// ConnsRefused counts connections closed at accept by the per-client cap.
+var ConnsRefused = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "palisade_conns_refused_total",
+	Help: "Connections closed at accept because the client already held --max-conns-per-ip.",
+})
+
 var _ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
 	Name: "palisade_services_total",
 	Help: "Number of backend services currently configured.",

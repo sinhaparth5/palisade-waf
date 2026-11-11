@@ -99,6 +99,7 @@ func main() {
 	trustedProxies := fs.String("trusted-proxies", "", "comma-separated trusted proxy IPs or CIDRs for X-Forwarded-For/X-Real-IP")
 	adminAllow := fs.String("admin-allow", "", "comma-separated client IPs or CIDRs that may reach the admin UI, API and metrics; everyone else gets a 404 (empty = any)")
 	adminListen := fs.String("admin-listen", "", "serve the admin UI only on this plain-HTTP address, e.g. 127.0.0.1:9090, and remove it from the public listener (empty = public listener)")
+	maxConns := fs.Int("max-conns-per-ip", 256, "concurrent TCP connections one client IP (IPv6 /64) may hold; trusted proxies, Cloudflare, loopback and trusted IPs are exempt (0 = no cap)")
 	trustedCrawlers := fs.String("trusted-crawlers", "", "extra crawlers that skip the bot challenge, pinned by source: ua=cidr[,cidr];ua2=ip, or ua=https://host to verify Web Bot Auth signatures (empty = none)")
 	dbPath := fs.String("db", "waf.db", "database path (sqlite) or DSN (mysql/postgres)")
 	dbDriver := fs.String("db-driver", "sqlite", "database driver: sqlite, mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)")
@@ -578,6 +579,8 @@ func main() {
 
 	appCount := len(registry.List())
 
+	connLimit := proxy.NewConnLimiter(*maxConns, proxy.ParseTrustedProxyCIDRs(cfg.TrustedProxies), registry.Trusted)
+
 	// --admin-listen: bound here so a taken port fails startup.
 	var extra []shutdowner
 	if cfg.Admin.Listen != "" {
@@ -599,13 +602,18 @@ func main() {
 	// TLS only starts when --listen-tls is provided. Certificate config
 	// (ACME email, per-service certs) lives entirely in the DB.
 	if cfg.ListenAddrTLS != "" {
-		if err := startTLS(e, cfg, registry, db, appCount, extra...); err != nil && err != http.ErrServerClosed {
+		if err := startTLS(e, cfg, registry, db, appCount, connLimit, extra...); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("tls server: %v", err)
 		}
 		return
 	}
 	log.Printf("palisade listening on %s (plain HTTP, waf=%v, apps=%d)",
 		cfg.ListenAddr, cfg.WAF.Enabled, appCount)
+	ln, err := net.Listen("tcp", cfg.ListenAddr)
+	if err != nil {
+		log.Fatalf("server: %v", err)
+	}
+	e.Listener = connLimit.Listener(ln)
 	done := shutdownOnSignal(e, extra...)
 	if err := e.Start(cfg.ListenAddr); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server: %v", err)
@@ -618,7 +626,7 @@ func main() {
 // on cfg.ListenAddr (ACME challenge handler + HTTPS redirect) and HTTPS on
 // cfg.ListenAddrTLS. Per-service custom certs take priority over autocert by
 // SNI (see services.Registry.GetCertificateFunc).
-func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db *storage.DB, appCount int, extra ...shutdowner) error {
+func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db *storage.DB, appCount int, connLimit *proxy.ConnLimiter, extra ...shutdowner) error {
 	email, _ := db.GetAcmeEmail()
 	primaryDomain, _ := db.GetPrimaryDomain()
 
@@ -671,7 +679,7 @@ func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db 
 	}
 	go func() {
 		log.Printf("palisade HTTP (ACME/redirect) on %s", cfg.ListenAddr)
-		if err := redirectServer.Serve(redirectLn); err != nil && err != http.ErrServerClosed {
+		if err := redirectServer.Serve(connLimit.Listener(redirectLn)); err != nil && err != http.ErrServerClosed {
 			log.Printf("http server: %v", err)
 		}
 	}()
@@ -744,6 +752,14 @@ func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db 
 		servers = append(servers, h3)
 	}
 
+	// Bound here, not by Echo, so the per-client cap sits below TLS: a
+	// refused connection costs no handshake.
+	tlsLn, err := net.Listen("tcp", cfg.ListenAddrTLS)
+	if err != nil {
+		return fmt.Errorf("https listener: %w", err)
+	}
+	e.TLSListener = tls.NewListener(connLimit.Listener(tlsLn), s.TLSConfig)
+
 	log.Printf("palisade TLS on %s (waf=%v, apps=%d)", cfg.ListenAddrTLS, cfg.WAF.Enabled, appCount)
 	done := shutdownOnSignal(e, servers...)
 	if err := e.StartServer(s); err != http.ErrServerClosed {
@@ -783,8 +799,9 @@ func startHTTP3(e *echo.Echo, addr string, tlsConf *tls.Config, registry *servic
 		// 0-RTT early data can be replayed by anyone who captured it, and a
 		// WAF must not act on a request it can't tell apart from its replay.
 		// quic-go enables it when QUICConfig is nil, so this must stay set.
-		QUICConfig: &quic.Config{Allow0RTT: false},
-		Handler:    http3Gate(registry, e),
+		QUICConfig:     &quic.Config{Allow0RTT: false, MaxIncomingStreams: maxStreams},
+		MaxHeaderBytes: 1 << 20,
+		Handler:        http3Gate(registry, e),
 		// QUIC has no ConnState hook, so clear the per-connection stores
 		// (filled at handshake by GetConfigForClient) when the conn ends.
 		ConnContext: func(ctx context.Context, c *quic.Conn) context.Context {
@@ -825,10 +842,16 @@ func http3Gate(registry *services.Registry, next http.Handler) http.Handler {
 // an idle keep-alive conn, so a Slowloris trickle can't pin connections below
 // the rate limiter. ReadTimeout/WriteTimeout stay unset: uploads, SSE and
 // WebSockets legitimately stream for longer than any fixed bound.
+// maxStreams caps concurrent requests per HTTP/2 or HTTP/3 connection.
+const maxStreams = 100
+
 func hardenServer(s *http.Server) {
 	s.ReadHeaderTimeout = 10 * time.Second
 	s.IdleTimeout = 120 * time.Second
-	s.MaxHeaderBytes = 1 << 20
+	s.MaxHeaderBytes = 1 << 20 // also HTTP/2's max header list size
+	// Stated rather than left to the library default (#272): one connection
+	// can't run more than this many requests at once.
+	s.HTTP2 = &http.HTTP2Config{MaxConcurrentStreams: maxStreams}
 }
 
 // shutdowner is the graceful-stop surface *http.Server and *http3.Server share.

@@ -499,10 +499,19 @@ func (h *Handler) Handle(c echo.Context) error {
 			checkOpts.Path = services.StripPrefix(r.URL.Path, app.Prefix)
 		}
 	}
+	checkOpts.SetReadDeadline = http.NewResponseController(c.Response()).SetReadDeadline
 	result := &waf.Result{}
 	var err error
 	if !trusted {
 		result, err = engine.CheckWithOptions(r, clientIP, checkOpts)
+	}
+	if errors.Is(err, waf.ErrBodyTimeout) {
+		// Slow body (#272). Not logged or scored: a slow link is not an attack
+		// signal by itself. The connection can't be reused past its deadline.
+		mark("waf")
+		metrics.RecordRequest(appName, strconv.Itoa(http.StatusRequestTimeout), time.Since(start).Seconds())
+		c.Response().Header().Set("Connection", "close")
+		return c.JSON(http.StatusRequestTimeout, map[string]string{"error": "request body timeout"})
 	}
 	if errors.Is(err, waf.ErrBodyRead) {
 		mark("waf")

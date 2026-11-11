@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -21,6 +22,21 @@ import (
 // ErrBodyRead wraps a failure reading the client's request body: a client
 // that went away mid-upload or sent a malformed body, not a WAF fault.
 var ErrBodyRead = errors.New("waf: reading request body")
+
+// ErrBodyTimeout is a body the client sent too slowly to buffer for
+// inspection (issue #272). The handler answers 408 and closes the connection.
+var ErrBodyTimeout = errors.New("waf: request body too slow")
+
+// A buffered body must arrive within bodyGrace plus its size at bodyMinRate
+// (128 KiB: 18s, a full 12.5 MiB multipart: about 13 minutes).
+var (
+	bodyGrace          = 10 * time.Second
+	bodyMinRate  int64 = 16 << 10 // bytes per second
+	bodyTimeouts atomic.Uint64
+)
+
+// BodyTimeouts counts requests refused with ErrBodyTimeout.
+func BodyTimeouts() uint64 { return bodyTimeouts.Load() }
 
 type Engine struct {
 	waf     coraza.WAF
@@ -57,6 +73,11 @@ type CheckOptions struct {
 	// Path is the request path as the backend sees it (service prefix
 	// stripped), for OpenAPI route matching. Empty means r.URL.Path.
 	Path string
+
+	// SetReadDeadline, when set, bounds how long the client may take to send
+	// a body that is buffered for inspection (http.ResponseController's
+	// method). Bodies that stream uninspected never get a deadline.
+	SetReadDeadline func(time.Time) error
 }
 
 // requestBodyLimit is the SecRequestBodyLimit value passed to Coraza and the
@@ -371,9 +392,25 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 			limit = requestBodyLimit
 		}
 		orig := r.Body
+		if opts.SetReadDeadline != nil {
+			n := limit
+			if r.ContentLength >= 0 && r.ContentLength < n {
+				n = r.ContentLength
+			}
+			_ = opts.SetReadDeadline(time.Now().Add(bodyGrace + time.Duration(n/bodyMinRate)*time.Second))
+		}
 		b, err := io.ReadAll(io.LimitReader(orig, limit+1))
 		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				bodyTimeouts.Add(1)
+				return nil, ErrBodyTimeout
+			}
 			return nil, fmt.Errorf("%w: %w", ErrBodyRead, err)
+		}
+		if opts.SetReadDeadline != nil {
+			// The rest of the request (an over-limit multipart tail, the
+			// next keep-alive request) is not on this clock.
+			_ = opts.SetReadDeadline(time.Time{})
 		}
 		body = b
 		switch {

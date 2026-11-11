@@ -505,3 +505,68 @@ func TestInspectionSlots(t *testing.T) {
 		t.Errorf("in flight after checks = %d, want 0", n)
 	}
 }
+
+// TestSlowBodyTimesOut pins issue #272: a body the WAF buffers must arrive
+// within its deadline, a body that streams uninspected gets no deadline, and
+// a prompt body leaves the connection without one.
+func TestSlowBodyTimesOut(t *testing.T) {
+	e := newTestEngine(t)
+	defer func(d time.Duration, r int64) { bodyGrace, bodyMinRate = d, r }(bodyGrace, bodyMinRate)
+	bodyGrace, bodyMinRate = 100*time.Millisecond, 1<<30 // no per-byte allowance
+
+	for _, h2 := range []bool{false, true} {
+		errs := make(chan error, 1)
+		srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, err := e.CheckWithOptions(r, "203.0.113.9", CheckOptions{
+				SetReadDeadline: http.NewResponseController(w).SetReadDeadline,
+			})
+			if err == nil && r.Header.Get("Content-Type") == "application/octet-stream" {
+				// Uninspected: the tail arrives after bodyGrace and must still be readable.
+				_, err = io.ReadAll(r.Body)
+			}
+			errs <- err
+		}))
+		srv.EnableHTTP2 = h2
+		srv.StartTLS()
+
+		send := func(contentType string, stall time.Duration) error {
+			pr, pw := io.Pipe()
+			req, _ := http.NewRequest("POST", srv.URL+"/api", pr)
+			req.Header.Set("Content-Type", contentType)
+			req.Header.Set("Cookie", "s=1") // keep the verdict cache out of it
+			go func() {
+				_, _ = pw.Write([]byte(`{"a":`))
+				time.Sleep(stall)
+				_, _ = pw.Write([]byte(`1}`))
+				pw.Close()
+			}()
+			go func() {
+				if resp, err := srv.Client().Do(req); err == nil {
+					resp.Body.Close()
+				}
+			}()
+			select {
+			case err := <-errs:
+				return err
+			case <-time.After(5 * time.Second):
+				t.Fatalf("h2=%v %s: handler never returned", h2, contentType)
+				return nil
+			}
+		}
+
+		before := BodyTimeouts()
+		if err := send("application/json", 2*time.Second); !errors.Is(err, ErrBodyTimeout) {
+			t.Errorf("h2=%v slow inspected body: err = %v, want ErrBodyTimeout", h2, err)
+		}
+		if got := BodyTimeouts() - before; got != 1 {
+			t.Errorf("h2=%v body timeouts counted = %d, want 1", h2, got)
+		}
+		if err := send("application/json", 0); err != nil {
+			t.Errorf("h2=%v prompt body: %v", h2, err)
+		}
+		if err := send("application/octet-stream", 300*time.Millisecond); err != nil {
+			t.Errorf("h2=%v slow uninspected body got a deadline: %v", h2, err)
+		}
+		srv.Close()
+	}
+}
