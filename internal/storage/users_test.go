@@ -34,7 +34,7 @@ func TestMigrateAdminFromMeta(t *testing.T) {
 		mustNoErr(t, db.setMeta(k, v))
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := db.exec(`INSERT INTO sessions (token, created_at) VALUES (?, ?)`, "legacy-token", now)
+	_, err := db.exec(`INSERT INTO sessions (token, created_at) VALUES (?, ?)`, SessionID("legacy-token"), now)
 	mustNoErr(t, err)
 	mustNoErr(t, db.AddWebAuthnCredential(0, "legacy-cred", "Key", []byte(`{}`)))
 
@@ -115,7 +115,7 @@ func TestUsersHaveIndependentSessions(t *testing.T) {
 			t.Fatalf("session %s not live with two users signed in", tok[:8])
 		}
 	}
-	if rows, _ := db.ListSessions(owner); len(rows) != 1 || rows[0].Token != a {
+	if rows, _ := db.ListSessions(owner); len(rows) != 1 || rows[0].ID != SessionID(a) {
 		t.Errorf("owner's device list = %+v, want only their own session", rows)
 	}
 

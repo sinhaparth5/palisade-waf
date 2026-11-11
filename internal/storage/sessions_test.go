@@ -16,7 +16,7 @@ func TestPruneExpiredSessions(t *testing.T) {
 		t.Helper()
 		_, err := db.exec(
 			`INSERT INTO sessions (token, created_at) VALUES (?, ?)`,
-			token, time.Now().UTC().Add(-age).Format(time.RFC3339),
+			SessionID(token), time.Now().UTC().Add(-age).Format(time.RFC3339),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -135,9 +135,9 @@ func TestListSessionsLiveFirst(t *testing.T) {
 	if len(sessions) != 3 {
 		t.Fatalf("ListSessions = %d rows, want 3", len(sessions))
 	}
-	if sessions[0].Token != live || !sessions[0].Live() {
+	if sessions[0].ID != SessionID(live) || !sessions[0].Live() {
 		t.Errorf("first row = %q (live=%v), want the live session %q",
-			sessions[0].Token, sessions[0].Live(), live)
+			sessions[0].ID, sessions[0].Live(), SessionID(live))
 	}
 }
 
@@ -168,5 +168,40 @@ func TestCreateSessionSameDeviceReplacesRow(t *testing.T) {
 	}
 	if s, _ := db.GetSession(last); s == nil || s.IP != "10.0.0.2" {
 		t.Errorf("dev-a row = %+v, want latest login from 10.0.0.2", s)
+	}
+}
+
+// An upgrade from a version that stored raw tokens must keep those sessions
+// working, store nothing a DB reader could sign in with, and hash only once
+// (#269).
+func TestHashSessionTokensMigration(t *testing.T) {
+	db := openTestDB(t)
+	uid := testUser(t, db)
+	const raw = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := db.exec(`INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)`, raw, uid, now)
+	mustNoErr(t, err)
+	_, err = db.exec(`DELETE FROM meta WHERE `+db.dialect.quoteIdent("key")+` = ?`, metaKeySessionsHashed)
+	mustNoErr(t, err)
+
+	for range 2 { // the second run must be a no-op
+		mustNoErr(t, db.hashSessionTokens())
+		if ok, _ := db.ValidateSession(raw); !ok {
+			t.Fatal("session from before the upgrade no longer validates")
+		}
+	}
+	var stored string
+	mustNoErr(t, db.queryRow(`SELECT token FROM sessions WHERE user_id = ?`, uid).Scan(&stored))
+	if stored != SessionID(raw) {
+		t.Errorf("stored %q, want the SHA-256 of the token", stored)
+	}
+
+	// New logins never store the cookie value either.
+	tok, err := db.CreateSession(uid, "10.0.0.1", "curl", "")
+	mustNoErr(t, err)
+	var n int
+	mustNoErr(t, db.queryRow(`SELECT COUNT(*) FROM sessions WHERE token = ?`, tok).Scan(&n))
+	if n != 0 {
+		t.Error("CreateSession stored the raw token")
 	}
 }

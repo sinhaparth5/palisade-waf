@@ -43,14 +43,14 @@ func TestRevokeDevice(t *testing.T) {
 	del := func(t *testing.T, caller, target string) {
 		t.Helper()
 		e := echo.New()
-		req := httptest.NewRequest(http.MethodDelete, "/admin/settings/devices/"+target, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/admin/settings/devices/"+storage.SessionID(target), nil)
 		if caller != "" {
 			req.AddCookie(&http.Cookie{Name: sessionCookie, Value: caller})
 		}
 		c := e.NewContext(req, httptest.NewRecorder())
 		c.Set(ctxUser, me)
 		c.SetParamNames("token")
-		c.SetParamValues(target)
+		c.SetParamValues(storage.SessionID(target)) // links carry the stored id
 		if err := h.RevokeDevice(c); err != nil {
 			t.Fatal(err)
 		}

@@ -237,12 +237,12 @@ func TestSessionLifecycle(t *testing.T) {
 	if s, _ := db.GetSession(tok); s == nil || s.UserID != uid {
 		t.Fatalf("session = %+v, want user %d", s, uid)
 	}
-	mustNoErr(t, db.TouchSession(tok))
-	mustNoErr(t, db.RevokeSession(uid, tok))
+	mustNoErr(t, db.TouchSession(SessionID(tok)))
+	mustNoErr(t, db.RevokeSession(uid, SessionID(tok)))
 	if s, _ := db.GetSession(tok); s == nil || !s.Revoked() {
 		t.Fatalf("revoked session = %+v", s)
 	}
-	mustNoErr(t, db.DeleteSession(tok))
+	mustNoErr(t, db.DeleteSession(SessionID(tok)))
 	if s, _ := db.GetSession(tok); s != nil {
 		t.Error("session not deleted")
 	}

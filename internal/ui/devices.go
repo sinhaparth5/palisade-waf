@@ -3,6 +3,8 @@ package ui
 import (
 	"strings"
 	"time"
+
+	"palisade/internal/storage"
 )
 
 // deviceRow is one line of the Settings page's "Registered devices" card.
@@ -88,14 +90,14 @@ func (h *Handler) deviceRows(uid int64, current string) []deviceRow {
 			location, flag = name, country
 		}
 		rows = append(rows, deviceRow{
-			Token:     s.Token,
+			Token:     s.ID,
 			Device:    browserOS(s.UserAgent),
 			IP:        s.IP,
 			Location:  location,
 			Flag:      flag,
 			FirstSeen: s.CreatedAt,
 			LastSeen:  s.LastActiveAt,
-			Current:   s.Token == current,
+			Current:   s.ID == storage.SessionID(current),
 			Live:      s.Live(),
 		})
 	}

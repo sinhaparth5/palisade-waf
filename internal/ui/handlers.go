@@ -299,16 +299,16 @@ func (h *Handler) sessionAuth(next echo.HandlerFunc) echo.HandlerFunc {
 		if u == nil || u.Disabled {
 			// Drop the row too: LoginPage would otherwise see a live
 			// session and bounce straight back here.
-			h.db.DeleteSession(sess.Token) //nolint — best effort, it can't authenticate either way
+			h.db.DeleteSession(sess.ID) //nolint — best effort, it can't authenticate either way
 			return c.Redirect(http.StatusFound, login)
 		}
 		c.Set(ctxUser, u)
 		// Record last-seen off the hot path, throttled like TouchAPIKey so
 		// a busy dashboard doesn't write on every request.
 		if time.Since(sess.LastActiveAt) > sessionTouchThrottle {
-			token := sess.Token
+			id := sess.ID
 			h.db.Go(func() {
-				if err := h.db.TouchSession(token); err != nil {
+				if err := h.db.TouchSession(id); err != nil {
 					log.Printf("session touch: %v", err)
 				}
 			})
@@ -634,7 +634,7 @@ func (h *Handler) startSession(c echo.Context, ip string, uid int64) error {
 	if sessions, err := h.db.ListSessions(uid); err == nil {
 		for _, s := range sessions {
 			if s.IP == ip && browserOS(s.UserAgent) == browserOS(ua) {
-				h.db.DeleteSession(s.Token) //nolint — best effort, a leftover row is only cosmetic
+				h.db.DeleteSession(s.ID) //nolint — best effort, a leftover row is only cosmetic
 			}
 		}
 	}
@@ -665,7 +665,7 @@ func (h *Handler) startSession(c echo.Context, ip string, uid int64) error {
 
 func (h *Handler) Logout(c echo.Context) error {
 	if cookie, err := c.Cookie(sessionCookie); err == nil {
-		h.db.DeleteSession(cookie.Value) //nolint
+		h.db.DeleteSession(storage.SessionID(cookie.Value)) //nolint
 	}
 	c.SetCookie(&http.Cookie{
 		Name:     sessionCookie,
@@ -2617,18 +2617,19 @@ func (h *Handler) devicesData(c echo.Context) map[string]any {
 // sidebar already signs you out, and doing it from a device list is a
 // confusing way to get there.
 func (h *Handler) RevokeDevice(c echo.Context) error {
-	if token := c.Param("token"); token != sessionCookieValue(c) {
-		sess, err := h.db.GetSession(token)
+	// The link carries the session's stored id, never its cookie token (#269).
+	if id := c.Param("token"); id != storage.SessionID(sessionCookieValue(c)) {
+		sess, err := h.db.GetSessionByID(id)
 		switch {
 		case err != nil:
 			log.Printf("revoke device: %v", err)
 		case sess == nil || sess.UserID != currentUID(c): // gone, or not this user's
 		case sess.Live():
-			if err := h.db.RevokeSession(sess.UserID, token); err != nil {
+			if err := h.db.RevokeSession(sess.UserID, id); err != nil {
 				log.Printf("revoke device: %v", err)
 			}
 		default:
-			if err := h.db.DeleteSession(token); err != nil {
+			if err := h.db.DeleteSession(id); err != nil {
 				log.Printf("forget device: %v", err)
 			}
 		}
@@ -2638,7 +2639,7 @@ func (h *Handler) RevokeDevice(c echo.Context) error {
 
 // RevokeOtherDevices signs out every session except the caller's own.
 func (h *Handler) RevokeOtherDevices(c echo.Context) error {
-	if _, err := h.db.RevokeOtherSessions(currentUID(c), sessionCookieValue(c)); err != nil {
+	if _, err := h.db.RevokeOtherSessions(currentUID(c), storage.SessionID(sessionCookieValue(c))); err != nil {
 		log.Printf("revoke other devices: %v", err)
 	}
 	return h.renderPartial(c, "settings", "devices-card", h.devicesData(c))

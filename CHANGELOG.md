@@ -19,6 +19,7 @@ rather than growing this file forever.
 - (#288) Stop dashboard queries from scanning the whole request log
 - (#260) Apply automatic bans in memory before persisting them
 - (#261) Limit concurrent WAF body inspections
+- (#269) Store admin session tokens hashed
 
 ## [3.2.1] - 2026-11-02
 
