@@ -383,6 +383,7 @@ func TestValidateRejectsMetadataEndpoints(t *testing.T) {
 	}{
 		{"aws/azure/gcp/do metadata IP", "http://169.254.169.254/latest/meta-data/", true},
 		{"metadata IP with port", "http://169.254.169.254:80/", true},
+		{"other link-local (ECS task metadata)", "http://169.254.170.2/", true},
 		{"gcp metadata hostname", "http://metadata.google.internal/computeMetadata/v1/", true},
 		{"gcp metadata hostname mixed case", "http://Metadata.Google.Internal/", true},
 		{"aws imds v2 ipv6", "http://[fd00:ec2::254]/latest/meta-data/", true},

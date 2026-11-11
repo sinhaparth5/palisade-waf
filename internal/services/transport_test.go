@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"palisade/internal/security/egress"
 )
 
 // TestBackendTransportReusesConns pins issue #107: with Go's default of 2
@@ -46,5 +49,18 @@ func TestBackendTransportReusesConns(t *testing.T) {
 	}
 	if n := newConns.Load(); n > concurrency {
 		t.Fatalf("opened %d backend connections for %d rounds of %d concurrent requests, want <= %d", n, rounds, concurrency, concurrency)
+	}
+}
+
+// TestBackendTransportRefusesMetadata pins issue #270: the check is on the
+// IP dialed, so it holds for a hostname that passed Validate when the
+// service was saved and resolves to the metadata address later.
+func TestBackendTransportRefusesMetadata(t *testing.T) {
+	resp, err := (&http.Client{Transport: backendTransport}).Get("http://169.254.169.254/latest/meta-data/")
+	if err == nil {
+		resp.Body.Close()
+	}
+	if !errors.Is(err, egress.ErrBlocked) {
+		t.Fatalf("err = %v, want egress.ErrBlocked", err)
 	}
 }

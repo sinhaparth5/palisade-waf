@@ -24,6 +24,7 @@ import (
 
 	"palisade/internal/security/bot"
 	"palisade/internal/security/csp"
+	"palisade/internal/security/egress"
 	"palisade/internal/security/ratelimit"
 	"palisade/internal/storage"
 
@@ -89,10 +90,9 @@ var proxyBuffers = &copyBuffers{sync.Pool{New: func() any {
 
 var backendTransport = &http.Transport{
 	Proxy: http.ProxyFromEnvironment,
-	DialContext: (&net.Dialer{
-		Timeout:   5 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).DialContext,
+	// The dial refuses cloud metadata addresses on the resolved IP (#270);
+	// Validate only sees the DNS answer at save time.
+	DialContext:           egress.Dialer(5 * time.Second).DialContext,
 	ResponseHeaderTimeout: 10 * time.Second,
 	ForceAttemptHTTP2:     true,
 	// Without MaxIdleConnsPerHost Go keeps only 2 idle conns per backend, so
@@ -867,7 +867,7 @@ func Validate(backend string) error {
 	}
 	if ips, err := net.LookupHost(host); err == nil {
 		for _, ip := range ips {
-			if metadataDenylist[ip] {
+			if a, err := netip.ParseAddr(ip); metadataDenylist[ip] || (err == nil && egress.Blocked(a)) {
 				return fmt.Errorf("backend host %q resolves to a cloud metadata endpoint, not a valid backend", host)
 			}
 		}
@@ -923,7 +923,8 @@ func ValidateBackends(backends []string, healthPath string, healthInterval int) 
 // is the only target this probe should ever contact.
 func Probe(backend string) error {
 	client := &http.Client{
-		Timeout: probeTimeout,
+		Transport: backendTransport,
+		Timeout:   probeTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

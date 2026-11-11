@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"palisade/internal/security/egress"
 	"palisade/internal/storage"
 )
 
@@ -38,7 +39,7 @@ func New(getConfig func() (storage.WebhookConfig, error)) *Pusher {
 	p := &Pusher{
 		queue:     make(chan storage.RequestLog, 500),
 		stop:      make(chan struct{}),
-		client:    &http.Client{Timeout: 5 * time.Second},
+		client:    egress.Client(5 * time.Second),
 		getConfig: getConfig,
 	}
 	go p.run()

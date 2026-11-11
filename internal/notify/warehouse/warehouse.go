@@ -39,6 +39,7 @@ import (
 	"sync"
 	"time"
 
+	"palisade/internal/security/egress"
 	"palisade/internal/storage"
 )
 
@@ -126,7 +127,7 @@ func New(rawURL string, st store) (*Sink, error) {
 	s := &Sink{
 		base:     u.Scheme + "://" + u.Host,
 		database: database,
-		client:   &http.Client{Timeout: 30 * time.Second},
+		client:   egress.Client(30 * time.Second),
 		store:    st,
 		queue:    make(chan storage.RequestLog, queueSize),
 		stop:     make(chan struct{}),

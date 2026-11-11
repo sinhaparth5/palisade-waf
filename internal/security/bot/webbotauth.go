@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"palisade/internal/security/egress"
 )
 
 // Web Bot Auth (issue #233, draft-ietf-webbotauth-httpsig-protocol): the
@@ -38,6 +40,7 @@ const (
 // wbaClient never follows redirects (the draft forbids it) and gives up fast.
 var wbaClient = &http.Client{
 	Timeout:       5 * time.Second,
+	Transport:     egress.Transport,
 	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 }
 

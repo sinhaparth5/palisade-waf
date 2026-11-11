@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"palisade/internal/security/egress"
 	"palisade/internal/storage"
 )
 
@@ -55,7 +56,7 @@ func Send(cfg storage.EmailConfig, subject, textBody, htmlBody string) error {
 	}
 
 	addr := net.JoinHostPort(smtpHost, strconv.Itoa(smtpPort))
-	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	dialer := egress.Dialer(10 * time.Second)
 	// Implicit TLS from the first byte.
 	conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: smtpHost})
 	if err != nil {

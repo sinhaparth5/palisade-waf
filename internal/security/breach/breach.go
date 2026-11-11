@@ -20,6 +20,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"palisade/internal/security/egress"
 )
 
 // DefaultURL is the public range endpoint; the 5-character prefix is appended.
@@ -59,7 +61,7 @@ func New(baseURL string) *Checker {
 	if baseURL == "" {
 		baseURL = DefaultURL
 	}
-	return &Checker{url: baseURL, client: &http.Client{Timeout: Timeout}, cache: map[string]entry{}}
+	return &Checker{url: baseURL, client: egress.Client(Timeout), cache: map[string]entry{}}
 }
 
 // Leaked reports whether password appears in a known breach. ok is false

@@ -13,6 +13,7 @@ Unreleased — older entries stay available in their git tags and GitHub release
 rather than growing this file forever.
 
 ## [Unreleased]
+- (#270) Block cloud metadata addresses at connect time for every outbound request
 
 ## [3.2.2] - 2026-11-11
 

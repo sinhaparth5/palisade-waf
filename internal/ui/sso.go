@@ -19,6 +19,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"golang.org/x/oauth2"
 
+	"palisade/internal/security/egress"
 	"palisade/internal/storage"
 )
 
@@ -45,7 +46,7 @@ func (h *Handler) ssoCallbackURL(c echo.Context) string {
 // for the key set.
 func ssoContext() (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), ssoTimeout)
-	return oidc.ClientContext(ctx, &http.Client{Timeout: ssoTimeout}), cancel
+	return oidc.ClientContext(ctx, egress.Client(ssoTimeout)), cancel
 }
 
 func (h *Handler) ssoClient(ctx context.Context, c echo.Context, cfg storage.SSOConfig) (*oidc.Provider, *oauth2.Config, error) {

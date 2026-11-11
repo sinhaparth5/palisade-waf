@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"palisade/internal/security/egress"
 	"palisade/internal/storage"
 )
 
@@ -38,7 +39,7 @@ func New(db *storage.DB, reloadIPBL func()) *Worker {
 	w := &Worker{
 		db:         db,
 		reloadIPBL: reloadIPBL,
-		client:     &http.Client{Timeout: 30 * time.Second},
+		client:     egress.Client(30 * time.Second),
 		ticker:     time.NewTicker(30 * time.Minute),
 		csTicker:   time.NewTicker(crowdSecPoll),
 		stop:       make(chan struct{}),

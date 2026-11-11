@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"palisade/internal/security/egress"
 )
 
 // typesafeAPIURL is TypeSafe's System One endpoint. Not configurable — like
@@ -55,7 +57,7 @@ type typesafeClient struct {
 }
 
 func newTypeSafeClient(apiKey string) *typesafeClient {
-	return &typesafeClient{apiKey: apiKey, baseURL: typesafeAPIURL, http: &http.Client{Timeout: typesafeTimeout}}
+	return &typesafeClient{apiKey: apiKey, baseURL: typesafeAPIURL, http: egress.Client(typesafeTimeout)}
 }
 
 type typesafeRequest struct {

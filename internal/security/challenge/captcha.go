@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"io"
 	"log"
-	"net/http"
 	"net/url"
 	"time"
+
+	"palisade/internal/security/egress"
 )
 
 // CAPTCHA fallback (issue #133): when the PoW can't run — crypto.subtle is
@@ -31,7 +32,7 @@ var captchaScripts = map[string]string{
 	"hcaptcha":  "https://js.hcaptcha.com/1/api.js",
 }
 
-var captchaClient = &http.Client{Timeout: 5 * time.Second}
+var captchaClient = egress.Client(5 * time.Second)
 
 // ValidCaptchaProvider reports whether p names a supported provider.
 func ValidCaptchaProvider(p string) bool {
