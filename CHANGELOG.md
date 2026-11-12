@@ -14,18 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.2.7] - 2026-11-12
+
 - (#285) Remove Redis leftovers and historical comments
 - (#286) Raise test coverage on the least-covered files
 - (#287) Make main.go testable and stop ignoring it in Codecov
 
-## [3.2.6] - 2026-11-12
-
-- (#284) Shrink the embedded icon and flag assets
-- (#283) Enforce mode for the script inventory CSP
-- (#282) Per-service request policy: methods, content types and body size
-- (#281) Harden backend cookies and response headers per service
-- (#267) Owner-only pprof endpoint
-- (#266) Remove JA3 fingerprinting
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.6...main
-[3.2.6]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.5...v3.2.6
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.7...main
+[3.2.7]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.6...v3.2.7
