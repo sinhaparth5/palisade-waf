@@ -45,7 +45,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 --trusted-crawlers ua=cidr[,cidr];ua2=ip   --db waf.db (DSN for mysql/postgres)   --db-driver sqlite|mysql|postgres
 --certs ./certs   --waf-rules dir   --geo-db path (empty = bundled)   --retention 30 (0 = forever)
 --prune-interval 0 (Docker passes 24h)   --tls-cert/--tls-key   --access-log path (+ -max-size-mb, -max-backups)
---db-key-file path (encrypt secrets at rest)   --warehouse-url (ClickHouse HTTP endpoint)
+--db-key-file path (encrypt secrets at rest)
 --admin-allow ip,cidr (who may reach /admin)   --admin-listen addr (plain-HTTP admin-only listener)
 --max-conns-per-ip 256 (concurrent TCP conns per client; 0 = off)
 ```
@@ -63,7 +63,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - `openPaths` (`/robots.txt`, `/sitemap.xml`, `/sitemap_index.xml`, `/llms.txt`; bodiless, query-less GET/HEAD) skip everything but the WAF, even for banned IPs.
 - `canonicalRedirect` 301/308s host aliases to the canonical host before any other stage.
 - Unknown `/_cz/*` requests (e.g. `HEAD /_cz/challenge` — Echo doesn't route HEAD to GET) are 404'd, never challenged or proxied.
-- Logging is fire-and-forget: `DB.QueueRequest` → buffered `logQueue` (10000) → one `runLogWorker` goroutine, which also fans out to broadcast, webhook, autoban, threat score, access log and warehouse hooks. Hooks run on that goroutine, so keep them in-memory; spawn goroutines for slow work.
+- Logging is fire-and-forget: `DB.QueueRequest` → buffered `logQueue` (10000) → one `runLogWorker` goroutine, which also fans out to broadcast, webhook, autoban, threat score and access log hooks. Hooks run on that goroutine, so keep them in-memory; spawn goroutines for slow work.
 - `Server: Palisade` is forced in both `handler.go` and `services/registry.go`'s `ModifyResponse`.
 - `proxy.responseWriter` must explicitly implement `Hijack` and `Flush` or WebSockets break.
 - `proxy.ConnLimiter` (`--max-conns-per-ip`, issue #272) wraps the TCP listeners below TLS and closes connections over the cap at accept, keyed by `ratelimit.ClientKey`. Trusted proxies, Cloudflare peers, loopback and trusted IPs are exempt; QUIC and the admin listener are not capped. `hardenServer` sets HTTP/2 `MaxConcurrentStreams` (100, same for HTTP/3 via `quic.Config`).
@@ -167,7 +167,6 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - Webhooks (`notify/webhook`): `generic`/`slack`/`discord` payloads; `generic` must stay byte-identical. Category logic is shared by `shouldSend` and formatting.
 - Daily email (`notify/mailer`): Cloudflare Email Service only (endpoint and sender hardcoded); the token is never echoed back by the UI.
 - Access log (`notify/accesslog`): nginx combined, in-house rotation. Close it after the DB drains (defer order in `serve`).
-- ClickHouse warehouse (`notify/warehouse`): mirror only, the operational DB stays the source of truth. Dimension tables are an **allowlist** in `snapshot()`; never ship secret-bearing tables or `headers_json`. Schema is created by the sink at startup, not an initdb script.
 
 ## Layout
 

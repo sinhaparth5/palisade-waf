@@ -79,7 +79,7 @@ KEY_FILE="${VAR_DIR}/certs/self-signed.key"
 # directory (or a waf.db backup) alone must not also hand over the key that
 # decrypts the secrets stored inside it.
 DB_KEY_FILE="/etc/${BINARY_NAME}/db.key"
-# Extra server flags (--trusted-proxies, --warehouse-url, ...) live here, read
+# Extra server flags (--trusted-proxies, --access-log, ...) live here, read
 # by the unit as $PALISADE_FLAGS. Created once and never rewritten, so flags
 # added by hand survive the unit being regenerated on every upgrade (#163).
 FLAGS_FILE="/etc/${BINARY_NAME}/${BINARY_NAME}.env"

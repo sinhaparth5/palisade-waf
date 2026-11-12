@@ -50,7 +50,6 @@ type DB struct {
 	autobanFn     func(RequestLog)
 	threatScoreFn func(RequestLog)
 	accessLogFn   func(RequestLog)
-	warehouseFn   func(RequestLog)
 	secretGCM     cipher.AEAD // non-nil = secrets-at-rest encryption active (see secretenc.go)
 	bg            sync.WaitGroup
 }
@@ -87,15 +86,6 @@ func (db *DB) SetBroadcastFn(fn func(RequestLog)) {
 // writer without coupling storage to the accesslog package.
 func (db *DB) SetAccessLogFn(fn func(RequestLog)) {
 	db.accessLogFn = fn
-}
-
-// SetWarehouseFn registers a callback invoked (from the log worker
-// goroutine) after each successful DB insert, to copy the entry into an
-// external analytics warehouse. Like every other fan-out hook the callback
-// must be fast; warehouse.Sink.Push satisfies that by being a non-blocking
-// channel send onto its own batching goroutine.
-func (db *DB) SetWarehouseFn(fn func(RequestLog)) {
-	db.warehouseFn = fn
 }
 
 // SetThreatScoreFn registers a callback invoked (from the log worker
@@ -210,7 +200,7 @@ func (db *DB) runLogWorker() {
 }
 
 // runLogWriter is stage two: it writes queued entries in batches and then
-// runs the hooks that need the row id (live log, webhook, warehouse). Exits
+// runs the hooks that need the row id (live log, webhook). Exits
 // once writeQueue is closed and drained.
 func (db *DB) runLogWriter() {
 	defer close(db.logDone)
@@ -244,9 +234,6 @@ func (db *DB) runLogWriter() {
 			}
 			if db.webhookFn != nil {
 				db.webhookFn(e)
-			}
-			if db.warehouseFn != nil {
-				db.warehouseFn(e)
 			}
 		}
 	}

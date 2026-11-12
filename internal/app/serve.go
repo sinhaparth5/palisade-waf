@@ -22,7 +22,6 @@ import (
 	"palisade/internal/notify/accesslog"
 	"palisade/internal/notify/mailer"
 	"palisade/internal/notify/metrics"
-	"palisade/internal/notify/warehouse"
 	"palisade/internal/notify/webhook"
 	"palisade/internal/proxy"
 	"palisade/internal/security/adaptive"
@@ -79,7 +78,6 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	accessLogMaxSizeMB := fs.Int("access-log-max-size-mb", 100, "rotate access log after this many MB")
 	accessLogMaxBackups := fs.Int("access-log-max-backups", 5, "number of rotated access log files to keep")
 	dbKeyFile := fs.String("db-key-file", "", "key file for AES-256-GCM encryption of stored secrets at rest (empty = plaintext)")
-	warehouseURL := fs.String("warehouse-url", "", "ClickHouse HTTP endpoint to mirror telemetry to for analytics, e.g. http://clickhouse:8123/?database=waf (empty = disabled)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -273,19 +271,6 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 		}
 		defer accessLogWriter.Close()
 		db.SetAccessLogFn(accessLogWriter.Push)
-	}
-
-	// ClickHouse analytics mirror (issue #94). A failure here is fatal at
-	// startup — a silently non-reporting warehouse is worse than a refused
-	// boot — but once running, Push drops rather than blocking the log
-	// worker. Same defer order as the access log.
-	if *warehouseURL != "" {
-		sink, err := warehouse.New(*warehouseURL, db)
-		if err != nil {
-			return fmt.Errorf("warehouse: %w", err)
-		}
-		defer sink.Stop()
-		db.SetWarehouseFn(sink.Push)
 	}
 
 	// Bot protection settings come entirely from the DB (managed via Settings page).

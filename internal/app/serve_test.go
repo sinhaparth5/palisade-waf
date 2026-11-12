@@ -213,7 +213,6 @@ func TestServeStartupErrors(t *testing.T) {
 		"db driver":          {"--db-driver", "nosuch"},
 		"db key":             {"--db-key-file", short},
 		"access log":         {"--access-log", filepath.Join(short, "a.log")},
-		"warehouse":          {"--warehouse-url", "ftp://nowhere"},
 		"listen taken":       {"--listen", busy},
 		"admin-listen taken": {"--admin-listen", busy},
 		"redirect taken":     {"--listen", busy, "--listen-tls", "127.0.0.1:0"},

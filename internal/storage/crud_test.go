@@ -390,7 +390,6 @@ func TestLogWorkerFansOut(t *testing.T) {
 	db.SetAutobanFn(hook("autoban"))
 	db.SetThreatScoreFn(hook("threatscore"))
 	db.SetAccessLogFn(hook("accesslog"))
-	db.SetWarehouseFn(hook("warehouse"))
 
 	if db.QueueDepth() != 0 {
 		t.Fatal("queue not empty at start")
@@ -402,14 +401,14 @@ func TestLogWorkerFansOut(t *testing.T) {
 		mu.Lock()
 		n := len(seen)
 		mu.Unlock()
-		if n == 6 {
+		if n == 5 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(seen) != 6 {
+	if len(seen) != 5 {
 		t.Fatalf("hooks called = %v", seen)
 	}
 	mustNoErr(t, db.Ping(context.Background()))
@@ -426,15 +425,17 @@ func TestQueueRequestAfterClose(t *testing.T) {
 func TestReputationListings(t *testing.T) {
 	db := openTestDB(t)
 	mustNoErr(t, db.UpsertIPThreatScore(IPThreatScore{IP: "1.1.1.1", Total: 50, UpdatedAt: time.Now()}))
+	if s, ok, _ := db.GetIPThreatScore("1.1.1.1"); !ok || s.Total != 50 {
+		t.Errorf("threat score = %+v", s)
+	}
+	var hits, blockedHits int
 	for _, blocked := range []bool{true, false} {
-		_, _, err := db.BumpJA4Reputation("t13d_abc", blocked)
+		var err error
+		hits, blockedHits, err = db.BumpJA4Reputation("t13d_abc", blocked)
 		mustNoErr(t, err)
 	}
-	if s, _ := db.ListIPThreatScores(); len(s) != 1 || s[0].Total != 50 {
-		t.Errorf("threat scores = %+v", s)
-	}
-	if r, _ := db.ListJA4Reputation(); len(r) != 1 || r[0].Hits != 2 || r[0].BlockedHits != 1 {
-		t.Errorf("ja4 = %+v", r)
+	if hits != 2 || blockedHits != 1 {
+		t.Errorf("ja4 = %d/%d", hits, blockedHits)
 	}
 }
 

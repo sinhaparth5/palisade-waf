@@ -21,13 +21,13 @@ Walk the diff with these questions. Flag anything you can't answer from the code
 - Does `go test -race` pass for the touched package?
 
 **Failure paths**
-- What happens when the DB, a backend, Varnish, ClickHouse, SMTP or a webhook endpoint is down or slow? A dependency outage must degrade the feature, never 502 traffic or stall the log worker.
+- What happens when the DB, a backend, Varnish, SMTP or a webhook endpoint is down or slow? A dependency outage must degrade the feature, never 502 traffic or stall the log worker.
 - Are errors returned/logged, not swallowed? Does a failure fail **closed** for security checks (auth, 2FA, WAF, CSRF) and **open** only where that's the documented intent (Varnish bypass, health fallback)?
 - Is a partial write possible (half-saved config, rule added but blocklist not reloaded)?
 
 **Security**
 - New admin route: behind `sessionAuth` + CSRF? Mutating and audited? Sensitive response on a POST, not a GET?
-- New secret: in `secretMetaKeys`, accessed via `getSecretMeta`/`setSecretMeta`, never echoed back to the UI, excluded from audit summaries and the warehouse?
+- New secret: in `secretMetaKeys`, accessed via `getSecretMeta`/`setSecretMeta`, never echoed back to the UI, excluded from audit summaries?
 - Does the change widen a bypass (open paths, challenge exemptions, trusted crawlers, verdict cache key)?
 
 **Data and upgrades**
