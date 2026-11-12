@@ -145,6 +145,14 @@ func (h *Handler) RegisterAPI(e *echo.Echo) {
 	api.GET("/rule-exceptions", h.APIListRuleExceptions)
 	api.GET("/vpatches", h.APIListVPatches)
 
+	// Writes for the same three (issue #262).
+	api.POST("/geo-rules", h.APICreateGeoRule, h.requireWrite)
+	api.DELETE("/geo-rules/:id", h.APIDeleteGeoRule, h.requireWrite)
+	api.POST("/rule-exceptions", h.APICreateRuleException, h.requireWrite)
+	api.DELETE("/rule-exceptions/global/:id", h.APIDeleteRuleException, h.requireWrite)
+	api.DELETE("/rule-exceptions/services/:id", h.APIDeleteRuleException, h.requireWrite)
+	api.PUT("/vpatches/:id", h.APISetVPatch, h.requireWrite)
+
 	// Same exposition as the session-authed /metrics, reachable with a bearer
 	// key so a Prometheus scrape job can authenticate (a read-only key is enough).
 	api.GET("/metrics", echo.WrapHandler(metrics.Handler()))
@@ -776,4 +784,213 @@ func (h *Handler) APIListVPatches(c *echo.Context) error {
 		return apiError(c, http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusOK, views)
+}
+
+// ── Geo rules, rule exceptions, virtual patches (issue #262) ─────────────────
+
+type apiGeoRuleRequest struct {
+	AppName     string `json:"app_name"`
+	CountryCode string `json:"country_code"`
+	RuleType    string `json:"rule_type"` // "block" | "allow"
+}
+
+func (h *Handler) APICreateGeoRule(c *echo.Context) error {
+	var req apiGeoRuleRequest
+	if err := c.Bind(&req); err != nil {
+		return apiError(c, http.StatusBadRequest, "invalid JSON body")
+	}
+	code := strings.ToUpper(strings.TrimSpace(req.CountryCode))
+	if len(code) != 2 || strings.Trim(code, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" {
+		return apiError(c, http.StatusBadRequest, "country_code must be a two-letter ISO code")
+	}
+	if req.RuleType != "block" && req.RuleType != "allow" {
+		return apiError(c, http.StatusBadRequest, "rule_type must be block or allow")
+	}
+	if req.AppName != "" && !h.serviceExists(req.AppName) {
+		return apiError(c, http.StatusBadRequest, "unknown service")
+	}
+	if err := h.db.AddGeoRule(req.AppName, code, req.RuleType); err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	if err := h.reloadGeo(); err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusCreated, map[string]string{"app_name": req.AppName, "country_code": code, "rule_type": req.RuleType})
+}
+
+func (h *Handler) APIDeleteGeoRule(c *echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return apiError(c, http.StatusBadRequest, "invalid id")
+	}
+	if err := h.db.RemoveGeoRule(id); err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	if err := h.reloadGeo(); err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// reloadGeo applies geo rule changes to the blocker and the threat score,
+// as the admin UI handlers do.
+func (h *Handler) reloadGeo() error {
+	if err := h.geoBl.Reload(h.db); err != nil {
+		return err
+	}
+	rules, err := h.db.ListGeoRules()
+	if err != nil {
+		return err
+	}
+	h.scorer.ReloadGeoRules(rules)
+	return nil
+}
+
+func (h *Handler) serviceExists(name string) bool {
+	_, ok := h.registry.Proxy(name)
+	return ok
+}
+
+type apiRuleExceptionRequest struct {
+	RuleID  int    `json:"rule_id"`
+	Service string `json:"service"` // "" = every service
+	Reason  string `json:"reason"`
+}
+
+// APICreateRuleException turns a WAF rule off globally or for one service.
+// Saving an existing exception again updates its reason.
+func (h *Handler) APICreateRuleException(c *echo.Context) error {
+	var req apiRuleExceptionRequest
+	if err := c.Bind(&req); err != nil {
+		return apiError(c, http.StatusBadRequest, "invalid JSON body")
+	}
+	if req.RuleID <= 0 {
+		return apiError(c, http.StatusBadRequest, "rule_id must be a positive number")
+	}
+	req.Service, req.Reason = strings.TrimSpace(req.Service), strings.TrimSpace(req.Reason)
+	if req.Service != "" && !h.serviceExists(req.Service) {
+		return apiError(c, http.StatusBadRequest, "unknown service")
+	}
+	if err := h.setRuleOff(req.RuleID, req.Service, req.Reason); err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusCreated, req)
+}
+
+// APIDeleteRuleException removes one exception by the row id the list
+// returns under "global" or "services".
+func (h *Handler) APIDeleteRuleException(c *echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return apiError(c, http.StatusBadRequest, "invalid id")
+	}
+	if strings.Contains(c.Path(), "/rule-exceptions/global/") {
+		err = h.db.EnableWAFRule(id)
+	} else {
+		err = h.db.EnableWAFRuleForService(id)
+	}
+	if err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	h.reloadWAF()
+	return c.NoContent(http.StatusNoContent)
+}
+
+// setRuleOff stores a global or per-service exception and rebuilds the WAF.
+func (h *Handler) setRuleOff(ruleID int, service, reason string) error {
+	var err error
+	if service == "" {
+		err = h.db.DisableWAFRule(ruleID, reason)
+	} else {
+		err = h.db.DisableWAFRuleForService(service, ruleID, reason)
+	}
+	if err != nil {
+		return err
+	}
+	h.reloadWAF()
+	return nil
+}
+
+type apiVPatchRequest struct {
+	Enabled *bool  `json:"enabled"`
+	Service string `json:"service"` // "" = every service
+	Reason  string `json:"reason"`
+}
+
+// APISetVPatch turns a virtual patch on or off, globally or for one service.
+// Off is an ordinary rule exception; on removes the matching one.
+func (h *Handler) APISetVPatch(c *echo.Context) error {
+	ruleID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return apiError(c, http.StatusBadRequest, "invalid id")
+	}
+	known := false
+	for _, p := range waf.VPatches() {
+		known = known || p.RuleID == ruleID
+	}
+	if !known {
+		return apiError(c, http.StatusNotFound, "no virtual patch with that rule id")
+	}
+	var req apiVPatchRequest
+	if err := c.Bind(&req); err != nil || req.Enabled == nil {
+		return apiError(c, http.StatusBadRequest, `body must be {"enabled": true|false}`)
+	}
+	req.Service = strings.TrimSpace(req.Service)
+	if req.Service != "" && !h.serviceExists(req.Service) {
+		return apiError(c, http.StatusBadRequest, "unknown service")
+	}
+	if !*req.Enabled {
+		reason := strings.TrimSpace(req.Reason)
+		if reason == "" {
+			reason = "Turned off via API"
+		}
+		if err := h.setRuleOff(ruleID, req.Service, reason); err != nil {
+			return apiError(c, http.StatusInternalServerError, err.Error())
+		}
+	} else if err := h.removeRuleOff(ruleID, req.Service); err != nil {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	}
+	return h.APIListVPatches(c)
+}
+
+// removeRuleOff deletes the exception for ruleID (global, or for service)
+// and rebuilds the WAF if there was one.
+func (h *Handler) removeRuleOff(ruleID int, service string) error {
+	var ids []int64
+	if service == "" {
+		rows, err := h.db.ListDisabledWAFRules()
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			if r.RuleID == ruleID {
+				ids = append(ids, r.ID)
+			}
+		}
+	} else {
+		rows, err := h.db.ListWAFServiceExceptions()
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			if r.RuleID == ruleID && r.ServiceName == service {
+				ids = append(ids, r.ID)
+			}
+		}
+	}
+	for _, id := range ids {
+		var err error
+		if service == "" {
+			err = h.db.EnableWAFRule(id)
+		} else {
+			err = h.db.EnableWAFRuleForService(id)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if len(ids) > 0 {
+		h.reloadWAF()
+	}
+	return nil
 }

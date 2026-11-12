@@ -14,6 +14,7 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#262) REST API write endpoints for geo rules, rule exceptions and virtual patches
 - (#280) Per-path rate limits per service
 
 ## [3.2.4] - 2026-11-12
