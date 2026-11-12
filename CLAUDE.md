@@ -68,7 +68,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - `Server: Palisade` is forced in both `handler.go` and `services/registry.go`'s `ModifyResponse`.
 - `proxy.responseWriter` must explicitly implement `Hijack` and `Flush` or WebSockets break.
 - `proxy.ConnLimiter` (`--max-conns-per-ip`, issue #272) wraps the TCP listeners below TLS and closes connections over the cap at accept, keyed by `ratelimit.ClientKey`. Trusted proxies, Cloudflare peers, loopback and trusted IPs are exempt; QUIC and the admin listener are not capped. `hardenServer` sets HTTP/2 `MaxConcurrentStreams` (100, same for HTTP/3 via `quic.Config`).
-- Client IP: always `proxy.ClientIP` (CF header only from Cloudflare peers, XFF only from `--trusted-proxies`, walked from the right), **never** echo's `c.RealIP()`.
+- Client IP: always `proxy.ClientIP` (CF header only from Cloudflare peers, XFF only from `--trusted-proxies`, walked from the right), **never** echo's `c.RealIP()`. A link-local peer's `%zone` is dropped in `socketPeerIP`; `FuzzClientIP`/`FuzzClientKey` check the resolution rules (issue #304).
 - Backends get `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP` rewritten from that resolved IP (`forwardClientIP`, applied to a clone so `captureHeaders` still logs what the client sent). The stock Director keeps client copies, so never forward `r` directly.
 - Trusted IPs (Settings, `services.Registry.Trusted`) skip IP/geo/challenge/rate-limit **and the WAF** on every path, and never trip honeypots.
 - IPv6 clients are keyed by /64 via `ratelimit.ClientKey` for rate limits, autoban, bans and threat-score cache. New per-client counters must use it; logs and manual rules keep the exact address.

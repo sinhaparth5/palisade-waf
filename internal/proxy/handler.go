@@ -982,8 +982,7 @@ func tlsInfo(r *http.Request) (version, cipher, sni string) {
 // When the WAF sits behind Cloudflare this is a CF edge node IP, not the
 // real client — real client IP is resolved separately by realIP().
 func proxyIP(r *http.Request) string {
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	return ip
+	return socketPeerIP(r.RemoteAddr)
 }
 
 // hop-by-hop headers that must not be forwarded and carry no diagnostic value.
@@ -1216,10 +1215,16 @@ func inNets(ip string, nets []*net.IPNet) bool {
 
 func socketPeerIP(remoteAddr string) string {
 	ip, _, err := net.SplitHostPort(remoteAddr)
-	if err == nil {
-		return ip
+	if err != nil {
+		ip = remoteAddr
 	}
-	return remoteAddr
+	// A link-local peer arrives as "fe80::1%eth0". The zone names our own
+	// interface, not the client, and no rule, trusted range or /64 key
+	// parses with it (issue #304).
+	if i := strings.IndexByte(ip, '%'); i >= 0 {
+		ip = ip[:i]
+	}
+	return ip
 }
 
 // normalizeIP converts IPv4-mapped IPv6 addresses (e.g. ::ffff:127.0.0.1) to

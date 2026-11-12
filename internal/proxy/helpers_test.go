@@ -32,7 +32,7 @@ func TestIPHelpers(t *testing.T) {
 	if len(got) != 4 || !inNets("203.0.113.7", got) || inNets("203.0.113.8", got) || !inNets("2001:db8::1", got) {
 		t.Errorf("trusted CIDRs = %v", got)
 	}
-	for in, want := range map[string]string{"1.2.3.4:80": "1.2.3.4", "no-port": "no-port", "[::1]:80": "::1"} {
+	for in, want := range map[string]string{"1.2.3.4:80": "1.2.3.4", "no-port": "no-port", "[::1]:80": "::1", "[fe80::1%eth0]:80": "fe80::1"} {
 		if got := socketPeerIP(in); got != want {
 			t.Errorf("socketPeerIP(%q) = %q", in, got)
 		}
@@ -68,6 +68,7 @@ func TestClientIP(t *testing.T) {
 		{"mapped IPv4 normalized", "192.0.2.10:1", map[string][]string{"X-Forwarded-For": {"::ffff:203.0.113.7"}}, "203.0.113.7"},
 		{"CF header from Cloudflare", "173.245.48.1:1", map[string][]string{"Cf-Connecting-Ip": {"203.0.113.7"}}, "203.0.113.7"},
 		{"CF header from elsewhere", "203.0.113.9:1", map[string][]string{"Cf-Connecting-Ip": {"1.1.1.1"}}, "203.0.113.9"},
+		{"link-local zone dropped", "[fe80::1%eth0]:1", nil, "fe80::1"},
 	}
 	for _, tc := range cases {
 		r := httptest.NewRequest("GET", "/", nil)
