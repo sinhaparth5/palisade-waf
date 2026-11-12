@@ -15,6 +15,7 @@ rather than growing this file forever.
 ## [Unreleased]
 
 - (#304) Fuzz client IP resolution
+- (#305) Fuzz edge JWT verification
 - (#310) Path-based checks can be bypassed with non-canonical paths
 - (#311) CSP inventory can be filled with fake reports to silence new-script alerts
 - (#312) Bot challenge pass cookie is not bound to the client
