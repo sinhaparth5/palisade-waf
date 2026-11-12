@@ -712,6 +712,11 @@ func TestChangeCredentialsAndBackup(t *testing.T) {
 		!strings.Contains(rec.Header().Get("Content-Disposition"), "palisade-") {
 		t.Errorf("backup: %d %q", rec.Code, rec.Header().Get("Content-Disposition"))
 	}
+	rec = env.do("POST", "/admin/settings/config-export", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"palisade-config"`) ||
+		!strings.Contains(rec.Header().Get("Content-Disposition"), "palisade-config-") {
+		t.Errorf("config export: %d %q", rec.Code, rec.Header().Get("Content-Disposition"))
+	}
 
 	for _, tc := range []struct {
 		f    []string

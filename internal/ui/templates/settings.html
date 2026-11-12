@@ -114,6 +114,18 @@
             </button>
           </form>
         </div>
+        <div class="card p-5">
+          <h3 class="font-mono text-[14px] font-medium uppercase tracking-[.04em] text-ink mb-1">Configuration export</h3>
+          <p class="text-[13px] text-slate-500 mb-4">Downloads services, rules, users and settings as JSON, without the request log. Works on every database. Secrets stay sealed under <code class="font-mono text-xs bg-surface px-1 py-0.5 rounded-sm">--db-key-file</code>, or are left out without one. Load it with <code class="font-mono text-xs bg-surface px-1 py-0.5 rounded-sm">palisade config import</code>.</p>
+          <form action="{{.AdminPath}}/settings/config-export" method="POST">
+            <input type="hidden" name="_csrf" value="{{.CSRF}}">
+            <button type="submit"
+                    class="inline-flex items-center gap-2 rounded-md bg-surface border border-line text-slate-700 text-[13px] font-medium px-5 py-2 hover:bg-canvas transition-colors cursor-pointer">
+              <i class="hgi hgi-stroke hgi-rounded hgi-download-02 text-base text-slate-500"></i>
+              Download config
+            </button>
+          </form>
+        </div>
       {{end}}
       <!-- ── WAF hot-reload ────────────────────────────────────────────────────── -->
         <div class="card p-5">

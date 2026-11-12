@@ -566,6 +566,8 @@ func (h *Handler) Register(e *echo.Echo) {
 		// challenge secret), so it must never be reachable via cross-site
 		// top-level navigation.
 		g.POST("/settings/backup", h.BackupDB),
+		// POST for the same reason: users, password hashes and sealed secrets.
+		g.POST("/settings/config-export", h.ExportConfig),
 	)
 }
 
@@ -4004,6 +4006,17 @@ func (h *Handler) BackupDB(c *echo.Context) error {
 	// Echo v5 reads files through an fs.FS, which rejects absolute paths.
 	c.Response().Header().Set(echo.HeaderContentDisposition, `attachment; filename="`+filename+`"`)
 	return c.FileFS(filepath.Base(tmp), os.DirFS(filepath.Dir(tmp)))
+}
+
+// ExportConfig downloads the configuration as JSON (issue #263).
+func (h *Handler) ExportConfig(c *echo.Context) error {
+	var buf bytes.Buffer
+	if err := h.db.ExportConfig(&buf); err != nil {
+		return fmt.Errorf("config export: %w", err)
+	}
+	filename := fmt.Sprintf("palisade-config-%s.json", time.Now().Format("2006-01-02"))
+	c.Response().Header().Set(echo.HeaderContentDisposition, `attachment; filename="`+filename+`"`)
+	return c.Blob(http.StatusOK, "application/json", buf.Bytes())
 }
 
 func (h *Handler) render(c *echo.Context, page string, data map[string]any) error {

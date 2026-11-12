@@ -47,7 +47,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 --max-conns-per-ip 256 (concurrent TCP conns per client; 0 = off)
 ```
 
-**Subcommands**: `prune [--retention d] [--vacuum]`, `setup --admin-email ...` (password on stdin, idempotent), `build-dsn --driver ...` (password on stdin; correctly escapes DSNs), `gencert --hosts ...`, `healthcheck [--url]` (scratch image has no curl), `--version`.
+**Subcommands**: `prune [--retention d] [--vacuum]`, `setup --admin-email ...` (password on stdin, idempotent), `build-dsn --driver ...` (password on stdin; correctly escapes DSNs), `config export [--out f] | import [--replace] f` (needs `--db-key-file` for sealed secrets), `gencert --hosts ...`, `healthcheck [--url]` (scratch image has no curl), `--version`.
 
 ## Request pipeline
 
@@ -108,6 +108,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - SQLite PRAGMAs go in the DSN (`_pragma=...`), not an `Exec` — only DSN params reach every pooled connection.
 - **Never use SQLite `date()`/`strftime()` on `requests.ts`** — modernc stores Go's `.String()` format and they return NULL. Bucket times in Go with `>=`/`<=` (see `GetHourlyTraffic`). Always scan/insert timestamps as `time.Time`.
 - Bolt-on features get new tables (`CREATE TABLE IF NOT EXISTS`) rather than `ALTER TABLE`, e.g. `waf_service_rule_exceptions`, `ip_threat_scores`, `ja4_reputation`.
+- Config export/import (`configfile.go`, issue #263; `palisade config`, Settings "Configuration export", owner-only): JSON of the `configSteps` tables (shared with `MigrateConfigTo`), both ways through a temp SQLite file and the same per-table copy code. The temp file seals with the source's key, so secrets stay `enc:v1:`; without a key any unsealed secret (meta secrets, webhook secret, TOTP columns) is blanked. Import refuses a DB that already has config unless `replace` (empties the config tables first), and checks column names against the real table. A new config table goes in `configSteps`; a new secret column outside meta goes in `secretColumns`.
 - The live DB connection always comes from CLI flags; the Settings "Database connection" card only prefills, tests and copies config tables (`MigrateConfigTo`). `BackupTo` (`VACUUM INTO`) is SQLite-only.
 - `DB.Close` is idempotent and `QueueRequest` after it is a silent drop (a handler can outlive a timed-out shutdown); keep that guard if you touch the log queue.
 - Pruning is not automatic unless `--prune-interval` is set; `PruneOldRequests` deletes in batches of 2000. `VACUUM` lives only in the one-shot `prune --vacuum`, never in the running server.

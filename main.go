@@ -20,6 +20,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"math/big"
@@ -80,6 +81,11 @@ func main() {
 			return
 		case "setup":
 			runSetup(os.Args[2:])
+			return
+		case "config":
+			if err := runConfig(os.Args[2:], os.Stdin, os.Stdout); err != nil {
+				log.Fatalf("config: %v", err)
+			}
 			return
 		case "gencert":
 			runGencert(os.Args[2:])
@@ -1104,6 +1110,69 @@ func dbDiskSize(path string) int64 {
 	return total
 }
 
+// runConfig is `palisade config export|import` (issue #263): the config
+// tables as one JSON file. export writes to --out or stdout; import reads a
+// file argument or stdin ("-") and refuses a database with config unless
+// --replace. Secrets stay sealed under --db-key-file, or are left out of an
+// export without one.
+func runConfig(args []string, stdin io.Reader, stdout io.Writer) error {
+	if len(args) == 0 || (args[0] != "export" && args[0] != "import") {
+		return errors.New("usage: palisade config export [--out file] | import [--replace] file (plus --db, --db-driver, --db-key-file)")
+	}
+	cmd := args[0]
+	fs := flag.NewFlagSet("config "+cmd, flag.ContinueOnError)
+	dbPath := fs.String("db", "waf.db", "database path (sqlite) or DSN (mysql/postgres)")
+	dbDriver := fs.String("db-driver", "sqlite", "database driver: sqlite, mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)")
+	keyFile := fs.String("db-key-file", "", "the server's key file: secrets are exported sealed under it, and sealed files need it to import")
+	out := fs.String("out", "", "export: write here instead of stdout (created 0600)")
+	replace := fs.Bool("replace", false, "import: empty the config tables first instead of refusing a database that has config")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	db, err := storage.OpenWithDriver(*dbDriver, *dbPath)
+	if err != nil {
+		return fmt.Errorf("db: %w", err)
+	}
+	defer db.Close()
+	if *keyFile != "" {
+		if err := enableDBEncryption(db, *keyFile); err != nil {
+			return fmt.Errorf("db-key-file: %w", err)
+		}
+	}
+
+	if cmd == "export" {
+		w := stdout
+		if *out != "" {
+			f, err := os.OpenFile(*out, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec // G703: the operator's own --out path
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			w = f
+		}
+		return db.ExportConfig(w)
+	}
+
+	if fs.NArg() != 1 {
+		return errors.New("import needs one file argument (- for stdin)")
+	}
+	r := stdin
+	if fs.Arg(0) != "-" {
+		f, err := os.Open(fs.Arg(0)) //nolint:gosec // G703: the operator's own file argument
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		r = f
+	}
+	rep, err := db.ImportConfig(r, *replace)
+	if err != nil {
+		return err
+	}
+	log.Printf("config import: %d rows in %d tables", rep.TotalRows, len(rep.Tables))
+	return nil
+}
+
 // enableDBEncryption turns on secrets-at-rest encryption from a key file.
 // The AES-256 key is SHA-256 of the file's whitespace-trimmed contents rather
 // than the raw bytes, so any high-entropy file works regardless of format
@@ -1112,7 +1181,7 @@ func dbDiskSize(path string) int64 {
 // carry at least 32 bytes so a short passphrase can't quietly stand in for
 // real key material — hashing would mask how weak it is.
 func enableDBEncryption(db *storage.DB, path string) error {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G703: the operator's own --db-key-file
 	if err != nil {
 		return err
 	}

@@ -82,43 +82,53 @@ func (db *DB) MigrateConfigTo(targetDriver, targetDSN string) (MigrationReport, 
 		return MigrationReport{}, fmt.Errorf("open target: %w", err)
 	}
 	defer target.Close()
+	return db.migrateConfigInto(target)
+}
 
+// configStep copies one config table from source to target.
+type configStep struct {
+	table string
+	fn    func(source, target *DB, overriding bool) (int, error)
+	// hasIdentitySeq marks tables with an actual auto-increment/identity
+	// id column (as opposed to webhook_config's literal non-identity
+	// PK, or tables with no id column at all) — see the fixup call
+	// in migrateConfigInto for why this matters on a Postgres target.
+	hasIdentitySeq bool
+}
+
+// configSteps is every config table, in dependency order. MigrateConfigTo
+// and the config export/import (configfile.go) both use it.
+var configSteps = []configStep{
+	{"meta", migrateMetaTable, false},
+	{"admin_users", migrateAdminUsersTable, true},
+	{"admin_sso_identities", migrateSSOIdentitiesTable, false},
+	{"certificates", migrateCertificatesTable, true},
+	{"services", migrateServicesTable, true},
+	{"service_openapi", migrateServiceOpenAPITable, false},
+	{"service_mtls", migrateServiceMTLSTable, false},
+	{"service_mcp", migrateServiceMCPTable, false},
+	{"service_jwt", migrateServiceJWTTable, false},
+	{"service_rate_rules", migrateServiceRateRulesTable, false},
+	{"service_gate", migrateServiceGateTable, false},
+	{"service_csp", migrateServiceCSPTable, false},
+	{"csp_scripts", migrateCSPScriptsTable, false},
+	{"ip_rules", migrateIPRulesTable, true},
+	{"geo_rules", migrateGeoRulesTable, true},
+	{"api_keys", migrateAPIKeysTable, true},
+	{"waf_disabled_rules", migrateWAFDisabledRulesTable, true},
+	{"waf_service_rule_exceptions", migrateWAFServiceExceptionsTable, true},
+	{"waf_custom_rules", migrateWAFCustomRulesTable, true},
+	{"threat_intel_sources", migrateThreatIntelSourcesTable, true},
+	{"threat_intel_ips", migrateThreatIntelIPsTable, false},
+	{"webhook_config", migrateWebhookConfigTable, false},
+	{"ip_threat_scores", migrateIPThreatScoresTable, false},
+	{"ja4_reputation", migrateJA4ReputationTable, false},
+}
+
+// migrateConfigInto copies every config table into an open target.
+func (db *DB) migrateConfigInto(target *DB) (MigrationReport, error) {
 	overriding := target.dialect.name == "postgres"
-
-	steps := []struct {
-		table string
-		fn    func(source, target *DB, overriding bool) (int, error)
-		// hasIdentitySeq marks tables with an actual auto-increment/identity
-		// id column (as opposed to webhook_config's literal non-identity
-		// PK, or tables with no id column at all) — see the fixup call
-		// below for why this matters on a Postgres target.
-		hasIdentitySeq bool
-	}{
-		{"meta", migrateMetaTable, false},
-		{"admin_users", migrateAdminUsersTable, true},
-		{"admin_sso_identities", migrateSSOIdentitiesTable, false},
-		{"certificates", migrateCertificatesTable, true},
-		{"services", migrateServicesTable, true},
-		{"service_openapi", migrateServiceOpenAPITable, false},
-		{"service_mtls", migrateServiceMTLSTable, false},
-		{"service_mcp", migrateServiceMCPTable, false},
-		{"service_jwt", migrateServiceJWTTable, false},
-		{"service_rate_rules", migrateServiceRateRulesTable, false},
-		{"service_gate", migrateServiceGateTable, false},
-		{"service_csp", migrateServiceCSPTable, false},
-		{"csp_scripts", migrateCSPScriptsTable, false},
-		{"ip_rules", migrateIPRulesTable, true},
-		{"geo_rules", migrateGeoRulesTable, true},
-		{"api_keys", migrateAPIKeysTable, true},
-		{"waf_disabled_rules", migrateWAFDisabledRulesTable, true},
-		{"waf_service_rule_exceptions", migrateWAFServiceExceptionsTable, true},
-		{"waf_custom_rules", migrateWAFCustomRulesTable, true},
-		{"threat_intel_sources", migrateThreatIntelSourcesTable, true},
-		{"threat_intel_ips", migrateThreatIntelIPsTable, false},
-		{"webhook_config", migrateWebhookConfigTable, false},
-		{"ip_threat_scores", migrateIPThreatScoresTable, false},
-		{"ja4_reputation", migrateJA4ReputationTable, false},
-	}
+	steps := configSteps
 
 	var report MigrationReport
 	for _, step := range steps {
