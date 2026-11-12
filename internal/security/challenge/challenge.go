@@ -350,7 +350,7 @@ func secureRequest(r *http.Request) bool {
 
 func (c *Challenger) issueCookie(w http.ResponseWriter, r *http.Request, visitorID string) {
 	expiry := time.Now().Unix() + int64(c.ttl)
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 		Name:     cookieName,
 		Value:    c.buildCookieValue(expiry, visitorID),
 		Path:     "/",

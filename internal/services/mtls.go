@@ -50,7 +50,7 @@ func SaveClientCA(name string, caPEM []byte) (string, error) {
 		return "", fmt.Errorf("create cert dir: %w", err)
 	}
 	path := filepath.Join(dir, "client-ca.pem")
-	if err := os.WriteFile(path, caPEM, 0o644); err != nil {
+	if err := os.WriteFile(path, caPEM, 0o600); err != nil {
 		return "", fmt.Errorf("write client CA: %w", err)
 	}
 	return path, nil

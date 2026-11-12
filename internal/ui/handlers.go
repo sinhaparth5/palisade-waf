@@ -687,7 +687,7 @@ func (h *Handler) startSession(c *echo.Context, ip string, uid int64) error {
 	if err != nil {
 		return err
 	}
-	c.SetCookie(&http.Cookie{
+	c.SetCookie(&http.Cookie{ //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 		Name:     sessionCookie,
 		Value:    token,
 		HttpOnly: true,
@@ -696,7 +696,7 @@ func (h *Handler) startSession(c *echo.Context, ip string, uid int64) error {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secureCookie(c),
 	})
-	c.SetCookie(&http.Cookie{
+	c.SetCookie(&http.Cookie{ //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 		Name:     deviceCookie,
 		Value:    deviceID,
 		HttpOnly: true,
@@ -712,7 +712,7 @@ func (h *Handler) Logout(c *echo.Context) error {
 	if cookie, err := c.Cookie(sessionCookie); err == nil {
 		h.db.DeleteSession(storage.SessionID(cookie.Value)) //nolint
 	}
-	c.SetCookie(&http.Cookie{
+	c.SetCookie(&http.Cookie{ //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 		Name:     sessionCookie,
 		Value:    "",
 		HttpOnly: true,
@@ -1901,7 +1901,7 @@ func (h *Handler) ThreatIntelPage(c *echo.Context) error {
 func validateOutboundURL(raw string) error {
 	u, err := neturl.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("invalid URL: %v", err)
+		return fmt.Errorf("invalid URL: %w", err)
 	}
 	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return fmt.Errorf("URL must be absolute http(s)://host[:port]/…")
@@ -3430,7 +3430,7 @@ func (h *Handler) ServicesCacheStats(c *echo.Context) error {
 	for _, r := range results {
 		rows = append(rows, map[string]any{
 			"App": r.App, "Hits": r.Hits, "Misses": r.Misses, "Passes": r.Passes, "Errors": r.Errors,
-			"Ratio": cacheRatio(uint64(r.Hits), uint64(r.Misses)),
+			"Ratio": cacheRatio(uint64(r.Hits), uint64(r.Misses)), //nolint:gosec // G115: varnishstat counters are never negative
 		})
 	}
 	data["Services"] = rows
@@ -3941,7 +3941,7 @@ func (h *Handler) ChangeCredentials(c *echo.Context) error {
 	}
 	// Credentials changed: UpdateAdminCredentials deleted this user's
 	// sessions, so clear the cookie and force a re-login.
-	c.SetCookie(&http.Cookie{Name: sessionCookie, Value: "", HttpOnly: true, Path: "/", MaxAge: -1, Secure: secureCookie(c)})
+	c.SetCookie(&http.Cookie{Name: sessionCookie, Value: "", HttpOnly: true, Path: "/", MaxAge: -1, Secure: secureCookie(c)}) //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 	return c.Redirect(http.StatusFound, h.cfg.Admin.Path+"/login")
 }
 

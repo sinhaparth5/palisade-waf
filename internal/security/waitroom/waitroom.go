@@ -78,7 +78,7 @@ func (r *Room) Visit(ticket, key string, max int, idle time.Duration, now time.T
 		}
 		if e, ok := r.queued[ticket]; ok && e.key == key {
 			e.seen = now
-			return Result{Ticket: ticket, Position: int(e.seq-r.base) - r.head + 1}
+			return Result{Ticket: ticket, Position: int(e.seq-r.base) - r.head + 1} //nolint:gosec // G115: seq-base is bounded by MaxQueue
 		}
 		// Unknown: expired, or issued before a restart. Start over.
 	}
@@ -96,7 +96,7 @@ func (r *Room) Visit(ticket, key string, max int, idle time.Duration, now time.T
 	r.queue = append(r.queue, t)
 	r.queued[t] = e
 	r.perKey[key]++
-	return Result{Ticket: t, Position: int(e.seq-r.base) - r.head + 1}
+	return Result{Ticket: t, Position: int(e.seq-r.base) - r.head + 1} //nolint:gosec // G115: seq-base is bounded by MaxQueue
 }
 
 // promote moves queue heads into free slots, oldest first.

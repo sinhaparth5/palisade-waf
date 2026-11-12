@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -162,7 +163,7 @@ func (db *DB) migrateSecrets() error {
 
 	var secret string
 	err := db.queryRow(`SELECT secret FROM webhook_config WHERE id = 1`).Scan(&secret)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
@@ -188,23 +189,25 @@ func (db *DB) migrateUserSecrets() error {
 		col, val string
 	}
 	var plain []field
-	for _, col := range secretUserColumns {
+	scan := func(col string) error {
 		rows, err := db.query(`SELECT id, ` + col + ` FROM admin_users`)
 		if err != nil {
 			return err
 		}
+		defer rows.Close()
 		for rows.Next() {
 			f := field{col: col}
 			if err := rows.Scan(&f.id, &f.val); err != nil {
-				rows.Close()
 				return err
 			}
 			if f.val != "" && !strings.HasPrefix(f.val, secretPrefix) {
 				plain = append(plain, f)
 			}
 		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
+		return rows.Err()
+	}
+	for _, col := range secretUserColumns {
+		if err := scan(col); err != nil {
 			return err
 		}
 	}

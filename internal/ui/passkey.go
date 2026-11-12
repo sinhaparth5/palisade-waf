@@ -181,7 +181,7 @@ func (h *Handler) FinishPasskeyLogin(c *echo.Context) error {
 	}
 
 	h.twoFA.delete(token)
-	c.SetCookie(&http.Cookie{
+	c.SetCookie(&http.Cookie{ //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 		Name: twoFACookie, Value: "", HttpOnly: true, Path: "/", MaxAge: -1,
 		Secure: secureCookie(c),
 	})

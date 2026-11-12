@@ -26,8 +26,8 @@ func runCSRF(t *testing.T, req *http.Request) (reached bool, status int) {
 		return nil
 	})(c)
 	if err != nil {
-		if he, ok := err.(*echo.HTTPError); ok {
-			return reached, he.Code
+		if code := echo.StatusCode(err); code != 0 {
+			return reached, code
 		}
 		t.Fatalf("unexpected error type: %v", err)
 	}

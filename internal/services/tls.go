@@ -43,7 +43,7 @@ func SaveCustomCert(name string, certPEM, keyPEM []byte) (certPath, keyPath stri
 	}
 	certPath = filepath.Join(dir, "cert.pem")
 	keyPath = filepath.Join(dir, "key.pem")
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
+	if err := os.WriteFile(certPath, certPEM, 0o600); err != nil {
 		return "", "", time.Time{}, fmt.Errorf("write cert: %w", err)
 	}
 	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
@@ -138,7 +138,7 @@ func SavePoolCert(id int64, certPEM, keyPEM []byte) (certPath, keyPath string, e
 	}
 	certPath = filepath.Join(dir, "cert.pem")
 	keyPath = filepath.Join(dir, "key.pem")
-	if err = os.WriteFile(certPath, certPEM, 0o644); err != nil {
+	if err = os.WriteFile(certPath, certPEM, 0o600); err != nil {
 		return "", "", fmt.Errorf("write cert: %w", err)
 	}
 	if err = os.WriteFile(keyPath, keyPEM, 0o600); err != nil {

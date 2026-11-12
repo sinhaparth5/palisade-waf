@@ -28,6 +28,7 @@ package warehouse
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -330,7 +331,7 @@ func (s *Sink) post(query string, body io.Reader, withDatabase bool) error {
 	if withDatabase {
 		v.Set("database", s.database)
 	}
-	req, err := http.NewRequest(http.MethodPost, s.base+"/?"+v.Encode(), body)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, s.base+"/?"+v.Encode(), body)
 	if err != nil {
 		return err
 	}
