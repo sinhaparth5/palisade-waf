@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"path"
 	"strconv"
 	"strings"
@@ -394,8 +395,7 @@ func (h *Handler) Handle(c *echo.Context) error {
 			if ch != nil && !challenge.Exempt(r.Method, r.URL.Path) && !ch.PassedChallenge(r, clientIP) {
 				metrics.BotChallengedTotal.WithLabelValues(appName).Inc()
 				mark("challenge")
-				h.logChallenged(r, appName, clientIP, http.StatusTemporaryRedirect, "ai_crawler_challenge:"+cat, time.Since(start), meta)
-				return c.Redirect(http.StatusTemporaryRedirect, ch.ChallengeURL(r.RequestURI))
+				return h.challenge(c, ch, appName, clientIP, "ai_crawler_challenge:"+cat, start, meta)
 			}
 		case bot.AIAllow:
 			aiAllowed = botAnalysis.AIVerified
@@ -425,8 +425,7 @@ func (h *Handler) Handle(c *echo.Context) error {
 					reason = "bot_challenge:adaptive"
 				}
 				mark("challenge")
-				h.logChallenged(r, appName, clientIP, http.StatusTemporaryRedirect, reason, time.Since(start), meta)
-				return c.Redirect(http.StatusTemporaryRedirect, ch.ChallengeURL(r.RequestURI))
+				return h.challenge(c, ch, appName, clientIP, reason, start, meta)
 			}
 		}
 	}
@@ -880,7 +879,45 @@ func (h *Handler) logBlocked(r *http.Request, appName, clientIP, country string,
 	})
 }
 
-// logChallenged logs a bot challenge redirect (307) without marking it as
+// challenge answers a request the gate challenges and logs it (issue
+// #314). A page navigation is redirected to the challenge page. A fetch or
+// XHR can never run the challenge (following the redirect hands the app an
+// HTML page), so it gets a JSON 403 with the page to open instead, set to
+// return to the page that made the call.
+func (h *Handler) challenge(c *echo.Context, ch *challenge.Challenger, appName, clientIP, reason string, start time.Time, meta reqMeta) error {
+	r := c.Request()
+	if !apiCall(r) {
+		h.logChallenged(r, appName, clientIP, http.StatusTemporaryRedirect, reason, time.Since(start), meta)
+		return c.Redirect(http.StatusTemporaryRedirect, ch.ChallengeURL(r.RequestURI))
+	}
+	h.logChallenged(r, appName, clientIP, http.StatusForbidden, reason, time.Since(start), meta)
+	back := "/"
+	if ref, err := url.Parse(r.Referer()); err == nil && ref.Host == r.Host && strings.HasPrefix(ref.Path, "/") {
+		back = ref.RequestURI()
+	}
+	c.Response().Header().Set("Cache-Control", "no-store")
+	return c.JSON(http.StatusForbidden, map[string]string{
+		"error":         "challenge_required",
+		"challenge_url": ch.ChallengeURL(back),
+		"request_id":    meta.RequestID,
+	})
+}
+
+// apiCall reports whether r is a script's request rather than a page
+// navigation: Sec-Fetch-Mode says so in every current browser; without it,
+// an Accept that prefers JSON or the XHR header does.
+func apiCall(r *http.Request) bool {
+	if m := r.Header.Get("Sec-Fetch-Mode"); m != "" {
+		return m != "navigate"
+	}
+	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		return true
+	}
+	accept := r.Header.Get("Accept")
+	return strings.HasPrefix(accept, "application/json") || (strings.Contains(accept, "application/json") && !strings.Contains(accept, "text/html"))
+}
+
+// logChallenged logs a bot challenge (307, or 403 to an API call) without marking it as
 // Blocked. A challenge is not a definitive deny — the browser solves the JS
 // PoW and proceeds normally — so it should not trigger blocked notifications
 // or inflate the blocked-request counters. reason is "bot_challenge" for a

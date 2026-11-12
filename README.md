@@ -40,6 +40,7 @@
   ```
 
   With Claude Code: `claude mcp add --transport http palisade https://waf.example.com/admin/api/v1/mcp --header "Authorization: Bearer cwaf_…"`.
+- **Bot challenge for single-page apps:** a page load that gets challenged is redirected to the challenge page. A `fetch`/XHR can't run the challenge, so it gets `403 {"error":"challenge_required","challenge_url":"/_cz/challenge?…"}` instead; send the user there with `location.href = body.challenge_url` and they come back to the page that made the call. A cross-origin API can't read that body (no CORS headers), so treat a failed request to it the same way.
 - **Health probes:** `/_cz/healthz` (process up) and `/_cz/readyz` (database reachable) for load balancers and orchestrators; the Docker image wires `palisade healthcheck` into its `HEALTHCHECK`.
 - **SQLite storage:** request logs, IP/geo rules, services, and TLS state all live in one `waf.db` file. No Postgres, Redis, or MySQL to run.
 

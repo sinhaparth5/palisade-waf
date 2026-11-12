@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#314) Return a JSON challenge_required to API calls instead of redirecting them to the challenge page
+
 ## [3.2.9] - 2026-11-12
 
 - (#304) Fuzz client IP resolution
