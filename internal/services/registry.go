@@ -212,8 +212,13 @@ func (r *Registry) Reload(db *storage.DB) error {
 	if err != nil {
 		return err
 	}
+	policies, err := db.ListServiceRequestPolicies()
+	if err != nil {
+		return err
+	}
 	for i := range list {
 		list[i].Gate = gates[list[i].ID]
+		list[i].Policy = policies[list[i].ID]
 	}
 	cspPolicies, err := db.ListServiceCSP()
 	if err != nil {

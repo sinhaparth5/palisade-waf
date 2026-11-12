@@ -1263,3 +1263,40 @@ func TestSetServiceCookies(t *testing.T) {
 		t.Errorf("off should remove the policy: %+v", got)
 	}
 }
+
+func TestSetServiceRequestPolicy(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("shop", "shop.example.com")
+	path := "/admin/services/policy/" + itoa(svc.ID)
+
+	rec := env.do("POST", path, form("policy_mode", "enforce", "policy_methods", "get, post", "policy_types", "Application/JSON image/*", "policy_max_kib", "1024"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if rec.Header().Get("HX-Trigger") != "policy-saved" || !strings.Contains(rec.Body.String(), `data-policy-methods="GET POST"`) {
+		t.Fatalf("no policy-saved trigger or row data: %s", rec.Body)
+	}
+	got, _ := env.db.ListServiceRequestPolicies()
+	if p := got[svc.ID]; p.Mode != "enforce" || !slices.Equal(p.ContentTypes, []string{"application/json", "image/*"}) || p.MaxBodyKiB != 1024 {
+		t.Errorf("stored %+v", p)
+	}
+	if app := env.h.registry.Match("shop.example.com", "/"); app == nil || app.Policy.Mode != "enforce" {
+		t.Error("registry not reloaded")
+	}
+
+	for _, bad := range [][]string{
+		{"policy_mode", "enforce"},
+		{"policy_mode", "enforce", "policy_methods", "GET;"},
+		{"policy_mode", "enforce", "policy_types", "json"},
+		{"policy_mode", "enforce", "policy_max_kib", "-1"},
+		{"policy_mode", "block", "policy_methods", "GET"},
+	} {
+		rec = env.do("POST", path, form(bad...))
+		if rec.Header().Get("HX-Retarget") != "#svc-policy-error" {
+			t.Errorf("%q: want inline error, got %s", bad, rec.Body)
+		}
+	}
+
+	env.do("POST", path, form("policy_mode", "off"))
+	if got, _ := env.db.ListServiceRequestPolicies(); len(got) != 0 {
+		t.Errorf("off should remove the policy: %+v", got)
+	}
+}

@@ -77,6 +77,9 @@ type Service struct {
 	// Gate is the maintenance mode and waiting room (issue #198), filled
 	// from service_gate by services.Registry.Reload.
 	Gate ServiceGate
+	// Policy is the accepted methods, Content-Types and body size (issue
+	// #282), filled from service_request_policy by Registry.Reload.
+	Policy RequestPolicy
 }
 
 // DefaultHealthInterval is the active health check interval used when a
@@ -174,7 +177,7 @@ func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
 }
 
 func (db *DB) RemoveService(id int) error {
-	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_jwt", "service_rate_rules", "service_gate", "service_csp", "csp_scripts", "service_cookie_policy"} {
+	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_jwt", "service_rate_rules", "service_gate", "service_csp", "csp_scripts", "service_cookie_policy", "service_request_policy"} {
 		if _, err := db.exec(`DELETE FROM `+t+` WHERE service_id = ?`, id); err != nil {
 			return err
 		}

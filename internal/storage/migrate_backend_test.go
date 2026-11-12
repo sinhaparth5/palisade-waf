@@ -58,6 +58,9 @@ func TestMigrateConfigTo(t *testing.T) {
 	if err := source.SetServiceCookiePolicy(1, true, []string{"csrf_js", "theme"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := source.SetServiceRequestPolicy(1, RequestPolicy{Mode: "enforce", Methods: []string{"GET", "POST"}, ContentTypes: []string{"application/json"}, MaxBodyKiB: 1024}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := source.AddCSPScript(1, CSPScript{Origin: "https://cdn.example.com", Page: "/", FirstSeen: time.Now()}); err != nil {
 		t.Fatal(err)
 	}

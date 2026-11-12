@@ -518,6 +518,26 @@ func (h *Handler) Handle(c *echo.Context) error {
 		}
 	}
 
+	// 4.9 Request policy (issue #282): methods, Content-Types and body size
+	// the service accepts, before the WAF spends time on the body. Trusted
+	// IPs skip it like the WAF.
+	policyFailed := false
+	if app != nil && !open && app.Policy.Mode != "" {
+		status := services.CheckRequestPolicy(app.Policy, r)
+		enforce := app.Policy.Mode == "enforce"
+		if status != 0 && enforce {
+			mark("policy")
+			h.logBlocked(r, appName, clientIP, country, status, 0, "policy_violation", time.Since(start), meta)
+			return deny(c, status, "policy_violation", reqID, map[string]any{"error": http.StatusText(status)})
+		}
+		policyFailed = status != 0
+		// A body of unknown length is capped as it streams: the WAF's read
+		// or the proxy's copy fails once it passes the limit.
+		if enforce && app.Policy.MaxBodyKiB > 0 && r.ContentLength < 0 {
+			r.Body = http.MaxBytesReader(c.Response(), r.Body, int64(app.Policy.MaxBodyKiB)<<10)
+		}
+	}
+
 	// 5. WAF — deep inspection of headers + body. Per-service override engine
 	// (if this service has its own rule exceptions) takes precedence over
 	// the shared default.
@@ -585,6 +605,11 @@ func (h *Handler) Handle(c *echo.Context) error {
 		}
 		hit := *result // may be the verdict cache's shared copy
 		hit.Action = "leaked_password:log"
+		result = &hit
+	}
+	if policyFailed && result.Action == "" {
+		hit := *result
+		hit.Action = "policy_violation:log"
 		result = &hit
 	}
 	if jwtFailed && result.Action == "" {

@@ -150,6 +150,14 @@
   var jwtForm = document.getElementById('svc-jwt-form');
   var cspForm = document.getElementById('svc-csp-form');
   var cookiesForm = document.getElementById('svc-cookies-form');
+  var policyForm = document.getElementById('svc-policy-form');
+  document.getElementById('svc-policy-preset').addEventListener('change', function () {
+    var o = this.selectedOptions[0];
+    if (!o.value) return;
+    document.getElementById('svc-policy-methods').value = o.dataset.methods;
+    document.getElementById('svc-policy-types').value = o.dataset.types;
+    document.getElementById('svc-policy-kib').value = o.dataset.kib;
+  });
   var mtlsForm = document.getElementById('svc-mtls-form');
   var responsesForm = document.getElementById('svc-responses-form');
   var openapiText = document.getElementById('svc-openapi-text');
@@ -323,6 +331,14 @@
     document.getElementById('svc-cookies-mode').value = d.cookies === '1' ? 'on' : 'off';
     document.getElementById('svc-cookies-exempt').value = d.cookieExempt || '';
 
+    policyForm.setAttribute('hx-post', adminPath + '/services/policy/' + d.id);
+    htmx.process(policyForm);
+    document.getElementById('svc-policy-preset').value = '';
+    document.getElementById('svc-policy-mode').value = d.policyMode || 'off';
+    document.getElementById('svc-policy-methods').value = d.policyMethods || '';
+    document.getElementById('svc-policy-types').value = d.policyTypes || '';
+    document.getElementById('svc-policy-kib').value = d.policyKib && d.policyKib !== '0' ? d.policyKib : '';
+
     responsesForm.setAttribute('hx-post', adminPath + '/services/responses/' + d.id);
     htmx.process(responsesForm);
     document.getElementById('svc-responses-mode').value = d.responseInspect || '';
@@ -369,7 +385,7 @@
     deleteBtn.setAttribute('hx-confirm', 'Remove service ' + d.name + '?');
     htmx.process(deleteBtn);
 
-    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-gate-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mcp-error', 'svc-jwt-error', 'svc-csp-error', 'svc-cookies-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
+    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-gate-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mcp-error', 'svc-jwt-error', 'svc-csp-error', 'svc-cookies-error', 'svc-policy-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.textContent = '';
     });
@@ -427,6 +443,7 @@
   document.body.addEventListener('jwt-saved', closeModal);
   document.body.addEventListener('csp-saved', closeModal);
   document.body.addEventListener('cookies-saved', closeModal);
+  document.body.addEventListener('policy-saved', closeModal);
   document.body.addEventListener('mtls-saved', closeModal);
   document.body.addEventListener('responses-saved', closeModal);
   openapiFile.addEventListener('change', function () {

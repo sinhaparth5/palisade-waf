@@ -382,6 +382,16 @@ func (db *DB) schemaStatements() []string {
 			exempt     TEXT NOT NULL
 		)`,
 
+		// Accepted methods, Content-Types and body size per service
+		// (issue #282); lists are space-separated.
+		`CREATE TABLE IF NOT EXISTS service_request_policy (
+			service_id    INTEGER PRIMARY KEY,
+			mode          TEXT NOT NULL,
+			methods       TEXT NOT NULL,
+			content_types TEXT NOT NULL,
+			max_body_kib  INTEGER NOT NULL DEFAULT 0
+		)`,
+
 		// Maintenance mode and waiting room per service (issue #198).
 		// Schedule bounds are RFC 3339 text, "" for none.
 		`CREATE TABLE IF NOT EXISTS service_gate (

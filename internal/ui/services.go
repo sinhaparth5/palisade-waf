@@ -721,7 +721,7 @@ func (h *Handler) SetServiceCookies(c *echo.Context) error {
 	if err != nil || id < 1 {
 		return fail("invalid service id")
 	}
-	exempt := strings.FieldsFunc(c.FormValue("cookie_exempt"), func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\r' || r == '\t' })
+	exempt := splitList(c.FormValue("cookie_exempt"))
 	if len(exempt) > 50 {
 		return fail("At most 50 cookie names.")
 	}
@@ -737,6 +737,69 @@ func (h *Handler) SetServiceCookies(c *echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "cookies-saved")
+	return h.servicesRows(c)
+}
+
+var (
+	methodToken = regexp.MustCompile(`^[A-Z]{1,20}$`)
+	mediaType   = regexp.MustCompile(`^[a-z0-9][a-z0-9!#$&^_.+-]*/([a-z0-9][a-z0-9!#$&^_.+-]*|\*)$`)
+)
+
+// splitList splits a form list on commas and whitespace.
+func splitList(s string) []string {
+	return strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\r' || r == '\t' })
+}
+
+// SetServiceRequestPolicy saves the methods, Content-Types and body size a
+// service accepts (issue #282). The presets only fill the form, in JS.
+func (h *Handler) SetServiceRequestPolicy(c *echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-policy-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	p := storage.RequestPolicy{Mode: c.FormValue("policy_mode")}
+	switch p.Mode {
+	case "off":
+		p.Mode = ""
+	case "log", "enforce":
+		for _, m := range splitList(strings.ToUpper(c.FormValue("policy_methods"))) {
+			if !methodToken.MatchString(m) {
+				return fail("Not an HTTP method: " + m)
+			}
+			p.Methods = append(p.Methods, m)
+		}
+		for _, t := range splitList(strings.ToLower(c.FormValue("policy_types"))) {
+			if len(t) > 127 || !mediaType.MatchString(t) {
+				return fail("Not a media type: " + t)
+			}
+			p.ContentTypes = append(p.ContentTypes, t)
+		}
+		if len(p.Methods) > 20 || len(p.ContentTypes) > 30 {
+			return fail("At most 20 methods and 30 content types.")
+		}
+		if s := strings.TrimSpace(c.FormValue("policy_max_kib")); s != "" {
+			if p.MaxBodyKiB, err = strconv.Atoi(s); err != nil || p.MaxBodyKiB < 0 || p.MaxBodyKiB > 1<<20 {
+				return fail("Maximum body size must be 0 to 1048576 KiB (1 GiB).")
+			}
+		}
+		if len(p.Methods) == 0 && len(p.ContentTypes) == 0 && p.MaxBodyKiB == 0 {
+			return fail("Set methods, content types or a body size, or turn the policy off.")
+		}
+	default:
+		return fail("invalid mode")
+	}
+	if err := h.db.SetServiceRequestPolicy(id, p); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return fail(err.Error())
+	}
+	c.Response().Header().Set("HX-Trigger", "policy-saved")
 	return h.servicesRows(c)
 }
 
