@@ -8,7 +8,7 @@ import (
 // TestPagesStorageFailure: with everything but the auth tables gone, admin
 // pages and fragments fail instead of rendering an empty view ("no rules",
 // "no blocked IPs") that an operator would take at face value. Certificates,
-// AI usage, threat intel and settings render best-effort on purpose and are
+// Threat intel and settings render best-effort on purpose and are
 // not listed.
 func TestPagesStorageFailure(t *testing.T) {
 	env := newAdminEnv(t)

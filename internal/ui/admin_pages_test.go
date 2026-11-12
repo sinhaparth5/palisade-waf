@@ -112,7 +112,6 @@ func TestAdminPagesRender(t *testing.T) {
 		"/admin/services":         "Services",
 		"/admin/certificates":     "Certificates",
 		"/admin/waf-rules":        "WAF Rules",
-		"/admin/ai-usage":         "AI Usage",
 		"/admin/threat-intel":     "Threat Intel",
 		"/admin/settings":         "Settings",
 	}

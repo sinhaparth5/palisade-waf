@@ -91,7 +91,7 @@ func TestRolePageSweep(t *testing.T) {
 	pages := []string{
 		"/admin", "/admin/logs", "/admin/ip-rules", "/admin/ip-rules/rows", "/admin/geo-rules",
 		"/admin/services", "/admin/services/rows", "/admin/certificates", "/admin/waf-rules",
-		"/admin/ai-usage", "/admin/threat-intel", "/admin/settings", "/admin/settings/audit",
+		"/admin/threat-intel", "/admin/settings", "/admin/settings/audit",
 		"/admin/api/notifications", fmt.Sprintf("/admin/logs/%d", id),
 	}
 	for _, role := range []string{storage.RoleViewer, storage.RoleAdmin} {

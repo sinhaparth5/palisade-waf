@@ -511,6 +511,14 @@ func (db *DB) migrate() error {
 	if err := db.hashSessionTokens(); err != nil {
 		return err
 	}
+	// TypeSafe ASN classification was removed (#299): drop its stored API
+	// key and call log so neither lingers in the DB or a config export.
+	if _, err := db.exec(`DELETE FROM meta WHERE ` + db.dialect.quoteIdent("key") + ` IN ('typesafe_enabled', 'typesafe_api_key')`); err != nil {
+		return err
+	}
+	if _, err := db.exec(`DROP TABLE IF EXISTS typesafe_calls`); err != nil {
+		return err
+	}
 
 	// Seed the notifications baseline at startup (not lazily on first access)
 	// so a block that happens before any admin page has ever been loaded

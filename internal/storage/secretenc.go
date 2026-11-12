@@ -47,7 +47,6 @@ var secretMetaKeys = []string{
 	"email_token",
 	"db_conn_password",
 	"db_conn_dsn",
-	"typesafe_api_key",
 	"captcha_secret",
 	"threatintel_api_keys",
 	"sso_client_secret",

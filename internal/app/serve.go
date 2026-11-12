@@ -251,11 +251,6 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	} else {
 		scorer.ReloadGeoRules(rules)
 	}
-	if tc, err := db.GetTypeSafeConfig(); err != nil {
-		log.Printf("threatscore: initial typesafe config load: %v", err)
-	} else {
-		scorer.ReloadTypeSafeConfig(tc.Enabled, tc.APIKey)
-	}
 	db.SetThreatScoreFn(scorer.Record)
 
 	// Threat-score-driven adaptive enforcement (issue #16), off by default.

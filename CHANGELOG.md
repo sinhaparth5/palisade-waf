@@ -19,6 +19,7 @@ rather than growing this file forever.
 - (#301) Remove leftover ja3_hash and redis_mode references
 - (#297) Drop the Windows release build
 - (#298) Remove the ClickHouse warehouse mirror
+- (#299) Remove TypeSafe ASN classification
 
 ## [3.2.7] - 2026-11-12
 

@@ -47,7 +47,6 @@ func TestClosedDBErrors(t *testing.T) {
 		"GetSSOConfig":              func() error { return e(db.GetSSOConfig()) },
 		"GetStats":                  func() error { return e(db.GetStats()) },
 		"GetTrustedIPs":             func() error { return e(db.GetTrustedIPs()) },
-		"GetTypeSafeConfig":         func() error { return e(db.GetTypeSafeConfig()) },
 		"GetVarnishConfig":          func() error { return e(db.GetVarnishConfig()) },
 		"GetWAFRuleFeedbackConfig":  func() error { return e(db.GetWAFRuleFeedbackConfig()) },
 		"GetWebhookConfig":          func() error { return e(db.GetWebhookConfig()) },

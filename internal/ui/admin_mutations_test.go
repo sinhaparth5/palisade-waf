@@ -618,16 +618,6 @@ func TestSettingsCards(t *testing.T) {
 		t.Errorf("email test: %s", rec.Body)
 	}
 
-	// TypeSafe.
-	if rec := env.do("POST", "/admin/settings/typesafe", form("typesafe_enabled", "1")); !strings.Contains(rec.Body.String(), "API key is required") {
-		t.Errorf("typesafe missing key: %s", rec.Body)
-	}
-	env.do("POST", "/admin/settings/typesafe", form("typesafe_enabled", "1", "typesafe_api_key", "k"))
-	env.do("POST", "/admin/settings/typesafe", form("typesafe_enabled", "1"))
-	if tc, _ := env.db.GetTypeSafeConfig(); !tc.Enabled || tc.APIKey != "k" {
-		t.Errorf("typesafe = %+v", tc)
-	}
-
 	// API keys.
 	if rec := env.do("POST", "/admin/settings/api-keys", form("name", " ")); !strings.Contains(rec.Body.String(), "Name is required") {
 		t.Errorf("api key no name: %s", rec.Body)

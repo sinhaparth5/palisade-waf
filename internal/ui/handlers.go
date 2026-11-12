@@ -420,7 +420,6 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/services/cache-stats", h.ServicesCacheStats)
 	g.GET("/certificates", h.CertificatesPage)
 	g.GET("/waf-rules", h.WAFRulesPage)
-	g.GET("/ai-usage", h.AIUsagePage)
 	g.GET("/threat-intel", h.ThreatIntelPage)
 	g.GET("/settings", h.SettingsPage)
 	g.GET("/settings/audit", h.AuditRows)
@@ -519,7 +518,6 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/settings/webhook/test", h.TestWebhook),
 		g.POST("/settings/email", h.SaveEmailSettings),
 		g.POST("/settings/email/test", h.TestEmailReport),
-		g.POST("/settings/typesafe", h.SaveTypeSafeSettings),
 		g.POST("/settings/dbconn", h.SaveDBConnConfig),
 		g.POST("/settings/dbconn/test", h.TestDBConnection),
 		g.POST("/settings/dbconn/migrate", h.MigrateDBConfig),

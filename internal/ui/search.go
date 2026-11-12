@@ -16,7 +16,7 @@ import (
 // live records. Read-only, so every role can use it.
 
 // adminPages are the base.html pages, in sidebar order.
-var adminPages = []string{"dashboard", "logs", "services", "certificates", "ip_rules", "geo_rules", "waf_rules", "threat_intel", "ai_usage", "settings"}
+var adminPages = []string{"dashboard", "logs", "services", "certificates", "ip_rules", "geo_rules", "waf_rules", "threat_intel", "settings"}
 
 var pageHeadings = map[string]string{
 	"dashboard":    "Dashboard",
@@ -26,7 +26,6 @@ var pageHeadings = map[string]string{
 	"services":     "Services",
 	"waf_rules":    "WAF Rules",
 	"threat_intel": "Threat Intel",
-	"ai_usage":     "AI Usage",
 	"certificates": "Certificates",
 	"settings":     "Settings",
 }

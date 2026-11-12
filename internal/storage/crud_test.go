@@ -139,9 +139,16 @@ func TestMetaBackedSettings(t *testing.T) {
 		}
 	}
 
-	mustNoErr(t, db.SetTypeSafeConfig(TypeSafeConfig{Enabled: true, APIKey: "k"}))
-	if tc, _ := db.GetTypeSafeConfig(); !tc.Enabled || tc.APIKey != "k" {
-		t.Errorf("typesafe = %+v", tc)
+	// An upgrade from a DB with TypeSafe settings (#299) drops them.
+	mustNoErr(t, db.setMeta("typesafe_api_key", "k"))
+	_, err := db.exec(`CREATE TABLE typesafe_calls (id INTEGER)`)
+	mustNoErr(t, err)
+	mustNoErr(t, db.migrate())
+	if v, _ := db.getMeta("typesafe_api_key"); v != "" {
+		t.Errorf("typesafe_api_key survived migrate: %q", v)
+	}
+	if _, err := db.exec(`SELECT 1 FROM typesafe_calls`); err == nil {
+		t.Error("typesafe_calls survived migrate")
 	}
 
 	// First read initializes to now, so a fresh install has no backlog badge.
