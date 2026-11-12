@@ -19,6 +19,7 @@ rather than growing this file forever.
 - (#306) Fuzz signed cookie parsing for challenge, waiting room and SSO
 - (#307) Fuzz request body and header extractors
 - (#308) Fuzz admin rule parsers and config import
+- (#309) Read-only MCP server for AI assistants
 - (#310) Path-based checks can be bypassed with non-canonical paths
 - (#311) CSP inventory can be filled with fake reports to silence new-script alerts
 - (#312) Bot challenge pass cookie is not bound to the client

@@ -158,6 +158,12 @@ func (h *Handler) RegisterAPI(e *echo.Echo) {
 	// Same exposition as the session-authed /metrics, reachable with a bearer
 	// key so a Prometheus scrape job can authenticate (a read-only key is enough).
 	api.GET("/metrics", echo.WrapHandler(metrics.Handler()))
+
+	// Read-only MCP server (issue #309); no requireWrite so read-only keys work.
+	api.POST("/mcp", h.mcpHandler(e))
+	api.GET("/mcp", func(c *echo.Context) error { // no server-sent event stream
+		return apiError(c, http.StatusMethodNotAllowed, "POST JSON-RPC messages")
+	})
 }
 
 // lookupError answers a failed lookup by id: 404 with msg for a missing

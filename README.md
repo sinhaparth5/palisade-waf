@@ -25,6 +25,21 @@
 - **TLS:** plain HTTP, automatic Let's Encrypt certificates, or your own cert/key, globally or per service. Upload a cert or enable auto-issue for a backend from the dashboard.
 - **Admin dashboard:** HTMX/Tailwind UI for live traffic and threat charts, filterable request logs with live tail, IP/geo rule management, and service management. Changes apply immediately, with no restart.
 - **Prometheus metrics:** `/admin/metrics` exposes request volume, latency, and per-cause block counters (IP/geo/WAF) alongside Go runtime metrics. For Prometheus, scrape `/admin/api/v1/metrics` with an API key from Settings (a read-only key is enough) via `authorization: { credentials: cwaf_… }`; the `/admin/metrics` path is for a logged-in browser session.
+- **MCP server for AI assistants (read-only):** `/admin/api/v1/mcp` (Streamable HTTP) lets Claude, Cursor and other MCP clients search logs, read one request, see stats, look up an IP, and list services and rules. No tool can change anything, so an attacker's `User-Agent: ignore previous instructions…` has nothing to act on. Use a read-only API key from Settings:
+
+  ```json
+  {
+    "mcpServers": {
+      "palisade": {
+        "type": "http",
+        "url": "https://waf.example.com/admin/api/v1/mcp",
+        "headers": { "Authorization": "Bearer cwaf_…" }
+      }
+    }
+  }
+  ```
+
+  With Claude Code: `claude mcp add --transport http palisade https://waf.example.com/admin/api/v1/mcp --header "Authorization: Bearer cwaf_…"`.
 - **Health probes:** `/_cz/healthz` (process up) and `/_cz/readyz` (database reachable) for load balancers and orchestrators; the Docker image wires `palisade healthcheck` into its `HEALTHCHECK`.
 - **SQLite storage:** request logs, IP/geo rules, services, and TLS state all live in one `waf.db` file. No Postgres, Redis, or MySQL to run.
 

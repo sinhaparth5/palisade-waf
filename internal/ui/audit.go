@@ -24,6 +24,7 @@ var auditSkip = map[string]bool{
 	"POST /settings/webhook/test":  true,
 	"POST /settings/email/test":    true,
 	"POST /waf-rules/dry-run":      true,
+	"POST /api/v1/mcp":             true, // read-only tool calls
 }
 
 // auditFields is the allowlist of form/JSON fields copied into an entry's
