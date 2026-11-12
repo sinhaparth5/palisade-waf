@@ -56,7 +56,7 @@ func TestVerifyCaptchaToken(t *testing.T) {
 			"captcha_token": token, "automation": automation,
 		})
 		rec := httptest.NewRecorder()
-		c.ServeVerify(rec, httptest.NewRequest(http.MethodPost, "/_cz/verify", bytes.NewReader(body)))
+		c.ServeVerify(rec, httptest.NewRequest(http.MethodPost, "/_cz/verify", bytes.NewReader(body)), testIP)
 		return rec.Code
 	}
 

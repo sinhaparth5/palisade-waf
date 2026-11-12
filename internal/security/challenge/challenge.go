@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"palisade/internal/security/ratelimit"
 )
 
 //go:embed page.html
@@ -111,13 +113,15 @@ func (c *Challenger) markNonceUsed(nonce string, exp int64) bool {
 func (c *Challenger) Threshold() int { return c.threshold }
 
 // PassedChallenge returns true if the request carries a valid, unexpired
-// bypass cookie issued by a previous successful challenge solve.
-func (c *Challenger) PassedChallenge(r *http.Request) bool {
+// bypass cookie issued to clientIP's ratelimit.ClientKey by a previous
+// successful challenge solve, so one solved cookie can't be shared across a
+// bot fleet (issue #312).
+func (c *Challenger) PassedChallenge(r *http.Request, clientIP string) bool {
 	ck, err := r.Cookie(cookieName)
 	if err != nil {
 		return false
 	}
-	_, ok := c.parseCookie(ck.Value)
+	_, ok := c.parseCookie(ck.Value, clientIP)
 	return ok
 }
 
@@ -125,12 +129,12 @@ func (c *Challenger) PassedChallenge(r *http.Request) bool {
 // bypass cookie, or "" when there is no valid cookie or the challenge was
 // solved without a fingerprint. The value is covered by the cookie HMAC, so
 // a client can't swap in someone else's ID without invalidating the cookie.
-func (c *Challenger) VisitorID(r *http.Request) string {
+func (c *Challenger) VisitorID(r *http.Request, clientIP string) string {
 	ck, err := r.Cookie(cookieName)
 	if err != nil {
 		return ""
 	}
-	vid, _ := c.parseCookie(ck.Value)
+	vid, _ := c.parseCookie(ck.Value, clientIP)
 	return vid
 }
 
@@ -283,8 +287,8 @@ func firstAutomationSignal(sigs []string) string {
 
 // ServeVerify handles POST /_cz/verify: authenticates the token, checks the
 // PoW solution (or the CAPTCHA token, when the page fell back to one), and
-// issues a bypass cookie on success.
-func (c *Challenger) ServeVerify(w http.ResponseWriter, r *http.Request) {
+// issues a bypass cookie bound to clientIP on success.
+func (c *Challenger) ServeVerify(w http.ResponseWriter, r *http.Request, clientIP string) {
 	// This endpoint is reachable unauthenticated — cap the body so a giant
 	// JSON string can't balloon memory. A PoW payload is <1 KiB; a CAPTCHA
 	// token adds a few KiB.
@@ -327,7 +331,7 @@ func (c *Challenger) ServeVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "challenge already used", http.StatusForbidden)
 		return
 	}
-	c.issueCookie(w, r, sanitizeVisitorID(req.VisitorID))
+	c.issueCookie(w, r, clientIP, sanitizeVisitorID(req.VisitorID))
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -348,11 +352,11 @@ func secureRequest(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
-func (c *Challenger) issueCookie(w http.ResponseWriter, r *http.Request, visitorID string) {
+func (c *Challenger) issueCookie(w http.ResponseWriter, r *http.Request, clientIP, visitorID string) {
 	expiry := time.Now().Unix() + int64(c.ttl)
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 		Name:     cookieName,
-		Value:    c.buildCookieValue(expiry, visitorID),
+		Value:    c.buildCookieValue(expiry, clientIP, visitorID),
 		Path:     "/",
 		Expires:  time.Unix(expiry, 0),
 		HttpOnly: true,
@@ -361,43 +365,36 @@ func (c *Challenger) issueCookie(w http.ResponseWriter, r *http.Request, visitor
 	})
 }
 
-// buildCookieValue produces "expiry.visitorID.sig" with the visitor ID inside
-// the HMAC input, so the fingerprint travels with every request tamper-evident
-// and without any server-side session state. visitorID may be "".
-func (c *Challenger) buildCookieValue(expiry int64, visitorID string) string {
-	mac := hmac.New(sha256.New, []byte(c.secret))
-	fmt.Fprintf(mac, "cz-pass:%d:%s", expiry, visitorID)
-	return fmt.Sprintf("%d.%s.%s", expiry, visitorID, hex.EncodeToString(mac.Sum(nil)[:16]))
+// buildCookieValue produces "expiry.visitorID.sig". The HMAC covers the
+// visitor ID and the client's ratelimit.ClientKey (IPv6 /64), so the
+// fingerprint travels tamper-evident without server-side state and the
+// cookie only works from the client that solved the challenge. visitorID
+// may be "".
+func (c *Challenger) buildCookieValue(expiry int64, clientIP, visitorID string) string {
+	return fmt.Sprintf("%d.%s.%s", expiry, visitorID, c.cookieMAC(expiry, clientIP, visitorID))
 }
 
-// parseCookie validates a bypass cookie and returns the visitor ID bound into
-// it. Accepts the current "expiry.visitorID.sig" format and the legacy
-// pre-fingerprint "expiry.sig" format (no visitor ID), so cookies issued
-// before an upgrade stay valid until they expire.
-func (c *Challenger) parseCookie(value string) (visitorID string, ok bool) {
+func (c *Challenger) cookieMAC(expiry int64, clientIP, visitorID string) string {
+	mac := hmac.New(sha256.New, []byte(c.secret))
+	fmt.Fprintf(mac, "cz-pass:%d:%s:%s", expiry, ratelimit.ClientKey(clientIP), visitorID)
+	return hex.EncodeToString(mac.Sum(nil)[:16])
+}
+
+// parseCookie validates a bypass cookie for clientIP and returns the visitor
+// ID bound into it.
+func (c *Challenger) parseCookie(value, clientIP string) (visitorID string, ok bool) {
 	parts := strings.Split(value, ".")
-	if len(parts) != 2 && len(parts) != 3 {
+	if len(parts) != 3 {
 		return "", false
 	}
 	expiry, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil || time.Now().Unix() > expiry {
 		return "", false
 	}
-
-	mac := hmac.New(sha256.New, []byte(c.secret))
-	sig := parts[1]
-	if len(parts) == 3 {
-		visitorID = parts[1]
-		sig = parts[2]
-		fmt.Fprintf(mac, "cz-pass:%d:%s", expiry, visitorID)
-	} else {
-		fmt.Fprintf(mac, "cz-pass:%d", expiry)
-	}
-	expected := hex.EncodeToString(mac.Sum(nil)[:16])
-	if !hmac.Equal([]byte(expected), []byte(sig)) {
+	if !hmac.Equal([]byte(c.cookieMAC(expiry, clientIP, parts[1])), []byte(parts[2])) {
 		return "", false
 	}
-	return visitorID, true
+	return parts[1], true
 }
 
 func (c *Challenger) signNonce(nonce string, expiry int64) string {

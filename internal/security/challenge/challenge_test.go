@@ -18,6 +18,7 @@ import (
 )
 
 const testVisitorID = "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+const testIP = "203.0.113.7"
 
 // solvePoW brute-forces the challenge like the browser does (~256 tries).
 func solvePoW(nonce string) uint64 {
@@ -33,8 +34,8 @@ func TestCookieCarriesVisitorID(t *testing.T) {
 	c := New("secret", 3600, 5)
 	expiry := time.Now().Unix() + 3600
 
-	value := c.buildCookieValue(expiry, testVisitorID)
-	vid, ok := c.parseCookie(value)
+	value := c.buildCookieValue(expiry, testIP, testVisitorID)
+	vid, ok := c.parseCookie(value, testIP)
 	if !ok {
 		t.Fatal("freshly built cookie did not verify")
 	}
@@ -43,7 +44,7 @@ func TestCookieCarriesVisitorID(t *testing.T) {
 	}
 
 	// Empty visitor ID (fingerprint blocked/failed) still verifies.
-	vid, ok = c.parseCookie(c.buildCookieValue(expiry, ""))
+	vid, ok = c.parseCookie(c.buildCookieValue(expiry, testIP, ""), testIP)
 	if !ok || vid != "" {
 		t.Fatalf("empty-vid cookie: vid=%q ok=%v, want \"\" true", vid, ok)
 	}
@@ -52,32 +53,40 @@ func TestCookieCarriesVisitorID(t *testing.T) {
 func TestCookieVisitorIDTamperRejected(t *testing.T) {
 	c := New("secret", 3600, 5)
 	expiry := time.Now().Unix() + 3600
-	value := c.buildCookieValue(expiry, testVisitorID)
+	value := c.buildCookieValue(expiry, testIP, testVisitorID)
 
 	// Swap in a different visitor ID without re-signing.
 	forged := fmt.Sprintf("%d.%s.%s", expiry, "ffffffffffffffffffffffffffffffff",
 		value[len(value)-32:])
-	if _, ok := c.parseCookie(forged); ok {
+	if _, ok := c.parseCookie(forged, testIP); ok {
 		t.Fatal("cookie with swapped visitor ID must not verify")
 	}
 }
 
-func TestLegacyCookieStillValid(t *testing.T) {
+// TestCookieBoundToClient pins issue #312: a solved cookie works only from
+// the client key it was issued to (the same IPv6 /64 is the same client),
+// and the pre-binding "expiry.sig" format is refused.
+func TestCookieBoundToClient(t *testing.T) {
 	c := New("secret", 3600, 5)
 	expiry := time.Now().Unix() + 3600
-
-	// Pre-fingerprint format: "expiry.sig" with HMAC("cz-pass:expiry").
-	legacy := func() string {
-		mac := newTestMAC(c.secret, fmt.Sprintf("cz-pass:%d", expiry))
-		return fmt.Sprintf("%d.%s", expiry, mac)
-	}()
-
-	vid, ok := c.parseCookie(legacy)
-	if !ok {
-		t.Fatal("legacy two-part cookie must stay valid after upgrade")
+	cases := []struct {
+		issued, from string
+		want         bool
+	}{
+		{testIP, testIP, true},
+		{testIP, "198.51.100.8", false},
+		{"2001:db8:1:2::1", "2001:db8:1:2::ffff", true},
+		{"2001:db8:1:2::1", "2001:db8:1:3::1", false},
 	}
-	if vid != "" {
-		t.Fatalf("legacy cookie visitor ID = %q, want empty", vid)
+	for _, tt := range cases {
+		if _, ok := c.parseCookie(c.buildCookieValue(expiry, tt.issued, testVisitorID), tt.from); ok != tt.want {
+			t.Errorf("issued to %s, sent from %s: ok=%v, want %v", tt.issued, tt.from, ok, tt.want)
+		}
+	}
+
+	legacy := fmt.Sprintf("%d.%s", expiry, newTestMAC(c.secret, fmt.Sprintf("cz-pass:%d", expiry)))
+	if _, ok := c.parseCookie(legacy, testIP); ok {
+		t.Fatal("legacy two-part cookie must be refused")
 	}
 }
 
@@ -113,7 +122,7 @@ func TestVerifyFlowEndToEnd(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/_cz/verify", bytes.NewReader(body))
-	c.ServeVerify(rec, req)
+	c.ServeVerify(rec, req, testIP)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("verify returned %d: %s", rec.Code, rec.Body.String())
 	}
@@ -125,10 +134,13 @@ func TestVerifyFlowEndToEnd(t *testing.T) {
 
 	follow := httptest.NewRequest(http.MethodGet, "/", nil)
 	follow.AddCookie(cookies[0])
-	if !c.PassedChallenge(follow) {
+	if !c.PassedChallenge(follow, testIP) {
 		t.Fatal("request with issued cookie did not pass the challenge gate")
 	}
-	if got := c.VisitorID(follow); got != testVisitorID {
+	if c.PassedChallenge(follow, "198.51.100.8") {
+		t.Fatal("issued cookie passed the gate from another client")
+	}
+	if got := c.VisitorID(follow, testIP); got != testVisitorID {
 		t.Fatalf("VisitorID() = %q, want %q", got, testVisitorID)
 	}
 }
@@ -173,7 +185,7 @@ func TestVerifyRefusesAutomation(t *testing.T) {
 			"automation": automation,
 		})
 		rec := httptest.NewRecorder()
-		c.ServeVerify(rec, httptest.NewRequest(http.MethodPost, "/_cz/verify", bytes.NewReader(body)))
+		c.ServeVerify(rec, httptest.NewRequest(http.MethodPost, "/_cz/verify", bytes.NewReader(body)), testIP)
 		return rec
 	}
 
@@ -269,7 +281,7 @@ func TestBypassCookieSecureFlag(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/_cz/verify", bytes.NewReader(body))
 		mutate(req)
-		c.ServeVerify(rec, req)
+		c.ServeVerify(rec, req, testIP)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("verify returned %d: %s", rec.Code, rec.Body.String())
 		}
@@ -307,13 +319,13 @@ func TestVerifyReplayRejected(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	c.ServeVerify(rec, httptest.NewRequest(http.MethodPost, "/_cz/verify", bytes.NewReader(body)))
+	c.ServeVerify(rec, httptest.NewRequest(http.MethodPost, "/_cz/verify", bytes.NewReader(body)), testIP)
 	if rec.Code != http.StatusOK || len(rec.Result().Cookies()) != 1 {
 		t.Fatalf("first solve: code=%d cookies=%d, want 200 with 1 cookie", rec.Code, len(rec.Result().Cookies()))
 	}
 
 	rec = httptest.NewRecorder()
-	c.ServeVerify(rec, httptest.NewRequest(http.MethodPost, "/_cz/verify", bytes.NewReader(body)))
+	c.ServeVerify(rec, httptest.NewRequest(http.MethodPost, "/_cz/verify", bytes.NewReader(body)), testIP)
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("replayed solve returned %d, want 403", rec.Code)
 	}
@@ -328,7 +340,7 @@ func TestVerifyBodyCapped(t *testing.T) {
 	c := New("secret", 3600, 5)
 	huge := `{"nonce":"` + strings.Repeat("a", 1<<20) + `"}`
 	rec := httptest.NewRecorder()
-	c.ServeVerify(rec, httptest.NewRequest(http.MethodPost, "/_cz/verify", strings.NewReader(huge)))
+	c.ServeVerify(rec, httptest.NewRequest(http.MethodPost, "/_cz/verify", strings.NewReader(huge)), testIP)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("oversized verify body returned %d, want 400", rec.Code)
 	}

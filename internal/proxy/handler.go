@@ -136,7 +136,7 @@ func (h *Handler) ServeChallengeVerify(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	ch.ServeVerify(w, r)
+	ch.ServeVerify(w, r, h.realIP(r))
 }
 
 // ServeFingerprintJS serves the vendored FingerprintJS bundle used by the
@@ -283,7 +283,7 @@ func (h *Handler) Handle(c *echo.Context) error {
 	h.challengerMu.RUnlock()
 	visitorID := ""
 	if ch != nil {
-		visitorID = ch.VisitorID(r)
+		visitorID = ch.VisitorID(r, clientIP)
 	}
 
 	meta := reqMeta{
@@ -391,7 +391,7 @@ func (h *Handler) Handle(c *echo.Context) error {
 			h.logBlocked(r, appName, clientIP, country, http.StatusForbidden, 0, "ai_crawler_blocked:"+cat, time.Since(start), meta)
 			return deny(c, http.StatusForbidden, "ai_crawler_blocked", reqID, map[string]any{"error": "access denied"})
 		case bot.AIChallenge:
-			if ch != nil && !challenge.Exempt(r.Method, r.URL.Path) && !ch.PassedChallenge(r) {
+			if ch != nil && !challenge.Exempt(r.Method, r.URL.Path) && !ch.PassedChallenge(r, clientIP) {
 				metrics.BotChallengedTotal.WithLabelValues(appName).Inc()
 				mark("challenge")
 				h.logChallenged(r, appName, clientIP, http.StatusTemporaryRedirect, "ai_crawler_challenge:"+cat, time.Since(start), meta)
@@ -409,7 +409,7 @@ func (h *Handler) Handle(c *echo.Context) error {
 		if app != nil && app.BotMode != "" {
 			svcMode = app.BotMode
 		}
-		if (svcMode != "off" || login) && !ch.PassedChallenge(r) {
+		if (svcMode != "off" || login) && !ch.PassedChallenge(r, clientIP) {
 			byService := svcMode == "always"
 			byBotScore := svcMode != "off" && botAnalysis.Score >= ch.Threshold()
 			byAdaptive := svcMode != "off" && adaptiveDecision.ForceChallenge
