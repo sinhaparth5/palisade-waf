@@ -16,6 +16,7 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/labstack/echo/v5"
 
+	"palisade/internal/services"
 	"palisade/internal/storage"
 )
 
@@ -23,9 +24,10 @@ import (
 // enforce answers 401, log forwards and tags the row, the verified sub is
 // passed as X-Auth-Subject and a client copy never reaches the backend.
 func TestEdgeJWT(t *testing.T) {
-	var gotSub atomic.Value
+	var gotSub, gotPath atomic.Value
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotSub.Store(r.Header.Get("X-Auth-Subject"))
+		gotPath.Store(r.URL.Path)
 	}))
 	defer backend.Close()
 
@@ -68,6 +70,9 @@ func TestEdgeJWT(t *testing.T) {
 		{"enforce: unprotected path", "enforce", "/public", "", "evil", http.StatusOK, "", ""},
 		{"enforce: open path", "enforce", "/robots.txt", "", "", http.StatusOK, "", ""},
 		{"log: missing", "log", "/api/x", "", "evil", http.StatusOK, "jwt_invalid:log", ""},
+		// Issue #310: a non-canonical path must not step around the prefix.
+		{"enforce: doubled slash", "enforce", "//api/x", "", "", http.StatusUnauthorized, "jwt_invalid", ""},
+		{"enforce: doubled slash, valid", "enforce", "//api//x/", valid, "", http.StatusOK, "", "user-7"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -94,6 +99,9 @@ func TestEdgeJWT(t *testing.T) {
 			if tt.want == http.StatusOK && gotSub.Load() != tt.wantSub {
 				t.Errorf("backend X-Auth-Subject %q, want %q", gotSub.Load(), tt.wantSub)
 			}
+			if tt.path == "//api//x/" && gotPath.Load() != "/api/x/" {
+				t.Errorf("backend path %q, want the canonical /api/x/", gotPath.Load())
+			}
 			select {
 			case l := <-logs:
 				if l.Action != tt.wantAction {
@@ -103,5 +111,21 @@ func TestEdgeJWT(t *testing.T) {
 				t.Fatal("no request logged")
 			}
 		})
+	}
+
+	// Trusted IPs skip the WAF but not authentication, so only the canonical
+	// path stops a dot segment walking around the prefix (CRS would catch it
+	// for anyone else).
+	trusted, err := services.ParseTrustedIPs([]string{"203.0.113.9"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg.SetTrustedIPs(trusted)
+	req := httptest.NewRequest(http.MethodGet, "/z/../api/x", nil)
+	req.RemoteAddr = "203.0.113.9:1234"
+	rec := httptest.NewRecorder()
+	_ = h.Handle(e.NewContext(req, rec))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("trusted /z/../api/x: status %d, want 401", rec.Code)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -204,6 +205,19 @@ func NewHandler(registry *services.Registry, engine *waf.Engine, wafByService ma
 // fake range API). Must run before serving.
 func (h *Handler) SetBreachChecker(c *breach.Checker) { h.breach = c }
 
+// canonicalPath collapses "//" and resolves dot segments, keeping a trailing
+// slash. Non-rooted paths ("*" for OPTIONS *) are left alone.
+func canonicalPath(p string) string {
+	if !strings.HasPrefix(p, "/") {
+		return p
+	}
+	c := path.Clean(p)
+	if strings.HasSuffix(p, "/") && c != "/" {
+		c += "/"
+	}
+	return c
+}
+
 func (h *Handler) Handle(c *echo.Context) error {
 	start := time.Now()
 
@@ -222,6 +236,14 @@ func (h *Handler) Handle(c *echo.Context) error {
 	r := c.Request()
 	w := c.Response()
 	w.Header().Set("Server", serverHeader)
+
+	// One canonical path for every check and for the backend (issue #310):
+	// "//api/x" or "/z/../api/x" must not step around a "/api" rule while
+	// the backend serves it as "/api/x". The WAF still sees the raw
+	// RequestURI, so CRS keeps scoring traversal attempts.
+	if p := canonicalPath(r.URL.Path); p != r.URL.Path {
+		r.URL.Path, r.URL.RawPath = p, ""
+	}
 
 	reqID := generateRequestID()
 	w.Header().Set("X-Request-ID", reqID)
@@ -318,7 +340,8 @@ func (h *Handler) Handle(c *echo.Context) error {
 	}
 
 	trusted := h.registry.Trusted(clientIP)
-	open := trusted || openPath(r)
+	crawlerFile := openPath(r)
+	open := trusted || crawlerFile
 
 	// 1. IP blocklist — an explicit admin/autoban decision, and 2. geo
 	// blocklist below, both checked before the bot-challenge gate. An IP
@@ -496,7 +519,7 @@ func (h *Handler) Handle(c *echo.Context) error {
 	var jwtv *jwtauth.Verifier
 	var jwtSub string
 	jwtFailed := false
-	if app != nil && !open {
+	if app != nil && !crawlerFile {
 		jwtv = h.registry.JWT(app.Name)
 	}
 	if jwtv != nil {

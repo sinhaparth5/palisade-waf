@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#310) Path-based checks can be bypassed with non-canonical paths
+
 ## [3.2.8] - 2026-11-12
 
 - (#291) Let the WAF verdict cache serve requests that carry cookies
