@@ -109,7 +109,7 @@ docker compose run --rm waf setup --db /data/waf.db --admin-email you@example.co
 docker compose up --build
 ```
 
-`Dockerfile` (multi-stage, `scratch` final image) and `docker-compose.yml` are for local container development only. The image runs as uid 65532: map ports below 1024 (or add `--cap-add NET_BIND_SERVICE`), and if a volume was created by an image that still ran as root, fix its owner once with `docker run --rm -v <volume>:/data alpine chown -R 65532:65532 /data`. Use Option A for systemd-based installs.
+`Dockerfile` (multi-stage, `scratch` final image) and `compose.yml` are for local container development only. The image runs as uid 65532: map ports below 1024 (or add `--cap-add NET_BIND_SERVICE`), and if a volume was created by an image that still ran as root, fix its owner once with `docker run --rm -v <volume>:/data alpine chown -R 65532:65532 /data`. Use Option A for systemd-based installs.
 
 ## Usage
 
