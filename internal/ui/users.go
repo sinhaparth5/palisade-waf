@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/labstack/echo/v5"
 
@@ -87,7 +86,7 @@ func (h *Handler) CreateUser(c *echo.Context) error {
 	email := storage.NormalizeEmail(c.FormValue("email"))
 	role := c.FormValue("role")
 	switch {
-	case !strings.Contains(email, "@"):
+	case !storage.ValidEmail(email):
 		return h.renderUsersCard(c, errors.New("enter a valid email"))
 	case !storage.ValidRole(role):
 		return h.renderUsersCard(c, errors.New("pick a role"))

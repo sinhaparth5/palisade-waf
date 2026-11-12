@@ -50,7 +50,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 --max-conns-per-ip 256 (concurrent TCP conns per client; 0 = off)
 ```
 
-**Subcommands**: `prune [--retention d] [--vacuum]`, `setup --admin-email ...` (password on stdin, idempotent), `config export [--out f] | import [--replace] f` (needs `--db-key-file` for sealed secrets), `gencert --hosts ...`, `healthcheck [--url]` (scratch image has no curl), `--version`.
+**Subcommands**: `prune [--retention d] [--vacuum]`, `setup --admin-email ...` (password on stdin, idempotent; the email must pass `storage.ValidEmail`, since the login field is `type="email"`; `--reset-password` replaces an existing user's password, signs out their sessions and writes an audit row, issue #315), `config export [--out f] | import [--replace] f` (needs `--db-key-file` for sealed secrets), `gencert --hosts ...`, `healthcheck [--url]` (scratch image has no curl), `--version`.
 
 ## Request pipeline
 

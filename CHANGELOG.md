@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#315) Admin setup accepts a non-email login, says it configured an account it skipped, and has no password reset
+
 ## [3.3.0] - 2026-11-12
 
 - (#314) Return a JSON challenge_required to API calls instead of redirecting them to the challenge page

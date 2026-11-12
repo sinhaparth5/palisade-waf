@@ -101,6 +101,7 @@ func TestSetup(t *testing.T) {
 	}
 	for name, err := range map[string]error{
 		"no email":       setup("long-enough-password\n"),
+		"plain name":     setup("long-enough-password\n", "--admin-email", "amir"),
 		"empty password": setup("\n", "--admin-email", "a@example.com"),
 		"short password": setup("short\n", "--admin-email", "a@example.com"),
 		"leaked":         setup(leakedPassword+"\n", "--admin-email", "a@example.com"),
@@ -133,6 +134,63 @@ func TestSetup(t *testing.T) {
 	acme, _ := db.GetAcmeEmail()
 	if domain != "waf2.example" || acme != "ops@example.com" {
 		t.Errorf("domain %q acme %q", domain, acme)
+	}
+}
+
+// TestSetupMessagesAndReset pins issue #315: setup says whether it created
+// the account or left it alone, and --reset-password replaces an existing
+// user's password, signs out their sessions and writes an audit row.
+func TestSetupMessagesAndReset(t *testing.T) {
+	fakeHIBP(t)
+	path := filepath.Join(t.TempDir(), "waf.db")
+	setup := func(stdin string, extra ...string) (string, error) {
+		return run(append([]string{"setup", "--db", path}, extra...), stdin)
+	}
+	if out, err := setup("long-enough-password\n", "--admin-email", "A@Example.com"); err != nil || !strings.Contains(out, "admin account created (a@example.com)") {
+		t.Fatalf("create: %q, %v", out, err)
+	}
+	if out, err := setup("another-long-password\n", "--admin-email", "a@example.com"); err != nil || !strings.Contains(out, "password unchanged (use --reset-password") {
+		t.Fatalf("re-run: %q, %v", out, err)
+	}
+
+	db, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	u, _ := db.GetAdminUserByEmail("a@example.com")
+	token, err := db.CreateSession(u.ID, "203.0.113.1", "test", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, args := range map[string][]string{
+		"unknown user": {"--admin-email", "b@example.com", "--reset-password"},
+		"short":        {"--admin-email", "a@example.com", "--reset-password"},
+	} {
+		stdin := "another-long-password\n"
+		if name == "short" {
+			stdin = "short\n"
+		}
+		if _, err := setup(stdin, args...); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	out, err := setup("another-long-password\n", "--admin-email", "a@example.com", "--reset-password")
+	if err != nil || !strings.Contains(out, "password reset for a@example.com") {
+		t.Fatalf("reset: %q, %v", out, err)
+	}
+	if u, _ := db.CheckAdminLogin("a@example.com", "another-long-password"); u == nil {
+		t.Error("new password refused")
+	}
+	if u, _ := db.CheckAdminLogin("a@example.com", "long-enough-password"); u != nil {
+		t.Error("old password still works")
+	}
+	if ok, _ := db.ValidateSession(token); ok {
+		t.Error("session survived the reset")
+	}
+	if rows, _, _ := db.ListAudit(10, 0); len(rows) != 1 || rows[0].Action != "setup --reset-password" {
+		t.Errorf("audit = %+v", rows)
 	}
 }
 

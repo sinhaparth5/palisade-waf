@@ -54,7 +54,7 @@ func Run(ctx context.Context, args []string, version string, assets Assets, stdi
 	case "prune":
 		err = runPrune(rest)
 	case "setup":
-		err = runSetup(rest, stdin)
+		err = runSetup(rest, stdin, stdout)
 	case "config":
 		err = runConfig(rest, stdin, stdout)
 	case "gencert":
@@ -336,16 +336,17 @@ func readLine(r io.Reader) string {
 }
 
 // runSetup seeds admin credentials and optional TLS config into the DB.
-// Idempotent for admin credentials — on upgrades (credentials already exist)
-// it skips that step, so re-running the installer never overwrites a changed
-// password. Domain and ACME email are always overwritten (safe to update
-// during upgrades).
-// Invoked as: palisade setup --db path --admin-email email [--domain d] [--acme-email e]
+// Idempotent for admin credentials: when an admin exists (upgrades, re-runs)
+// the account is left alone unless --reset-password names an existing user,
+// whose password is then replaced (issue #315). Domain and ACME email are
+// always overwritten (safe to update during upgrades).
+// Invoked as: palisade setup --db path --admin-email email [--reset-password] [--domain d] [--acme-email e]
 // Password is read from stdin (one line).
-func runSetup(args []string, stdin io.Reader) error {
+func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
 	dbPath, dbDriver := dbFlags(fs)
-	adminEmail := fs.String("admin-email", "", "admin email address")
+	adminEmail := fs.String("admin-email", "", "admin email address (the login name)")
+	reset := fs.Bool("reset-password", false, "replace the password of the existing user --admin-email")
 	domain := fs.String("domain", "", "primary domain for ACME (Let's Encrypt)")
 	acmeEmail := fs.String("acme-email", "", "ACME contact email (defaults to admin email)")
 	if err := fs.Parse(args); err != nil {
@@ -353,6 +354,10 @@ func runSetup(args []string, stdin io.Reader) error {
 	}
 	if *adminEmail == "" {
 		return errors.New("--admin-email is required")
+	}
+	// The login form is type="email": a plain name could never be typed in.
+	if !storage.ValidEmail(*adminEmail) {
+		return fmt.Errorf("--admin-email %q is not an email address (it is the login name, e.g. you@example.com)", *adminEmail)
 	}
 
 	fmt.Fprint(os.Stderr, "Admin password: ")
@@ -368,20 +373,44 @@ func runSetup(args []string, stdin io.Reader) error {
 	defer db.Close()
 
 	// Only a password that will actually be stored is judged: a re-run on
-	// an existing install must stay a no-op (SeedAdmin skips it).
+	// an existing install must stay a no-op.
 	n, err := db.CountAdminUsers()
 	if err != nil {
 		return err
 	}
-	if n == 0 {
-		if err := ui.ValidateAdminPassword(context.Background(), breach.New(hibpURL), *adminEmail, password); err != nil {
+	validate := func() error {
+		return ui.ValidateAdminPassword(context.Background(), breach.New(hibpURL), *adminEmail, password)
+	}
+	switch {
+	case *reset:
+		u, err := db.GetAdminUserByEmail(*adminEmail)
+		if err != nil {
 			return err
 		}
+		if u == nil {
+			return fmt.Errorf("no admin user %q to reset", storage.NormalizeEmail(*adminEmail))
+		}
+		if err := validate(); err != nil {
+			return err
+		}
+		if err := db.UpdateAdminCredentials(u.ID, "", password); err != nil { // also signs out their sessions
+			return err
+		}
+		if err := db.InsertAudit(storage.AuditEntry{Actor: "palisade setup (shell)", Action: "setup --reset-password", Target: fmt.Sprintf("id=%d", u.ID), Summary: "email=" + u.Email}); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "setup: password reset for %s; their sessions were signed out\n", u.Email)
+	case n > 0:
+		fmt.Fprintln(stdout, "setup: an admin account already exists, password unchanged (use --reset-password to change it)")
+	default:
+		if err := validate(); err != nil {
+			return err
+		}
+		if _, err := db.CreateAdminUser(*adminEmail, password, storage.RoleOwner); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "setup: admin account created (%s)\n", storage.NormalizeEmail(*adminEmail))
 	}
-	if err := db.SeedAdmin(*adminEmail, password); err != nil {
-		return err
-	}
-	log.Printf("setup: admin account configured (%s)", *adminEmail)
 
 	if *domain == "" {
 		return nil

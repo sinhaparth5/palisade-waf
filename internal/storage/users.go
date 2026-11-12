@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +56,14 @@ type AdminUser struct {
 // NormalizeEmail is the form emails are stored and looked up in, so login
 // is case-insensitive.
 func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
+
+// ValidEmail reports whether email can be typed into the login form's
+// type="email" field: text on both sides of one "@" and no spaces. setup,
+// install.sh and the Users card all check it (issue #315).
+func ValidEmail(email string) bool {
+	local, domain, ok := strings.Cut(NormalizeEmail(email), "@")
+	return ok && local != "" && domain != "" && !strings.ContainsAny(local+domain, "@ \t\r\n")
+}
 
 const adminUserColumns = `id, email, role, disabled, totp_secret <> '',
 	(SELECT COUNT(*) FROM admin_sso_identities i WHERE i.user_id = admin_users.id) > 0,
@@ -190,7 +197,6 @@ func (db *DB) SeedAdmin(email, password string) error {
 		return err
 	}
 	if n > 0 {
-		log.Printf("admin accounts already exist — skipping")
 		return nil
 	}
 	_, err = db.CreateAdminUser(email, password, RoleOwner)

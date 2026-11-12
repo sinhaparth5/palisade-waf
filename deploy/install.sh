@@ -302,9 +302,10 @@ if [ "$IS_UPGRADE" = "0" ] && [ "$DRY_RUN" != "1" ]; then
 	echo
 
 	while true; do
-		read -rp "${C_CYAN}  Admin email:${C_RESET} " ADMIN_EMAIL
-		[ -n "$ADMIN_EMAIL" ] && break
-		printf '  %sEmail cannot be empty.%s\n' "$C_RED" "$C_RESET"
+		read -rp "${C_CYAN}  Admin email (your login name):${C_RESET} " ADMIN_EMAIL
+		# The login form only accepts an email address (issue #315).
+		[[ "$ADMIN_EMAIL" =~ ^[^@[:space:]]+@[^@[:space:]]+$ ]] && break
+		printf '  %sEnter an email address, e.g. you@example.com: the login form accepts nothing else.%s\n' "$C_RED" "$C_RESET"
 	done
 
 	while true; do

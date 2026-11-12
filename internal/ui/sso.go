@@ -333,7 +333,7 @@ func checkIssuer(cfg storage.SSOConfig) error {
 // CreateSSOInvite invites an email to sign in with SSO under a role.
 func (h *Handler) CreateSSOInvite(c *echo.Context) error {
 	email := storage.NormalizeEmail(c.FormValue("email"))
-	if !strings.Contains(email, "@") {
+	if !storage.ValidEmail(email) {
 		return h.renderUsersCard(c, errors.New("enter a valid email"))
 	}
 	return h.renderUsersCard(c, h.db.CreateSSOInvite(email, c.FormValue("role")))
