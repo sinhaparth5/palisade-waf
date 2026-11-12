@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.2.6] - 2026-11-12
+
 - (#284) Shrink the embedded icon and flag assets
 - (#283) Enforce mode for the script inventory CSP
 - (#282) Per-service request policy: methods, content types and body size
@@ -21,13 +23,5 @@ rather than growing this file forever.
 - (#267) Owner-only pprof endpoint
 - (#266) Remove JA3 fingerprinting
 
-## [3.2.5] - 2026-11-12
-
-- (#265) Run fuzz tests in CI and cover the request parsers
-- (#264) Split handlers.go and db.go into per-feature files
-- (#263) Export and import configuration as a file
-- (#262) REST API write endpoints for geo rules, rule exceptions and virtual patches
-- (#280) Per-path rate limits per service
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.5...main
-[3.2.5]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.4...v3.2.5
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.6...main
+[3.2.6]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.5...v3.2.6
