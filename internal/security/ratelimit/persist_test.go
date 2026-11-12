@@ -46,6 +46,19 @@ func TestSnapshotRestoreAndEvict(t *testing.T) {
 	if fresh.TrackedIPs() != 0 {
 		t.Fatal("evictIdle kept an idle bucket")
 	}
+
+	// 5/h, burst 1: idle past idleTTL but not refilled, so evicting would
+	// hand out a fresh token early (issue #280).
+	slow := NewWithParams(5.0/3600, 1)
+	defer slow.Stop()
+	slow.Allow("10.0.0.2")
+	slow.mu.Lock()
+	slow.buckets["10.0.0.2"].lastRefill = time.Now().Add(-2 * idleTTL)
+	slow.mu.Unlock()
+	slow.evictIdle()
+	if slow.TrackedIPs() != 1 || slow.Allow("10.0.0.2").Allowed {
+		t.Fatal("evictIdle dropped a slow bucket before it refilled")
+	}
 }
 
 func TestStartPersistenceSavesOnStop(t *testing.T) {

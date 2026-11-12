@@ -139,6 +139,7 @@ type Registry struct {
 	hosts     map[string]int                // host or alias (lowercase) -> index into list
 	mtls      map[int]*mtlsPolicy           // index into list -> client-cert policy (issue #191)
 	jwt       map[string]*jwtauth.Verifier  // service name -> bearer-token check (issue #279)
+	rateRules map[string][]RateRule         // service name -> per-path rate limits (issue #280)
 	stopCheck chan struct{}                 // closed on Reload to stop the previous active health checks
 	honeypots []string                      // see Honeypot
 	trusted   []netip.Prefix                // see Trusted
@@ -202,6 +203,11 @@ func (r *Registry) Reload(db *storage.DB) error {
 		return err
 	}
 	jwt := loadJWTVerifiers(storedJWT, list)
+	storedRates, err := db.ListServiceRateRules()
+	if err != nil {
+		return err
+	}
+	rateRules := buildRateRules(storedRates, list)
 	gates, err := db.ListServiceGates()
 	if err != nil {
 		return err
@@ -499,7 +505,7 @@ func (r *Registry) Reload(db *storage.DB) error {
 	}
 
 	r.mu.Lock()
-	oldLimiters := r.limiters
+	oldLimiters, oldRateRules := r.limiters, r.rateRules
 	oldList, oldCached, oldVarnish := r.list, r.cached, r.varnish
 	r.list = list
 	r.proxies = proxies
@@ -512,6 +518,7 @@ func (r *Registry) Reload(db *storage.DB) error {
 	r.hosts = hosts
 	r.mtls = mtls
 	r.jwt = jwt
+	r.rateRules = rateRules
 	r.csp = cspNames
 	r.mu.Unlock()
 
@@ -519,6 +526,7 @@ func (r *Registry) Reload(db *storage.DB) error {
 	for _, l := range oldLimiters {
 		l.Stop()
 	}
+	stopRateRules(oldRateRules)
 
 	// Anything Varnish still holds for a service that was removed, re-pointed
 	// or taken off the cache is now wrong: re-adding it (or re-enabling

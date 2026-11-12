@@ -30,7 +30,7 @@ type MigrationTableResult struct {
 // admin_users (credentials, TOTP), admin_sso_identities, certificates, api_keys, waf_disabled_rules,
 // waf_service_rule_exceptions, waf_custom_rules, threat_intel_sources + their synced
 // threat_intel_ips, webhook_config, ip_threat_scores, ja4_reputation, service_openapi,
-// service_mtls (the CA files it points at stay on disk), service_mcp, service_jwt, service_gate, service_csp, csp_scripts.
+// service_mtls (the CA files it points at stay on disk), service_mcp, service_jwt, service_rate_rules, service_gate, service_csp, csp_scripts.
 //
 // Deliberately NOT migrated: requests (the access/request log — could be
 // millions of rows on a long-running install; disposable operational
@@ -103,6 +103,7 @@ func (db *DB) MigrateConfigTo(targetDriver, targetDSN string) (MigrationReport, 
 		{"service_mtls", migrateServiceMTLSTable, false},
 		{"service_mcp", migrateServiceMCPTable, false},
 		{"service_jwt", migrateServiceJWTTable, false},
+		{"service_rate_rules", migrateServiceRateRulesTable, false},
 		{"service_gate", migrateServiceGateTable, false},
 		{"service_csp", migrateServiceCSPTable, false},
 		{"csp_scripts", migrateCSPScriptsTable, false},
@@ -632,6 +633,21 @@ func migrateServiceJWTTable(source, target *DB, _ bool) (int, error) {
 	n := 0
 	for id, j := range checks {
 		if err := target.SetServiceJWT(id, j); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+func migrateServiceRateRulesTable(source, target *DB, _ bool) (int, error) {
+	all, err := source.ListServiceRateRules()
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for id, rules := range all {
+		if err := target.SetServiceRateRules(id, rules); err != nil {
 			return n, err
 		}
 		n++

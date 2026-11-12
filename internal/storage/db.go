@@ -1184,7 +1184,7 @@ func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
 }
 
 func (db *DB) RemoveService(id int) error {
-	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_jwt", "service_gate", "service_csp", "csp_scripts"} {
+	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_jwt", "service_rate_rules", "service_gate", "service_csp", "csp_scripts"} {
 		if _, err := db.exec(`DELETE FROM `+t+` WHERE service_id = ?`, id); err != nil {
 			return err
 		}
@@ -1444,6 +1444,37 @@ func (db *DB) ListServiceMCP() (map[int]ServiceMCP, error) {
 			return nil, err
 		}
 		out[id] = m
+	}
+	return out, rows.Err()
+}
+
+// SetServiceRateRules stores a service's per-path rate limits (issue #280);
+// empty rules remove the row.
+func (db *DB) SetServiceRateRules(id int, rules string) error {
+	if rules == "" {
+		_, err := db.exec(`DELETE FROM service_rate_rules WHERE service_id = ?`, id)
+		return err
+	}
+	cols := []string{"service_id", "rules"}
+	_, err := db.exec(db.dialect.upsertUpdate("service_rate_rules", cols, "?, ?", []string{"service_id"}, cols[1:]), id, rules)
+	return err
+}
+
+// ListServiceRateRules returns every service's per-path rate limits by id.
+func (db *DB) ListServiceRateRules() (map[int]string, error) {
+	rows, err := db.query(`SELECT service_id, rules FROM service_rate_rules`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]string{}
+	for rows.Next() {
+		var id int
+		var rules string
+		if err := rows.Scan(&id, &rules); err != nil {
+			return nil, err
+		}
+		out[id] = rules
 	}
 	return out, rows.Err()
 }

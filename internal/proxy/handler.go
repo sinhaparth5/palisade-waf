@@ -441,37 +441,41 @@ func (h *Handler) Handle(c *echo.Context) error {
 		return deny(c, http.StatusTooManyRequests, "rate_limited", reqID, map[string]any{"error": "too many requests"})
 	}
 
+	// tooMany answers 429 for a per-service, per-path or login limit.
+	tooMany := func(res ratelimit.Result, reason string) error {
+		mark("ratelimit")
+		setRateLimitHeaders(c.Response().Header(), res)
+		metrics.RateLimitedTotal.WithLabelValues(appName).Inc()
+		h.logBlocked(r, appName, clientIP, country, http.StatusTooManyRequests, 0, reason, time.Since(start), meta)
+		c.Response().Header().Set("Retry-After", strconv.Itoa(max(1, int(res.RetryAfter.Seconds()))))
+		return deny(c, http.StatusTooManyRequests, "rate_limited", reqID, map[string]any{"error": "too many requests"})
+	}
+
 	// 4.5 Per-service rate limit — only if the matched service has its own limit.
 	if app != nil && !open {
 		svRes := h.registry.AllowService(app.Name, rlKey)
 		setRateLimitHeaders(c.Response().Header(), svRes)
 		if !svRes.Allowed {
-			mark("ratelimit")
-			metrics.RateLimitedTotal.WithLabelValues(appName).Inc()
-			h.logBlocked(r, appName, clientIP, country, http.StatusTooManyRequests, 0, "rate_limited", time.Since(start), meta)
-			secs := int(svRes.RetryAfter.Seconds())
-			if secs < 1 {
-				secs = 1
+			return tooMany(svRes, "rate_limited")
+		}
+		// 4.55 Per-path rate limit (issue #280), matched on the service
+		// path; the rule goes in the action so the log row shows it.
+		path := r.URL.Path
+		if app.Prefix != "" && services.PrefixMatch(path, app.Prefix) {
+			path = services.StripPrefix(path, app.Prefix)
+		}
+		if pRes, rule := h.registry.AllowPath(app.Name, r.Method, path, rlKey); rule != "" {
+			setRateLimitHeaders(c.Response().Header(), pRes)
+			if !pRes.Allowed {
+				return tooMany(pRes, "rate_limited:path "+rule)
 			}
-			c.Response().Header().Set("Retry-After", strconv.Itoa(secs))
-			return deny(c, http.StatusTooManyRequests, "rate_limited", reqID, map[string]any{"error": "too many requests"})
 		}
 	}
 	// 4.6 Login protection (issue #132): a strict limit on submissions only,
 	// so loading or reloading the login page is never what trips it.
 	if login && !trusted && r.Method != http.MethodGet && r.Method != http.MethodHead {
-		lRes := h.registry.AllowLogin(app.Name, rlKey)
-		if !lRes.Allowed {
-			mark("ratelimit")
-			setRateLimitHeaders(c.Response().Header(), lRes)
-			metrics.RateLimitedTotal.WithLabelValues(appName).Inc()
-			h.logBlocked(r, appName, clientIP, country, http.StatusTooManyRequests, 0, "rate_limited:login", time.Since(start), meta)
-			secs := int(lRes.RetryAfter.Seconds())
-			if secs < 1 {
-				secs = 1
-			}
-			c.Response().Header().Set("Retry-After", strconv.Itoa(secs))
-			return deny(c, http.StatusTooManyRequests, "rate_limited", reqID, map[string]any{"error": "too many requests"})
+		if lRes := h.registry.AllowLogin(app.Name, rlKey); !lRes.Allowed {
+			return tooMany(lRes, "rate_limited:login")
 		}
 	}
 	mark("ratelimit")

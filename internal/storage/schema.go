@@ -341,6 +341,13 @@ func (db *DB) schemaStatements() []string {
 			tools      TEXT NOT NULL
 		)`,
 
+		// Per-path rate limits per service (issue #280): one
+		// "METHOD /prefix rate burst" per line, see services.ParseRateRules.
+		`CREATE TABLE IF NOT EXISTS service_rate_rules (
+			service_id INTEGER PRIMARY KEY,
+			rules      TEXT NOT NULL
+		)`,
+
 		// Bearer JWT check per service (issue #279). Lists are
 		// newline-separated; public_key is PEM.
 		`CREATE TABLE IF NOT EXISTS service_jwt (

@@ -153,6 +153,10 @@
           </div>
         </div>
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Set 0 or leave blank to fall through to the global limit from Settings.</p>
+        <label for="rl-path-rules" class="field-label">Path limits</label>
+        <textarea id="rl-path-rules" name="path_rules" rows="4" spellcheck="false" placeholder="POST /password-reset 5/h 3&#10;* /search 2/s 10&#10;GET /export 10/m 2"
+          class="field text-[13px] font-mono"></textarea>
+        <p class="text-[12px] text-slate-500 mt-[6px] mb-4 leading-[1.5]">One <span class="font-mono">METHOD /path rate burst</span> per line, on top of the limits above. <span class="font-mono">*</span> matches any method; the path is a prefix and the longest match wins. Rate is <span class="font-mono">N/s</span>, <span class="font-mono">N/m</span> or <span class="font-mono">N/h</span> per client.</p>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
       <div id="rl-error" class="text-[12px] text-red-600 mt-[10px]"></div>
@@ -893,7 +897,7 @@
       data-aliases="{{range $i, $a := .HostAliases}}{{if $i}}&#10;{{end}}{{$a}}{{end}}" data-canonical="{{.CanonicalHost}}"
       data-ai="{{.AICrawlerPolicy}}" data-breach-action="{{.BreachAction}}" data-breach-fields="{{range $i, $f := .BreachFields}}{{if $i}} {{end}}{{$f}}{{end}}"
       data-login-paths="{{range $i, $p := .LoginPaths}}{{if $i}}&#10;{{end}}{{$p}}{{end}}"
-      data-rps="{{.RateLimitRPS}}" data-burst="{{.RateLimitBurst}}" data-mode="{{.BotMode}}" data-cache="{{if .CacheEnabled}}1{{else}}0{{end}}"
+      data-rps="{{.RateLimitRPS}}" data-burst="{{.RateLimitBurst}}" data-rate-rules="{{.RateRules}}" data-mode="{{.BotMode}}" data-cache="{{if .CacheEnabled}}1{{else}}0{{end}}"
       data-session-cache="{{if .CacheBySession}}1{{else}}0{{end}}" data-session-cookie="{{.SessionCookieName}}"
       data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
       data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}"
@@ -949,6 +953,7 @@
 
   {{template "svc-view-head" "Rate limit"}}
   {{template "svc-kv" (map "K" "Limit" "V" (or (and (gt .RateLimitRPS 0.0) (printf "%g/s, burst %s" .RateLimitRPS (or (and .RateLimitBurst (printf "%d" .RateLimitBurst)) "auto"))) "Global limit"))}}
+  {{if not .RateRules}}{{template "svc-kv" (map "K" "Path limits" "V" "None")}}{{else}}<p class="pt-2 text-slate-500">Path limits</p><pre class="my-2 border border-line bg-surface p-3 font-mono text-[12px] text-ink whitespace-pre-wrap">{{.RateRules}}</pre>{{end}}
 
   {{template "svc-view-head" "Bot"}}
   {{template "svc-kv" (map "K" "Bot protection" "V" (or (and (eq .BotMode "always") "Always challenge") (and (eq .BotMode "off") "Off for this service") "Inherit global"))}}

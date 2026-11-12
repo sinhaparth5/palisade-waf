@@ -204,6 +204,7 @@
     rlIdInput.value = d.id;
     rpsInput.value = parseFloat(d.rps) > 0 ? d.rps : '';
     burstInput.value = parseInt(d.burst) > 0 ? d.burst : '';
+    document.getElementById('rl-path-rules').value = d.rateRules || '';
 
     botIdInput.value = d.id;
     botForm.setAttribute('hx-post', adminPath + '/services/bot/' + d.id);

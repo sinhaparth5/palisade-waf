@@ -194,12 +194,16 @@ func (l *Limiter) runJanitor() {
 	}
 }
 
+// evictIdle drops buckets idle for idleTTL that have refilled to burst, so
+// dropping them changes nothing. A slow rate (5/h) keeps its bucket until
+// then; evicting it earlier would hand the client a fresh burst.
 func (l *Limiter) evictIdle() {
-	cutoff := time.Now().Add(-idleTTL)
+	now := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for ip, b := range l.buckets {
-		if b.lastRefill.Before(cutoff) {
+		idle := now.Sub(b.lastRefill)
+		if idle > idleTTL && b.tokens+idle.Seconds()*l.rate >= l.burst {
 			delete(l.buckets, ip)
 		}
 	}

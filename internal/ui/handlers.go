@@ -2002,6 +2002,7 @@ type ServiceView struct {
 	MTLS        storage.ServiceMTLS // zero value when no client CA is stored
 	MCP         storage.ServiceMCP  // zero value when the MCP guard is off
 	JWT         storage.ServiceJWT  // zero value when the JWT check is off
+	RateRules   string              // per-path rate limits, "" when none
 	CSP         string              // report-only policy, "" when off
 	Scripts     []storage.CSPScript // script sources its reports named
 }
@@ -2018,12 +2019,13 @@ func (h *Handler) serviceViews() []ServiceView {
 	mtls, _ := h.db.ListServiceMTLS()
 	mcp, _ := h.db.ListServiceMCP()
 	jwts, _ := h.db.ListServiceJWT()
+	rateRules, _ := h.db.ListServiceRateRules()
 	cspPolicies, _ := h.db.ListServiceCSP()
 	scripts, _ := h.db.ListCSPScripts()
 	out := make([]ServiceView, len(list))
 	for i, s := range list {
 		healthy, known := h.registry.IsHealthy(s.Name)
-		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID], MCP: mcp[s.ID], JWT: jwts[s.ID], CSP: cspPolicies[s.ID], Scripts: scripts[s.ID]}
+		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID], MCP: mcp[s.ID], JWT: jwts[s.ID], RateRules: rateRules[s.ID], CSP: cspPolicies[s.ID], Scripts: scripts[s.ID]}
 	}
 	return out
 }
@@ -2483,7 +2485,14 @@ func (h *Handler) SetServiceRateLimit(c *echo.Context) error {
 	if burst < 0 {
 		burst = 0
 	}
+	pathRules := strings.TrimSpace(strings.ReplaceAll(c.FormValue("path_rules"), "\r\n", "\n"))
+	if _, err := services.ParseRateRules(pathRules); err != nil {
+		return h.rlError(c, "Path limits: "+err.Error())
+	}
 	if err := h.db.SetServiceRateLimit(id, rps, burst); err != nil {
+		return err
+	}
+	if err := h.db.SetServiceRateRules(id, pathRules); err != nil {
 		return err
 	}
 	if err := h.registry.Reload(h.db); err != nil {

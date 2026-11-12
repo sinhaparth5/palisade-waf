@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#280) Per-path rate limits per service
+
 ## [3.2.4] - 2026-11-12
 
 - (#274) Run the Docker image as a non-root user

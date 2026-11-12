@@ -330,7 +330,8 @@ func TestServiceSettingHandlers(t *testing.T) {
 		{[]string{"service_id", id, "rps", "x"}, 200, true},
 		{[]string{"service_id", id, "burst", "x"}, 200, true},
 		{[]string{"service_id", id, "rps", "-2", "burst", "-1"}, 200, false},
-		{[]string{"service_id", id, "rps", "3", "burst", "6"}, 200, false},
+		{[]string{"service_id", id, "rps", "3", "burst", "6", "path_rules", "POST /reset 5/q 1"}, 200, true},
+		{[]string{"service_id", id, "rps", "3", "burst", "6", "path_rules", "post /reset 5/h 3\r\n* /search 2/s 10"}, 200, false},
 	} {
 		rec := env.do("POST", "/admin/services/ratelimit", form(tc.f...))
 		wantCode(t, "ratelimit", rec.Code, tc.code, rec.Body.String())
@@ -340,6 +341,12 @@ func TestServiceSettingHandlers(t *testing.T) {
 	}
 	if got, _ := env.db.GetService(svc.ID); got.RateLimitRPS != 3 || got.RateLimitBurst != 6 {
 		t.Errorf("rate limit = %v/%v", got.RateLimitRPS, got.RateLimitBurst)
+	}
+	if got, _ := env.db.ListServiceRateRules(); got[svc.ID] != "post /reset 5/h 3\n* /search 2/s 10" {
+		t.Errorf("path rules = %q", got[svc.ID])
+	}
+	if _, rule := env.h.registry.AllowPath(svc.Name, "POST", "/reset/x", "1.2.3.4"); rule != "POST /reset 5/h 3" {
+		t.Errorf("registry not reloaded: rule %q", rule)
 	}
 
 	// Purge: invalid id / unknown service / Varnish unreachable all report inline.
