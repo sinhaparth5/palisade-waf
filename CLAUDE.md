@@ -21,7 +21,7 @@ make test        # go test ./...
 make bench       # proxy pipeline benchmarks -> bench.txt (see BENCHMARKS.md)
 make fuzz        # every Fuzz* target for FUZZTIME (default 30s) each
 make lint        # golangci-lint run ./... (.golangci.yml, version pinned in LINT_VERSION)
-make dist        # cross-compile linux/amd64, linux/arm64, windows/amd64 (CGO_ENABLED=0)
+make dist        # cross-compile linux/amd64, linux/arm64 (CGO_ENABLED=0)
 make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 ```
 

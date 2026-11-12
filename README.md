@@ -87,7 +87,7 @@ The pin lives in your service's flags, not the repo. It skips only the challenge
 ### Option C: cross-compiled release binaries
 
 ```bash
-make dist        # cross-compiles Linux amd64/arm64 and Windows amd64 binaries, CGO_ENABLED=0
+make dist        # cross-compiles Linux amd64/arm64 binaries, CGO_ENABLED=0
 make checksums   # writes dist/checksums.txt
 ```
 
@@ -111,7 +111,7 @@ docker compose up --build
 
 ### GeoIP setup (optional)
 
-Country blocking uses the bundled MaxMind GeoLite2 Country database by default, so fresh Windows/Linux builds work without manually copying an `.mmdb` file. This product includes GeoLite Data created by MaxMind, available from [https://www.maxmind.com](https://www.maxmind.com).
+Country blocking uses the bundled MaxMind GeoLite2 Country database by default, so fresh builds work without manually copying an `.mmdb` file. This product includes GeoLite Data created by MaxMind, available from [https://www.maxmind.com](https://www.maxmind.com).
 
 To override the bundled database with a newer external copy:
 

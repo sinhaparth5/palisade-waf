@@ -17,6 +17,7 @@ rather than growing this file forever.
 - (#291) Let the WAF verdict cache serve requests that carry cookies
 - (#292) Cut the cost of inspecting large JSON bodies
 - (#301) Remove leftover ja3_hash and redis_mode references
+- (#297) Drop the Windows release build
 
 ## [3.2.7] - 2026-11-12
 

@@ -114,12 +114,11 @@ dist: generate
 	mkdir -p $(DIST)
 	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-linux-amd64 .
 	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-linux-arm64 .
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-windows-amd64.exe .
 
 # Run after `make dist`. Produces dist/checksums.txt for users to verify
 # their download with `sha256sum --check checksums.txt`.
 checksums:
-	cd $(DIST) && sha256sum $(ASSET)-linux-amd64 $(ASSET)-linux-arm64 $(ASSET)-windows-amd64.exe > checksums.txt
+	cd $(DIST) && sha256sum $(ASSET)-linux-amd64 $(ASSET)-linux-arm64 > checksums.txt
 
 # Cut a release: promote CHANGELOG.md's [Unreleased] section into a version
 # section, commit that, tag it, and push — which triggers the CI release

@@ -335,7 +335,6 @@ jobs:
           files: |
             dist/${{ env.PACKAGE_NAME }}-linux-amd64
             dist/${{ env.PACKAGE_NAME }}-linux-arm64
-            dist/${{ env.PACKAGE_NAME }}-windows-amd64.exe
             dist/palisade-cli-linux-amd64
             dist/checksums.txt
             dist/checksums.txt.sigstore.json
