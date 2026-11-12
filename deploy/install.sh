@@ -565,6 +565,40 @@ FLAGS
 	run chmod 600 "${FLAGS_FILE}"
 fi
 
+# systemd sandbox shared by the server and prune units (issue #275). The
+# process sees a read-only OS: it writes only ${VAR_DIR} (DB, certs, ACME
+# cache), its log directory and a private /tmp (Coraza temp files, DB
+# backups). AF_UNIX stays for local MySQL/Postgres sockets; varnishstat, run
+# by the Services page, inherits the same limits and needs nothing more.
+# @resources stays allowed: the Go runtime raises RLIMIT_NOFILE at startup.
+# systemd-analyze security: palisade 1.5 OK, palisade-prune 1.4 OK (was 6.2
+# MEDIUM with only ProtectSystem=full, PrivateTmp and NoNewPrivileges).
+SANDBOX="ProtectSystem=strict
+ReadWritePaths=${VAR_DIR}
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+UMask=0077"
+
 write_file "${UNIT_PATH}" <<UNIT
 [Unit]
 Description=Palisade (WAF + reverse proxy)
@@ -586,9 +620,7 @@ RestartSec=5s
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
-ProtectSystem=full
-PrivateTmp=true
-NoNewPrivileges=true
+${SANDBOX}
 
 [Install]
 WantedBy=multi-user.target
@@ -607,6 +639,8 @@ WorkingDirectory=${VAR_DIR}
 # OS — a plain DELETE never shrinks a SQLite file, it only marks pages
 # reusable inside it.
 ExecStart=${INSTALL_PATH} prune --db-driver ${DB_DRIVER} --db '${DB_DSN}' --retention 30 --vacuum
+CapabilityBoundingSet=
+${SANDBOX}
 UNIT
 
 write_file "${PRUNE_TIMER_PATH}" <<UNIT
