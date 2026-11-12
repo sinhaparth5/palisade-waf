@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -573,5 +574,53 @@ func TestSlowBodyTimesOut(t *testing.T) {
 			t.Errorf("h2=%v slow uninspected body got a deadline: %v", h2, err)
 		}
 		srv.Close()
+	}
+}
+
+// TestArgsLimit pins issue #292: Coraza stops collecting arguments at 1000,
+// so a payload after 1000 harmless values used to go uninspected. Over the
+// limit is now a 400 from ArgsLimitRuleID, unless a rule exception removes it.
+func TestArgsLimit(t *testing.T) {
+	e := newTestEngine(t)
+	exempt, err := New(config.WAFConfig{Enabled: true}, []int{ArgsLimitRuleID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	evil := "1' UNION SELECT password FROM users--"
+	check := func(e *Engine, method, target, ctype, body string) *Result {
+		t.Helper()
+		r := httptest.NewRequest(method, "http://app.example.com"+target, strings.NewReader(body))
+		if ctype != "" {
+			r.Header.Set("Content-Type", ctype)
+		}
+		res, err := e.Check(r, "203.0.113.9")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	jsonBody := func(pad int, last string) string {
+		return `{"a":[` + strings.Repeat(`1,`, pad) + `"` + last + `"]}`
+	}
+	form := strings.Repeat("a=1&", 1000) + "x=" + url.QueryEscape(evil)
+	for name, tc := range map[string]struct {
+		method, target, ctype, body string
+	}{
+		"json":  {"POST", "/api", "application/json", jsonBody(1000, evil)},
+		"form":  {"POST", "/f", "application/x-www-form-urlencoded", form},
+		"query": {"GET", "/f?" + form, "", ""},
+	} {
+		if res := check(e, tc.method, tc.target, tc.ctype, tc.body); !res.Blocked || res.RuleID != ArgsLimitRuleID || res.Status != http.StatusBadRequest {
+			t.Errorf("%s over the limit: %+v, want 400 from %d", name, res, ArgsLimitRuleID)
+		}
+	}
+	if res := check(e, "POST", "/api", "application/json", jsonBody(998, evil)); !res.Blocked || res.RuleID == ArgsLimitRuleID {
+		t.Errorf("payload under the limit: %+v, want a CRS block", res)
+	}
+	if res := check(e, "POST", "/api", "application/json", jsonBody(998, "ok")); res.Blocked {
+		t.Errorf("999 harmless values: %+v, want allowed", res)
+	}
+	if res := check(exempt, "POST", "/api", "application/json", jsonBody(1200, "ok")); res.Blocked {
+		t.Errorf("exempted engine: %+v, want allowed", res)
 	}
 }

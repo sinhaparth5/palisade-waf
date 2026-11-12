@@ -10,7 +10,7 @@ import (
 
 // ResponseInspectLimit caps how much of a response body is buffered for
 // outbound inspection (issue #192). A bigger body streams through unread.
-// ponytail: CRS's outbound regexes cost ~0.55ms per KiB (BENCHMARKS.md), so
+// ponytail: CRS's outbound regexes cost ~0.13ms per KiB (BENCHMARKS.md), so
 // this stays small: leaked errors and stack traces are short.
 const ResponseInspectLimit = 64 << 10
 

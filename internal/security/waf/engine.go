@@ -122,6 +122,25 @@ func New(cfg config.WAFConfig, disabledRuleIDs []int) (*Engine, error) {
 	return NewWithDirectives(cfg, disabledRuleIDs, "")
 }
 
+// ArgsLimitRuleID refuses a request with more arguments than Coraza's
+// SecArgumentsLimit (1000 per collection). Coraza stops collecting at the
+// limit, so without this a payload placed after 1000 harmless JSON values or
+// form fields was never inspected (issue #292). It runs ahead of CRS, so an
+// oversized body is refused before the rules run over it; a rule exception
+// for this id lets such requests through again, with the tail uninspected.
+const ArgsLimitRuleID = 2100000
+
+// rxPreFilter skips an @rx regex when the value lacks a literal the pattern
+// requires or is shorter than any match (issue #292: about a third off a
+// large JSON body). It must precede the rules, since it applies as each one
+// compiles. Coraza calls it experimental; TestRxPreFilterSameMatches checks
+// that CRS matches the same rules with it. A var so that test can turn it off.
+var rxPreFilter = "SecRxPreFilter On\n"
+
+var argsLimitRule = fmt.Sprintf(`SecRule ARGUMENTS_LIMIT_REACHED "@eq 1" \
+    "id:%d,phase:2,t:none,deny,status:400,log,severity:'WARNING',msg:'Too many arguments to inspect'"
+`, ArgsLimitRuleID)
+
 // NewWithDirectives is New plus extra directives loaded last, after CRS and
 // any rules dir — the WAF Rules dry-run (issue #8) uses it to compile a
 // candidate rule snippet into a throwaway engine that never sees live traffic.
@@ -141,7 +160,7 @@ func NewWithDirectives(cfg config.WAFConfig, disabledRuleIDs []int, extra string
 	//
 	// Virtual patches go first: their deny fires on its own rule id before
 	// CRS scoring, and SecRuleRemoveById below can still switch one off.
-	directives := vpatchDirectives() + fmt.Sprintf(`
+	directives := rxPreFilter + vpatchDirectives() + argsLimitRule + fmt.Sprintf(`
 Include @coraza.conf-recommended
 Include @crs-setup.conf.example
 Include @owasp_crs/*.conf

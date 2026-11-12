@@ -76,7 +76,9 @@ func newBenchRequest(method, target, body string, unique bool) *http.Request {
 }
 
 func BenchmarkHandle(b *testing.B) {
-	largeBody := `{"items":[` + strings.Repeat(`{"id":12345,"name":"widget","tags":["a","b","c"]},`, 1200) + `{}]}` // ~64 KiB
+	// ~58 KiB in 960 values: under Coraza's 1000-argument limit, which a
+	// longer list now trips (rule 2100000, issue #292).
+	largeBody := `{"items":[` + strings.Repeat(`{"id":12345,"name":"widget","description":"`+strings.Repeat("A sturdy widget for everyday use. ", 9)+`","tags":["a","b","c"]},`, 159) + `{}]}`
 	for _, tc := range []struct {
 		name   string
 		method string

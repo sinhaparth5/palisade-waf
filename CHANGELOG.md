@@ -15,6 +15,7 @@ rather than growing this file forever.
 ## [Unreleased]
 
 - (#291) Let the WAF verdict cache serve requests that carry cookies
+- (#292) Cut the cost of inspecting large JSON bodies
 
 ## [3.2.7] - 2026-11-12
 
