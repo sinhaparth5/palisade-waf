@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.2.9] - 2026-11-12
+
 - (#304) Fuzz client IP resolution
 - (#305) Fuzz edge JWT verification
 - (#306) Fuzz signed cookie parsing for challenge, waiting room and SSO
@@ -25,18 +27,5 @@ rather than growing this file forever.
 - (#312) Bot challenge pass cookie is not bound to the client
 - (#313) Allow service that uses self signed certificate
 
-## [3.2.8] - 2026-11-12
-
-- (#291) Let the WAF verdict cache serve requests that carry cookies
-- (#292) Cut the cost of inspecting large JSON bodies
-- (#301) Remove leftover ja3_hash and redis_mode references
-- (#297) Drop the Windows release build
-- (#298) Remove the ClickHouse warehouse mirror
-- (#299) Remove TypeSafe ASN classification
-- (#300) Drop MySQL and Postgres backends, SQLite only
-- (#303) Rename docker-compose.yml to compose.yml
-- (#302) Verify the feature removals leave a clean upgrade and no residue
-- (#296) Allow the login of existing users via SSO
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.8...main
-[3.2.8]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.7...v3.2.8
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.9...main
+[3.2.9]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.8...v3.2.9
