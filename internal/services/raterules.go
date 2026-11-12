@@ -69,7 +69,7 @@ func parseRate(s string) (float64, error) {
 	n, unit, _ := strings.Cut(s, "/")
 	per := map[string]float64{"": 1, "s": 1, "m": 60, "h": 3600}[unit]
 	v, err := strconv.ParseFloat(n, 64)
-	if per == 0 || err != nil || v <= 0 || v > 1e6 {
+	if per == 0 || err != nil || !(v > 0 && v <= 1e6) { // NaN fails both
 		return 0, fmt.Errorf("rate %q: want a positive N, N/s, N/m or N/h", s)
 	}
 	return v / per, nil

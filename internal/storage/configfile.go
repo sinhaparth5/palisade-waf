@@ -134,6 +134,16 @@ func (db *DB) ImportConfig(r io.Reader, replace bool) (MigrationReport, error) {
 				return fmt.Errorf("import %s: %w", step.table, err)
 			}
 		}
+		// Copy into a scratch DB first, so a row the copy can't read fails
+		// before prepareConfigImport empties the target (issue #308).
+		// ponytail: not a transaction; a target-side I/O error mid-copy can
+		// still leave a partial import.
+		if err := db.withTempConfigDB(func(check *DB) error {
+			_, err := tmp.migrateConfigInto(check)
+			return err
+		}); err != nil {
+			return err
+		}
 		if err := db.prepareConfigImport(replace); err != nil {
 			return err
 		}
