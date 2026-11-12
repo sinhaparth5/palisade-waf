@@ -50,7 +50,6 @@ import (
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/csp"
 	"palisade/internal/security/geo"
-	ja3pkg "palisade/internal/security/ja3"
 	ja4pkg "palisade/internal/security/ja4"
 	"palisade/internal/security/ratelimit"
 	"palisade/internal/security/threatintel"
@@ -706,7 +705,6 @@ func startTLS(s *http.Server, e *echo.Echo, cfg *config.Config, registry *servic
 			prevConnState(conn, state)
 		}
 		if state == http.StateClosed || state == http.StateHijacked {
-			ja3pkg.Delete(conn.RemoteAddr().String())
 			ja4pkg.Delete(conn.RemoteAddr().String())
 			geo.DeleteConn(conn.RemoteAddr().String())
 			asn.DeleteConn(conn.RemoteAddr().String())
@@ -738,17 +736,14 @@ func startTLS(s *http.Server, e *echo.Echo, cfg *config.Config, registry *servic
 	// http.Server only enables HTTP/2 on a non-nil TLSConfig that offers
 	// "h2", and per-SNI configs (mTLS) are cloned from this one.
 	base := &tls.Config{GetCertificate: getCert, NextProtos: []string{"h2", "http/1.1"}}
-	// Capture the ClientHello so we can compute JA3 (legacy) and JA4
-	// fingerprints for each connection. Both are stored in their package's
-	// sync.Map keyed by remoteAddr and retrieved later in the proxy handler
+	// Capture the ClientHello so we can compute the JA4 fingerprint for
+	// each connection. It is stored in the ja4 package's sync.Map keyed by
+	// remoteAddr and retrieved later in the proxy handler
 	// when the HTTP request arrives. SNI names with an mTLS policy also get
 	// a config that asks for a client cert (issue #191); HTTP/3 clones this
 	// config, and quic-go re-applies its own ALPN to what this returns.
 	base.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 		remoteAddr := hello.Conn.RemoteAddr().String()
-		if hash := ja3pkg.Compute(hello); hash != "" {
-			ja3pkg.Store(remoteAddr, hash)
-		}
 		ja4pkg.Store(remoteAddr, ja4pkg.Compute(hello))
 		if cfg := registry.MTLSConfig(base, hello.ServerName); cfg != nil {
 			return cfg, nil
@@ -820,7 +815,6 @@ func startHTTP3(e *echo.Echo, addr string, tlsConf *tls.Config, registry *servic
 			remote := c.RemoteAddr().String()
 			go func() {
 				<-c.Context().Done()
-				ja3pkg.Delete(remote)
 				ja4pkg.Delete(remote)
 				geo.DeleteConn(remote)
 				asn.DeleteConn(remote)

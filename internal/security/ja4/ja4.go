@@ -1,7 +1,7 @@
 // Package ja4 computes JA4 TLS client fingerprints (FoxIO's successor to
 // JA3, https://github.com/FoxIO-LLC/ja4) from tls.ClientHelloInfo and stores
 // them in a per-connection sync.Map so the HTTP handler can retrieve them
-// after the handshake completes — same lifecycle as the ja3 package.
+// after the handshake completes.
 //
 // Unlike JA3, JA4 sorts cipher suites and extensions before hashing, so
 // clients that shuffle their handshake ordering per connection (a common

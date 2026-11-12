@@ -47,7 +47,7 @@ go test ./internal/proxy/ -run TestName -v
 ```
 
 Tests live alongside the code they cover — `internal/proxy/`,
-`internal/security/ratelimit/`, `internal/security/ja3/`,
+`internal/security/ratelimit/`,
 `internal/security/ja4/`, `internal/storage/`, `internal/notify/mailer/`,
 `internal/security/autoban/`, `internal/security/challenge/`,
 `internal/services/`, `internal/ui/`. Every implementation package lives

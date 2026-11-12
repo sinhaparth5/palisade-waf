@@ -11,8 +11,8 @@ const insertRequestSQL = `
 			(ts, app_name, real_ip, proxy_ip, country, method, host, path, query,
 			 status, blocked, rule_id, action, user_agent, duration_ms, headers_json,
 			 request_id, proto, tls_version, tls_cipher, tls_sni, asn_num, org,
-			 ja3_hash, ja4, visitor_id, bot_score, cache_status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			 ja4, visitor_id, bot_score, cache_status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 func insertRequestArgs(r RequestLog) []any {
 	return []any{
@@ -39,7 +39,6 @@ func insertRequestArgs(r RequestLog) []any {
 		r.TLSSNI,
 		r.ASN,
 		r.Org,
-		r.JA3Hash,
 		r.JA4,
 		r.VisitorID,
 		r.BotScore,
@@ -118,7 +117,6 @@ type LogDetail struct {
 	TLSSNI      string
 	ASN         uint
 	Org         string
-	JA3Hash     string
 	JA4         string
 	VisitorID   string
 	BotScore    int
@@ -134,13 +132,13 @@ func (db *DB) GetRequestByID(id int) (*LogDetail, error) {
 		SELECT id, ts, app_name, real_ip, proxy_ip, country, method, host, path, query,
 		       status, blocked, rule_id, action, user_agent, duration_ms, headers_json,
 		       request_id, proto, tls_version, tls_cipher, tls_sni, asn_num, org,
-		       ja3_hash, ja4, visitor_id, bot_score, cache_status
+		       ja4, visitor_id, bot_score, cache_status
 		FROM requests WHERE id = ?`, id).Scan(
 		&d.ID, &d.Timestamp, &d.AppName, &d.RealIP, &d.ProxyIP, &d.Country,
 		&d.Method, &d.Host, &d.Path, &d.Query,
 		&d.Status, &blocked, &d.RuleID, &d.Action, &d.UserAgent, &d.Duration,
 		&d.HeadersJSON, &d.RequestID, &d.Proto, &d.TLSVersion, &d.TLSCipher,
-		&d.TLSSNI, &d.ASN, &d.Org, &d.JA3Hash, &d.JA4, &d.VisitorID, &d.BotScore, &d.CacheStatus,
+		&d.TLSSNI, &d.ASN, &d.Org, &d.JA4, &d.VisitorID, &d.BotScore, &d.CacheStatus,
 	)
 	if err != nil {
 		return nil, err
@@ -685,7 +683,7 @@ func (db *DB) ExportRequests(f LogFilter, fn func(RequestLog) bool) error {
 	where, args := f.where()
 	query := `SELECT id, ts, app_name, real_ip, proxy_ip, country, method, host, path, query,
 	                 status, blocked, rule_id, action, user_agent, duration_ms, headers_json,
-	                 request_id, proto, tls_version, tls_cipher, tls_sni, asn_num, org, ja3_hash, ja4, visitor_id, bot_score
+	                 request_id, proto, tls_version, tls_cipher, tls_sni, asn_num, org, ja4, visitor_id, bot_score
 	          FROM requests ` + where + ` ORDER BY ts DESC`
 	rows, err := db.query(query, args...)
 	if err != nil {
@@ -699,7 +697,7 @@ func (db *DB) ExportRequests(f LogFilter, fn func(RequestLog) bool) error {
 			&r.ID, &r.Timestamp, &r.AppName, &r.RealIP, &r.ProxyIP, &r.Country,
 			&r.Method, &r.Host, &r.Path, &r.Query,
 			&r.Status, &blocked, &r.RuleID, &r.Action, &r.UserAgent, &r.Duration, &r.HeadersJSON,
-			&r.RequestID, &r.Proto, &r.TLSVersion, &r.TLSCipher, &r.TLSSNI, &r.ASN, &r.Org, &r.JA3Hash, &r.JA4, &r.VisitorID, &r.BotScore,
+			&r.RequestID, &r.Proto, &r.TLSVersion, &r.TLSCipher, &r.TLSSNI, &r.ASN, &r.Org, &r.JA4, &r.VisitorID, &r.BotScore,
 		); err != nil {
 			return err
 		}

@@ -51,7 +51,7 @@ func (l *Lookup) Lookup(ipStr string) (asnNum uint, org string) {
 // connCacheTTL bounds how long a per-connection ASN lookup is reused. See
 // geo.connCacheTTL's doc comment — same reasoning applies here: TLS
 // connections are cleaned up immediately via DeleteConn (wired into the
-// ConnState hook in main.go alongside ja3/ja4), this TTL reclaims entries
+// ConnState hook in main.go alongside ja4), this TTL reclaims entries
 // for plain HTTP connections, which have no such hook.
 const connCacheTTL = 10 * time.Minute
 
@@ -68,8 +68,8 @@ type cacheEntry struct {
 }
 
 // connCache maps a connection's remote address to its last ASN lookup, the
-// same per-connection sync.Map pattern ja3/ja4 use for their fingerprint
-// stores — populated lazily on first lookup (unlike ja3/ja4, which populate
+// same per-connection sync.Map pattern ja4 use for their fingerprint
+// stores — populated lazily on first lookup (unlike ja4, which populate
 // eagerly at TLS handshake time, since an ASN lookup needs the resolved
 // client IP, which isn't known until the request arrives).
 var connCache sync.Map
@@ -99,7 +99,7 @@ func sweepConnCache(now time.Time) {
 }
 
 // DeleteConn removes any cached ASN lookup for remoteAddr. Call when the
-// connection closes, mirroring ja3pkg.Delete/ja4pkg.Delete.
+// connection closes, mirroring ja4pkg.Delete.
 func DeleteConn(remoteAddr string) {
 	connCache.Delete(remoteAddr)
 }

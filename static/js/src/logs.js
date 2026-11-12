@@ -254,12 +254,11 @@
     setText('ld-sni', d.tls_sni);
     show('ld-sni-row', !!d.tls_version);
 
-    var hasBot = !!(d.bot_score || d.ja3_hash || d.ja4 || d.visitor_id);
+    var hasBot = !!(d.bot_score || d.ja4 || d.visitor_id);
     show('ld-bot-section', hasBot);
     if (hasBot) {
       setText('ld-bot-score', String(d.bot_score || 0));
       setText('ld-ja4', d.ja4);
-      setText('ld-ja3', d.ja3_hash);
       setText('ld-visitor', d.visitor_id);
     }
 

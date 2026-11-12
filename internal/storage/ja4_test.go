@@ -21,7 +21,6 @@ func TestJA4RoundTrip(t *testing.T) {
 		Host:        "example.com",
 		Path:        "/",
 		Status:      200,
-		JA3Hash:     "0123456789abcdef0123456789abcdef",
 		JA4:         ja4,
 		VisitorID:   visitorID,
 		CacheStatus: "HIT",
@@ -36,9 +35,6 @@ func TestJA4RoundTrip(t *testing.T) {
 	}
 	if d.JA4 != ja4 {
 		t.Errorf("GetRequestByID JA4 = %q, want %q", d.JA4, ja4)
-	}
-	if d.JA3Hash == "" {
-		t.Error("GetRequestByID lost the legacy JA3 hash")
 	}
 	if d.VisitorID != visitorID {
 		t.Errorf("GetRequestByID VisitorID = %q, want %q", d.VisitorID, visitorID)

@@ -26,7 +26,6 @@ import (
 	"palisade/internal/security/breach"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
-	ja3pkg "palisade/internal/security/ja3"
 	ja4pkg "palisade/internal/security/ja4"
 	"palisade/internal/security/jwtauth"
 	"palisade/internal/security/ratelimit"
@@ -252,7 +251,7 @@ func (h *Handler) Handle(c *echo.Context) error {
 	// Bot signal analysis + TLS fingerprints. Analyze is header-only unless
 	// the UA claims a trusted crawler, which it verifies against the source.
 	botAnalysis := bot.Analyze(r, clientIP, asnNum)
-	ja3Hash, ja4Fp := tlsFingerprints(r)
+	ja4Fp := tlsFingerprint(r)
 
 	// challengerMu guards live hot-reloads from the Settings page. Fetched
 	// before meta so the FingerprintJS visitor ID (bound into the bypass
@@ -274,7 +273,6 @@ func (h *Handler) Handle(c *echo.Context) error {
 		ASN:        asnNum,
 		Org:        org,
 		Query:      r.URL.RawQuery,
-		JA3Hash:    ja3Hash,
 		JA4:        ja4Fp,
 		VisitorID:  visitorID,
 		BotScore:   botAnalysis.Score,
@@ -763,7 +761,6 @@ type reqMeta struct {
 	ASN         uint
 	Org         string
 	Query       string
-	JA3Hash     string
 	JA4         string
 	VisitorID   string
 	BotScore    int
@@ -796,7 +793,6 @@ func (h *Handler) logRequest(r *http.Request, appName, clientIP, country string,
 		TLSSNI:      m.TLSSNI,
 		ASN:         m.ASN,
 		Org:         m.Org,
-		JA3Hash:     m.JA3Hash,
 		JA4:         m.JA4,
 		VisitorID:   m.VisitorID,
 		BotScore:    m.BotScore,
@@ -830,7 +826,6 @@ func (h *Handler) logBlocked(r *http.Request, appName, clientIP, country string,
 		TLSSNI:      m.TLSSNI,
 		ASN:         m.ASN,
 		Org:         m.Org,
-		JA3Hash:     m.JA3Hash,
 		JA4:         m.JA4,
 		VisitorID:   m.VisitorID,
 		BotScore:    m.BotScore,
@@ -867,7 +862,6 @@ func (h *Handler) logChallenged(r *http.Request, appName, clientIP string, statu
 		TLSSNI:      m.TLSSNI,
 		ASN:         m.ASN,
 		Org:         m.Org,
-		JA3Hash:     m.JA3Hash,
 		JA4:         m.JA4,
 		VisitorID:   m.VisitorID,
 		BotScore:    m.BotScore,
@@ -1025,22 +1019,17 @@ func init() {
 	}
 }
 
-// tlsFingerprints returns the client's JA3 (legacy) and JA4 (primary) TLS
-// fingerprints. Cloudflare's Cf-Ja3-Fp/Cf-Ja4 headers win, but only when the
-// socket peer is a Cloudflare IP, like CF-Connecting-IP (issue #160); anyone
-// else could send them. Otherwise the per-connection store populated at TLS
-// handshake time is used.
-func tlsFingerprints(r *http.Request) (ja3Hash, ja4Fp string) {
+// tlsFingerprint returns the client's JA4 TLS fingerprint. Cloudflare's
+// Cf-Ja4 header wins, but only when the socket peer is a Cloudflare IP, like
+// CF-Connecting-IP (issue #160); anyone else could send it. Otherwise the
+// per-connection store populated at TLS handshake time is used.
+func tlsFingerprint(r *http.Request) string {
 	if isCloudflareIP(socketPeerIP(r.RemoteAddr)) {
-		ja3Hash, ja4Fp = r.Header.Get("Cf-Ja3-Fp"), r.Header.Get("Cf-Ja4")
+		if fp := r.Header.Get("Cf-Ja4"); fp != "" {
+			return fp
+		}
 	}
-	if ja3Hash == "" {
-		ja3Hash = ja3pkg.Get(r.RemoteAddr)
-	}
-	if ja4Fp == "" {
-		ja4Fp = ja4pkg.Get(r.RemoteAddr)
-	}
-	return ja3Hash, ja4Fp
+	return ja4pkg.Get(r.RemoteAddr)
 }
 
 func isCloudflareIP(ip string) bool {

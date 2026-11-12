@@ -168,7 +168,6 @@ func (h *Handler) LogDetail(c *echo.Context) error {
 		"tls_sni":          d.TLSSNI,
 		"asn":              d.ASN,
 		"org":              d.Org,
-		"ja3_hash":         d.JA3Hash,
 		"ja4":              d.JA4,
 		"visitor_id":       d.VisitorID,
 		"bot_score":        d.BotScore,

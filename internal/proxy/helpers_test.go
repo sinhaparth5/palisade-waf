@@ -81,21 +81,20 @@ func TestClientIP(t *testing.T) {
 	}
 }
 
-// TestTLSFingerprintsTrustCloudflareOnly pins issue #160: the Cf-Ja3-Fp and
-// Cf-Ja4 headers count only when the socket peer is a Cloudflare IP.
-func TestTLSFingerprintsTrustCloudflareOnly(t *testing.T) {
+// TestTLSFingerprintTrustsCloudflareOnly pins issue #160: the Cf-Ja4 header
+// counts only when the socket peer is a Cloudflare IP.
+func TestTLSFingerprintTrustsCloudflareOnly(t *testing.T) {
 	for _, tc := range []struct {
-		name, peer, ja3, ja4 string
+		name, peer, ja4 string
 	}{
-		{"from Cloudflare", "173.245.48.1:1", "cfja3", "cfja4"},
-		{"from elsewhere", "203.0.113.9:1", "", ""},
+		{"from Cloudflare", "173.245.48.1:1", "cfja4"},
+		{"from elsewhere", "203.0.113.9:1", ""},
 	} {
 		r := httptest.NewRequest("GET", "/", nil)
 		r.RemoteAddr = tc.peer
-		r.Header.Set("Cf-Ja3-Fp", "cfja3")
 		r.Header.Set("Cf-Ja4", "cfja4")
-		if ja3, ja4 := tlsFingerprints(r); ja3 != tc.ja3 || ja4 != tc.ja4 {
-			t.Errorf("%s: tlsFingerprints = %q %q, want %q %q", tc.name, ja3, ja4, tc.ja3, tc.ja4)
+		if ja4 := tlsFingerprint(r); ja4 != tc.ja4 {
+			t.Errorf("%s: tlsFingerprint = %q, want %q", tc.name, ja4, tc.ja4)
 		}
 	}
 }

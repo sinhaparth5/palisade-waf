@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#266) Remove JA3 fingerprinting
+
 ## [3.2.5] - 2026-11-12
 
 - (#265) Run fuzz tests in CI and cover the request parsers

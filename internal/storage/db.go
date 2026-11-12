@@ -132,7 +132,6 @@ type RequestLog struct {
 	TLSSNI      string // SNI hostname from TLS ClientHello
 	ASN         uint   // autonomous system number
 	Org         string // ISP / organization name
-	JA3Hash     string // JA3 TLS fingerprint MD5 hex (legacy); empty for plain HTTP
 	JA4         string // JA4 TLS fingerprint (a_b_c format); empty for plain HTTP
 	VisitorID   string // FingerprintJS browser fingerprint from the bot-challenge bypass cookie; "" when unchallenged
 	BotScore    int    // anomaly score from bot signal analysis (0 = clean)
@@ -442,7 +441,7 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"requests", "asn_num INTEGER NOT NULL DEFAULT 0"},
 	{"requests", "org TEXT NOT NULL DEFAULT ''"},
 	{"requests", "query TEXT NOT NULL DEFAULT ''"},
-	{"requests", "ja3_hash TEXT NOT NULL DEFAULT ''"},
+	{"requests", "ja3_hash TEXT NOT NULL DEFAULT ''"}, // unused since JA3 was removed (#266)
 	{"requests", "ja4 TEXT NOT NULL DEFAULT ''"},
 	{"requests", "visitor_id TEXT NOT NULL DEFAULT ''"},
 	{"requests", "bot_score INTEGER NOT NULL DEFAULT 0"},
