@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -118,7 +119,7 @@ func (p *Pusher) post(cfg storage.WebhookConfig, entry storage.RequestLog) error
 	if err != nil {
 		return fmt.Errorf("build payload: %w", err)
 	}
-	req, err := http.NewRequest(http.MethodPost, cfg.URL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, cfg.URL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}

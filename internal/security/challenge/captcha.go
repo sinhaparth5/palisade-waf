@@ -1,10 +1,13 @@
 package challenge
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log"
+	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"palisade/internal/security/egress"
@@ -52,8 +55,13 @@ func (c *Challenger) WithCaptcha(provider, siteKey, secret string) *Challenger {
 // verifyCaptcha asks the provider whether token is a fresh, valid solve.
 // Providers redeem a token once, so a replay fails here too.
 func (c *Challenger) verifyCaptcha(token string) bool {
-	resp, err := captchaClient.PostForm(captchaVerifyURLs[c.captchaProvider],
-		url.Values{"secret": {c.captchaSecret}, "response": {token}})
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, captchaVerifyURLs[c.captchaProvider],
+		strings.NewReader(url.Values{"secret": {c.captchaSecret}, "response": {token}}.Encode()))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := captchaClient.Do(req)
 	if err != nil {
 		log.Printf("challenge: %s siteverify: %v", c.captchaProvider, err)
 		return false

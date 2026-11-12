@@ -179,7 +179,7 @@ func (h *Handler) beginTOTPStage(c *echo.Context, u *storage.AdminUser) error {
 	if err != nil {
 		return h.renderLogin(c, "Internal error. Please try again.")
 	}
-	c.SetCookie(&http.Cookie{
+	c.SetCookie(&http.Cookie{ //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 		Name:     twoFACookie,
 		Value:    token,
 		HttpOnly: true,
@@ -223,7 +223,7 @@ func (h *Handler) LoginTOTPPost(c *echo.Context) error {
 	}
 
 	h.twoFA.delete(token)
-	c.SetCookie(&http.Cookie{
+	c.SetCookie(&http.Cookie{ //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 		Name: twoFACookie, Value: "", HttpOnly: true, Path: "/", MaxAge: -1,
 		Secure: secureCookie(c),
 	})
@@ -364,7 +364,7 @@ func (h *Handler) renderTOTPEnrollment(c *echo.Context, secret, errMsg string) e
 	// from our own PNG bytes, never from user input.
 	var qr template.URL
 	if err == nil {
-		qr = template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png))
+		qr = template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)) //nolint:gosec // G203: built from our own PNG bytes, never user input
 	}
 	return h.renderPartial(c, "settings", "twofa-card", h.twoFACardData(c, map[string]any{
 		"Enrolling": true,

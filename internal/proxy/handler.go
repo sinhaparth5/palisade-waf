@@ -642,7 +642,7 @@ func (h *Handler) Handle(c *echo.Context) error {
 }
 
 // leakedPasswordHeader tells the backend a login used a breached password.
-const leakedPasswordHeader = "X-Palisade-Leaked-Password"
+const leakedPasswordHeader = "X-Palisade-Leaked-Password" //nolint:gosec // G101: a header name, not a credential
 
 // breachBodyLimit caps how much of a login body is read for the password.
 const breachBodyLimit = 64 << 10

@@ -73,7 +73,7 @@ func (h *Handler) gate(c *echo.Context, app *storage.Service, clientKey string, 
 	if g.MaintenanceActive(now) {
 		if tok := r.URL.Query().Get(bypassParam); g.BypassToken != "" && tok != "" &&
 			subtle.ConstantTimeCompare([]byte(tok), []byte(g.BypassToken)) == 1 {
-			c.SetCookie(&http.Cookie{Name: bypassCookie, Value: tok, Path: "/", MaxAge: 12 * 3600,
+			c.SetCookie(&http.Cookie{Name: bypassCookie, Value: tok, Path: "/", MaxAge: 12 * 3600, //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 				HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode})
 			// Strip the token before anything logs or proxies the URL. A
 			// query-only Location keeps the browser on this path: echoing the
@@ -126,7 +126,7 @@ func (h *Handler) gate(c *echo.Context, app *storage.Service, clientKey string, 
 	}
 	res := room.Visit(ticket, clientKey, g.MaxActive, idle, now)
 	if res.Ticket != "" && res.Ticket != ticket {
-		c.SetCookie(&http.Cookie{Name: name, Value: res.Ticket + "." + h.ticketSig(app.Name, res.Ticket, clientKey),
+		c.SetCookie(&http.Cookie{Name: name, Value: res.Ticket + "." + h.ticketSig(app.Name, res.Ticket, clientKey), //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 			Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode})
 	}
 	if res.Admitted {

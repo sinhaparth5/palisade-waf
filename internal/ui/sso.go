@@ -92,7 +92,7 @@ func (h *Handler) SSOStart(c *echo.Context) error {
 		return h.renderLogin(c, "Couldn't reach the identity provider. Sign in with your password, or try again later.")
 	}
 	state, nonce, verifier := randHex(16), randHex(16), oauth2.GenerateVerifier()
-	c.SetCookie(&http.Cookie{
+	c.SetCookie(&http.Cookie{ //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 		Name: ssoCookie, Value: state + "." + nonce + "." + verifier,
 		Path: h.cfg.Admin.Path + "/login/sso", MaxAge: 600, HttpOnly: true,
 		// Lax, not Strict: the IdP's redirect back is a cross-site top-level GET.
@@ -115,7 +115,7 @@ type ssoClaims struct {
 // with a reason; none creates a user.
 func (h *Handler) SSOCallback(c *echo.Context) error {
 	ck, _ := c.Cookie(ssoCookie)
-	c.SetCookie(&http.Cookie{Name: ssoCookie, Path: h.cfg.Admin.Path + "/login/sso", MaxAge: -1, HttpOnly: true, Secure: secureCookie(c)})
+	c.SetCookie(&http.Cookie{Name: ssoCookie, Path: h.cfg.Admin.Path + "/login/sso", MaxAge: -1, HttpOnly: true, Secure: secureCookie(c)}) //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 	var parts []string
 	if ck != nil {
 		parts = strings.Split(ck.Value, ".")

@@ -65,7 +65,7 @@ const adminUserColumns = `id, email, role, disabled, totp_secret <> '',
 func scanAdminUser(row interface{ Scan(...any) error }) (*AdminUser, error) {
 	var u AdminUser
 	err := row.Scan(&u.ID, &u.Email, &u.Role, &u.Disabled, &u.TOTPEnabled, &u.SSO, &u.Invited, &u.CreatedAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -309,7 +309,7 @@ func (db *DB) ResetAdminUser2FA(id int64) error {
 func (db *DB) userField(id int64, col string) (string, error) {
 	var v string
 	err := db.queryRow(`SELECT `+col+` FROM admin_users WHERE id = ?`, id).Scan(&v)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
 	return v, err
@@ -468,7 +468,7 @@ func (db *DB) UserInvite(token string) (*AdminUser, error) {
 	var id int64
 	var expires time.Time
 	err := db.queryRow(`SELECT user_id, expires_at FROM admin_user_invites WHERE token_hash = ?`, hashInviteToken(token)).Scan(&id, &expires)
-	if err == sql.ErrNoRows || (err == nil && time.Now().After(expires)) {
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && time.Now().After(expires)) {
 		return nil, nil
 	}
 	if err != nil {

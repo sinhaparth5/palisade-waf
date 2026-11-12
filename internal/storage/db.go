@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"slices"
@@ -314,10 +315,10 @@ func (db *DB) insertRequestTx(batch []RequestLog) (err error) {
 	for i := range batch {
 		args := insertRequestArgs(batch[i])
 		if db.dialect.name == "postgres" {
-			err = stmt.QueryRow(args...).Scan(&ids[i])
+			err = stmt.QueryRowContext(context.Background(), args...).Scan(&ids[i])
 		} else {
 			var res sql.Result
-			if res, err = stmt.Exec(args...); err == nil {
+			if res, err = stmt.ExecContext(context.Background(), args...); err == nil {
 				ids[i], err = res.LastInsertId()
 			}
 		}
@@ -384,15 +385,15 @@ func (db *DB) QueueDepth() int {
 // here means every existing call site written against "?" keeps working
 // unmodified across all three dialects instead of needing its own Rebind.
 func (db *DB) exec(query string, args ...any) (sql.Result, error) {
-	return db.conn.Exec(db.conn.Rebind(query), args...)
+	return db.conn.ExecContext(context.Background(), db.conn.Rebind(query), args...)
 }
 
 func (db *DB) query(query string, args ...any) (*sql.Rows, error) {
-	return db.conn.Query(db.conn.Rebind(query), args...)
+	return db.conn.QueryContext(context.Background(), db.conn.Rebind(query), args...)
 }
 
 func (db *DB) queryRow(query string, args ...any) *sql.Row {
-	return db.conn.QueryRow(db.conn.Rebind(query), args...)
+	return db.conn.QueryRowContext(context.Background(), db.conn.Rebind(query), args...)
 }
 
 // insertReturningID runs an INSERT and returns the id of the new row.
@@ -591,7 +592,7 @@ func (db *DB) GetIPRuleType(appName, ip string) (string, error) {
 	err := db.queryRow(
 		`SELECT rule_type FROM ip_rules WHERE app_name = ? AND ip = ?`, appName, ip,
 	).Scan(&rt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
 	return rt, err
@@ -1337,7 +1338,7 @@ func (db *DB) ListServiceOpenAPI() (map[int]ServiceOpenAPI, error) {
 func (db *DB) GetServiceOpenAPI(id int) (ServiceOpenAPI, error) {
 	var o ServiceOpenAPI
 	err := db.queryRow(`SELECT spec, mode FROM service_openapi WHERE service_id = ?`, id).Scan(&o.Spec, &o.Mode)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return ServiceOpenAPI{}, nil
 	}
 	return o, err
@@ -2410,7 +2411,7 @@ func (db *DB) getMeta(key string) (string, error) {
 	var v string
 	query := fmt.Sprintf(`SELECT value FROM meta WHERE %s = ?`, db.dialect.quoteIdent("key"))
 	err := db.queryRow(query, key).Scan(&v)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
 	return v, err
@@ -2803,12 +2804,12 @@ func (db *DB) hashSessionTokens() error {
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after Commit
 	for _, t := range tokens {
-		if _, err := tx.Exec(tx.Rebind(`UPDATE sessions SET token = ? WHERE token = ?`), SessionID(t), t); err != nil {
+		if _, err := tx.ExecContext(context.Background(), tx.Rebind(`UPDATE sessions SET token = ? WHERE token = ?`), SessionID(t), t); err != nil {
 			return err
 		}
 	}
 	keyCol := db.dialect.quoteIdent("key")
-	if _, err := tx.Exec(tx.Rebind(
+	if _, err := tx.ExecContext(context.Background(), tx.Rebind(
 		db.dialect.upsertUpdate("meta", []string{keyCol, "value"}, "?, ?", []string{keyCol}, []string{"value"}),
 	), metaKeySessionsHashed, "1"); err != nil {
 		return err
@@ -2875,7 +2876,7 @@ func (db *DB) GetSession(token string) (*Session, error) {
 // link.
 func (db *DB) GetSessionByID(id string) (*Session, error) {
 	s, err := scanSession(db.queryRow(`SELECT `+sessionColumns+` FROM sessions WHERE token = ?`, id))
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return s, err
@@ -3030,7 +3031,7 @@ func (db *DB) ValidateAPIKey(hash string) (*APIKey, error) {
 	err := db.queryRow(
 		`SELECT id, name, key_prefix, read_only, created_at, last_used_at FROM api_keys WHERE key_hash = ?`, hash,
 	).Scan(&k.ID, &k.Name, &k.Prefix, &k.ReadOnly, &k.CreatedAt, &lastUsed)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -3056,21 +3057,21 @@ func (db *DB) TouchAPIKey(id int) error {
 // It replaces the whole table in a single transaction — called every 10 s by
 // Limiter.StartPersistence so restarts pick up near-current state.
 func (db *DB) SaveRateLimitState(states []ratelimit.BucketState) error {
-	tx, err := db.conn.Begin()
+	tx, err := db.conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback() //nolint
-	if _, err := tx.Exec(`DELETE FROM rate_state`); err != nil {
+	if _, err := tx.ExecContext(context.Background(), `DELETE FROM rate_state`); err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare(db.conn.Rebind(`INSERT INTO rate_state (ip, tokens, last_refill) VALUES (?, ?, ?)`))
+	stmt, err := tx.PrepareContext(context.Background(), db.conn.Rebind(`INSERT INTO rate_state (ip, tokens, last_refill) VALUES (?, ?, ?)`))
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 	for _, s := range states {
-		if _, err := stmt.Exec(s.IP, s.Tokens, s.LastRefill.UTC().Format(time.RFC3339Nano)); err != nil {
+		if _, err := stmt.ExecContext(context.Background(), s.IP, s.Tokens, s.LastRefill.UTC().Format(time.RFC3339Nano)); err != nil {
 			return err
 		}
 	}
@@ -3345,22 +3346,22 @@ func (db *DB) UpdateThreatIntelSync(id int64, ipCount int, lastError string) err
 // ReplaceThreatIntelIPs atomically replaces all IPs for a source in a single
 // transaction so the blocklist never sees a partial update.
 func (db *DB) ReplaceThreatIntelIPs(sourceID int64, ips []string) error {
-	tx, err := db.conn.Begin()
+	tx, err := db.conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback() //nolint
-	if _, err := tx.Exec(db.conn.Rebind(`DELETE FROM threat_intel_ips WHERE source_id = ?`), sourceID); err != nil {
+	if _, err := tx.ExecContext(context.Background(), db.conn.Rebind(`DELETE FROM threat_intel_ips WHERE source_id = ?`), sourceID); err != nil {
 		return err
 	}
 	insertStmt := db.dialect.upsertIgnore("threat_intel_ips", []string{"source_id", "ip"}, "?, ?", []string{"source_id", "ip"})
-	stmt, err := tx.Prepare(db.conn.Rebind(insertStmt))
+	stmt, err := tx.PrepareContext(context.Background(), db.conn.Rebind(insertStmt))
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 	for _, ip := range ips {
-		if _, err := stmt.Exec(sourceID, ip); err != nil {
+		if _, err := stmt.ExecContext(context.Background(), sourceID, ip); err != nil {
 			return err
 		}
 	}
@@ -4178,7 +4179,7 @@ func (db *DB) GetIPThreatScore(ip string) (IPThreatScore, bool, error) {
 		`SELECT total_score, autoban_score, bot_score, asn_score, geo_score, ja4_score, updated_at
 		 FROM ip_threat_scores WHERE ip = ?`, ip,
 	).Scan(&s.Total, &s.AutobanScore, &s.BotScore, &s.ASNScore, &s.GeoScore, &s.JA4Score, &s.UpdatedAt)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return IPThreatScore{}, false, nil
 	}
 	if err != nil {
@@ -4373,7 +4374,7 @@ func (db *DB) InsertTypeSafeCall(c TypeSafeCall) error {
 	}
 	var cutoff int64
 	err = db.queryRow(`SELECT id FROM typesafe_calls ORDER BY id DESC LIMIT 1 OFFSET ?`, typesafeCallsKeep).Scan(&cutoff)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 	if err != nil {

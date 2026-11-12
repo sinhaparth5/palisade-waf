@@ -473,7 +473,7 @@ func main() {
 
 	e := echo.New()
 	// Echo v5 is only a handler; the servers are ours.
-	srv := &http.Server{Handler: e}
+	srv := &http.Server{Handler: e} //nolint:gosec // G112: hardenServer sets ReadHeaderTimeout on the next line
 	hardenServer(srv)
 	e.Use(middleware.Recover())
 	e.Use(proxy.SecurityMiddleware())
@@ -594,14 +594,14 @@ func main() {
 	// --admin-listen: bound here so a taken port fails startup.
 	var extra []shutdowner
 	if cfg.Admin.Listen != "" {
-		ln, err := net.Listen("tcp", cfg.Admin.Listen)
+		ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", cfg.Admin.Listen)
 		if err != nil {
 			log.Fatalf("--admin-listen: %v", err)
 		}
-		adminSrv := &http.Server{Handler: ui.AdminListener(cfg.Admin.Path, e)}
+		adminSrv := &http.Server{Handler: ui.AdminListener(cfg.Admin.Path, e)} //nolint:gosec // G112: hardenServer sets ReadHeaderTimeout on the next line
 		hardenServer(adminSrv)
 		go func() {
-			if err := adminSrv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			if err := adminSrv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				log.Printf("admin listener: %v", err)
 			}
 		}()
@@ -612,19 +612,19 @@ func main() {
 	// TLS only starts when --listen-tls is provided. Certificate config
 	// (ACME email, per-service certs) lives entirely in the DB.
 	if cfg.ListenAddrTLS != "" {
-		if err := startTLS(srv, e, cfg, registry, db, appCount, connLimit, extra...); err != nil && err != http.ErrServerClosed {
+		if err := startTLS(srv, e, cfg, registry, db, appCount, connLimit, extra...); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("tls server: %v", err)
 		}
 		return
 	}
 	log.Printf("palisade listening on %s (plain HTTP, waf=%v, apps=%d)",
 		cfg.ListenAddr, cfg.WAF.Enabled, appCount)
-	ln, err := net.Listen("tcp", cfg.ListenAddr)
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", cfg.ListenAddr)
 	if err != nil {
 		log.Fatalf("server: %v", err)
 	}
 	done := shutdownOnSignal(append(extra, srv)...)
-	if err := srv.Serve(connLimit.Listener(ln)); err != nil && err != http.ErrServerClosed {
+	if err := srv.Serve(connLimit.Listener(ln)); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server: %v", err)
 	}
 	<-done
@@ -678,17 +678,17 @@ func startTLS(s *http.Server, e *echo.Echo, cfg *config.Config, registry *servic
 	if am != nil {
 		httpHandler = am.HTTPHandler(httpHandler)
 	}
-	redirectServer := &http.Server{Addr: cfg.ListenAddr, Handler: httpHandler}
+	redirectServer := &http.Server{Addr: cfg.ListenAddr, Handler: httpHandler} //nolint:gosec // G112: hardenServer sets ReadHeaderTimeout on the next line
 	hardenServer(redirectServer)
 	// Bind before serving so a taken port fails startup: without this
 	// listener ACME HTTP-01 renewals fail silently until the certs expire.
-	redirectLn, err := net.Listen("tcp", cfg.ListenAddr)
+	redirectLn, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("http (ACME/redirect) listener: %w", err)
 	}
 	go func() {
 		log.Printf("palisade HTTP (ACME/redirect) on %s", cfg.ListenAddr)
-		if err := redirectServer.Serve(connLimit.Listener(redirectLn)); err != nil && err != http.ErrServerClosed {
+		if err := redirectServer.Serve(connLimit.Listener(redirectLn)); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("http server: %v", err)
 		}
 	}()
@@ -762,13 +762,13 @@ func startTLS(s *http.Server, e *echo.Echo, cfg *config.Config, registry *servic
 
 	// Bound here, not by Echo, so the per-client cap sits below TLS: a
 	// refused connection costs no handshake.
-	tlsLn, err := net.Listen("tcp", cfg.ListenAddrTLS)
+	tlsLn, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", cfg.ListenAddrTLS)
 	if err != nil {
 		return fmt.Errorf("https listener: %w", err)
 	}
 	log.Printf("palisade TLS on %s (waf=%v, apps=%d)", cfg.ListenAddrTLS, cfg.WAF.Enabled, appCount)
 	done := shutdownOnSignal(append(servers, s)...)
-	if err := s.Serve(tls.NewListener(connLimit.Listener(tlsLn), s.TLSConfig)); err != http.ErrServerClosed {
+	if err := s.Serve(tls.NewListener(connLimit.Listener(tlsLn), s.TLSConfig)); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	<-done
@@ -785,7 +785,7 @@ func startHTTP3(e *echo.Echo, addr string, tlsConf *tls.Config, registry *servic
 	}
 	// Bind here rather than in ListenAndServe so a taken port fails startup
 	// instead of only being logged from a goroutine.
-	conn, err := net.ListenPacket("udp", addr)
+	conn, err := (&net.ListenConfig{}).ListenPacket(context.Background(), "udp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("http3 listen %s: %w", addr, err)
 	}
@@ -824,7 +824,7 @@ func startHTTP3(e *echo.Echo, addr string, tlsConf *tls.Config, registry *servic
 	}
 	go func() {
 		log.Printf("palisade HTTP/3 on %s (udp)", addr)
-		if err := srv.Serve(conn); err != nil && err != http.ErrServerClosed {
+		if err := srv.Serve(conn); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("http3 server: %v", err)
 		}
 	}()
@@ -905,10 +905,10 @@ func startCacheReturn(db *storage.DB, registry *services.Registry) {
 		log.Printf("cache-return: refusing to bind non-loopback address %q", vcfg.ReturnAddr)
 		return
 	}
-	srv := &http.Server{Addr: vcfg.ReturnAddr, Handler: registry.CacheReturnHandler()}
+	srv := &http.Server{Addr: vcfg.ReturnAddr, Handler: registry.CacheReturnHandler()} //nolint:gosec // G112: hardenServer sets ReadHeaderTimeout on the next line
 	hardenServer(srv)
 	log.Printf("cache-return listener on %s (Varnish miss path)", vcfg.ReturnAddr)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Printf("cache-return listener: %v", err)
 	}
 }
@@ -1073,7 +1073,12 @@ func runHealthcheck(args []string) {
 	fs.Parse(args) //nolint // ExitOnError: never returns an error to check
 
 	client := http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(*url)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, *url, nil)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "healthcheck:", err)
+		os.Exit(1)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "healthcheck:", err)
 		os.Exit(1)
@@ -1240,7 +1245,7 @@ func runGencert(args []string) {
 		log.Fatalf("gencert: marshal key: %v", err)
 	}
 
-	cf, err := os.OpenFile(*certFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	cf, err := os.OpenFile(*certFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644) //nolint:gosec // G302: a public certificate
 	if err != nil {
 		log.Fatalf("gencert: open cert file: %v", err)
 	}
@@ -1299,7 +1304,7 @@ func runBuildDSN(args []string) {
 
 func httpsRedirect(w http.ResponseWriter, r *http.Request) {
 	target := "https://" + r.Host + r.URL.RequestURI()
-	http.Redirect(w, r, target, http.StatusMovedPermanently)
+	http.Redirect(w, r, target, http.StatusMovedPermanently) //nolint:gosec // G710: redirects the client to its own Host, nothing else
 }
 
 // buildRateLimit creates the global limiter from the settings stored in the

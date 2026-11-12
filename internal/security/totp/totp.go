@@ -65,7 +65,7 @@ func decodeSecret(secret string) ([]byte, error) {
 
 // Counter returns the TOTP counter (time step index) for t.
 func Counter(t time.Time) uint64 {
-	return uint64(t.Unix() / int64(step.Seconds()))
+	return uint64(t.Unix() / int64(step.Seconds())) //nolint:gosec // G115: Unix time is positive
 }
 
 // Code returns the code valid at t. Used by tests and by the enrollment
@@ -93,7 +93,7 @@ func Validate(secret, code string, t time.Time) (ok bool, counter uint64) {
 	code = strings.ReplaceAll(strings.TrimSpace(code), " ", "")
 	base := Counter(t)
 	for i := -skew; i <= skew; i++ {
-		c := uint64(int64(base) + int64(i))
+		c := uint64(int64(base) + int64(i)) //nolint:gosec // G115: a TOTP counter is far below MaxInt64
 		if subtle.ConstantTimeCompare([]byte(hotp(key, c)), []byte(code)) == 1 && !ok {
 			ok, counter = true, c
 		}

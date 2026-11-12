@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -133,7 +134,7 @@ func (db *DB) AcceptSSOInvite(email, issuer, subject string) (*AdminUser, error)
 	email = NormalizeEmail(email)
 	var inv SSOInvite
 	err := db.queryRow(`SELECT id, role, expires_at FROM admin_sso_invites WHERE email = ?`, email).Scan(&inv.ID, &inv.Role, &inv.ExpiresAt)
-	if err == sql.ErrNoRows || (err == nil && inv.Expired()) {
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && inv.Expired()) {
 		return nil, nil
 	}
 	if err != nil {

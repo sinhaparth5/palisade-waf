@@ -30,7 +30,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", srcDir, err)
 	}
-	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+	if err := os.MkdirAll(dstDir, 0o755); err != nil { //nolint:gosec // G301: build output in the repo
 		return fmt.Errorf("mkdir %s: %w", dstDir, err)
 	}
 
@@ -55,7 +55,7 @@ func run() error {
 			return fmt.Errorf("minify %s: %w", srcPath, err)
 		}
 
-		if err := os.WriteFile(dstPath, []byte(out), 0o644); err != nil {
+		if err := os.WriteFile(dstPath, []byte(out), 0o644); err != nil { //nolint:gosec // G306: build output in the repo
 			return fmt.Errorf("write %s: %w", dstPath, err)
 		}
 		fmt.Printf("minified %s -> %s (%d -> %d bytes)\n", srcPath, dstPath, len(src), len(out))

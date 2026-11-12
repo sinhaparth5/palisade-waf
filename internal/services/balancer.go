@@ -167,7 +167,7 @@ func (p *pool) pick(skip *upstream) *upstream {
 	if len(cands) == 0 {
 		return nil
 	}
-	start := int(p.next.Add(1) % uint64(len(cands)))
+	start := int(p.next.Add(1) % uint64(len(cands))) //nolint:gosec // G115: the modulo is below len(cands)
 	if !p.leastConn {
 		return cands[start]
 	}
@@ -191,7 +191,12 @@ func (p *pool) runChecks(path string, interval time.Duration, stop <-chan struct
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	check := func(u *upstream) {
-		resp, err := client.Get(u.base.String() + path)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, u.base.String()+path, nil)
+		if err != nil {
+			u.health.markDown(math.MaxInt64)
+			return
+		}
+		resp, err := client.Do(req)
 		if err != nil {
 			u.health.markDown(math.MaxInt64)
 			return

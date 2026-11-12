@@ -11,7 +11,7 @@
 package ja3
 
 import (
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // G501: the JA3 spec defines the fingerprint as MD5
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
@@ -82,7 +82,7 @@ func Compute(hello *tls.ClientHelloInfo) string {
 	sb.WriteByte(',')
 	joinU8(&sb, hello.SupportedPoints)
 
-	sum := md5.Sum([]byte(sb.String()))
+	sum := md5.Sum([]byte(sb.String())) //nolint:gosec // G401: the JA3 spec defines the fingerprint as MD5
 	return hex.EncodeToString(sum[:])
 }
 

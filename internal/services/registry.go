@@ -56,9 +56,9 @@ func (t *timedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.rt.RoundTrip(req)
 	dur := time.Since(start)
 	if err != nil {
-		log.Printf("backend [%s] %s %s: failed after %s: %v", t.name, req.Method, req.URL.Path, dur, err)
+		log.Printf("backend [%s] %s %q: failed after %s: %v", t.name, req.Method, req.URL.Path, dur, err) //nolint:gosec // G706: %q escapes control characters
 	} else if dur >= slowBackendThreshold {
-		log.Printf("backend [%s] %s %s: slow response, took %s", t.name, req.Method, req.URL.Path, dur)
+		log.Printf("backend [%s] %s %q: slow response, took %s", t.name, req.Method, req.URL.Path, dur) //nolint:gosec // G706: %q escapes control characters
 	}
 	return resp, err
 }
@@ -435,7 +435,7 @@ func (r *Registry) Reload(db *storage.DB) error {
 			// Only GET/HEAD are routed to Varnish (see Director), and
 			// neither carries a body a failed attempt could have consumed.
 			if errors.Is(err, errVarnishFetch) || (errors.As(err, &opErr) && opErr.Op == "dial" && (r.Method == http.MethodGet || r.Method == http.MethodHead)) {
-				log.Printf("cache [%s]: %s %s served from the backend: %v", name, r.Method, r.URL.Path, err)
+				log.Printf("cache [%s]: %s %q served from the backend: %v", name, r.Method, r.URL.Path, err) //nolint:gosec // G706: %q escapes control characters
 				for hn := range r.Header {
 					if strings.HasPrefix(hn, "X-Cache-") {
 						r.Header.Del(hn)
@@ -865,7 +865,7 @@ func Validate(backend string) error {
 	if metadataDenylist[strings.ToLower(host)] {
 		return fmt.Errorf("backend host %q is a cloud metadata endpoint, not a valid backend", host)
 	}
-	if ips, err := net.LookupHost(host); err == nil {
+	if ips, err := net.DefaultResolver.LookupHost(context.Background(), host); err == nil {
 		for _, ip := range ips {
 			if a, err := netip.ParseAddr(ip); metadataDenylist[ip] || (err == nil && egress.Blocked(a)) {
 				return fmt.Errorf("backend host %q resolves to a cloud metadata endpoint, not a valid backend", host)
@@ -929,7 +929,7 @@ func Probe(backend string) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	req, err := http.NewRequest(http.MethodGet, backend, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, backend, nil)
 	if err != nil {
 		return fmt.Errorf("invalid backend URL: %w", err)
 	}
@@ -1007,7 +1007,7 @@ func sendPurge(addr, serviceName, urlRegex string) error {
 	}
 
 	client := &http.Client{Timeout: probeTimeout}
-	req, err := http.NewRequest("PURGE", "http://"+addr+"/", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "PURGE", "http://"+addr+"/", nil)
 	if err != nil {
 		return fmt.Errorf("invalid varnish address: %w", err)
 	}

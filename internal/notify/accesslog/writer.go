@@ -94,10 +94,10 @@ func New(path string, maxSizeMB, maxBackups int) (*Writer, error) {
 	if maxBackups < 0 {
 		maxBackups = 0
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // G301: log dir readable by log shippers, as nginx does
 		return nil, fmt.Errorf("access log: create directory: %w", err)
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // G302: access log readable by log shippers, as nginx does
 	if err != nil {
 		return nil, fmt.Errorf("access log: open %s: %w", path, err)
 	}
@@ -172,7 +172,7 @@ func (w *Writer) rotateLocked() error {
 		}
 	}
 
-	f, err := os.OpenFile(w.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(w.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) //nolint:gosec // G302: access log readable by log shippers, as nginx does
 	if err != nil {
 		return fmt.Errorf("reopen %s: %w", w.path, err)
 	}

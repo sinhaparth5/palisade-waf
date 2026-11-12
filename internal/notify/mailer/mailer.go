@@ -6,6 +6,7 @@
 package mailer
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
@@ -58,7 +59,7 @@ func Send(cfg storage.EmailConfig, subject, textBody, htmlBody string) error {
 	addr := net.JoinHostPort(smtpHost, strconv.Itoa(smtpPort))
 	dialer := egress.Dialer(10 * time.Second)
 	// Implicit TLS from the first byte.
-	conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: smtpHost})
+	conn, err := (&tls.Dialer{NetDialer: dialer, Config: &tls.Config{ServerName: smtpHost}}).DialContext(context.Background(), "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("smtp dial %s: %w", addr, err)
 	}
