@@ -78,7 +78,7 @@ var (
 )
 
 // currentDB/currentRegistry/currentLimiter back the gauges below. Set once
-// from main.go after each is constructed; read lazily on every scrape rather
+// from internal/app after each is constructed; read lazily on every scrape rather
 // than polled on a timer, matching the rest of this codebase's preference for
 // passive/pull-based observation over background polling loops.
 var (

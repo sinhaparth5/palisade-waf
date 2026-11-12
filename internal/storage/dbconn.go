@@ -205,7 +205,7 @@ func TestConnection(driverName, dsn string) error {
 // meta table purely for the Settings page's convenience (pre-filling the
 // form on next visit) — it has no effect on the live server's actual DB
 // connection, which is fixed at process start via the --db-driver/--db CLI
-// flags (see main.go). Applying a saved config requires restarting the
+// flags (see internal/app). Applying a saved config requires restarting the
 // process with the shown flags.
 type DBConnConfig struct {
 	Driver   string

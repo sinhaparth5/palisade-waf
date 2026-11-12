@@ -7,11 +7,10 @@ coverage:
       default:
         target: 90%
 
-# main.go is flag parsing and process wiring (servers, signals, goroutine
-# startup) exercised only by running the binary; tools/ is the build-time
-# JS minifier, never shipped.
+# assets.go is only //go:embed declarations; tools/ is the build-time JS
+# minifier, never shipped. main.go is counted: its logic lives in
+# internal/app (issue #287).
 ignore:
-  - "main.go"
   - "assets.go"
   - "tools/**"
 
@@ -50,6 +49,11 @@ component_management:
       name: notify
       paths:
         - internal/notify/**
+    - component_id: app
+      name: app
+      paths:
+        - main.go
+        - internal/app/**
     - component_id: config
       name: config
       paths:

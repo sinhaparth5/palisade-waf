@@ -184,7 +184,7 @@ func (w *Writer) rotateLocked() error {
 // Close flushes and closes the underlying file. Safe to call once; a
 // subsequent Push after Close is a silent no-op rather than a write-after-
 // close error, since it can race storage's log-worker drain on shutdown
-// (see main.go's defer ordering relative to db.Close).
+// (see internal/app's defer ordering relative to db.Close).
 func (w *Writer) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()

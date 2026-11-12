@@ -72,7 +72,7 @@ type BotProtectionConfig struct {
 }
 
 // Defaults returns a Config populated with sensible defaults. CLI flag parsing
-// in main.go overrides individual fields after calling this.
+// in internal/app overrides individual fields after calling this.
 func Defaults() *Config {
 	return &Config{
 		ListenAddr:     ":8080",

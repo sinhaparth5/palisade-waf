@@ -75,7 +75,7 @@ type Handler struct {
 // override engines without dropping in-flight requests. Both are swapped
 // together under one lock so a reload is atomic — requests never see a
 // default engine from one generation paired with per-service engines from
-// another. Called from the SIGHUP handler in main.go and whenever WAF rule
+// another. Called from the SIGHUP handler in internal/app and whenever WAF rule
 // exceptions (global or per-service) change from the admin UI.
 func (h *Handler) ReloadWAF(defaultEngine *waf.Engine, byService map[string]*waf.Engine) {
 	h.wafMu.Lock()

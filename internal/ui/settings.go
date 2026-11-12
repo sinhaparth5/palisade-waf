@@ -542,7 +542,7 @@ func resolveDBConnInput(c *echo.Context) (driver, dsn string, err error) {
 // meta table purely for this page's own convenience — pre-filling the form
 // on the next visit. It has no effect on the live server: the DB connection
 // this process actually uses is fixed at startup via the --db-driver/--db
-// CLI flags (see main.go's "No config file, by design") and only changes
+// CLI flags (see internal/app's serve) and only changes
 // after a restart with the flags TestDBConnection shows on a successful
 // test. Saving here never touches that live connection or requires a
 // successful test first, so an admin can save a draft mid-edit.

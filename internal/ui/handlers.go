@@ -168,7 +168,7 @@ type Handler struct {
 // must contain "static/imgs/*"; it's served under /<admin_path>/static/imgs/.
 // proxyHandle is the reverse-proxy pipeline's own route handler
 // (proxy.Handler.Handle, the same func registered for the catch-all "/*"
-// route in main.go); see hostGuard for why the admin/API routes need to be
+// route in internal/app); see hostGuard for why the admin/API routes need to be
 // able to hand a request off to it.
 func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist, geoBl *geo.Blocker, registry *services.Registry, bc *LogBroadcaster, jsFS embed.FS, cssFS embed.FS, imgsFS embed.FS, reloadBot func(*challenge.Challenger), buildChallenger func(bool, int, int) *challenge.Challenger, reloadRateLimit func(), reloadWAF func(), syncThreatIntel func(int64), sendReportNow func() error, sendTestWebhook func() error, sendLoginCode func(string) error, sendInvite func(to, inviter, role, link string) error, reloadAutoban func(), scorer *threatscore.Scorer, reloadAdaptive func(), proxyHandle echo.HandlerFunc) (*Handler, error) {
 	sub, err := fs.Sub(jsFS, "static/js/dist")

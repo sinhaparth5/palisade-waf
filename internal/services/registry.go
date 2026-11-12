@@ -1001,7 +1001,7 @@ var safePurgePath = regexp.MustCompile(`^/[A-Za-z0-9/_.~%-]*$`)
 // Purge invalidates cached objects for one service by sending a PURGE
 // request directly to Varnish's client port over loopback — the WAF issuing
 // it, never client traffic, same trust model as the cache-return listener
-// (see main.go's startCacheReturn). deploy/varnish/default.vcl bans on
+// (see internal/app's startCacheReturn). deploy/varnish/default.vcl bans on
 // obj.http.X-Cache-Service, the tag every cached object carries, so this
 // only affects objects belonging to svc. pathPrefix is optional: empty
 // purges the whole service; otherwise only objects whose URL starts with it

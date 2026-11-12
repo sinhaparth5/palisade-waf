@@ -196,7 +196,7 @@ func ValidateSchema(schemaJSON string) error {
 // posture for a check this new and heuristic. An empty schemaJSON or mode
 // "off" clears any previously attached schema.
 //
-// Called once per engine build (main.go's buildWAFAll, on every SIGHUP and
+// Called once per engine build (internal/app's buildWAFAll, on every SIGHUP and
 // WAF Rules/Services save), never per request — compiling isn't free, and a
 // per-service engine is already rebuilt on every relevant save.
 func (e *Engine) SetRequestSchema(schemaJSON, mode string) error {

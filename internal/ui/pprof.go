@@ -2,7 +2,7 @@ package ui
 
 import (
 	"net/http"
-	"net/http/pprof" //nolint:gosec // G108: also registers on http.DefaultServeMux, which no server in main.go uses; served here behind session + owner (issue #267)
+	"net/http/pprof" //nolint:gosec // G108: also registers on http.DefaultServeMux, which no server in internal/app uses; served here behind session + owner (issue #267)
 	"strconv"
 
 	"github.com/labstack/echo/v5"

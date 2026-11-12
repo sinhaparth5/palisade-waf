@@ -88,7 +88,7 @@ signal/mitigation packages, `internal/notify/` for outbound reporting) — see
   rendered — keep modal/partial markup inside the right block.
 - **Config direction:** there is no config file. Bootstrap settings (listen
   addresses, TLS binding, WAF rules dir, DB path, retention) are CLI flags —
-  see `palisade --help`-equivalent flag list in `main.go`'s `main()`. All
+  see `palisade --help` (defined in `serve`, `internal/app/serve.go`). All
   runtime knobs (bot protection, ACME email, per-service overrides,
   etc.) are stored in the database (`meta` table / per-service columns, on
   SQLite, MySQL or Postgres) and managed from the admin UI.

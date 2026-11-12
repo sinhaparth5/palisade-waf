@@ -76,7 +76,7 @@ func (db *DB) SetWebhookFn(fn func(RequestLog)) {
 }
 
 // SetBroadcastFn registers a callback invoked after each successful DB insert,
-// with entry.ID set to the real row ID. Called from main.go to wire the UI
+// with entry.ID set to the real row ID. Called from internal/app to wire the UI
 // broadcaster without importing ui from storage.
 func (db *DB) SetBroadcastFn(fn func(RequestLog)) {
 	db.broadcastFn = fn
@@ -143,7 +143,7 @@ type RequestLog struct {
 
 // Open opens the default SQLite-backed store at path. It is a thin wrapper
 // around OpenWithDriver("sqlite", path) kept for backward compatibility with
-// every existing caller (main.go's default bootstrap path, every storage
+// every existing caller (internal/app's default bootstrap path, every storage
 // test) that only ever spoke SQLite before external-database support (issue
 // database-backends) was added — none of them need to change.
 func Open(path string) (*DB, error) {

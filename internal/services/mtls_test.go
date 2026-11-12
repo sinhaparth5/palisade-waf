@@ -180,7 +180,7 @@ func TestCheckClientCert(t *testing.T) {
 
 func ptr[T any](v T) *T { return &v }
 
-// TestMTLSHandshake runs a real TLS listener wired like startTLS in main.go:
+// TestMTLSHandshake runs a real TLS listener wired like startTLS in internal/app:
 // the client cert is only requested for SNI names with a policy, the check
 // itself follows the Host header, and HTTP/2 and HTTP/3 survive the
 // per-SNI config.

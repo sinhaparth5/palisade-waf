@@ -92,7 +92,7 @@ func (g *Blocker) LookupCountry(ipStr string) string {
 // connCacheTTL bounds how long a per-connection country lookup is reused.
 // TLS connections are cleaned up immediately when they close (DeleteConn is
 // wired into the same ConnState hook that already cleans up ja4 in
-// main.go); this TTL is the safety net for plain HTTP connections, which have
+// internal/app); this TTL is the safety net for plain HTTP connections, which have
 // no such hook, so their entries still get reclaimed by the janitor below
 // instead of accumulating forever.
 const connCacheTTL = 10 * time.Minute

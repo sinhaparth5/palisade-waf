@@ -17,7 +17,7 @@ import (
 )
 
 // Custom WAF rules (issue #112): SecRules stored in the DB and compiled into
-// the live engines by buildWAFAll in main.go, so saving one takes effect on
+// the live engines by buildWAFAll in internal/app, so saving one takes effect on
 // the next request with no restart or SIGHUP.
 
 const customRuleMaxLen = 16 << 10

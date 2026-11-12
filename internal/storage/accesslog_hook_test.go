@@ -9,7 +9,7 @@ import (
 // from QueueRequest -> runLogWorker's async pipeline, the same fan-out point
 // webhook/autoban/broadcast already use — a regression here would silently
 // mean the access.log writer (internal/notify/accesslog) never receives any
-// entries despite being wired up correctly in main.go.
+// entries despite being wired up correctly in internal/app.
 func TestAccessLogFnFires(t *testing.T) {
 	db := openTestDB(t)
 
@@ -28,7 +28,7 @@ func TestAccessLogFnFires(t *testing.T) {
 	}
 }
 
-// TestAccessLogFnNilIsSafe confirms a nil hook (the default — main.go only
+// TestAccessLogFnNilIsSafe confirms a nil hook (the default — internal/app only
 // calls SetAccessLogFn when --access-log is set) never panics runLogWorker.
 func TestAccessLogFnNilIsSafe(t *testing.T) {
 	db := openTestDB(t)

@@ -51,7 +51,7 @@ func (l *Lookup) Lookup(ipStr string) (asnNum uint, org string) {
 // connCacheTTL bounds how long a per-connection ASN lookup is reused. See
 // geo.connCacheTTL's doc comment — same reasoning applies here: TLS
 // connections are cleaned up immediately via DeleteConn (wired into the
-// ConnState hook in main.go alongside ja4), this TTL reclaims entries
+// ConnState hook in internal/app alongside ja4), this TTL reclaims entries
 // for plain HTTP connections, which have no such hook.
 const connCacheTTL = 10 * time.Minute
 
