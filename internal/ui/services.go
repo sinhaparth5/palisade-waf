@@ -6,6 +6,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"palisade/internal/security/bot"
+	"palisade/internal/security/csp"
 	"palisade/internal/security/jwtauth"
 	"palisade/internal/security/waf"
 	"palisade/internal/services"
@@ -42,6 +43,7 @@ type ServiceView struct {
 	CSPEnforce   bool                // enforcing (issue #283)
 	CSPApproved  []string            // approved inventory entries
 	CSPRecent    bool                // a source first seen in the last 7 days
+	CSPFull      bool                // inventory at csp.MaxSources (#311)
 	CookiesOn    bool                // Set-Cookie hardening (issue #281)
 	CookieExempt string              // cookie names it leaves alone, space-separated
 }
@@ -71,6 +73,7 @@ func (h *Handler) serviceViews() []ServiceView {
 		exempt, on := cookies[s.ID]
 		out[i].CookiesOn, out[i].CookieExempt = on, strings.Join(exempt, " ")
 		out[i].CSPEnforce, out[i].CSPApproved = cspEnforce[s.ID].Enforce, cspEnforce[s.ID].Approved
+		out[i].CSPFull = len(out[i].Scripts) >= csp.MaxSources
 		out[i].CSPRecent = slices.ContainsFunc(out[i].Scripts, func(sc storage.CSPScript) bool { return sc.FirstSeen.After(weekAgo) })
 	}
 	return out

@@ -25,10 +25,18 @@ import (
 const ReportPath = "/_cz/csp-report"
 
 const (
-	maxBody    = 64 << 10 // a reports+json batch can carry several reports
-	maxSources = 500      // per service; past it, new sources are dropped
-	maxLen     = 255      // origin column width
+	maxBody = 64 << 10 // a reports+json batch can carry several reports
+	maxLen  = 255      // origin column width
 )
+
+// MaxSources caps each service's inventory. Past it new sources are not
+// recorded, and the alert fires once with InventoryFull as the source.
+const MaxSources = 500
+
+// InventoryFull is the alert source sent once per service (per process)
+// when a new source arrives at a full inventory, so filling it with fake
+// reports can't silence the next real one without anyone noticing (#311).
+const InventoryFull = "(inventory full: new script sources are no longer recorded)"
 
 // Header returns the report-only header value for a service's policy.
 func Header(serviceID int, policy string) (csp, endpoints string) {
@@ -80,15 +88,21 @@ type Collector struct {
 	clientIP func(*http.Request) string
 	alert    func(service, source, page string) // called once per new source, on its own goroutine
 	limit    *ratelimit.Limiter
+	newSrc   *ratelimit.Limiter // new sources per service + client key (#311)
 
 	mu    sync.Mutex
 	known map[int]map[string]bool // loaded from the store on a service's first report
+	full  map[int]bool            // InventoryFull already sent
 }
 
 // New builds a Collector. alert may be nil.
 func New(store Store, service func(int) (string, bool), clientIP func(*http.Request) string, alert func(service, source, page string)) *Collector {
 	return &Collector{store: store, service: service, clientIP: clientIP, alert: alert,
-		limit: ratelimit.NewWithParams(2, 40), known: map[int]map[string]bool{}}
+		limit: ratelimit.NewWithParams(2, 40), known: map[int]map[string]bool{}, full: map[int]bool{},
+		// 10 new sources per client per service, then one an hour: enough
+		// for a first page load to seed the inventory, while filling all
+		// MaxSources takes 50 client keys instead of one report batch.
+		newSrc: ratelimit.NewWithParams(10.0/3600, 10)}
 }
 
 // ServeHTTP always answers 204 to a POST: a browser does nothing with the
@@ -104,7 +118,8 @@ func (c *Collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name, ok := c.service(id)
-	if !ok || !c.limit.Allow(ratelimit.ClientKey(c.clientIP(r))).Allowed {
+	key := ratelimit.ClientKey(c.clientIP(r))
+	if !ok || !c.limit.Allow(key).Allowed {
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxBody+1))
@@ -112,7 +127,7 @@ func (c *Collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, v := range parse(body) {
-		c.record(id, name, v)
+		c.record(id, name, key, v)
 	}
 }
 
@@ -213,7 +228,7 @@ func page(doc string) string {
 	return u.Path
 }
 
-func (c *Collector) record(id int, name string, v violation) {
+func (c *Collector) record(id int, name, key string, v violation) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	known := c.known[id]
@@ -229,7 +244,17 @@ func (c *Collector) record(id int, name string, v violation) {
 		}
 		c.known[id] = known
 	}
-	if known[v.source] || len(known) >= maxSources {
+	if known[v.source] {
+		return
+	}
+	if len(known) >= MaxSources {
+		if !c.full[id] && c.alert != nil {
+			c.full[id] = true
+			go c.alert(name, InventoryFull, v.page)
+		}
+		return
+	}
+	if !c.newSrc.Allow(strconv.Itoa(id) + " " + key).Allowed {
 		return
 	}
 	isNew, err := c.store.AddCSPScript(id, storage.CSPScript{Origin: v.source, Page: v.page, FirstSeen: time.Now().UTC()})

@@ -3,6 +3,7 @@ package csp
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -111,12 +112,12 @@ func TestCollector(t *testing.T) {
 		t.Errorf("GET = %d", rec.Code)
 	}
 
-	// The per-client limit (burst 40) stops a flood from one client.
+	// One client adds at most 10 new sources per service (issue #311).
 	for i := 0; i < 100; i++ {
 		post("/_cz/csp-report?s=1", report("https://flood"+string(rune('a'+i%26))+string(rune('a'+i/26))+".example/x.js"))
 	}
-	if n := len(store.rows[1]); n > 45 {
-		t.Errorf("rate limit let %d sources through", n)
+	if n := len(store.rows[1]); n > 11 {
+		t.Errorf("one client added %d sources, want at most 10 new", n)
 	}
 	select { // alerts run on their own goroutine
 	case <-alerts:
@@ -146,5 +147,55 @@ func TestEnforcePolicy(t *testing.T) {
 		if got := EnforcePolicy(tc.policy, tc.approved); got != tc.want {
 			t.Errorf("EnforcePolicy(%q, %q) = %q, want %q", tc.policy, tc.approved, got, tc.want)
 		}
+	}
+}
+
+// TestCollectorInventoryFull pins issue #311: one report batch can't fill
+// the inventory, and a full inventory alerts once instead of going silent.
+func TestCollectorInventoryFull(t *testing.T) {
+	store := &memStore{rows: map[int][]storage.CSPScript{1: {}}}
+	for i := range MaxSources - 1 {
+		store.rows[1] = append(store.rows[1], storage.CSPScript{Origin: "https://s" + strconv.Itoa(i) + ".example"})
+	}
+	alerts := make(chan string, 10)
+	c := New(store, func(id int) (string, bool) { return "shop", id == 1 },
+		func(r *http.Request) string { return r.Header.Get("X-Test-IP") },
+		func(_, source, _ string) { alerts <- source })
+	batch := func(ip string, n int) {
+		var b strings.Builder
+		b.WriteString("[")
+		for i := range n {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			b.WriteString(`{"type":"csp-violation","body":{"documentURL":"https://shop.example/","blockedURL":"https://` + ip + `-` + strconv.Itoa(i) + `.example/x.js","effectiveDirective":"script-src"}}`)
+		}
+		b.WriteString("]")
+		req := httptest.NewRequest(http.MethodPost, "/_cz/csp-report?s=1", strings.NewReader(b.String()))
+		req.Header.Set("X-Test-IP", ip)
+		c.ServeHTTP(httptest.NewRecorder(), req)
+	}
+
+	batch("203.0.113.1", 5) // one slot left: the first fills it, the rest hit the cap
+	batch("203.0.113.2", 5)
+	if n := len(store.rows[1]); n != MaxSources {
+		t.Fatalf("inventory %d, want %d", n, MaxSources)
+	}
+	got := map[string]int{}
+	for range 2 {
+		select {
+		case a := <-alerts:
+			got[a]++
+		case <-time.After(2 * time.Second):
+			t.Fatalf("missing alert, got %v", got)
+		}
+	}
+	if got[InventoryFull] != 1 || got["https://203.0.113.1-0.example"] != 1 {
+		t.Errorf("alerts %v, want the last recorded source and one InventoryFull", got)
+	}
+	select {
+	case a := <-alerts:
+		t.Errorf("extra alert %q", a)
+	case <-time.After(100 * time.Millisecond):
 	}
 }

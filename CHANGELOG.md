@@ -15,6 +15,7 @@ rather than growing this file forever.
 ## [Unreleased]
 
 - (#310) Path-based checks can be bypassed with non-canonical paths
+- (#311) CSP inventory can be filled with fake reports to silence new-script alerts
 - (#312) Bot challenge pass cookie is not bound to the client
 
 ## [3.2.8] - 2026-11-12
