@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -1233,5 +1234,32 @@ func TestSetServiceGate(t *testing.T) {
 	env.do("POST", path, form())
 	if g := gate(); g.Maintenance || g.WaitingRoom {
 		t.Errorf("turning both off left %+v", g)
+	}
+}
+
+func TestSetServiceCookies(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("shop", "shop.example.com")
+	path := "/admin/services/cookies/" + itoa(svc.ID)
+
+	rec := env.do("POST", path, form("cookie_mode", "on", "cookie_exempt", "csrftoken, theme"))
+	wantCode(t, "save", rec.Code, 200, rec.Body.String())
+	if rec.Header().Get("HX-Trigger") != "cookies-saved" || !strings.Contains(rec.Body.String(), `data-cookie-exempt="csrftoken theme"`) {
+		t.Fatalf("no cookies-saved trigger or row data: %s", rec.Body)
+	}
+	if got, _ := env.db.ListServiceCookiePolicies(); !slices.Equal(got[svc.ID], []string{"csrftoken", "theme"}) {
+		t.Errorf("exempt = %q", got[svc.ID])
+	}
+
+	for _, bad := range []string{"a;b", "sid=x", "café"} {
+		rec = env.do("POST", path, form("cookie_mode", "on", "cookie_exempt", bad))
+		if rec.Header().Get("HX-Retarget") != "#svc-cookies-error" {
+			t.Errorf("%q: want inline error, got %s", bad, rec.Body)
+		}
+	}
+
+	env.do("POST", path, form("cookie_mode", "off"))
+	if got, _ := env.db.ListServiceCookiePolicies(); len(got) != 0 {
+		t.Errorf("off should remove the policy: %+v", got)
 	}
 }

@@ -477,6 +477,7 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/services/mcp/:id", h.SetServiceMCP),
 		g.POST("/services/jwt/:id", h.SetServiceJWT),
 		g.POST("/services/csp/:id", h.SetServiceCSP),
+		g.POST("/services/cookies/:id", h.SetServiceCookies),
 		g.POST("/services/cache/:id", h.SetServiceCache),
 		g.POST("/services/cache-session/:id", h.SetServiceCacheSession),
 		g.POST("/services/cache-tuning/:id", h.SetServiceCacheTuning),

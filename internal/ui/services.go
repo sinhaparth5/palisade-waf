@@ -10,6 +10,7 @@ import (
 	"palisade/internal/security/waf"
 	"palisade/internal/services"
 	"palisade/internal/storage"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -31,13 +32,15 @@ type ServiceView struct {
 	// OpenAPIMode is "log" or "enforce" when the service has a spec; the
 	// spec itself is fetched by the edit modal (ServiceOpenAPI), since this
 	// table is polled.
-	OpenAPIMode string
-	MTLS        storage.ServiceMTLS // zero value when no client CA is stored
-	MCP         storage.ServiceMCP  // zero value when the MCP guard is off
-	JWT         storage.ServiceJWT  // zero value when the JWT check is off
-	RateRules   string              // per-path rate limits, "" when none
-	CSP         string              // report-only policy, "" when off
-	Scripts     []storage.CSPScript // script sources its reports named
+	OpenAPIMode  string
+	MTLS         storage.ServiceMTLS // zero value when no client CA is stored
+	MCP          storage.ServiceMCP  // zero value when the MCP guard is off
+	JWT          storage.ServiceJWT  // zero value when the JWT check is off
+	RateRules    string              // per-path rate limits, "" when none
+	CSP          string              // report-only policy, "" when off
+	Scripts      []storage.CSPScript // script sources its reports named
+	CookiesOn    bool                // Set-Cookie hardening (issue #281)
+	CookieExempt string              // cookie names it leaves alone, space-separated
 }
 
 func (h *Handler) serviceViews() []ServiceView {
@@ -55,10 +58,13 @@ func (h *Handler) serviceViews() []ServiceView {
 	rateRules, _ := h.db.ListServiceRateRules()
 	cspPolicies, _ := h.db.ListServiceCSP()
 	scripts, _ := h.db.ListCSPScripts()
+	cookies, _ := h.db.ListServiceCookiePolicies()
 	out := make([]ServiceView, len(list))
 	for i, s := range list {
 		healthy, known := h.registry.IsHealthy(s.Name)
 		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID], MCP: mcp[s.ID], JWT: jwts[s.ID], RateRules: rateRules[s.ID], CSP: cspPolicies[s.ID], Scripts: scripts[s.ID]}
+		exempt, on := cookies[s.ID]
+		out[i].CookiesOn, out[i].CookieExempt = on, strings.Join(exempt, " ")
 	}
 	return out
 }
@@ -697,6 +703,40 @@ func (h *Handler) SetServiceCSP(c *echo.Context) error {
 		return fail(err.Error())
 	}
 	c.Response().Header().Set("HX-Trigger", "csp-saved")
+	return h.servicesRows(c)
+}
+
+// cookieName matches an RFC 6265 cookie name (a token).
+var cookieName = regexp.MustCompile("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$")
+
+// SetServiceCookies turns Set-Cookie hardening on or off for a service
+// (issue #281), with the cookie names to leave alone.
+func (h *Handler) SetServiceCookies(c *echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-cookies-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	exempt := strings.FieldsFunc(c.FormValue("cookie_exempt"), func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\r' || r == '\t' })
+	if len(exempt) > 50 {
+		return fail("At most 50 cookie names.")
+	}
+	for _, n := range exempt {
+		if len(n) > 128 || !cookieName.MatchString(n) {
+			return fail("Not a cookie name: " + n)
+		}
+	}
+	if err := h.db.SetServiceCookiePolicy(id, c.FormValue("cookie_mode") == "on", exempt); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return fail(err.Error())
+	}
+	c.Response().Header().Set("HX-Trigger", "cookies-saved")
 	return h.servicesRows(c)
 }
 

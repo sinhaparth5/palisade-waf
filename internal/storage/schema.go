@@ -375,6 +375,13 @@ func (db *DB) schemaStatements() []string {
 			PRIMARY KEY (service_id, origin)
 		)`, ts),
 
+		// Set-Cookie hardening per service (issue #281): a row means on;
+		// exempt is space-separated cookie names left alone.
+		`CREATE TABLE IF NOT EXISTS service_cookie_policy (
+			service_id INTEGER PRIMARY KEY,
+			exempt     TEXT NOT NULL
+		)`,
+
 		// Maintenance mode and waiting room per service (issue #198).
 		// Schedule bounds are RFC 3339 text, "" for none.
 		`CREATE TABLE IF NOT EXISTS service_gate (

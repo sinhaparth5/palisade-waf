@@ -220,6 +220,10 @@ func (r *Registry) Reload(db *storage.DB) error {
 		return err
 	}
 	cspNames := map[int]string{}
+	cookiePolicies, err := db.ListServiceCookiePolicies()
+	if err != nil {
+		return err
+	}
 
 	proxies := make(map[string]http.Handler, len(list))
 	direct := make(map[string]http.Handler, len(list))
@@ -357,6 +361,8 @@ func (r *Registry) Reload(db *storage.DB) error {
 				"X-Powered-By",
 				"X-AspNet-Version",
 				"X-AspNetMvc-Version",
+				"X-Runtime",
+				"X-Generator",
 				"Via",
 				"X-Varnish",
 			} {
@@ -367,6 +373,7 @@ func (r *Registry) Reload(db *storage.DB) error {
 		// Toward the client: response inspection (issue #192) sees the
 		// backend's own bytes, before compression re-encodes them.
 		compress := s.CompressEnabled
+		cookieExempt, cookiesOn := cookiePolicies[s.ID]
 		var cspHeader, cspEndpoints string
 		if p := cspPolicies[s.ID]; p != "" {
 			cspNames[s.ID] = name
@@ -378,6 +385,9 @@ func (r *Registry) Reload(db *storage.DB) error {
 			}
 			if compress {
 				compressResponse(resp)
+			}
+			if cookiesOn {
+				hardenCookies(resp, cookieExempt)
 			}
 			// Report-only CSP (issue #235): only documents run a policy.
 			if cspHeader != "" && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {

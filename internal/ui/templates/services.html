@@ -481,6 +481,20 @@
       </form>
       <div id="svc-csp-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
 
+      <form id="svc-cookies-form" hx-post="{{.AdminPath}}/services/cookies/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
+        <p class="text-[13px] font-semibold text-slate-800 mb-1">Harden backend cookies</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Adds <code class="font-mono">HttpOnly</code>, <code class="font-mono">SameSite=Lax</code> and, on HTTPS, <code class="font-mono">Secure</code> to every <code class="font-mono">Set-Cookie</code> from the backend that lacks them. Attributes the backend already set are kept. List cookies the page's JavaScript must read, or that must be sent cross-site, to leave them alone.</p>
+        <label for="svc-cookies-exempt" class="field-label">Leave these cookies alone</label>
+        <input id="svc-cookies-exempt" name="cookie_exempt" type="text" placeholder="csrftoken, theme" class="field text-[13px] font-mono mb-3">
+        <label for="svc-cookies-mode" class="field-label">Mode</label>
+        <select id="svc-cookies-mode" name="cookie_mode" class="field text-[13px] mb-4">
+          <option value="off">Off</option>
+          <option value="on">On</option>
+        </select>
+        <button type="submit" class="btn-primary w-full">Save</button>
+      </form>
+      <div id="svc-cookies-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
+
       <form id="svc-responses-form" hx-post="{{.AdminPath}}/services/responses/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">Inspect responses</p>
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Checks the backend's replies for leaked SQL errors, stack traces, PHP/Java/IIS error pages and web shells with the OWASP CRS outbound rules. Logged as <code class="font-mono">response_leak</code>. Only HTML, plain text, JSON and XML up to 64 KiB are inspected; binary, streaming and larger responses pass through untouched. Each inspected response adds about 0.5 ms per KiB.</p>
@@ -903,6 +917,7 @@
       data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}"
       data-schema="{{.RequestSchema}}" data-schema-mode="{{.SchemaMode}}" data-openapi-mode="{{.OpenAPIMode}}"
       data-mcp-mode="{{.MCP.Mode}}" data-mcp-path="{{.MCP.Path}}" data-mcp-origins="{{.MCP.Origins}}" data-mcp-methods="{{.MCP.Methods}}" data-mcp-tools="{{.MCP.Tools}}" data-csp="{{.CSP}}"
+      data-cookies="{{if .CookiesOn}}1{{else}}0{{end}}" data-cookie-exempt="{{.CookieExempt}}"
       data-jwt-mode="{{.JWT.Mode}}" data-jwt-jwks="{{.JWT.JWKSURL}}" data-jwt-key="{{.JWT.PublicKey}}" data-jwt-issuer="{{.JWT.Issuer}}"
       data-jwt-audience="{{.JWT.Audience}}" data-jwt-algs="{{.JWT.Algorithms}}" data-jwt-prefixes="{{.JWT.Prefixes}}"
       data-response-inspect="{{.ResponseInspect}}" data-mtls-mode="{{.MTLS.Mode}}" data-mtls-ca="{{if .MTLS.CAPath}}1{{else}}0{{end}}" data-mtls-allow="{{.MTLS.Allow}}"
@@ -976,6 +991,7 @@
   {{template "svc-kv" (map "K" "MCP guard" "V" (or .MCP.Mode "Off"))}}
   {{template "svc-kv" (map "K" "JWT verification" "V" (or .JWT.Mode "Off"))}}
   {{template "svc-kv" (map "K" "CSP report-only" "V" (or .CSP "Off"))}}
+  {{template "svc-kv" (map "K" "Cookie hardening" "V" (or (and .CookiesOn (or (and .CookieExempt (print "On, except " .CookieExempt)) "On")) "Off"))}}
   {{if .Scripts}}<p class="pt-2 text-slate-500">Script sources</p>
   <ul class="my-2 border border-line bg-surface p-3 font-mono text-[12px] text-ink">{{range .Scripts}}<li class="flex flex-wrap justify-between gap-x-3"><span class="break-all">{{.Origin}}</span><span class="text-slate-500">{{.Page}} · {{fmtTimeFull .FirstSeen}}</span></li>{{end}}</ul>{{end}}
   {{template "svc-kv" (map "K" "Inspect responses" "V" (or .ResponseInspect "Off"))}}

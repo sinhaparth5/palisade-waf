@@ -14,6 +14,7 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#281) Harden backend cookies and response headers per service
 - (#267) Owner-only pprof endpoint
 - (#266) Remove JA3 fingerprinting
 
