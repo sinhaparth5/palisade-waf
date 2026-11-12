@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"log"
+	"palisade/internal/storage"
 	"strings"
 	"time"
 
-	"palisade/internal/storage"
+	"github.com/labstack/echo/v5"
 )
 
 // deviceRow is one line of the Settings page's "Registered devices" card.
@@ -119,4 +121,61 @@ func currentFirst(rows []deviceRow) []deviceRow {
 		}
 	}
 	return rows
+}
+
+// sessionCookieValue returns the caller's own session token, or "".
+func sessionCookieValue(c *echo.Context) string {
+	cookie, err := c.Cookie(sessionCookie)
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+// devicesData is the render payload shared by the card and its row list.
+func (h *Handler) devicesData(c *echo.Context) map[string]any {
+	current := sessionCookieValue(c)
+	return map[string]any{
+		"AdminPath": h.cfg.Admin.Path,
+		"Devices":   h.deviceRows(currentUID(c), current),
+	}
+}
+
+// RevokeDevice is the one button on each row of the "Registered devices"
+// card, and does whichever of the two things that row needs: a still-live
+// device is signed out (revoked, so it keeps its place in the history and
+// learns why on its next request), while an already-signed-out one is
+// dropped from the history entirely. One route rather than two, because the
+// row's own state already says which is meant.
+//
+// The current device is refused either way: the Log out button in the
+// sidebar already signs you out, and doing it from a device list is a
+// confusing way to get there.
+func (h *Handler) RevokeDevice(c *echo.Context) error {
+	// The link carries the session's stored id, never its cookie token (#269).
+	if id := c.Param("token"); id != storage.SessionID(sessionCookieValue(c)) {
+		sess, err := h.db.GetSessionByID(id)
+		switch {
+		case err != nil:
+			log.Printf("revoke device: %v", err)
+		case sess == nil || sess.UserID != currentUID(c): // gone, or not this user's
+		case sess.Live():
+			if err := h.db.RevokeSession(sess.UserID, id); err != nil {
+				log.Printf("revoke device: %v", err)
+			}
+		default:
+			if err := h.db.DeleteSession(id); err != nil {
+				log.Printf("forget device: %v", err)
+			}
+		}
+	}
+	return h.renderPartial(c, "settings", "devices-rows", h.devicesData(c))
+}
+
+// RevokeOtherDevices signs out every session except the caller's own.
+func (h *Handler) RevokeOtherDevices(c *echo.Context) error {
+	if _, err := h.db.RevokeOtherSessions(currentUID(c), storage.SessionID(sessionCookieValue(c))); err != nil {
+		log.Printf("revoke other devices: %v", err)
+	}
+	return h.renderPartial(c, "settings", "devices-card", h.devicesData(c))
 }

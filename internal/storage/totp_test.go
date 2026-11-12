@@ -5,7 +5,7 @@ import (
 )
 
 // TestTOTPEnrollmentLifecycle exercises the pending → enabled → disabled
-// flow backing the 2FA settings card (ui/handlers.go).
+// flow backing the 2FA settings card (ui/twofactor.go).
 func TestTOTPEnrollmentLifecycle(t *testing.T) {
 	db := openTestDB(t)
 	uid := testUser(t, db)

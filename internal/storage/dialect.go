@@ -12,7 +12,7 @@ import (
 )
 
 // dialect captures the handful of SQL differences between the backends this
-// package supports, so the ~130 query methods elsewhere in db.go can stay
+// package supports, so the ~130 query methods elsewhere in this package can stay
 // written once (mostly against "?" placeholders and shared DDL/upsert
 // helpers) instead of forking per-driver at every call site. sqlx.Rebind
 // handles placeholder translation ("?" -> "$1, $2, ...") transparently, so

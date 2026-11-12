@@ -211,7 +211,7 @@ func (h *Handler) APIPurgeService(c *echo.Context) error {
 }
 
 // apiCreateServiceRequest mirrors the fields accepted by the admin UI's
-// service-add wizard (see AddService, ui/handlers.go).
+// service-add wizard (see AddService, ui/services.go).
 type apiCreateServiceRequest struct {
 	Name       string `json:"name"`
 	MatchType  string `json:"match_type"` // "host" | "prefix"
@@ -490,7 +490,7 @@ func (h *Handler) APIDeleteService(c *echo.Context) error {
 // ── IP rules ─────────────────────────────────────────────────────────────────
 
 // normalizeIPOrCIDR accepts a plain IP or CIDR range and returns its
-// canonical string form, the same normalization AddIPRule (ui/handlers.go)
+// canonical string form, the same normalization AddIPRule (ui/iprules.go)
 // applies, kept here so both the HTMX and REST paths agree on stored form.
 func normalizeIPOrCIDR(ip string) (string, error) {
 	if _, network, err := net.ParseCIDR(ip); err == nil {

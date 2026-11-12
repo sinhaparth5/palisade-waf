@@ -102,7 +102,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 
 ## Storage
 
-- Queries in `db.go` use `?` and go through `DB.exec/query/queryRow`, which `Rebind`. Hand-rolled `*sqlx.Tx` code must call `Rebind` itself (Postgres rejects `?`).
+- Queries in `storage` use `?` and go through `DB.exec/query/queryRow`, which `Rebind`. Hand-rolled `*sqlx.Tx` code must call `Rebind` itself (Postgres rejects `?`).
 - `dialect` generates only what Rebind can't: DDL types, idempotent index/ALTER clauses, MySQL TEXT index prefixes, quoted identifiers (`meta.key` is reserved in MySQL), upserts. `schema.go` emits one statement per Exec (pgx rejects multi-statement strings).
 - Verify dialect-touching changes against real mysql:8/postgres:16, not docs.
 - SQLite PRAGMAs go in the DSN (`_pragma=...`), not an `Exec` — only DSN params reach every pooled connection.
@@ -165,7 +165,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 
 ## Layout
 
-`cli/` is a separate C++20 terminal client (issue #244): same version as the WAF (release passes `-DPALISADE_VERSION=<tag>`), installed by `install.sh` with `PALISADE_CLI=1` or `PALISADE_CLI_ONLY=1` (#253); CMake + FetchContent (FTXUI, cpp-httplib, nlohmann/json, versions pinned in `cli/CMakeLists.txt`), talks only to `/api/v1` with a bearer key, config `~/.config/palisade/config.toml` written 0600. Own workflow `cli.yml`, filtered on `cli/**`; Go tooling ignores the directory. Its test uses plain `assert` with `#undef NDEBUG` (default build type is Release). Everything under `internal/`: `config/`, `storage/`, `proxy/`, `services/`, `ui/`, `security/*` (pipeline signals and mitigations), `notify/*` (outbound reporting). `main.go`/`assets.go` stay at the root because `//go:embed` can't reach `static/` otherwise. `tools/minify` is build-time only. GeoLite2 country and DB-IP ASN databases are bundled via `//go:embed`. User docs live in a separate repo.
+`cli/` is a separate C++20 terminal client (issue #244): same version as the WAF (release passes `-DPALISADE_VERSION=<tag>`), installed by `install.sh` with `PALISADE_CLI=1` or `PALISADE_CLI_ONLY=1` (#253); CMake + FetchContent (FTXUI, cpp-httplib, nlohmann/json, versions pinned in `cli/CMakeLists.txt`), talks only to `/api/v1` with a bearer key, config `~/.config/palisade/config.toml` written 0600. Own workflow `cli.yml`, filtered on `cli/**`; Go tooling ignores the directory. Its test uses plain `assert` with `#undef NDEBUG` (default build type is Release). Everything under `internal/`: `config/`, `storage/`, `proxy/`, `services/`, `ui/`, `security/*` (pipeline signals and mitigations), `notify/*` (outbound reporting). `ui` and `storage` are split per feature (issue #264): `handlers.go` keeps the Handler, templates, auth middleware and `Register`; `db.go` keeps `DB`, `Open`, the log worker and `migrate`. Page handlers and queries live in `services.go`, `iprules.go`, `georules.go`, `wafrules.go`, `threatintel.go`, `certificates.go`, `settings.go`, `logs.go`/`requests.go`, `sessions.go`, etc.; add new code to the matching file, not back into `handlers.go`/`db.go`. `main.go`/`assets.go` stay at the root because `//go:embed` can't reach `static/` otherwise. `tools/minify` is build-time only. GeoLite2 country and DB-IP ASN databases are bundled via `//go:embed`. User docs live in a separate repo.
 
 ## Release and distribution
 
