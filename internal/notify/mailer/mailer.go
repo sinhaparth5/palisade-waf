@@ -63,7 +63,11 @@ func Send(cfg storage.EmailConfig, subject, textBody, htmlBody string) error {
 		return fmt.Errorf("smtp dial %s: %w", addr, err)
 	}
 	_ = conn.SetDeadline(time.Now().Add(sendTimeout))
+	return session(conn, cfg.Token, recipients, buildMessage(fromHeader(), recipients, subject, textBody, htmlBody))
+}
 
+// session runs one SMTP transaction over an already-established TLS conn.
+func session(conn net.Conn, token string, recipients []string, msg []byte) error {
 	c, err := smtp.NewClient(conn, smtpHost)
 	if err != nil {
 		conn.Close()
@@ -73,7 +77,7 @@ func Send(cfg storage.EmailConfig, subject, textBody, htmlBody string) error {
 
 	// PlainAuth is safe here: net/smtp marks the session as TLS because the
 	// underlying conn is a *tls.Conn, so it allows AUTH PLAIN.
-	if err := c.Auth(smtp.PlainAuth("", smtpUsername, cfg.Token, smtpHost)); err != nil {
+	if err := c.Auth(smtp.PlainAuth("", smtpUsername, token, smtpHost)); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
 	if err := c.Mail(Sender); err != nil {
@@ -88,7 +92,7 @@ func Send(cfg storage.EmailConfig, subject, textBody, htmlBody string) error {
 	if err != nil {
 		return fmt.Errorf("smtp DATA: %w", err)
 	}
-	if _, err := w.Write(buildMessage(fromHeader(), recipients, subject, textBody, htmlBody)); err != nil {
+	if _, err := w.Write(msg); err != nil {
 		return fmt.Errorf("smtp write body: %w", err)
 	}
 	if err := w.Close(); err != nil {

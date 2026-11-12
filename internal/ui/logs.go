@@ -126,7 +126,7 @@ func (h *Handler) LogDetail(c *echo.Context) error {
 	}
 	d, err := h.db.GetRequestByID(id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
+		return lookupError(c, err, "not found")
 	}
 
 	// Parse headers_json into a plain map for the response.
@@ -194,7 +194,7 @@ func (h *Handler) MarkLogFeedback(c *echo.Context) error {
 	}
 	d, err := h.db.GetRequestByID(id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
+		return lookupError(c, err, "not found")
 	}
 	if !d.Blocked || d.RuleID == 0 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "log entry has no WAF rule to mark"})
@@ -217,7 +217,7 @@ func (h *Handler) CreateLogException(c *echo.Context) error {
 	}
 	d, err := h.db.GetRequestByID(id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
+		return lookupError(c, err, "not found")
 	}
 	if !d.Blocked || d.RuleID == 0 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "log entry has no WAF rule"})

@@ -15,6 +15,7 @@ rather than growing this file forever.
 ## [Unreleased]
 
 - (#285) Remove Redis leftovers and historical comments
+- (#286) Raise test coverage on the least-covered files
 
 ## [3.2.6] - 2026-11-12
 

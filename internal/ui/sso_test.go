@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -31,6 +32,9 @@ type fakeIdP struct {
 	idt  map[string]any // ID token claims for the next exchange
 	info map[string]any // userinfo claims
 	sign *rsa.PrivateKey
+	// token endpoint faults: "error" answers invalid_grant, "no-id-token"
+	// leaves the id_token out of an otherwise good response.
+	fault string
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
@@ -56,7 +60,7 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		sum := sha256.Sum256([]byte(r.FormValue("code_verifier")))
-		if base64.RawURLEncoding.EncodeToString(sum[:]) != f.chal {
+		if base64.RawURLEncoding.EncodeToString(sum[:]) != f.chal || f.fault == "error" {
 			http.Error(w, `{"error":"invalid_grant"}`, http.StatusBadRequest)
 			return
 		}
@@ -65,11 +69,12 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 			claims[k] = v
 		}
 		raw, _ := json.Marshal(claims)
+		resp := map[string]any{"access_token": "at", "token_type": "Bearer", "expires_in": 60}
+		if f.fault != "no-id-token" {
+			resp["id_token"] = oidctest.SignIDToken(f.sign, "k1", oidc.RS256, string(raw))
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"access_token": "at", "token_type": "Bearer", "expires_in": 60,
-			"id_token": oidctest.SignIDToken(f.sign, "k1", oidc.RS256, string(raw)),
-		})
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
@@ -319,5 +324,105 @@ func TestSSOSettings(t *testing.T) {
 	env.do("POST", "/admin/settings/sso", form("issuer", ""))
 	if cfg, _ := env.db.GetSSOConfig(); cfg != (storage.SSOConfig{}) {
 		t.Errorf("turning SSO off left %+v", cfg)
+	}
+}
+
+// TestSSOCallbackFailures: every way the IdP leg can go wrong lands on the
+// login page with no session and no new user.
+func TestSSOCallbackFailures(t *testing.T) {
+	env, idp := newSSOEnv(t)
+	if err := env.db.CreateSSOInvite("eve@example.com", storage.RoleOwner); err != nil {
+		t.Fatal(err)
+	}
+	eve := map[string]any{"sub": "eve", "email": "eve@example.com", "email_verified": true}
+
+	for _, tc := range []struct {
+		name, fault string
+		claims      map[string]any
+	}{
+		{"token endpoint error", "error", eve},
+		{"no id_token", "no-id-token", eve},
+		{"malformed claims", "", map[string]any{"sub": "eve", "email": "eve@example.com", "email_verified": "yes"}},
+	} {
+		idp.set(func() { idp.fault = tc.fault })
+		if rec := idp.ssoLogin(t, env, tc.claims); loggedIn(rec) || !strings.Contains(rec.Body.String(), "Single sign-on failed") {
+			t.Errorf("%s: %d %s", tc.name, rec.Code, rec.Body)
+		}
+	}
+	idp.set(func() { idp.fault = "" })
+
+	// The IdP declined (user cancelled): state still has to match.
+	start := env.doWith("GET", "/admin/login/sso", nil, "")
+	state := ""
+	if loc, err := url.Parse(start.Header().Get("Location")); err == nil {
+		state = loc.Query().Get("state")
+	}
+	req := httptest.NewRequest("GET", "/admin/login/sso/callback?error=access_denied&state="+url.QueryEscape(state), nil)
+	req.AddCookie(cookieByName(start, ssoCookie))
+	rec := httptest.NewRecorder()
+	env.e.ServeHTTP(rec, req)
+	if loggedIn(rec) || !strings.Contains(rec.Body.String(), "sign you in") {
+		t.Errorf("IdP error = %d %s", rec.Code, rec.Body)
+	}
+
+	// SSO turned off between start and callback.
+	start = env.doWith("GET", "/admin/login/sso", nil, "")
+	loc, _ := url.Parse(start.Header().Get("Location"))
+	if err := env.db.SetSSOConfig(storage.SSOConfig{}); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest("GET", "/admin/login/sso/callback?code=c&state="+url.QueryEscape(loc.Query().Get("state")), nil)
+	req.AddCookie(cookieByName(start, ssoCookie))
+	rec = httptest.NewRecorder()
+	env.e.ServeHTTP(rec, req)
+	if loggedIn(rec) || !strings.Contains(rec.Body.String(), "not set up") {
+		t.Errorf("callback with SSO off = %d %s", rec.Code, rec.Body)
+	}
+	if rec := env.doWith("GET", "/admin/login/sso", nil, ""); rec.Code != http.StatusFound || !strings.HasSuffix(rec.Header().Get("Location"), "/admin/login") {
+		t.Errorf("start with SSO off = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+
+	// IdP unreachable at start.
+	dead := httptest.NewServer(http.NotFoundHandler())
+	dead.Close()
+	if err := env.db.SetSSOConfig(storage.SSOConfig{Issuer: dead.URL, ClientID: "palisade", ClientSecret: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	if rec := env.doWith("GET", "/admin/login/sso", nil, ""); !strings.Contains(rec.Body.String(), "reach the identity provider") {
+		t.Errorf("start with IdP down = %d %s", rec.Code, rec.Body)
+	}
+
+	if n, _ := env.db.CountAdminUsers(); n != 1 {
+		t.Errorf("failed logins created users: %d", n)
+	}
+}
+
+// TestSSOInviteRoutes covers renew and revoke, and their bad-id answers.
+func TestSSOInviteRoutes(t *testing.T) {
+	env := newAdminEnv(t)
+	if rec := env.do("POST", "/admin/settings/users/invites", form("email", "nope", "role", "viewer")); !strings.Contains(rec.Body.String(), "valid email") {
+		t.Errorf("bad email = %s", rec.Body)
+	}
+	env.do("POST", "/admin/settings/users/invites", form("email", "pat@example.com", "role", "viewer"))
+	inv, _ := env.db.ListSSOInvites()
+	if len(inv) != 1 {
+		t.Fatalf("invites = %+v", inv)
+	}
+	id := strconv.FormatInt(inv[0].ID, 10)
+	for _, tc := range []struct {
+		method, path string
+		want         int
+	}{
+		{"POST", "/admin/settings/users/invites/x", 400},
+		{"DELETE", "/admin/settings/users/invites/x", 400},
+		{"POST", "/admin/settings/users/invites/" + id, 200},
+		{"DELETE", "/admin/settings/users/invites/" + id, 200},
+	} {
+		if rec := env.do(tc.method, tc.path, nil); rec.Code != tc.want {
+			t.Errorf("%s %s = %d, want %d", tc.method, tc.path, rec.Code, tc.want)
+		}
+	}
+	if inv, _ := env.db.ListSSOInvites(); len(inv) != 0 {
+		t.Errorf("revoke left %+v", inv)
 	}
 }

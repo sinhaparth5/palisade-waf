@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 	"time"
@@ -240,5 +241,50 @@ func TestLoginRehashesOldCost(t *testing.T) {
 	}
 	if u, _ := db.CheckAdminLogin("owner@x.test", "owner-password"); u == nil {
 		t.Error("password stopped working after the rehash")
+	}
+}
+
+// TestUserGuards: an email can't be moved onto another account, roles are
+// checked on every path, and a sealed TOTP secret read with the wrong key is
+// an error rather than "2FA not set up".
+func TestUserGuards(t *testing.T) {
+	db := openTestDB(t)
+	a, err := db.CreateAdminUser("a@example.com", "password-aaaa", RoleOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.CreateAdminUser("b@example.com", "password-bbbb", RoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpdateAdminCredentials(a, "B@Example.com", ""); !errors.Is(err, ErrUserExists) {
+		t.Errorf("taking another user's email: %v, want ErrUserExists", err)
+	}
+	if err := db.UpdateAdminCredentials(a, "a@example.com", ""); err != nil {
+		t.Errorf("keeping one's own email: %v", err)
+	}
+	if err := db.SetAdminUserRole(a, "root"); err == nil {
+		t.Error("SetAdminUserRole accepted an unknown role")
+	}
+	if _, _, err := db.InviteAdminUser("c@example.com", "root"); err == nil {
+		t.Error("InviteAdminUser accepted an unknown role")
+	}
+	if u, err := db.AcceptUserInvite("no-such-token", "password-cccc"); u != nil || err != nil {
+		t.Errorf("unknown invite token = %+v, %v", u, err)
+	}
+
+	if err := db.EnableSecretEncryption(bytes.Repeat([]byte{7}, 32)); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetPendingTOTPSecret(a, "JBSWY3DPEHPK3PXP"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.EnableSecretEncryption(bytes.Repeat([]byte{8}, 32)); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := db.GetPendingTOTPSecret(a); err == nil || s != "" {
+		t.Errorf("wrong-key TOTP read = %q, %v; want an error", s, err)
+	}
+	if s, err := db.GetPendingTOTPSecret(999); err != nil || s != "" {
+		t.Errorf("unknown user TOTP read = %q, %v; want empty", s, err)
 	}
 }

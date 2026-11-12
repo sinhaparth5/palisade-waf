@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bytes"
+	"errors"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -187,6 +188,12 @@ func TestLoginTOTPWrongCodesHitLimiter(t *testing.T) {
 	})
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("password step during lockout = %d, want 429", rec.Code)
+	}
+	// So does another code, or asking for an emailed one.
+	for _, path := range []string{"/admin/login/totp", "/admin/login/totp/email"} {
+		if rec := postForm(e, path, url.Values{"code": {"000000"}}, pending); rec.Code != http.StatusTooManyRequests {
+			t.Errorf("%s during lockout = %d, want 429", path, rec.Code)
+		}
 	}
 }
 
@@ -404,5 +411,36 @@ func TestTwoFAEntryConcurrentUse(t *testing.T) {
 				t.Fatalf("succeeded %d times, want exactly 1", got)
 			}
 		})
+	}
+}
+
+// TestLoginTOTPEmailFailures: no pending login, no mail config, and a failed
+// send, whose code is dropped (never usable) while the resend wait still
+// applies, so a broken mailer isn't hammered.
+func TestLoginTOTPEmailFailures(t *testing.T) {
+	h, e, db := newTestLoginHandler(t)
+	enableTOTP(t, db)
+	var sent []string
+	h.sendLoginCode = func(code string) error { sent = append(sent, code); return errors.New("smtp down") }
+
+	if rec := postForm(e, "/admin/login/totp/email", url.Values{}); !strings.Contains(rec.Body.String(), "Sign-in expired") {
+		t.Errorf("no pending login: %d", rec.Code)
+	}
+	pending := passwordStep(t, e)
+	if rec := postForm(e, "/admin/login/totp/email", url.Values{}, pending); !strings.Contains(rec.Body.String(), "not configured") || len(sent) != 0 {
+		t.Errorf("no mail config: sent=%v %d", sent, rec.Code)
+	}
+	if err := db.SetEmailConfig(storage.EmailConfig{To: "ops@example.com", Token: "cf-token"}); err != nil {
+		t.Fatal(err)
+	}
+	if rec := postForm(e, "/admin/login/totp/email", url.Values{}, pending); !strings.Contains(rec.Body.String(), "Sending the code failed") {
+		t.Errorf("failed send: %d", rec.Code)
+	}
+	postForm(e, "/admin/login/totp/email", url.Values{}, pending)
+	if len(sent) != 1 {
+		t.Fatalf("sent = %v, want one attempt inside the resend wait", sent)
+	}
+	if rec := postForm(e, "/admin/login/totp", url.Values{"code": {sent[0]}}, pending); cookieByName(rec, sessionCookie) != nil {
+		t.Error("a code whose email failed signed in")
 	}
 }

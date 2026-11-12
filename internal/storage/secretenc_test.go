@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"encoding/base64"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -160,5 +161,37 @@ func TestSecretEncryptionKeyErrors(t *testing.T) {
 
 	if err := db.EnableSecretEncryption([]byte("short")); err == nil {
 		t.Error("EnableSecretEncryption accepted a non-32-byte key")
+	}
+}
+
+// TestOpenSecretTampered: a damaged sealed value is an error, never
+// plaintext or "", and an untouched one still opens.
+func TestOpenSecretTampered(t *testing.T) {
+	db := openTestDB(t)
+	if err := db.EnableSecretEncryption(bytes.Repeat([]byte{3}, 32)); err != nil {
+		t.Fatal(err)
+	}
+	sealed, err := db.sealSecret("hunter2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := base64.StdEncoding.DecodeString(strings.TrimPrefix(sealed, secretPrefix))
+	flipped := append([]byte{}, raw...)
+	flipped[len(flipped)-1] ^= 1
+
+	for name, tc := range map[string]struct{ in, want, errSub string }{
+		"intact":      {sealed, "hunter2", ""},
+		"plaintext":   {"not-sealed", "not-sealed", ""},
+		"bad base64":  {secretPrefix + "!!!", "", "decode"},
+		"short":       {secretPrefix + base64.StdEncoding.EncodeToString([]byte("abc")), "", "too short"},
+		"flipped bit": {secretPrefix + base64.StdEncoding.EncodeToString(flipped), "", "decrypt"},
+	} {
+		got, err := db.openSecret(tc.in)
+		if got != tc.want || (tc.errSub == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), tc.errSub)) {
+			t.Errorf("%s: openSecret = %q, %v; want %q, %q", name, got, err, tc.want, tc.errSub)
+		}
+	}
+	if s, _ := db.sealSecret(""); s != "" {
+		t.Errorf("sealSecret(\"\") = %q, want \"\" (unset)", s)
 	}
 }

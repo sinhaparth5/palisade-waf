@@ -92,3 +92,60 @@ func TestCacheHelpers(t *testing.T) {
 		t.Errorf("fmtMiB = %q", got)
 	}
 }
+
+// TestAPIServiceFields: a multi-backend create and an update of the host and
+// feature fields land in the DB and the live registry.
+func TestAPIServiceFields(t *testing.T) {
+	h, e := newTestAPIHandler(t)
+	key := createTestKey(t, h, false)
+	var backends []string
+	for range 2 {
+		b := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		t.Cleanup(b.Close)
+		backends = append(backends, b.URL)
+	}
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+key)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		return rec
+	}
+
+	rec := call("POST", "/admin/api/v1/services", `{"name":"lb","match_type":"host","match_value":"lb.example.com",`+
+		`"backends":["`+backends[0]+`","`+backends[1]+`"],"lb_policy":"least_conn","rate_limit_rps":-1,"rate_limit_burst":-1}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", rec.Code, rec.Body)
+	}
+	svcs, _ := h.db.ListServices()
+	if len(svcs) != 1 || len(svcs[0].Backends()) != 2 || svcs[0].LBPolicy != "least_conn" || svcs[0].RateLimitRPS != 0 {
+		t.Fatalf("created = %+v", svcs)
+	}
+	path := fmt.Sprintf("/admin/api/v1/services/%d", svcs[0].ID)
+
+	rec = call("PUT", path, `{"host_aliases":["www.lb.example.com"],"canonical_host":"www.lb.example.com",`+
+		`"http3_enabled":true,"compress_enabled":true,"allow_large_js_uploads":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update = %d %s", rec.Code, rec.Body)
+	}
+	got, _ := h.db.GetService(svcs[0].ID)
+	if len(got.HostAliases) != 1 || got.CanonicalHost != "www.lb.example.com" || !got.HTTP3Enabled || !got.CompressEnabled || !got.AllowLargeJSUploads {
+		t.Errorf("updated = %+v", got)
+	}
+	if h.registry.Match("www.lb.example.com", "/") == nil {
+		t.Error("alias not routed after update")
+	}
+
+	// A canonical host that is neither the host nor an alias is refused.
+	if rec := call("PUT", path, `{"canonical_host":"elsewhere.example.com"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad canonical = %d %s", rec.Code, rec.Body)
+	}
+	// Switching to prefix matching drops the aliases.
+	if rec := call("PUT", path, `{"host":"","prefix":"/lb"}`); rec.Code != http.StatusOK {
+		t.Fatalf("to prefix = %d %s", rec.Code, rec.Body)
+	}
+	if got, _ := h.db.GetService(svcs[0].ID); len(got.HostAliases) != 0 || got.CanonicalHost != "" {
+		t.Errorf("prefix service kept host names: %+v", got)
+	}
+}

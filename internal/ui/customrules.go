@@ -25,6 +25,10 @@ const customRuleMaxLen = 16 << 10
 // checkCustomRule normalizes r and rejects it unless it compiles, uses only
 // custom-range IDs no other custom rule already uses, and is scoped to an
 // existing service (or globally).
+// errCustomRuleStorage marks a checkCustomRule failure that is the DB's
+// fault, not the rule's, so the API can answer 500 instead of 400.
+var errCustomRuleStorage = errors.New("storage error")
+
 func (h *Handler) checkCustomRule(r *storage.WAFCustomRule) error {
 	r.Rule = strings.TrimSpace(r.Rule)
 	r.ServiceName = strings.TrimSpace(r.ServiceName)
@@ -46,7 +50,7 @@ func (h *Handler) checkCustomRule(r *storage.WAFCustomRule) error {
 	}
 	others, err := h.db.ListWAFCustomRules()
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errCustomRuleStorage, err)
 	}
 	for _, o := range others {
 		if o.ID == r.ID {
@@ -143,7 +147,9 @@ func (h *Handler) apiSaveCustomRule(c *echo.Context, id int64) error {
 		return apiError(c, http.StatusBadRequest, "invalid JSON body")
 	}
 	r := storage.WAFCustomRule{ID: id, ServiceName: req.ServiceName, Rule: req.Rule, Note: req.Note, Enabled: req.Enabled == nil || *req.Enabled}
-	if err := h.checkCustomRule(&r); err != nil {
+	if err := h.checkCustomRule(&r); errors.Is(err, errCustomRuleStorage) {
+		return apiError(c, http.StatusInternalServerError, err.Error())
+	} else if err != nil {
 		return apiError(c, http.StatusBadRequest, err.Error())
 	}
 	if err := h.db.SaveWAFCustomRule(r); errors.Is(err, sql.ErrNoRows) {

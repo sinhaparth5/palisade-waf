@@ -178,3 +178,29 @@ func TestTestConnectionErrors(t *testing.T) {
 		t.Error("connection to a closed port should error, got nil")
 	}
 }
+
+// TestBuildDSNRejects: field values that would produce a DSN the driver
+// parses differently from what the admin typed are refused.
+func TestBuildDSNRejects(t *testing.T) {
+	for name, f := range map[string]DBConnFields{
+		"host with @":         {Driver: "postgres", Host: "evil@db.example.com"},
+		"host with slash":     {Driver: "mysql", Host: "db/x"},
+		"bad ipv6":            {Driver: "mysql", Host: "::zz"},
+		"mysql port":          {Driver: "mysql", Host: "db", Port: "0"},
+		"postgres port":       {Driver: "postgres", Host: "db", Port: "70000"},
+		"port text":           {Driver: "postgres", Host: "db", Port: "abc"},
+		"mysql user colon":    {Driver: "mysql", Host: "db", Username: "a:b"},
+		"mysql pass, no user": {Driver: "mysql", Host: "db", Password: "pw"},
+		"mysql extra key":     {Driver: "mysql", Host: "db", Extra: "a/b=1"},
+		"postgres extra":      {Driver: "postgres", Host: "db", Extra: "%zz"},
+		"empty extra key":     {Driver: "postgres", Host: "db", Extra: "=1"},
+	} {
+		if dsn, err := BuildDSN(f); err == nil {
+			t.Errorf("%s: accepted as %q", name, dsn)
+		}
+	}
+	if dsn, err := BuildDSN(DBConnFields{Driver: "mysql", Host: "::1", Port: "+3307", SSLMode: "true"}); err != nil ||
+		!strings.Contains(dsn, "[::1]:3307") || !strings.Contains(dsn, "tls=true") {
+		t.Errorf("ipv6 mysql = %q, %v", dsn, err)
+	}
+}

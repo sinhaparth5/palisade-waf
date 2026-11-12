@@ -35,6 +35,7 @@ type adminEnv struct {
 	h       *Handler
 	e       *echo.Echo
 	db      *storage.DB
+	dbPath  string
 	session string
 	uid     int64 // the owner the session belongs to
 	calls   map[string]*atomic.Int32
@@ -54,7 +55,8 @@ func init() { storage.PasswordCost = bcrypt.MinCost }
 
 func newAdminEnv(t *testing.T) *adminEnv {
 	t.Helper()
-	db, err := storage.Open(filepath.Join(t.TempDir(), "waf.db"))
+	dbPath := filepath.Join(t.TempDir(), "waf.db")
+	db, err := storage.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +77,7 @@ func newAdminEnv(t *testing.T) *adminEnv {
 		t.Fatal(err)
 	}
 
-	env := &adminEnv{t: t, db: db, calls: map[string]*atomic.Int32{}}
+	env := &adminEnv{t: t, db: db, dbPath: dbPath, calls: map[string]*atomic.Int32{}}
 	hook := func(name string) func() {
 		env.calls[name] = &atomic.Int32{}
 		return func() { env.calls[name].Add(1) }

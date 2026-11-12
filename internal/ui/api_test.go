@@ -27,7 +27,12 @@ import (
 // rather than a server process (see CLAUDE.md: don't start the server to verify).
 func newTestAPIHandler(t *testing.T) (*Handler, *echo.Echo) {
 	t.Helper()
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	return newTestAPIHandlerAt(t, filepath.Join(t.TempDir(), "test.db"))
+}
+
+func newTestAPIHandlerAt(t *testing.T, path string) (*Handler, *echo.Echo) {
+	t.Helper()
+	db, err := storage.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}

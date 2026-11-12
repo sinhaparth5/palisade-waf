@@ -3,8 +3,10 @@ package ui
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -158,6 +160,15 @@ func (h *Handler) RegisterAPI(e *echo.Echo) {
 	api.GET("/metrics", echo.WrapHandler(metrics.Handler()))
 }
 
+// lookupError answers a failed lookup by id: 404 with msg for a missing
+// row, 500 for a DB failure (never "not found" for a row that may exist).
+func lookupError(c *echo.Context, err error, msg string) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return apiError(c, http.StatusNotFound, msg)
+	}
+	return apiError(c, http.StatusInternalServerError, err.Error())
+}
+
 func apiError(c *echo.Context, status int, msg string) error {
 	return c.JSON(status, map[string]string{"error": msg})
 }
@@ -175,7 +186,7 @@ func (h *Handler) APIGetService(c *echo.Context) error {
 	}
 	svc, err := h.db.GetService(id)
 	if err != nil {
-		return apiError(c, http.StatusNotFound, "service not found")
+		return lookupError(c, err, "service not found")
 	}
 	return c.JSON(http.StatusOK, svc)
 }
@@ -198,7 +209,7 @@ func (h *Handler) APIPurgeService(c *echo.Context) error {
 	}
 	svc, err := h.db.GetService(id)
 	if err != nil {
-		return apiError(c, http.StatusNotFound, "service not found")
+		return lookupError(c, err, "service not found")
 	}
 	vcfg, err := h.db.GetVarnishConfig()
 	if err != nil {
@@ -329,7 +340,7 @@ func (h *Handler) APIUpdateService(c *echo.Context) error {
 	}
 	existing, err := h.db.GetService(id)
 	if err != nil {
-		return apiError(c, http.StatusNotFound, "service not found")
+		return lookupError(c, err, "service not found")
 	}
 
 	var req apiUpdateServiceRequest

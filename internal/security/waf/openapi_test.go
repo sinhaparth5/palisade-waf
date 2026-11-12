@@ -117,6 +117,11 @@ func TestValidateOpenAPI(t *testing.T) {
 		{"relative path", `{"openapi":"3.0.0","paths":{"a":{"get":{}}}}`, "must start with /"},
 		{"bad schema", `{"openapi":"3.0.0","paths":{"/a":{"get":{"parameters":[{"name":"q","in":"query","schema":{"type":"integer","minimum":"x"}}]}}}}`, "parameter q"},
 		{"unresolved parameter", `{"openapi":"3.0.0","paths":{"/a":{"get":{"parameters":[{"$ref":"#/components/parameters/Nope"}]}}}}`, "unresolved"},
+		{"bad component schema", `{"openapi":"3.0.0","components":{"schemas":{"A":{"type":"object","minProperties":"x"}}},"paths":{"/a":{"get":{}}}}`, "components.schemas"},
+		{"path parameters not a list", `{"openapi":"3.0.0","paths":{"/a":{"parameters":{"name":"q"},"get":{}}}}`, "/a parameters"},
+		{"operation not an object", `{"openapi":"3.0.0","paths":{"/a":{"get":[1]}}}`, "GET /a"},
+		{"requestBody $ref", `{"openapi":"3.0.0","paths":{"/a":{"post":{"requestBody":{"$ref":"#/components/requestBodies/B"}}}}}`, "inline it"},
+		{"bad body schema", `{"openapi":"3.0.0","paths":{"/a":{"post":{"requestBody":{"content":{"application/json":{"schema":{"type":"object","maxProperties":"x"}}}}}}}}`, "requestBody application/json"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

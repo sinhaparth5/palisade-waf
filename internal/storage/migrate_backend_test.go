@@ -2,6 +2,7 @@ package storage
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -177,5 +178,33 @@ func TestMigrateConfigTo(t *testing.T) {
 	}
 	if _, err := target.CreateAdminUser("second@example.com", "second-password", RoleViewer); err != nil {
 		t.Errorf("new user after migration failed (sequence may be broken): %v", err)
+	}
+}
+
+// TestMigrateConfigToSourceErrors: a config table the source can't read
+// stops the migration with that table's name, rather than reporting a
+// partial copy as success.
+func TestMigrateConfigToSourceErrors(t *testing.T) {
+	for _, step := range configSteps {
+		t.Run(step.table, func(t *testing.T) {
+			source, err := Open(filepath.Join(t.TempDir(), "source.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer source.Close()
+			if _, err := source.exec(`DROP TABLE ` + source.dialect.quoteIdent(step.table)); err != nil {
+				t.Fatal(err)
+			}
+			_, err = source.MigrateConfigTo("sqlite", filepath.Join(t.TempDir(), "target.db"))
+			// Steps that read through a shared List (csp_approved and
+			// service_csp_enforce) may fail one step early; the table is
+			// still named in the error.
+			if err == nil || !strings.Contains(err.Error(), step.table) {
+				t.Errorf("err = %v, want a failure naming %s", err, step.table)
+			}
+		})
+	}
+	if _, err := (&DB{}).MigrateConfigTo("nosuchdriver", "x"); err == nil {
+		t.Error("unknown target driver accepted")
 	}
 }
