@@ -1,0 +1,5 @@
+go test fuzz v1
+string("1794586390.visitor-1.131dfda8a31f2b1200c96c9dd59d5708")
+string("2001:dB8::")
+uint(0)
+byte('x')

@@ -388,7 +388,9 @@ func (c *Challenger) parseCookie(value, clientIP string) (visitorID string, ok b
 		return "", false
 	}
 	expiry, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil || time.Now().Unix() > expiry {
+	// Canonical form only ("+123" and "0123" parse too), so exactly one
+	// string passes for each issued cookie.
+	if err != nil || parts[0] != strconv.FormatInt(expiry, 10) || time.Now().Unix() > expiry {
 		return "", false
 	}
 	if !hmac.Equal([]byte(c.cookieMAC(expiry, clientIP, parts[1])), []byte(parts[2])) {

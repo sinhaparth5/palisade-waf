@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -101,6 +102,18 @@ func (h *Handler) SSOStart(c *echo.Context) error {
 	return c.Redirect(http.StatusFound, oc.AuthCodeURL(state, oidc.Nonce(nonce), oauth2.S256ChallengeOption(verifier)))
 }
 
+// parseSSOCookie splits the cz_sso cookie set by SSOStart and checks the
+// callback's state against it. Every part must be present: an empty state
+// would match a callback without one.
+func parseSSOCookie(value, state string) (nonce, verifier string, ok bool) {
+	parts := strings.Split(value, ".")
+	if len(parts) != 3 || len(parts[0]) != 32 || len(parts[1]) != 32 || parts[2] == "" ||
+		subtle.ConstantTimeCompare([]byte(state), []byte(parts[0])) != 1 {
+		return "", "", false
+	}
+	return parts[1], parts[2], true
+}
+
 // ssoClaims are the claims read from the ID token, with gaps filled from
 // userinfo (Authelia, for one, keeps email and groups out of the ID token
 // by default).
@@ -116,11 +129,12 @@ type ssoClaims struct {
 func (h *Handler) SSOCallback(c *echo.Context) error {
 	ck, _ := c.Cookie(ssoCookie)
 	c.SetCookie(&http.Cookie{Name: ssoCookie, Path: h.cfg.Admin.Path + "/login/sso", MaxAge: -1, HttpOnly: true, Secure: secureCookie(c)}) //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
-	var parts []string
+	value := ""
 	if ck != nil {
-		parts = strings.Split(ck.Value, ".")
+		value = ck.Value
 	}
-	if len(parts) != 3 || c.QueryParam("state") != parts[0] {
+	nonce, verifier, ok := parseSSOCookie(value, c.QueryParam("state"))
+	if !ok {
 		return h.renderLogin(c, "Single sign-on expired. Try again.")
 	}
 	if e := c.QueryParam("error"); e != "" {
@@ -134,7 +148,7 @@ func (h *Handler) SSOCallback(c *echo.Context) error {
 
 	ctx, cancel := ssoContext()
 	defer cancel()
-	cl, err := h.ssoVerify(ctx, c, cfg, c.QueryParam("code"), parts[1], parts[2])
+	cl, err := h.ssoVerify(ctx, c, cfg, c.QueryParam("code"), nonce, verifier)
 	if err != nil {
 		log.Printf("admin sso: %v", err)
 		return h.renderLogin(c, "Single sign-on failed. Try again.")

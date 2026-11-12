@@ -63,6 +63,16 @@ func (h *Handler) ticketSig(service, ticket, clientKey string) string {
 	return hex.EncodeToString(m.Sum(nil))[:32]
 }
 
+// ticketFromCookie returns the ticket in a "ticket.sig" cookie value, or ""
+// unless it was signed for this service and client key.
+func (h *Handler) ticketFromCookie(value, service, clientKey string) string {
+	t, sig, ok := strings.Cut(value, ".")
+	if !ok || t == "" || !hmac.Equal([]byte(sig), []byte(h.ticketSig(service, t, clientKey))) {
+		return ""
+	}
+	return t
+}
+
 // gate applies maintenance and the waiting room to a request that passed
 // the blocklists, challenge and rate limits. A non-empty reason means it
 // answered the request itself (err is the write's result).
@@ -116,9 +126,7 @@ func (h *Handler) gate(c *echo.Context, app *storage.Service, clientKey string, 
 	name := waitCookie + strconv.Itoa(app.ID)
 	ticket := ""
 	if ck, err := r.Cookie(name); err == nil {
-		if t, sig, ok := strings.Cut(ck.Value, "."); ok && hmac.Equal([]byte(sig), []byte(h.ticketSig(app.Name, t, clientKey))) {
-			ticket = t
-		}
+		ticket = h.ticketFromCookie(ck.Value, app.Name, clientKey)
 	}
 	idle := time.Duration(g.IdleSecs) * time.Second
 	if idle <= 0 {
