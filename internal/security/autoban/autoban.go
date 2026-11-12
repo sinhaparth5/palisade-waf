@@ -11,6 +11,7 @@
 //	any other WAF rule block                    2 points
 //	rate limited                                1 point
 //	bot-challenge redirect (never solved)       1 point
+//	invalid edge JWT, blocked or logged (#279)  1 point
 //	honeypot path hit (issue #130)              the whole threshold
 //	bad backend status, opt-in (issue #193)     configured, default 1
 //
@@ -64,6 +65,7 @@ const (
 	ptsRateLimited = 1
 	ptsChallenged  = 1
 	ptsLeaked      = 2
+	ptsJWT         = 1
 )
 
 // store is the slice of *storage.DB the banner needs; an interface so tests
@@ -79,8 +81,8 @@ type event struct {
 	t   time.Time
 	pts int
 	// event class for the ban-reason breakdown
-	critical, waf, rl, chal, hp, leaked bool
-	status                              int // bad backend status, 0 otherwise
+	critical, waf, rl, chal, hp, leaked, jwt bool
+	status                                   int // bad backend status, 0 otherwise
 }
 
 // Banner accumulates blocked-event scores per IP and issues bans.
@@ -194,10 +196,12 @@ func (b *Banner) Record(e storage.RequestLog) {
 	// A breached password on a login path (issue #188) scores whether it was
 	// blocked or only logged: repeated hits from one client are a stuffing run.
 	leaked := strings.HasPrefix(e.Action, "leaked_password")
+	// So does an invalid edge JWT (issue #279): a token-guessing run.
+	jwt := strings.HasPrefix(e.Action, "jwt_invalid")
 	// A backend error status on a request Palisade let through (issue #193);
 	// whether the code counts is decided under the lock from the config.
 	badStatus := !e.Blocked && !e.Exempt && e.Action == "" && e.Status >= 400 && !staticAsset(e.Path)
-	if !e.Blocked && !challenged && !honeypot && !leaked && !badStatus {
+	if !e.Blocked && !challenged && !honeypot && !leaked && !jwt && !badStatus {
 		return
 	}
 	// Never score traffic that is already blocked by an IP rule or geo rule:
@@ -217,6 +221,8 @@ func (b *Banner) Record(e storage.RequestLog) {
 		ev.pts, ev.chal = ptsChallenged, true
 	case leaked:
 		ev.pts, ev.leaked = ptsLeaked, true
+	case jwt:
+		ev.pts, ev.jwt = ptsJWT, true
 	case e.RuleID > 0 && criticalRule(e.RuleID):
 		ev.pts, ev.critical = ptsCritical, true
 	case e.RuleID > 0:
@@ -458,7 +464,7 @@ func bannable(ip string) bool {
 // banReason summarises what earned the ban, e.g.
 // "12 flagged requests in 10 min (2 critical WAF hits, 1 WAF hit, 3 rate-limited)".
 func banReason(evs []event, windowMin int) string {
-	var hp, crit, waf, rl, chal, leaked, bad int
+	var hp, crit, waf, rl, chal, leaked, jwt, bad int
 	var codes []int
 	for _, ev := range evs {
 		switch {
@@ -474,6 +480,8 @@ func banReason(evs []event, windowMin int) string {
 			chal++
 		case ev.leaked:
 			leaked++
+		case ev.jwt:
+			jwt++
 		case ev.status != 0:
 			bad++
 			if !slices.Contains(codes, ev.status) {
@@ -493,6 +501,9 @@ func banReason(evs []event, windowMin int) string {
 	}
 	if leaked > 0 {
 		parts = append(parts, fmt.Sprintf("%d breached %s", leaked, plural(leaked, "password")))
+	}
+	if jwt > 0 {
+		parts = append(parts, fmt.Sprintf("%d invalid %s", jwt, plural(jwt, "token")))
 	}
 	if rl > 0 {
 		parts = append(parts, fmt.Sprintf("%d rate-limited", rl))

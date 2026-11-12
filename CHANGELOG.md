@@ -13,11 +13,13 @@ Unreleased — older entries stay available in their git tags and GitHub release
 rather than growing this file forever.
 
 ## [Unreleased]
+
 - (#274) Run the Docker image as a non-root user
 - (#275) Tighten the systemd sandbox in install.sh
 - (#276) Pin GitHub Actions to commit SHAs
 - (#277) Move to Echo v5
 - (#278) Enable gosec and stricter linters
+- (#279) Verify JWTs at the edge per service
 
 ## [3.2.3] - 2026-11-12
 

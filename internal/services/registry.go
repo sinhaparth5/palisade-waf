@@ -25,6 +25,7 @@ import (
 	"palisade/internal/security/bot"
 	"palisade/internal/security/csp"
 	"palisade/internal/security/egress"
+	"palisade/internal/security/jwtauth"
 	"palisade/internal/security/ratelimit"
 	"palisade/internal/storage"
 
@@ -137,6 +138,7 @@ type Registry struct {
 	autoHosts map[string]bool               // host (lowercase) -> true if tls_mode == "auto"
 	hosts     map[string]int                // host or alias (lowercase) -> index into list
 	mtls      map[int]*mtlsPolicy           // index into list -> client-cert policy (issue #191)
+	jwt       map[string]*jwtauth.Verifier  // service name -> bearer-token check (issue #279)
 	stopCheck chan struct{}                 // closed on Reload to stop the previous active health checks
 	honeypots []string                      // see Honeypot
 	trusted   []netip.Prefix                // see Trusted
@@ -195,6 +197,11 @@ func (r *Registry) Reload(db *storage.DB) error {
 		return err
 	}
 	mtls := loadMTLSPolicies(storedMTLS, list)
+	storedJWT, err := db.ListServiceJWT()
+	if err != nil {
+		return err
+	}
+	jwt := loadJWTVerifiers(storedJWT, list)
 	gates, err := db.ListServiceGates()
 	if err != nil {
 		return err
@@ -504,6 +511,7 @@ func (r *Registry) Reload(db *storage.DB) error {
 	r.autoHosts = autoHosts
 	r.hosts = hosts
 	r.mtls = mtls
+	r.jwt = jwt
 	r.csp = cspNames
 	r.mu.Unlock()
 

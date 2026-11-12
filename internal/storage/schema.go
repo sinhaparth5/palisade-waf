@@ -341,6 +341,19 @@ func (db *DB) schemaStatements() []string {
 			tools      TEXT NOT NULL
 		)`,
 
+		// Bearer JWT check per service (issue #279). Lists are
+		// newline-separated; public_key is PEM.
+		`CREATE TABLE IF NOT EXISTS service_jwt (
+			service_id INTEGER PRIMARY KEY,
+			mode       VARCHAR(16) NOT NULL,
+			jwks_url   TEXT NOT NULL,
+			public_key TEXT NOT NULL,
+			issuer     TEXT NOT NULL,
+			audience   TEXT NOT NULL,
+			algorithms TEXT NOT NULL,
+			prefixes   TEXT NOT NULL
+		)`,
+
 		// Report-only CSP per service and the script sources its reports
 		// named (issue #235). origin is a scheme://host or a CSP keyword.
 		`CREATE TABLE IF NOT EXISTS service_csp (

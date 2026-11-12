@@ -32,6 +32,7 @@ import (
 	"palisade/internal/security/breach"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
+	"palisade/internal/security/jwtauth"
 	"palisade/internal/security/passkey"
 	"palisade/internal/security/threatscore"
 	"palisade/internal/security/waf"
@@ -515,6 +516,7 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/services/schema/:id", h.SetServiceSchema),
 		g.POST("/services/openapi/:id", h.SetServiceOpenAPI),
 		g.POST("/services/mcp/:id", h.SetServiceMCP),
+		g.POST("/services/jwt/:id", h.SetServiceJWT),
 		g.POST("/services/csp/:id", h.SetServiceCSP),
 		g.POST("/services/cache/:id", h.SetServiceCache),
 		g.POST("/services/cache-session/:id", h.SetServiceCacheSession),
@@ -1999,6 +2001,7 @@ type ServiceView struct {
 	OpenAPIMode string
 	MTLS        storage.ServiceMTLS // zero value when no client CA is stored
 	MCP         storage.ServiceMCP  // zero value when the MCP guard is off
+	JWT         storage.ServiceJWT  // zero value when the JWT check is off
 	CSP         string              // report-only policy, "" when off
 	Scripts     []storage.CSPScript // script sources its reports named
 }
@@ -2014,12 +2017,13 @@ func (h *Handler) serviceViews() []ServiceView {
 	modes, _ := h.db.ListServiceOpenAPIModes()
 	mtls, _ := h.db.ListServiceMTLS()
 	mcp, _ := h.db.ListServiceMCP()
+	jwts, _ := h.db.ListServiceJWT()
 	cspPolicies, _ := h.db.ListServiceCSP()
 	scripts, _ := h.db.ListCSPScripts()
 	out := make([]ServiceView, len(list))
 	for i, s := range list {
 		healthy, known := h.registry.IsHealthy(s.Name)
-		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID], MCP: mcp[s.ID], CSP: cspPolicies[s.ID], Scripts: scripts[s.ID]}
+		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID], MCP: mcp[s.ID], JWT: jwts[s.ID], CSP: cspPolicies[s.ID], Scripts: scripts[s.ID]}
 	}
 	return out
 }
@@ -3134,6 +3138,42 @@ func (h *Handler) SetServiceMCP(c *echo.Context) error {
 		h.reloadWAF()
 	}
 	c.Response().Header().Set("HX-Trigger", "mcp-saved")
+	return h.servicesRows(c)
+}
+
+// SetServiceJWT saves a service's edge JWT check (issue #279). See
+// jwtauth.Verifier.
+func (h *Handler) SetServiceJWT(c *echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-jwt-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	j := storage.ServiceJWT{
+		Mode:       c.FormValue("jwt_mode"),
+		JWKSURL:    strings.TrimSpace(c.FormValue("jwt_jwks_url")),
+		PublicKey:  strings.TrimSpace(c.FormValue("jwt_public_key")),
+		Issuer:     strings.TrimSpace(c.FormValue("jwt_issuer")),
+		Audience:   strings.TrimSpace(c.FormValue("jwt_audience")),
+		Algorithms: strings.Join(strings.Fields(c.FormValue("jwt_algorithms")), " "),
+		Prefixes:   strings.Join(strings.Fields(c.FormValue("jwt_prefixes")), "\n"),
+	}
+	if j.Mode == "log" || j.Mode == "enforce" {
+		if _, err := jwtauth.New(services.JWTConfig(j)); err != nil {
+			return fail(err.Error())
+		}
+	}
+	if err := h.db.SetServiceJWT(id, j); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return fail(err.Error())
+	}
+	c.Response().Header().Set("HX-Trigger", "jwt-saved")
 	return h.servicesRows(c)
 }
 

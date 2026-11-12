@@ -46,6 +46,9 @@ func TestMigrateConfigTo(t *testing.T) {
 	if err := source.SetServiceMCP(1, ServiceMCP{Mode: "enforce", Path: "/mcp", Tools: "search"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := source.SetServiceJWT(1, ServiceJWT{Mode: "enforce", JWKSURL: "https://idp.example/jwks", Prefixes: "/api"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := source.SetServiceCSP(1, "script-src 'self'"); err != nil {
 		t.Fatal(err)
 	}

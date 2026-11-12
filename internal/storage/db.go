@@ -1184,7 +1184,7 @@ func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
 }
 
 func (db *DB) RemoveService(id int) error {
-	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_gate", "service_csp", "csp_scripts"} {
+	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_jwt", "service_gate", "service_csp", "csp_scripts"} {
 		if _, err := db.exec(`DELETE FROM `+t+` WHERE service_id = ?`, id); err != nil {
 			return err
 		}
@@ -1444,6 +1444,49 @@ func (db *DB) ListServiceMCP() (map[int]ServiceMCP, error) {
 			return nil, err
 		}
 		out[id] = m
+	}
+	return out, rows.Err()
+}
+
+// ServiceJWT is a service's bearer-token check (issue #279), see
+// jwtauth.Config. Algorithms and Prefixes are newline-separated.
+type ServiceJWT struct {
+	Mode       string // "off", "log" or "enforce"
+	JWKSURL    string
+	PublicKey  string
+	Issuer     string
+	Audience   string
+	Algorithms string
+	Prefixes   string
+}
+
+// SetServiceJWT stores a service's JWT check; mode "off" removes it.
+func (db *DB) SetServiceJWT(id int, j ServiceJWT) error {
+	if j.Mode != "log" && j.Mode != "enforce" {
+		_, err := db.exec(`DELETE FROM service_jwt WHERE service_id = ?`, id)
+		return err
+	}
+	cols := []string{"service_id", "mode", "jwks_url", "public_key", "issuer", "audience", "algorithms", "prefixes"}
+	_, err := db.exec(db.dialect.upsertUpdate("service_jwt", cols, "?, ?, ?, ?, ?, ?, ?, ?", []string{"service_id"}, cols[1:]),
+		id, j.Mode, j.JWKSURL, j.PublicKey, j.Issuer, j.Audience, j.Algorithms, j.Prefixes)
+	return err
+}
+
+// ListServiceJWT returns every service's JWT check by service id.
+func (db *DB) ListServiceJWT() (map[int]ServiceJWT, error) {
+	rows, err := db.query(`SELECT service_id, mode, jwks_url, public_key, issuer, audience, algorithms, prefixes FROM service_jwt`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]ServiceJWT{}
+	for rows.Next() {
+		var id int
+		var j ServiceJWT
+		if err := rows.Scan(&id, &j.Mode, &j.JWKSURL, &j.PublicKey, &j.Issuer, &j.Audience, &j.Algorithms, &j.Prefixes); err != nil {
+			return nil, err
+		}
+		out[id] = j
 	}
 	return out, rows.Err()
 }

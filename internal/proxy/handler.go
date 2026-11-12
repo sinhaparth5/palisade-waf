@@ -28,6 +28,7 @@ import (
 	"palisade/internal/security/geo"
 	ja3pkg "palisade/internal/security/ja3"
 	ja4pkg "palisade/internal/security/ja4"
+	"palisade/internal/security/jwtauth"
 	"palisade/internal/security/ratelimit"
 	"palisade/internal/security/threatscore"
 	"palisade/internal/security/waf"
@@ -488,6 +489,33 @@ func (h *Handler) Handle(c *echo.Context) error {
 		}
 	}
 
+	// 4.8 Edge JWT check (issue #279). Authentication, so trusted IPs are
+	// checked too, like mTLS; open paths stay public.
+	var jwtv *jwtauth.Verifier
+	var jwtSub string
+	jwtFailed := false
+	if app != nil && !open {
+		jwtv = h.registry.JWT(app.Name)
+	}
+	if jwtv != nil {
+		path := r.URL.Path
+		if app.Prefix != "" && services.PrefixMatch(path, app.Prefix) {
+			path = services.StripPrefix(path, app.Prefix)
+		}
+		if jwtv.Protects(path) {
+			var err error
+			if jwtSub, err = jwtv.Verify(r); err != nil {
+				jwtFailed, jwtSub = true, ""
+				if jwtv.Enforce() {
+					mark("jwt")
+					h.logBlocked(r, appName, clientIP, country, http.StatusUnauthorized, 0, "jwt_invalid", time.Since(start), meta)
+					c.Response().Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+					return deny(c, http.StatusUnauthorized, "jwt_invalid", reqID, map[string]any{"error": "valid bearer token required"})
+				}
+			}
+		}
+	}
+
 	// 5. WAF — deep inspection of headers + body. Per-service override engine
 	// (if this service has its own rule exceptions) takes precedence over
 	// the shared default.
@@ -557,6 +585,11 @@ func (h *Handler) Handle(c *echo.Context) error {
 		hit.Action = "leaked_password:log"
 		result = &hit
 	}
+	if jwtFailed && result.Action == "" {
+		hit := *result
+		hit.Action = "jwt_invalid:log"
+		result = &hit
+	}
 
 	// 6. Proxy to backend.
 	if app == nil {
@@ -601,6 +634,13 @@ func (h *Handler) Handle(c *echo.Context) error {
 		out.Header.Del(leakedPasswordHeader)
 		if leaked {
 			out.Header.Set(leakedPasswordHeader, "1")
+		}
+	}
+	if jwtv != nil {
+		// Only Palisade sets it, and only from a verified token.
+		out.Header.Del(jwtauth.SubjectHeader)
+		if jwtSub != "" {
+			out.Header.Set(jwtauth.SubjectHeader, jwtSub)
 		}
 	}
 	// Response inspection (issue #192): CRS's outbound rules over the

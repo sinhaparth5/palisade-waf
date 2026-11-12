@@ -457,6 +457,27 @@ func TestLeakedPasswordScores(t *testing.T) {
 	}
 }
 
+// TestJWTScores pins issue #279: invalid edge tokens score 1 point each,
+// logged or blocked.
+func TestJWTScores(t *testing.T) {
+	db := newFakeStore()
+	now := time.Date(2026, 7, 3, 9, 16, 12, 0, time.UTC)
+	b, _ := testBanner(db, now)
+	for i := range 10 {
+		action, blocked := "jwt_invalid:log", false
+		if i%2 == 1 {
+			action, blocked = "jwt_invalid", true
+		}
+		b.Record(storage.RequestLog{Timestamp: now, RealIP: "203.0.113.41", Action: action, Blocked: blocked, Status: 401})
+		if banned := db.rules[":203.0.113.41"] == "block"; banned != (i == 9) {
+			t.Fatalf("after %d hits banned=%v", i+1, banned)
+		}
+	}
+	if note := db.banNote("203.0.113.41"); !strings.Contains(note, "10 invalid tokens") {
+		t.Errorf("note = %q, want invalid-token breakdown", note)
+	}
+}
+
 // TestBadStatusScores pins issue #193: a run of backend 404s from one IP
 // bans once bad-status scoring is on, and the reason shows the count.
 func TestBadStatusScores(t *testing.T) {

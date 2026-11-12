@@ -438,6 +438,31 @@
       </form>
       <div id="svc-mcp-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
 
+      <form id="svc-jwt-form" hx-post="{{.AdminPath}}/services/jwt/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
+        <p class="text-[13px] font-semibold text-slate-800 mb-1">JWT verification</p>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Checks the <code class="font-mono">Authorization: Bearer</code> token on protected paths before the request reaches the backend: signature, <code class="font-mono">exp</code> (required), <code class="font-mono">nbf</code>, issuer and audience, with a minute of clock skew. Only RS*, PS*, ES* and EdDSA are accepted. The verified <code class="font-mono">sub</code> is sent as <code class="font-mono">X-Auth-Subject</code>; a client copy is always dropped. Trusted IPs are checked too. Logged as <code class="font-mono">jwt_invalid</code>.</p>
+        <label for="svc-jwt-jwks" class="field-label">JWKS URL</label>
+        <input id="svc-jwt-jwks" name="jwt_jwks_url" type="url" placeholder="https://idp.example.com/.well-known/jwks.json" class="field text-[13px] font-mono mb-3"/>
+        <label for="svc-jwt-key" class="field-label">Or a PEM public key</label>
+        <textarea id="svc-jwt-key" name="jwt_public_key" rows="3" placeholder="-----BEGIN PUBLIC KEY-----" class="field text-[13px] font-mono mb-3"></textarea>
+        <label for="svc-jwt-issuer" class="field-label">Issuer (<code class="font-mono">iss</code>, empty = any)</label>
+        <input id="svc-jwt-issuer" name="jwt_issuer" type="text" placeholder="https://idp.example.com" class="field text-[13px] font-mono mb-3"/>
+        <label for="svc-jwt-audience" class="field-label">Audience (<code class="font-mono">aud</code>, empty = any)</label>
+        <input id="svc-jwt-audience" name="jwt_audience" type="text" placeholder="api" class="field text-[13px] font-mono mb-3"/>
+        <label for="svc-jwt-algs" class="field-label">Allowed algorithms (empty = every asymmetric one)</label>
+        <input id="svc-jwt-algs" name="jwt_algorithms" type="text" placeholder="RS256 ES256" class="field text-[13px] font-mono mb-3"/>
+        <label for="svc-jwt-prefixes" class="field-label">Protected paths, one per line (after the service prefix, empty = all)</label>
+        <textarea id="svc-jwt-prefixes" name="jwt_prefixes" rows="2" placeholder="/api" class="field text-[13px] font-mono mb-3"></textarea>
+        <label for="svc-jwt-mode" class="field-label">Mode</label>
+        <select id="svc-jwt-mode" name="jwt_mode" class="field text-[13px] mb-4">
+          <option value="off">Off</option>
+          <option value="log">Log only</option>
+          <option value="enforce">Enforce: 401 without a valid token</option>
+        </select>
+        <button type="submit" class="btn-primary w-full">Save</button>
+      </form>
+      <div id="svc-jwt-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
+
       <form id="svc-csp-form" hx-post="{{.AdminPath}}/services/csp/0" hx-target="#services-body" hx-swap="innerHTML" class="mt-6 border-t border-line pt-5">
         <p class="text-[13px] font-semibold text-slate-800 mb-1">Script inventory (CSP report-only)</p>
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Adds a <code class="font-mono">Content-Security-Policy-Report-Only</code> header to HTML pages. Browsers report every script the policy doesn't allow to <code class="font-mono">/_cz/csp-report</code>, and each new source is added to the inventory in the service view and sent as an alert (webhook "New script sources", and email). Nothing is blocked. Leave out <code class="font-mono">report-uri</code> and <code class="font-mono">report-to</code>; Palisade adds them.</p>
@@ -846,6 +871,9 @@
     {{if .MCP.Mode}}
     <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .MCP.Mode "enforce"}}bg-warning{{else}}bg-slate-400{{end}}"></span>MCP: {{.MCP.Mode}}</span>
     {{end}}
+    {{if .JWT.Mode}}
+    <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .JWT.Mode "enforce"}}bg-warning{{else}}bg-slate-400{{end}}"></span>JWT: {{.JWT.Mode}}</span>
+    {{end}}
     {{if .ResponseInspect}}
     <span class="tag"><span class="h-2 w-2 rounded-full {{if eq .ResponseInspect "block"}}bg-warning{{else}}bg-slate-400{{end}}"></span>Responses: {{.ResponseInspect}}</span>
     {{end}}
@@ -871,6 +899,8 @@
       data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}"
       data-schema="{{.RequestSchema}}" data-schema-mode="{{.SchemaMode}}" data-openapi-mode="{{.OpenAPIMode}}"
       data-mcp-mode="{{.MCP.Mode}}" data-mcp-path="{{.MCP.Path}}" data-mcp-origins="{{.MCP.Origins}}" data-mcp-methods="{{.MCP.Methods}}" data-mcp-tools="{{.MCP.Tools}}" data-csp="{{.CSP}}"
+      data-jwt-mode="{{.JWT.Mode}}" data-jwt-jwks="{{.JWT.JWKSURL}}" data-jwt-key="{{.JWT.PublicKey}}" data-jwt-issuer="{{.JWT.Issuer}}"
+      data-jwt-audience="{{.JWT.Audience}}" data-jwt-algs="{{.JWT.Algorithms}}" data-jwt-prefixes="{{.JWT.Prefixes}}"
       data-response-inspect="{{.ResponseInspect}}" data-mtls-mode="{{.MTLS.Mode}}" data-mtls-ca="{{if .MTLS.CAPath}}1{{else}}0{{end}}" data-mtls-allow="{{.MTLS.Allow}}"
       data-maintenance="{{if .Gate.Maintenance}}1{{else}}0{{end}}" data-maint-message="{{.Gate.MaintMsg}}"
       data-maint-start="{{if not .Gate.MaintStart.IsZero}}{{.Gate.MaintStart.UTC.Format "2006-01-02T15:04"}}{{end}}"
@@ -939,6 +969,7 @@
   {{if .RequestSchema}}<pre class="my-2 max-h-48 overflow-auto border border-line bg-surface p-3 font-mono text-[12px] text-ink whitespace-pre-wrap">{{.RequestSchema}}</pre>{{end}}
   {{template "svc-kv" (map "K" "OpenAPI" "V" (or .OpenAPIMode "No spec"))}}
   {{template "svc-kv" (map "K" "MCP guard" "V" (or .MCP.Mode "Off"))}}
+  {{template "svc-kv" (map "K" "JWT verification" "V" (or .JWT.Mode "Off"))}}
   {{template "svc-kv" (map "K" "CSP report-only" "V" (or .CSP "Off"))}}
   {{if .Scripts}}<p class="pt-2 text-slate-500">Script sources</p>
   <ul class="my-2 border border-line bg-surface p-3 font-mono text-[12px] text-ink">{{range .Scripts}}<li class="flex flex-wrap justify-between gap-x-3"><span class="break-all">{{.Origin}}</span><span class="text-slate-500">{{.Page}} · {{fmtTimeFull .FirstSeen}}</span></li>{{end}}</ul>{{end}}

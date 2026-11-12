@@ -147,6 +147,7 @@
   var schemaText = document.getElementById('svc-schema-text');
   var openapiForm = document.getElementById('svc-openapi-form');
   var mcpForm = document.getElementById('svc-mcp-form');
+  var jwtForm = document.getElementById('svc-jwt-form');
   var cspForm = document.getElementById('svc-csp-form');
   var mtlsForm = document.getElementById('svc-mtls-form');
   var responsesForm = document.getElementById('svc-responses-form');
@@ -300,6 +301,16 @@
     document.getElementById('svc-mcp-methods').value = d.mcpMethods || '';
     document.getElementById('svc-mcp-tools').value = d.mcpTools || '';
 
+    jwtForm.setAttribute('hx-post', adminPath + '/services/jwt/' + d.id);
+    htmx.process(jwtForm);
+    document.getElementById('svc-jwt-mode').value = d.jwtMode || 'off';
+    document.getElementById('svc-jwt-jwks').value = d.jwtJwks || '';
+    document.getElementById('svc-jwt-key').value = d.jwtKey || '';
+    document.getElementById('svc-jwt-issuer').value = d.jwtIssuer || '';
+    document.getElementById('svc-jwt-audience').value = d.jwtAudience || '';
+    document.getElementById('svc-jwt-algs').value = d.jwtAlgs || '';
+    document.getElementById('svc-jwt-prefixes').value = d.jwtPrefixes || '';
+
     cspForm.setAttribute('hx-post', adminPath + '/services/csp/' + d.id);
     htmx.process(cspForm);
     document.getElementById('svc-csp-mode').value = d.csp ? 'report' : 'off';
@@ -351,7 +362,7 @@
     deleteBtn.setAttribute('hx-confirm', 'Remove service ' + d.name + '?');
     htmx.process(deleteBtn);
 
-    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-gate-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mcp-error', 'svc-csp-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
+    ['tls-error', 'rl-error', 'bot-error', 'svc-uploads-error', 'svc-http3-error', 'svc-compress-error', 'svc-backends-error', 'svc-hosts-error', 'svc-login-error', 'svc-breach-error', 'svc-gate-error', 'svc-schema-error', 'svc-openapi-error', 'svc-mcp-error', 'svc-jwt-error', 'svc-csp-error', 'svc-mtls-error', 'svc-responses-error', 'svc-cache-error', 'svc-cache-session-error', 'svc-cache-tuning-error'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.textContent = '';
     });
@@ -406,6 +417,7 @@
   document.body.addEventListener('gate-saved', closeModal);
   document.body.addEventListener('openapi-saved', closeModal);
   document.body.addEventListener('mcp-saved', closeModal);
+  document.body.addEventListener('jwt-saved', closeModal);
   document.body.addEventListener('csp-saved', closeModal);
   document.body.addEventListener('mtls-saved', closeModal);
   document.body.addEventListener('responses-saved', closeModal);
