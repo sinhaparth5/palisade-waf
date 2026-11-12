@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.2.8] - 2026-11-12
+
 - (#291) Let the WAF verdict cache serve requests that carry cookies
 - (#292) Cut the cost of inspecting large JSON bodies
 - (#301) Remove leftover ja3_hash and redis_mode references
@@ -25,11 +27,5 @@ rather than growing this file forever.
 - (#302) Verify the feature removals leave a clean upgrade and no residue
 - (#296) Allow the login of existing users via SSO
 
-## [3.2.7] - 2026-11-12
-
-- (#285) Remove Redis leftovers and historical comments
-- (#286) Raise test coverage on the least-covered files
-- (#287) Make main.go testable and stop ignoring it in Codecov
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.7...main
-[3.2.7]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.6...v3.2.7
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.8...main
+[3.2.8]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.7...v3.2.8
