@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.2.4] - 2026-11-12
+
 - (#274) Run the Docker image as a non-root user
 - (#275) Tighten the systemd sandbox in install.sh
 - (#276) Pin GitHub Actions to commit SHAs
@@ -21,12 +23,5 @@ rather than growing this file forever.
 - (#278) Enable gosec and stricter linters
 - (#279) Verify JWTs at the edge per service
 
-## [3.2.3] - 2026-11-12
-
-- (#270) Block cloud metadata addresses at connect time for every outbound request
-- (#271) Restrict the admin UI by source IP or a separate listener
-- (#272) Bound slow request bodies and per-client connections
-- (#273) Reject weak and breached admin passwords
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.3...main
-[3.2.3]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.2...v3.2.3
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.4...main
+[3.2.4]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.3...v3.2.4
