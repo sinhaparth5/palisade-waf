@@ -31,7 +31,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - Lint suppressions the presets don't cover get a same-line `//nolint` with a short reason (see `internal/storage/db.go`).
 - Admin UI handler tests use `newAdminEnv` (`internal/ui/harness_test.go`): real handler + session + CSRF over temp SQLite. Use `env.do(method, path, form(...))`, don't call handlers directly.
 - Storage tests get their DB from `openTestDB(t)`: temp SQLite by default; set `TEST_DB_DRIVER` + `TEST_DB_DSN` (admin DSN that can CREATE/DROP DATABASE) to run against a real server. `docker compose -f docker-compose.test.yml up -d` gives mysql:8 on `:3307` and postgres:16 on `:5433`; MySQL needs ~20–25s before it's really ready (early `mysqladmin ping` lies).
-- CI (`ci.yml`): `lint`, `test` (`-coverpkg=./...`, Codecov), and a `test-external-db` matrix all gate `release` and `docker`. `codeql.yml` and `govulncheck.yml` run separately.
+- CI (`ci.yml`): `lint`, `test` (`-coverpkg=./...`, Codecov), and a `test-external-db` matrix all gate `release` and `docker`. `codeql.yml` and `govulncheck.yml` run separately. Every `uses:` is pinned to a full commit SHA with the version in a trailing comment (issue #276; Dependabot bumps both), every workflow has top-level `permissions: contents: read` with per-job widening, and checkouts set `persist-credentials: false`.
 - Run `go test -race` on packages where you touched shared state or a `Reload*` swap.
 - Reviews follow `REVIEW.md` (every finding needs a concrete input/state → breakage scenario).
 
