@@ -441,7 +441,6 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"requests", "asn_num INTEGER NOT NULL DEFAULT 0"},
 	{"requests", "org TEXT NOT NULL DEFAULT ''"},
 	{"requests", "query TEXT NOT NULL DEFAULT ''"},
-	{"requests", "ja3_hash TEXT NOT NULL DEFAULT ''"}, // unused since JA3 was removed (#266)
 	{"requests", "ja4 TEXT NOT NULL DEFAULT ''"},
 	{"requests", "visitor_id TEXT NOT NULL DEFAULT ''"},
 	{"requests", "bot_score INTEGER NOT NULL DEFAULT 0"},

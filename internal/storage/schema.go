@@ -66,7 +66,6 @@ func (db *DB) schemaStatements() []string {
 			tls_sni      TEXT NOT NULL DEFAULT '',
 			asn_num      INTEGER NOT NULL DEFAULT 0,
 			org          TEXT NOT NULL DEFAULT '',
-			ja3_hash     TEXT NOT NULL DEFAULT '',
 			ja4          TEXT NOT NULL DEFAULT '',
 			visitor_id   TEXT NOT NULL DEFAULT '',
 			bot_score    INTEGER NOT NULL DEFAULT 0,
