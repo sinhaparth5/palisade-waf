@@ -141,7 +141,7 @@ func TestVPatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range VPatches {
+	for _, p := range VPatches() {
 		tc := vpatchCases[p.CVE]
 		if tc.exploit == nil {
 			continue // reported by TestVPatchPack
@@ -168,7 +168,7 @@ func TestVPatches(t *testing.T) {
 // TestVPatchDisabledByID: switching a patch off is a rule exception, which
 // must work although patches load before the SecRuleRemoveById line.
 func TestVPatchDisabledByID(t *testing.T) {
-	p := VPatches[0]
+	p := VPatches()[0]
 	e, err := New(config.WAFConfig{Enabled: true}, []int{p.RuleID})
 	if err != nil {
 		t.Fatal(err)

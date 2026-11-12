@@ -13,6 +13,7 @@ Unreleased — older entries stay available in their git tags and GitHub release
 rather than growing this file forever.
 
 ## [Unreleased]
+- (#274) Run the Docker image as a non-root user
 
 ## [3.2.3] - 2026-11-12
 

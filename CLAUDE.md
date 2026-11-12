@@ -167,7 +167,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 ## Release and distribution
 
 - `CHANGELOG.md` holds exactly `[Unreleased]` + the latest version. Add entries under `[Unreleased]` as one line: `- (#137) <issue title as on GitHub>` — no description, never a hand-written version heading. `make tag` rolls it (`scripts/roll-changelog.sh`) before tagging because CI reads release notes from the tagged commit.
-- Docker: multi-stage → `scratch`; needs the copied CA bundle and `TMPDIR=/data` (Coraza writes a temp file; scratch has no `/tmp`). Pushed to GHCR and Docker Hub on `v*` tags; tags are computed in shell, not `docker/metadata-action`.
+- Docker: multi-stage → `scratch`; needs the copied CA bundle and `TMPDIR=/data` (Coraza writes a temp file; scratch has no `/tmp`). Runs as `USER 65532:65532` (issue #274); `/data` is created and chowned in the builder because scratch has no shell. Ports below 1024 need a mapping or `--cap-add NET_BIND_SERVICE`. `docker-compose.yml` is `read_only` with all caps dropped, so anything written at runtime must live under `/data`. `mustBeWritable` in `main.go` fails startup with the `chown` fix for a root-owned volume. Pushed to GHCR and Docker Hub on `v*` tags; tags are computed in shell, not `docker/metadata-action`.
 - `deploy/install.sh` (`curl | sudo bash`): writes systemd units via heredoc and regenerates the main unit every run; extra flags go in `/etc/palisade/palisade.env` (`$PALISADE_FLAGS`), which is never overwritten. It generates `/etc/palisade/db.key` once.
 
 Never commit credentials, TLS private keys, GeoIP databases or a production `waf.db`.

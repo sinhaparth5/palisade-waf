@@ -1118,14 +1118,14 @@ func TestSetServiceMTLS(t *testing.T) {
 func TestVirtualPatchesCard(t *testing.T) {
 	env := newAdminEnv(t)
 	env.seedService("shop", "shop.example.com")
-	p := waf.VPatches[0]
+	p := waf.VPatches()[0]
 	env.seedLog(storage.RequestLog{Timestamp: time.Now(), RealIP: "203.0.113.5", Blocked: true, RuleID: p.RuleID, Status: 403})
 	env.seedLog(storage.RequestLog{Timestamp: time.Now(), RealIP: "203.0.113.6", Blocked: true, RuleID: p.RuleID, Status: 403})
 
 	rec := env.do("GET", "/admin/waf-rules", nil)
 	wantCode(t, "page", rec.Code, 200, "")
 	body := rec.Body.String()
-	for _, vp := range waf.VPatches {
+	for _, vp := range waf.VPatches() {
 		if !strings.Contains(body, vp.CVE) {
 			t.Errorf("%s not listed", vp.CVE)
 		}

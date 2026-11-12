@@ -17,8 +17,10 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"math/big"
 	"net"
@@ -26,6 +28,7 @@ import (
 	"net/netip"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -153,6 +156,12 @@ func main() {
 		log.Fatalf("--prune-interval must be 0 (off) or at least 1m, got %s", *pruneInterval)
 	}
 
+	if cfg.DB.Driver == "sqlite" {
+		mustBeWritable(filepath.Dir(cfg.DB.Path))
+	}
+	if _, err := os.Stat(cfg.TLS.CacheDir); err == nil {
+		mustBeWritable(cfg.TLS.CacheDir)
+	}
 	db, err := storage.OpenWithDriver(cfg.DB.Driver, cfg.DB.Path)
 	if err != nil {
 		log.Fatalf("db: %v", err)
@@ -837,6 +846,23 @@ func http3Gate(registry *services.Registry, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// mustBeWritable stops startup with a fix instead of a bare permission error
+// later. The Docker image runs as uid 65532 since issue #274, so a volume an
+// older image (root) created is the usual cause.
+func mustBeWritable(dir string) {
+	f, err := os.CreateTemp(dir, ".palisade-write-check-*")
+	if err == nil {
+		f.Close()
+		_ = os.Remove(f.Name())
+		return
+	}
+	if !errors.Is(err, fs.ErrPermission) {
+		return // missing dir etc.: the real open reports it better
+	}
+	log.Fatalf("%s is not writable by uid %d. In Docker, a volume created while the image still ran as root is owned by root; fix it once with:\n"+
+		"  docker run --rm -v <volume>:/data alpine chown -R 65532:65532 /data", dir, os.Getuid())
 }
 
 // hardenServer bounds how long a client may take to send its headers and hold

@@ -6,6 +6,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // Virtual patches (issue #189): one rule per exploited CVE, embedded and
@@ -30,16 +31,17 @@ type VPatch struct {
 }
 
 // VPatches lists the shipped patches, newest first. A malformed file fails
-// TestVPatchPack, so loading it here never errors in a released binary.
-var VPatches = mustLoadVPatches()
-
-func mustLoadVPatches() []VPatch {
+// TestVPatchPack, so loading it never errors in a released binary. Loaded on
+// first use, not at package init: compiling a rule makes Coraza test-write
+// to TMPDIR, and at init that panics before main can explain an unwritable
+// data dir (issue #274).
+var VPatches = sync.OnceValue(func() []VPatch {
 	ps, err := loadVPatches()
 	if err != nil {
 		panic(err)
 	}
 	return ps
-}
+})
 
 func loadVPatches() ([]VPatch, error) {
 	entries, err := vpatchFS.ReadDir("vpatch")
@@ -94,7 +96,7 @@ func loadVPatches() ([]VPatch, error) {
 // vpatchDirectives is every patch, in load order.
 func vpatchDirectives() string {
 	var sb strings.Builder
-	for _, p := range VPatches {
+	for _, p := range VPatches() {
 		sb.WriteString(p.Rule)
 		sb.WriteString("\n")
 	}

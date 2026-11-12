@@ -1729,8 +1729,8 @@ func (h *Handler) vpatchViews(disabled []storage.DisabledWAFRule, exceptions []s
 	if err != nil {
 		return nil, err
 	}
-	out := make([]vpatchView, len(waf.VPatches))
-	for i, p := range waf.VPatches {
+	out := make([]vpatchView, len(waf.VPatches()))
+	for i, p := range waf.VPatches() {
 		v := vpatchView{VPatch: p, Hits: hits[p.RuleID]}
 		for _, d := range disabled {
 			v.GlobalOff = v.GlobalOff || d.RuleID == p.RuleID

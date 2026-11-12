@@ -5,6 +5,10 @@ services:
       - "8080:8080"
     volumes:
       - waf-data:/data
+    # Everything Palisade writes (DB, certs, Coraza's temp files) is on /data.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
 
 volumes:
   waf-data:
