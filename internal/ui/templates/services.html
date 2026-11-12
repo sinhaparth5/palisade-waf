@@ -198,6 +198,9 @@
           </div>
         </div>
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">With a path set, each backend is checked on that path and leaves the rotation until it answers 2xx or 3xx again. Leave it blank to judge backends by real traffic only: one that fails sits out for 10 seconds, then gets traffic again.</p>
+        <label for="svc-backend-ca" class="field-label">Trusted backend certificate (PEM)</label>
+        <textarea id="svc-backend-ca" name="backend_ca" rows="3" spellcheck="false" placeholder="-----BEGIN CERTIFICATE-----" class="field text-[13px] font-mono mb-2"></textarea>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">For HTTPS backends with a self-signed or private certificate. Paste the backend's own certificate to accept exactly that one, or your private CA to check the chain and hostname against it. Leave blank to use the system's trusted CAs. Never paste a private key.</p>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
       <div id="svc-backends-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
@@ -946,7 +949,7 @@
       data-rps="{{.RateLimitRPS}}" data-burst="{{.RateLimitBurst}}" data-rate-rules="{{.RateRules}}" data-mode="{{.BotMode}}" data-cache="{{if .CacheEnabled}}1{{else}}0{{end}}"
       data-session-cache="{{if .CacheBySession}}1{{else}}0{{end}}" data-session-cookie="{{.SessionCookieName}}"
       data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
-      data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}"
+      data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}" data-backend-ca="{{.BackendCA}}"
       data-schema="{{.RequestSchema}}" data-schema-mode="{{.SchemaMode}}" data-openapi-mode="{{.OpenAPIMode}}"
       data-mcp-mode="{{.MCP.Mode}}" data-mcp-path="{{.MCP.Path}}" data-mcp-origins="{{.MCP.Origins}}" data-mcp-methods="{{.MCP.Methods}}" data-mcp-tools="{{.MCP.Tools}}" data-csp="{{.CSP}}" data-csp-enforce="{{if .CSPEnforce}}1{{else}}0{{end}}" data-csp-recent="{{if .CSPRecent}}1{{else}}0{{end}}"
       data-csp-scripts="{{range $i, $s := .Scripts}}{{if $i}} {{end}}{{$s.Origin}}{{end}}" data-csp-approved="{{join .CSPApproved " "}}"
@@ -999,6 +1002,7 @@
   </div>
   {{if .ExtraBackends}}{{template "svc-kv" (map "K" "Balancing" "V" (or (and (eq .LBPolicy "least_conn") "Least connections") "Round robin"))}}{{end}}
   {{template "svc-kv" (map "K" "Health check" "V" (or (and .HealthPath (printf "%s every %ds" .HealthPath (or .HealthInterval 10))) "From real traffic"))}}
+  {{template "svc-kv" (map "K" "Backend certificate" "V" (or (and .BackendCA "Custom") "System CAs"))}}
 
   {{template "svc-view-head" "Rate limit"}}
   {{template "svc-kv" (map "K" "Limit" "V" (or (and (gt .RateLimitRPS 0.0) (printf "%g/s, burst %s" .RateLimitRPS (or (and .RateLimitBurst (printf "%d" .RateLimitBurst)) "auto"))) "Global limit"))}}

@@ -216,9 +216,14 @@ func (r *Registry) Reload(db *storage.DB) error {
 	if err != nil {
 		return err
 	}
+	backendCAs, err := db.ListServiceBackendCA()
+	if err != nil {
+		return err
+	}
 	for i := range list {
 		list[i].Gate = gates[list[i].ID]
 		list[i].Policy = policies[list[i].ID]
+		list[i].BackendCA = backendCAs[list[i].ID]
 	}
 	cspPolicies, err := db.ListServiceCSP()
 	if err != nil {
@@ -976,6 +981,11 @@ func Probe(backend string) error {
 		return fmt.Errorf("invalid backend URL: %w", err)
 	}
 	resp, err := client.Do(req)
+	// It answered TLS, so it's reachable; the certificate is enforced on
+	// every proxied request and set on the Backends tab (issue #313).
+	if _, ok := errors.AsType[*tls.CertificateVerificationError](err); ok {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("backend not reachable: %w", err)
 	}

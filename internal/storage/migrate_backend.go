@@ -42,6 +42,7 @@ var configSteps = []configStep{
 	{"service_mcp", migrateServiceMCPTable},
 	{"service_jwt", migrateServiceJWTTable},
 	{"service_rate_rules", migrateServiceRateRulesTable},
+	{"service_backend_ca", migrateServiceBackendCATable},
 	{"service_gate", migrateServiceGateTable},
 	{"service_csp", migrateServiceCSPTable},
 	{"csp_scripts", migrateCSPScriptsTable},
@@ -547,6 +548,21 @@ func migrateServiceJWTTable(source, target *DB) (int, error) {
 	n := 0
 	for id, j := range checks {
 		if err := target.SetServiceJWT(id, j); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+func migrateServiceBackendCATable(source, target *DB) (int, error) {
+	all, err := source.ListServiceBackendCA()
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for id, pem := range all {
+		if err := target.SetServiceBackendCA(id, pem); err != nil {
 			return n, err
 		}
 		n++

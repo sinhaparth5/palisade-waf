@@ -61,6 +61,7 @@ type pool struct {
 	name      string
 	leastConn bool
 	active    bool // an active health check brings failed backends back
+	rt        http.RoundTripper
 	ups       []*upstream
 	next      atomic.Uint64
 }
@@ -75,7 +76,7 @@ type attempt struct {
 }
 
 func newPool(s storage.Service, health func(raw string) *backendHealth, stripPath bool, modify func(*http.Response) error) *pool {
-	p := &pool{name: s.Name, leastConn: s.LBPolicy == "least_conn", active: s.HealthPath != ""}
+	p := &pool{name: s.Name, leastConn: s.LBPolicy == "least_conn", active: s.HealthPath != "", rt: backendRT(s)}
 	for _, raw := range s.Backends() {
 		target, err := url.Parse(raw)
 		if err != nil || target.Host == "" {
@@ -90,7 +91,7 @@ func newPool(s storage.Service, health func(raw string) *backendHealth, stripPat
 		}
 		u := &upstream{raw: raw, base: base, health: health(raw)}
 		u.rp = httputil.NewSingleHostReverseProxy(target)
-		u.rp.Transport = &timedTransport{rt: backendTransport, name: s.Name}
+		u.rp.Transport = &timedTransport{rt: p.rt, name: s.Name}
 		u.rp.BufferPool = proxyBuffers
 		u.rp.ModifyResponse = func(resp *http.Response) error {
 			u.health.markUp()
@@ -186,7 +187,7 @@ func (p *pool) pick(skip *upstream) *upstream {
 // answer, takes it out until a later check passes.
 func (p *pool) runChecks(path string, interval time.Duration, stop <-chan struct{}) {
 	client := &http.Client{
-		Transport:     backendTransport,
+		Transport:     p.rt,
 		Timeout:       probeTimeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}

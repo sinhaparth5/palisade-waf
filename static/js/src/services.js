@@ -137,6 +137,7 @@
   var backendsText = document.getElementById('svc-backends');
   var healthPathInput = document.getElementById('svc-health-path');
   var healthIntervalInput = document.getElementById('svc-health-interval');
+  var backendCAText = document.getElementById('svc-backend-ca');
   var hostsForm = document.getElementById('svc-hosts-form');
   var aliasesText = document.getElementById('svc-host-aliases');
   var canonicalSelect = document.getElementById('svc-canonical-host');
@@ -283,6 +284,7 @@
     if (lbRadio) lbRadio.checked = true;
     healthPathInput.value = d.healthPath || '';
     healthIntervalInput.value = parseInt(d.healthInterval) > 0 ? d.healthInterval : '';
+    backendCAText.value = d.backendCa || '';
 
     hostsForm.setAttribute('hx-post', adminPath + '/services/hosts/' + d.id);
     htmx.process(hostsForm);

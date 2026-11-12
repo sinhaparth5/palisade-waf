@@ -289,6 +289,13 @@ func (db *DB) schemaStatements() []string {
 			rules      TEXT NOT NULL
 		)`,
 
+		// Certificates a service's HTTPS backends are verified against
+		// (issue #313): a self-signed cert pinned exactly, or a private CA.
+		`CREATE TABLE IF NOT EXISTS service_backend_ca (
+			service_id INTEGER PRIMARY KEY,
+			pem        TEXT NOT NULL
+		)`,
+
 		// Bearer JWT check per service (issue #279). Lists are
 		// newline-separated; public_key is PEM.
 		`CREATE TABLE IF NOT EXISTS service_jwt (

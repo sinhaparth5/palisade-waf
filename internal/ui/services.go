@@ -65,9 +65,11 @@ func (h *Handler) serviceViews() []ServiceView {
 	scripts, _ := h.db.ListCSPScripts()
 	cookies, _ := h.db.ListServiceCookiePolicies()
 	cspEnforce, _ := h.db.ListCSPEnforcement()
+	backendCAs, _ := h.db.ListServiceBackendCA()
 	weekAgo := time.Now().Add(-7 * 24 * time.Hour)
 	out := make([]ServiceView, len(list))
 	for i, s := range list {
+		s.BackendCA = backendCAs[s.ID]
 		healthy, known := h.registry.IsHealthy(s.Name)
 		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID], MCP: mcp[s.ID], JWT: jwts[s.ID], RateRules: rateRules[s.ID], CSP: cspPolicies[s.ID], Scripts: scripts[s.ID]}
 		exempt, on := cookies[s.ID]
@@ -352,7 +354,14 @@ func (h *Handler) SetServiceBackends(c *echo.Context) error {
 	if err := services.ValidateBackends(backends, healthPath, interval); err != nil {
 		return fail(err.Error())
 	}
+	backendCA := strings.TrimSpace(strings.ReplaceAll(c.FormValue("backend_ca"), "\r\n", "\n"))
+	if err := services.ValidateBackendCA(backendCA); err != nil {
+		return fail("Trusted backend certificate: " + err.Error())
+	}
 	if err := h.db.SetServiceBackends(id, backends, c.FormValue("lb_policy"), healthPath, interval); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.db.SetServiceBackendCA(id, backendCA); err != nil {
 		return fail(err.Error())
 	}
 	if err := h.registry.Reload(h.db); err != nil {

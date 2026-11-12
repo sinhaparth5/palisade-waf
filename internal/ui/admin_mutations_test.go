@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -294,6 +295,23 @@ func TestServiceSettingHandlers(t *testing.T) {
 	rec := env.do("POST", "/admin/services/backends/"+id, form("backends", "http://127.0.0.1:1/<b>\nhttp://127.0.0.2:1/"))
 	if rec.Header().Get("HX-Retarget") != "#svc-backends-error" || strings.Contains(rec.Body.String(), "<b>") {
 		t.Errorf("backends error = %q (retarget %q)", rec.Body.String(), rec.Header().Get("HX-Retarget"))
+	}
+
+	// Trusted backend certificate (issue #313): a key is refused, a cert is
+	// stored, and an empty field clears it.
+	rec = env.do("POST", "/admin/services/backends/"+id, form("backends", "http://127.0.0.1:9001\nhttp://127.0.0.1:9002", "lb_policy", "least_conn", "health_path", "/healthz", "health_interval", "30", "backend_ca", "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----"))
+	if rec.Header().Get("HX-Retarget") != "#svc-backends-error" || !strings.Contains(rec.Body.String(), "private key") {
+		t.Errorf("backend key = %q (retarget %q)", rec.Body.String(), rec.Header().Get("HX-Retarget"))
+	}
+	ts := httptest.NewTLSServer(nil)
+	ts.Close()
+	certPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ts.Certificate().Raw}))
+	for _, ca := range []string{certPEM, ""} {
+		rec = env.do("POST", "/admin/services/backends/"+id, form("backends", "http://127.0.0.1:9001\nhttp://127.0.0.1:9002", "lb_policy", "least_conn", "health_path", "/healthz", "health_interval", "30", "backend_ca", ca))
+		cas, err := env.db.ListServiceBackendCA()
+		if rec.Header().Get("HX-Trigger") != "backends-saved" || err != nil || cas[svc.ID] != strings.TrimSpace(ca) {
+			t.Errorf("backend ca save %q: %d %q, stored %q", ca, rec.Code, rec.Body.String(), cas[svc.ID])
+		}
 	}
 
 	// Hosts tab: a name another service owns is refused in the tab's error box.

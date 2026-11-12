@@ -80,6 +80,9 @@ type Service struct {
 	// Policy is the accepted methods, Content-Types and body size (issue
 	// #282), filled from service_request_policy by Registry.Reload.
 	Policy RequestPolicy
+	// BackendCA is the PEM the backend's TLS certificate is checked against
+	// (issue #313), filled from service_backend_ca by Registry.Reload.
+	BackendCA string
 }
 
 // DefaultHealthInterval is the active health check interval used when a
@@ -177,7 +180,7 @@ func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
 }
 
 func (db *DB) RemoveService(id int) error {
-	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_jwt", "service_rate_rules", "service_gate", "service_csp", "csp_scripts", "service_cookie_policy", "service_request_policy", "csp_approved", "service_csp_enforce"} {
+	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_jwt", "service_rate_rules", "service_gate", "service_csp", "csp_scripts", "service_cookie_policy", "service_request_policy", "csp_approved", "service_csp_enforce", "service_backend_ca"} {
 		if _, err := db.exec(`DELETE FROM `+t+` WHERE service_id = ?`, id); err != nil {
 			return err
 		}
@@ -468,6 +471,37 @@ func (db *DB) ListServiceRateRules() (map[int]string, error) {
 			return nil, err
 		}
 		out[id] = rules
+	}
+	return out, rows.Err()
+}
+
+// SetServiceBackendCA stores the certificates a service's HTTPS backends are
+// verified against (issue #313); "" removes the row.
+func (db *DB) SetServiceBackendCA(id int, pem string) error {
+	if pem == "" {
+		_, err := db.exec(`DELETE FROM service_backend_ca WHERE service_id = ?`, id)
+		return err
+	}
+	cols := []string{"service_id", "pem"}
+	_, err := db.exec(upsertUpdate("service_backend_ca", cols, "?, ?", []string{"service_id"}, cols[1:]), id, pem)
+	return err
+}
+
+// ListServiceBackendCA returns every service's backend certificates by id.
+func (db *DB) ListServiceBackendCA() (map[int]string, error) {
+	rows, err := db.query(`SELECT service_id, pem FROM service_backend_ca`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]string{}
+	for rows.Next() {
+		var id int
+		var pem string
+		if err := rows.Scan(&id, &pem); err != nil {
+			return nil, err
+		}
+		out[id] = pem
 	}
 	return out, rows.Err()
 }
