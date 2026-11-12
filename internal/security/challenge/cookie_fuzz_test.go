@@ -3,8 +3,8 @@ package challenge
 import (
 	"crypto/sha256"
 	"fmt"
+	"net/netip"
 	"testing"
-	"time"
 )
 
 // FuzzChallengeCookie (issue #306): only the exact cookie issued to a
@@ -13,9 +13,10 @@ import (
 func FuzzChallengeCookie(f *testing.F) {
 	c := New("fuzz-secret", 3600, 3)
 	const ip = "2001:db8::1"
-	valid := c.buildCookieValue(time.Now().Add(24*time.Hour).Unix(), ip, "visitor-1")
+	valid := c.buildCookieValue(4102444800, ip, "visitor-1") // fixed (2100), so saved inputs replay
 	f.Add(valid, ip, uint(0), byte('x'))
 	f.Add(valid, "2001:db8::2", uint(3), byte('0'))
+	f.Add(valid, "2001:dB8::", uint(3), byte(0x7f))
 	f.Add(valid, "198.51.100.7", uint(len(valid)-1), byte('A'))
 	f.Add("+"+valid, ip, uint(0), byte('+'))
 	f.Add("0"+valid, ip, uint(5), byte('.'))
@@ -25,7 +26,8 @@ func FuzzChallengeCookie(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, value, clientIP string, pos uint, b byte) {
-		same := clientIP == ip || clientIP == "2001:db8::2" // same /64
+		a, err := netip.ParseAddr(clientIP)
+		same := err == nil && client64.Contains(a) // the cookie is bound to the /64
 		if vid, ok := c.parseCookie(value, clientIP); ok && (value != valid || !same || vid != "visitor-1") {
 			t.Fatalf("accepted %q for %q (visitor %q)", value, clientIP, vid)
 		}
@@ -38,6 +40,8 @@ func FuzzChallengeCookie(f *testing.F) {
 		}
 	})
 }
+
+var client64 = netip.MustParsePrefix("2001:db8::/64")
 
 // FuzzVerifyPoW: a solution passes only when SHA-256(nonce || decimal)
 // really starts with a zero byte.
