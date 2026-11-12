@@ -131,6 +131,16 @@ var _ = promauto.NewCounterFunc(prometheus.CounterOpts{
 	Help: "Requests answered 408 because the client sent an inspected body too slowly.",
 }, func() float64 { return float64(waf.BodyTimeouts()) })
 
+var _ = promauto.NewCounterFunc(prometheus.CounterOpts{
+	Name: "palisade_waf_verdict_cache_hits_total",
+	Help: "WAF checks answered from the 5s verdict cache instead of running the rules.",
+}, func() float64 { return float64(waf.VerdictCacheHits()) })
+
+var _ = promauto.NewCounterFunc(prometheus.CounterOpts{
+	Name: "palisade_waf_verdict_cache_misses_total",
+	Help: "WAF checks that looked in the verdict cache and ran the rules.",
+}, func() float64 { return float64(waf.VerdictCacheMisses()) })
+
 // ConnsRefused counts connections closed at accept by the per-client cap.
 var ConnsRefused = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "palisade_conns_refused_total",

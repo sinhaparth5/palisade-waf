@@ -487,7 +487,7 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 	// uninspected one was never read at all, so a fingerprint over it would
 	// key two different uploads to the same verdict.
 	var cacheKey string
-	if buffered && fingerprintEligible(r) {
+	if buffered {
 		cacheKey = fingerprint(r, clientIP, body)
 		if cached, ok := e.cache.get(cacheKey); ok {
 			result := cached

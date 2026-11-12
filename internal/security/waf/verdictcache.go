@@ -7,8 +7,15 @@ import (
 	"net/http"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+var cacheHits, cacheMisses atomic.Uint64
+
+// VerdictCacheHits and VerdictCacheMisses count lookups across every engine.
+func VerdictCacheHits() uint64   { return cacheHits.Load() }
+func VerdictCacheMisses() uint64 { return cacheMisses.Load() }
 
 // verdictCacheTTL is intentionally short: this cache only exists to absorb
 // byte-identical repeats within a single flood/scan burst (issue #13), not to
@@ -57,15 +64,18 @@ func (c *verdictCache) get(key string) (Result, bool) {
 	defer c.mu.Unlock()
 	el, ok := c.entries[key]
 	if !ok {
+		cacheMisses.Add(1)
 		return Result{}, false
 	}
 	entry := el.Value.(*verdictEntry)
 	if time.Now().After(entry.expiresAt) {
 		c.order.Remove(el)
 		delete(c.entries, key)
+		cacheMisses.Add(1)
 		return Result{}, false
 	}
 	c.order.MoveToFront(el)
+	cacheHits.Add(1)
 	return entry.result, true
 }
 
@@ -93,18 +103,11 @@ func (c *verdictCache) put(key string, result Result) {
 	}
 }
 
-// fingerprintEligible reports whether r is safe to key by fingerprint alone.
-// A session cookie or Authorization header carries request identity that
-// method+path+query+body doesn't capture — two requests with an identical
-// body but different logged-in users must never share a verdict — so either
-// one excludes the request from the cache entirely. This deliberately
-// restricts the cache to anonymous, bot-flood-shaped traffic (issue #13).
-func fingerprintEligible(r *http.Request) bool {
-	return r.Header.Get("Authorization") == "" && r.Header.Get("Cookie") == ""
-}
-
 // fingerprint computes the cache key for r: client IP + method + host + raw
-// path + query + every request header + a hash of body. Anything Coraza can
+// path + query + every request header + a hash of body. Cookie and
+// Authorization are headers like any other, so two users' requests never
+// share a key (issue #291); the verdict itself depends only on what Coraza
+// sees, all of which is hashed here. Anything Coraza can
 // inspect must be in the key, or a request differing only there would reuse
 // another request's verdict: headers are how CRS sees header-borne payloads
 // (issue #152), the raw path keeps "/a/../b" from sharing "/b"'s verdict, and

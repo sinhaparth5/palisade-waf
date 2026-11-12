@@ -44,25 +44,6 @@ func TestVerdictCacheEvictsLeastRecentlyUsed(t *testing.T) {
 	}
 }
 
-func TestFingerprintEligible(t *testing.T) {
-	r := httptest.NewRequest("GET", "http://example.com/", nil)
-	if !fingerprintEligible(r) {
-		t.Fatalf("plain request should be eligible")
-	}
-
-	withCookie := httptest.NewRequest("GET", "http://example.com/", nil)
-	withCookie.Header.Set("Cookie", "session=x")
-	if fingerprintEligible(withCookie) {
-		t.Fatalf("cookie-bearing request must not be eligible")
-	}
-
-	withAuth := httptest.NewRequest("GET", "http://example.com/", nil)
-	withAuth.Header.Set("Authorization", "Bearer x")
-	if fingerprintEligible(withAuth) {
-		t.Fatalf("Authorization-bearing request must not be eligible")
-	}
-}
-
 func TestFingerprintDeterministicAndDistinguishesRequests(t *testing.T) {
 	r1 := httptest.NewRequest("GET", "http://example.com/search?q=a", nil)
 	r2 := httptest.NewRequest("GET", "http://example.com/search?q=a", nil)
