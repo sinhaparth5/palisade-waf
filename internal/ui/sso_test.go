@@ -426,3 +426,45 @@ func TestSSOInviteRoutes(t *testing.T) {
 		t.Errorf("revoke left %+v", inv)
 	}
 }
+
+// TestSSOLinkExistingUser: an invite for an existing user's email links SSO
+// to that user (issue #296), who keeps their role and password.
+func TestSSOLinkExistingUser(t *testing.T) {
+	env, idp := newSSOEnv(t)
+	dev, _, err := env.db.InviteAdminUser("dev@example.com", storage.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims := func(sub, email string) map[string]any {
+		return map[string]any{"sub": sub, "email": email, "email_verified": true}
+	}
+	if rec := idp.ssoLogin(t, env, claims("admin-1", testAdminEmail)); loggedIn(rec) {
+		t.Fatal("existing user signed in by email without an invite")
+	}
+
+	for _, email := range []string{testAdminEmail, "dev@example.com"} {
+		if rec := env.do("POST", "/admin/settings/users/invites", form("email", email, "role", "viewer")); rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "already") {
+			t.Fatalf("invite %s = %d", email, rec.Code)
+		}
+	}
+	if err := env.db.SetAdminUserDisabled(dev, true); err != nil {
+		t.Fatal(err)
+	}
+	if rec := idp.ssoLogin(t, env, claims("dev-1", "dev@example.com")); loggedIn(rec) || !strings.Contains(rec.Body.String(), "disabled") {
+		t.Errorf("disabled linked user login = %d", rec.Code)
+	}
+
+	if rec := idp.ssoLogin(t, env, claims("admin-1", testAdminEmail)); !loggedIn(rec) {
+		t.Fatalf("invited existing user login = %d %s", rec.Code, rec.Body)
+	}
+	u, _ := env.db.GetAdminUserByEmail(testAdminEmail)
+	if u == nil || u.Role != storage.RoleOwner || !u.SSO {
+		t.Errorf("linked user = %+v, want the SSO-linked owner", u)
+	}
+	if n, _ := env.db.CountAdminUsers(); n != 2 {
+		t.Errorf("users = %d, want 2 (no new row)", n)
+	}
+	if _, s := login(env, "10.9.0.2", testAdminEmail, testAdminPassword); s == "" {
+		t.Error("password login stopped working after linking SSO")
+	}
+}

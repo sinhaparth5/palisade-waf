@@ -49,7 +49,7 @@ type AdminUser struct {
 	Role        string
 	Disabled    bool
 	TOTPEnabled bool
-	SSO         bool // bound to an IdP identity (issue #197); has no password
+	SSO         bool // bound to an IdP identity (issue #197); has no password unless linked to an existing user (#296)
 	Invited     bool // hasn't set a password from their invite link yet (issue #229)
 	CreatedAt   time.Time
 }

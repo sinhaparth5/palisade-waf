@@ -11,7 +11,8 @@ import (
 //
 // Invite-only: the IdP proves who someone is, an owner's invite decides
 // whether they get in and with which role. The first SSO login spends the
-// invite, creates the user and binds it to the token's iss+sub in
+// invite, creates the user (or, for an existing user's email, links that
+// user, issue #296) and binds it to the token's iss+sub in
 // admin_sso_identities; later logins match on that pair, never on email.
 
 // SSOConfig is the Settings → Single sign-on card. An empty Issuer means
@@ -61,8 +62,12 @@ func (db *DB) SetSSOConfig(c SSOConfig) error {
 	return db.setSecretMeta("sso_client_secret", c.ClientSecret)
 }
 
+// ErrSSOLinked is returned when inviting a user who already signs in with SSO.
+var ErrSSOLinked = errors.New("that user already signs in with single sign-on")
+
 // CreateSSOInvite invites email with role, or renews the pending invite for
-// that email with the new role.
+// that email with the new role. An existing user's email can be invited:
+// accepting links SSO to that user (issue #296).
 func (db *DB) CreateSSOInvite(email, role string) error {
 	if !ValidRole(role) {
 		return fmt.Errorf("invalid role %q", role)
@@ -70,8 +75,8 @@ func (db *DB) CreateSSOInvite(email, role string) error {
 	email = NormalizeEmail(email)
 	if u, err := db.GetAdminUserByEmail(email); err != nil {
 		return err
-	} else if u != nil {
-		return ErrUserExists
+	} else if u != nil && u.SSO {
+		return ErrSSOLinked
 	}
 	if _, err := db.exec(`DELETE FROM admin_sso_invites WHERE email = ?`, email); err != nil {
 		return err
@@ -127,7 +132,9 @@ func (db *DB) SSOUser(issuer, subject string) (*AdminUser, error) {
 }
 
 // AcceptSSOInvite spends the live invite for email: it creates the user
-// with the invite's role and no password, bound to issuer+subject. Returns
+// with the invite's role and no password, bound to issuer+subject. If a user
+// already has the email, it binds that user instead and keeps their role,
+// password and 2FA (issue #296). Returns
 // nil with no error when there is no live invite (none, revoked, used or
 // expired).
 func (db *DB) AcceptSSOInvite(email, issuer, subject string) (*AdminUser, error) {
@@ -149,9 +156,15 @@ func (db *DB) AcceptSSOInvite(email, issuer, subject string) (*AdminUser, error)
 	if n, _ := res.RowsAffected(); n != 1 {
 		return nil, nil
 	}
-	if u, err := db.GetAdminUserByEmail(email); err != nil || u != nil {
-		// A password user took the email after the invite was sent.
+	u, err := db.GetAdminUserByEmail(email)
+	if err != nil {
 		return nil, err
+	}
+	if u != nil {
+		if _, err := db.exec(`INSERT INTO admin_sso_identities (user_id, issuer, subject) VALUES (?, ?, ?)`, u.ID, issuer, subject); err != nil {
+			return nil, err
+		}
+		return db.GetAdminUser(u.ID)
 	}
 	id, err := db.insertReturningID(`INSERT INTO admin_users (email, password_hash, role, created_at) VALUES (?, '', ?, ?)`,
 		email, inv.Role, time.Now())

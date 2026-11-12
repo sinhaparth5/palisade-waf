@@ -6,16 +6,13 @@ import (
 	"time"
 )
 
-// TestSSOInvites: an invite works once, only while live, and only for an
-// email no user has.
+// TestSSOInvites: an invite works once, only while live, and links an
+// existing user by email.
 func TestSSOInvites(t *testing.T) {
 	db := openTestDB(t)
 	testUser(t, db)
 	const iss = "https://idp.example"
 
-	if err := db.CreateSSOInvite("owner@x.test", RoleViewer); !errors.Is(err, ErrUserExists) {
-		t.Errorf("invite for an existing user: err = %v", err)
-	}
 	if err := db.CreateSSOInvite("a@x.test", "root"); err == nil {
 		t.Error("invalid role accepted")
 	}
@@ -56,6 +53,21 @@ func TestSSOInvites(t *testing.T) {
 	mustNoErr(t, db.DeleteSSOInvite(invites[0].ID))
 	if u, _ := db.AcceptSSOInvite("b@x.test", iss, "b"); u != nil {
 		t.Error("revoked invite accepted")
+	}
+
+	// An existing user's email links that user (#296): role kept, no new
+	// row, and a linked user can't be invited again.
+	owner, _ := db.GetAdminUserByEmail("owner@x.test")
+	mustNoErr(t, db.CreateSSOInvite("owner@x.test", RoleViewer))
+	linked, err := db.AcceptSSOInvite("owner@x.test", iss, "o")
+	if err != nil || linked == nil || linked.ID != owner.ID || linked.Role != owner.Role || !linked.SSO {
+		t.Fatalf("link existing = %+v, %v; want user %d keeping role %s", linked, err, owner.ID, owner.Role)
+	}
+	if got, _ := db.SSOUser(iss, "o"); got == nil || got.ID != owner.ID {
+		t.Errorf("SSOUser = %+v, want the existing user", got)
+	}
+	if err := db.CreateSSOInvite("owner@x.test", RoleViewer); !errors.Is(err, ErrSSOLinked) {
+		t.Errorf("invite for a linked user: err = %v", err)
 	}
 
 	// Deleting the user frees the identity for a fresh invite.

@@ -237,8 +237,11 @@ func (h *Handler) ssoUser(cfg storage.SSOConfig, cl *verifiedClaims) (*storage.A
 	if u, err = h.db.AcceptSSOInvite(cl.email, cl.iss, cl.sub); err != nil {
 		return nil, "Internal error. Please try again."
 	}
-	if u == nil {
+	switch {
+	case u == nil:
 		return nil, cl.email + " hasn't been invited, or the invite expired."
+	case u.Disabled: // an existing user linked by the invite (#296)
+		return nil, "Your account is disabled."
 	}
 	return u, ""
 }

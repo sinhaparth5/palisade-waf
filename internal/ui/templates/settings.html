@@ -483,7 +483,7 @@
     </div>
     <button type="submit" class="btn-primary px-6 shrink-0">Invite</button>
   </form>
-  <p class="text-[11px] text-slate-500 mb-5">The invite works once, for 7 days: the first single sign-on with this verified email creates the user and ties it to their identity-provider account.</p>
+  <p class="text-[11px] text-slate-500 mb-5">The invite works once, for 7 days: the first single sign-on with this verified email creates the user and ties it to their identity-provider account. For an existing user it links SSO to their account and keeps its role and password.</p>
   {{end}}
 
   {{if .Invites}}
@@ -543,7 +543,7 @@
           <i class="hgi hgi-stroke hgi-rounded hgi-mail-01 text-xs"></i>
           Resend invite
         </button>
-        {{else if not .SSO}}
+        {{else}}
         <button hx-post="{{$.AdminPath}}/settings/users/{{.ID}}" hx-target="#users-card" hx-swap="outerHTML"
                 hx-confirm="Turn off two-factor authentication and remove every passkey for {{.Email}}? Their password still works."
                 hx-vals='{"action":"reset-2fa"}'
