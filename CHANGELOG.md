@@ -14,20 +14,13 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.2.5] - 2026-11-12
+
 - (#265) Run fuzz tests in CI and cover the request parsers
 - (#264) Split handlers.go and db.go into per-feature files
 - (#263) Export and import configuration as a file
 - (#262) REST API write endpoints for geo rules, rule exceptions and virtual patches
 - (#280) Per-path rate limits per service
 
-## [3.2.4] - 2026-11-12
-
-- (#274) Run the Docker image as a non-root user
-- (#275) Tighten the systemd sandbox in install.sh
-- (#276) Pin GitHub Actions to commit SHAs
-- (#277) Move to Echo v5
-- (#278) Enable gosec and stricter linters
-- (#279) Verify JWTs at the edge per service
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.4...main
-[3.2.4]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.3...v3.2.4
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.5...main
+[3.2.5]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.4...v3.2.5
