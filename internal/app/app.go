@@ -59,8 +59,6 @@ func Run(ctx context.Context, args []string, version string, assets Assets, stdi
 		err = runConfig(rest, stdin, stdout)
 	case "gencert":
 		err = runGencert(rest)
-	case "build-dsn":
-		err = runBuildDSN(rest, stdin, stdout)
 	case "healthcheck":
 		err = runHealthcheck(ctx, rest)
 	default:
@@ -70,6 +68,35 @@ func Run(ctx context.Context, args []string, version string, assets Assets, stdi
 		return fmt.Errorf("%s: %w", args[0], err)
 	}
 	return nil
+}
+
+// dbFlags registers --db. --db-driver stays so units written before #300,
+// which pass --db-driver sqlite, still start; openDB refuses anything else.
+func dbFlags(fs *flag.FlagSet) (path, driver *string) {
+	return fs.String("db", "waf.db", "SQLite database file"),
+		fs.String("db-driver", "sqlite", "deprecated: only sqlite is supported")
+}
+
+// errNoExternalDB names the way off MySQL/Postgres, which #300 removed.
+var errNoExternalDB = errors.New(`only SQLite is supported: MySQL and Postgres were removed. ` +
+	`Run "palisade config export" with the previous release against the old database, ` +
+	`then "palisade config import" into a SQLite --db (see README)`)
+
+// checkSQLite rejects a non-sqlite --db-driver or a --db that is a server DSN.
+func checkSQLite(driver, path string) error {
+	if !strings.EqualFold(strings.TrimSpace(driver), "sqlite") ||
+		strings.Contains(path, "://") || strings.Contains(path, "@tcp(") || strings.Contains(path, "@unix(") {
+		return errNoExternalDB
+	}
+	return nil
+}
+
+// openDB opens the SQLite store at path after checkSQLite.
+func openDB(driver, path string) (*storage.DB, error) {
+	if err := checkSQLite(driver, path); err != nil {
+		return nil, err
+	}
+	return storage.Open(path)
 }
 
 // runPrune opens the DB, deletes request logs older than the configured
@@ -86,15 +113,14 @@ func Run(ctx context.Context, args []string, version string, assets Assets, stdi
 // Invoked as: palisade prune [--db path] [--retention days] [--vacuum]
 func runPrune(args []string) error {
 	fs := flag.NewFlagSet("prune", flag.ContinueOnError)
-	dbPath := fs.String("db", "waf.db", "database path (sqlite) or DSN (mysql/postgres)")
-	dbDriver := fs.String("db-driver", "sqlite", "database driver: sqlite, mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)")
+	dbPath, dbDriver := dbFlags(fs)
 	retention := fs.Int("retention", 30, "log retention in days (0 = keep forever)")
-	vacuum := fs.Bool("vacuum", false, "rebuild the DB file after pruning to reclaim disk space (sqlite/postgres; no-op on mysql, which has no database-wide VACUUM)")
+	vacuum := fs.Bool("vacuum", false, "rebuild the DB file after pruning to reclaim disk space")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	db, err := storage.OpenWithDriver(*dbDriver, *dbPath)
+	db, err := openDB(*dbDriver, *dbPath)
 	if err != nil {
 		return fmt.Errorf("db: %w", err)
 	}
@@ -106,28 +132,14 @@ func runPrune(args []string) error {
 	if !*vacuum {
 		return nil
 	}
-	// dbDiskSize stats a SQLite file (plus -wal/-shm sidecars) on the local
-	// filesystem — meaningless for a MySQL/Postgres DSN, so the before/after
-	// size delta is only reported for the sqlite driver.
-	isSQLite := *dbDriver == "" || strings.EqualFold(*dbDriver, "sqlite")
-	var before int64
-	if isSQLite {
-		before = dbDiskSize(*dbPath)
-	}
+	before := dbDiskSize(*dbPath)
 	start := time.Now()
 	if err := db.Vacuum(); err != nil {
 		return fmt.Errorf("vacuum: failed after %s: %w", time.Since(start), err)
 	}
-	switch {
-	case isSQLite:
-		after := dbDiskSize(*dbPath)
-		log.Printf("vacuum: reclaimed %s (%s -> %s, took %s)",
-			formatBytes(before-after), formatBytes(before), formatBytes(after), time.Since(start))
-	case strings.EqualFold(*dbDriver, "mysql") || strings.EqualFold(*dbDriver, "mariadb"):
-		log.Printf("vacuum: no-op on MySQL/MariaDB — there is no database-wide VACUUM; use OPTIMIZE TABLE per table if needed")
-	default:
-		log.Printf("vacuum: ran VACUUM (took %s) — Postgres/CockroachDB/Neon reclaim space in place, not via file rebuild, so no size delta is reported", time.Since(start))
-	}
+	after := dbDiskSize(*dbPath)
+	log.Printf("vacuum: reclaimed %s (%s -> %s, took %s)",
+		formatBytes(before-after), formatBytes(before), formatBytes(after), time.Since(start))
 	return nil
 }
 
@@ -229,19 +241,18 @@ func dbDiskSize(path string) int64 {
 // export without one.
 func runConfig(args []string, stdin io.Reader, stdout io.Writer) error {
 	if len(args) == 0 || (args[0] != "export" && args[0] != "import") {
-		return errors.New("usage: palisade config export [--out file] | import [--replace] file (plus --db, --db-driver, --db-key-file)")
+		return errors.New("usage: palisade config export [--out file] | import [--replace] file (plus --db, --db-key-file)")
 	}
 	cmd := args[0]
 	fs := flag.NewFlagSet("config "+cmd, flag.ContinueOnError)
-	dbPath := fs.String("db", "waf.db", "database path (sqlite) or DSN (mysql/postgres)")
-	dbDriver := fs.String("db-driver", "sqlite", "database driver: sqlite, mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)")
+	dbPath, dbDriver := dbFlags(fs)
 	keyFile := fs.String("db-key-file", "", "the server's key file: secrets are exported sealed under it, and sealed files need it to import")
 	out := fs.String("out", "", "export: write here instead of stdout (created 0600)")
 	replace := fs.Bool("replace", false, "import: empty the config tables first instead of refusing a database that has config")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
-	db, err := storage.OpenWithDriver(*dbDriver, *dbPath)
+	db, err := openDB(*dbDriver, *dbPath)
 	if err != nil {
 		return fmt.Errorf("db: %w", err)
 	}
@@ -317,7 +328,7 @@ func formatBytes(n int64) string {
 	}
 }
 
-// readLine reads the one stdin line setup and build-dsn take a password from.
+// readLine reads the one stdin line setup takes a password from.
 func readLine(r io.Reader) string {
 	s := bufio.NewScanner(r)
 	s.Scan()
@@ -333,8 +344,7 @@ func readLine(r io.Reader) string {
 // Password is read from stdin (one line).
 func runSetup(args []string, stdin io.Reader) error {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
-	dbPath := fs.String("db", "waf.db", "database path (sqlite) or DSN (mysql/postgres)")
-	dbDriver := fs.String("db-driver", "sqlite", "database driver: sqlite, mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)")
+	dbPath, dbDriver := dbFlags(fs)
 	adminEmail := fs.String("admin-email", "", "admin email address")
 	domain := fs.String("domain", "", "primary domain for ACME (Let's Encrypt)")
 	acmeEmail := fs.String("acme-email", "", "ACME contact email (defaults to admin email)")
@@ -351,7 +361,7 @@ func runSetup(args []string, stdin io.Reader) error {
 		return errors.New("password cannot be empty")
 	}
 
-	db, err := storage.OpenWithDriver(*dbDriver, *dbPath)
+	db, err := openDB(*dbDriver, *dbPath)
 	if err != nil {
 		return fmt.Errorf("db: %w", err)
 	}
@@ -451,42 +461,6 @@ func writePEM(path string, perm os.FileMode, typ string, der []byte) error {
 		return err
 	}
 	return f.Close()
-}
-
-// runBuildDSN prints a dialect-correct DSN built from individual fields —
-// a thin CLI wrapper around storage.BuildDSN so deploy/install.sh (and anyone
-// else scripting a MySQL/Postgres connection string) doesn't have to
-// hand-roll escaping in shell for a password containing ":"/"@"/"/", which
-// would silently corrupt a naive concatenation. Mirrors the admin Settings
-// page's "Database connection" card, which calls the same storage.BuildDSN.
-// The password is read from stdin (one line, empty allowed for passwordless
-// accounts), never a flag — an argv value is visible to every local user in
-// /proc/<pid>/cmdline and lands in shell history. The prompt goes to stderr
-// so it never contaminates the captured stdout the DSN is printed to.
-// Invoked as: printf '%s\n' "$PASSWORD" | palisade build-dsn --driver ...
-func runBuildDSN(args []string, stdin io.Reader, stdout io.Writer) error {
-	fs := flag.NewFlagSet("build-dsn", flag.ContinueOnError)
-	driver := fs.String("driver", "", "database driver: mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)")
-	host := fs.String("host", "", "database host: hostname, IP, or Docker service name")
-	port := fs.String("port", "", "database port (defaults: mysql 3306, postgres 5432)")
-	username := fs.String("username", "", "database username")
-	dbname := fs.String("dbname", "", "database name")
-	sslmode := fs.String("sslmode", "", "mysql: true/false/skip-verify/preferred; postgres: disable/allow/prefer/require/verify-ca/verify-full")
-	extra := fs.String("extra", "", "extra DSN parameters as key=value&key2=value2")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	fmt.Fprint(os.Stderr, "Database password (empty if none): ")
-	dsn, err := storage.BuildDSN(storage.DBConnFields{
-		Driver: *driver, Host: *host, Port: *port, Username: *username,
-		Password: readLine(stdin), DBName: *dbname, SSLMode: *sslmode, Extra: *extra,
-	})
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(stdout, dsn)
-	return err
 }
 
 func splitCSV(s string) []string {

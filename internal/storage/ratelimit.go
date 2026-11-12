@@ -21,7 +21,7 @@ func (db *DB) SaveRateLimitState(states []ratelimit.BucketState) error {
 	if _, err := tx.ExecContext(context.Background(), `DELETE FROM rate_state`); err != nil {
 		return err
 	}
-	stmt, err := tx.PrepareContext(context.Background(), db.conn.Rebind(`INSERT INTO rate_state (ip, tokens, last_refill) VALUES (?, ?, ?)`))
+	stmt, err := tx.PrepareContext(context.Background(), `INSERT INTO rate_state (ip, tokens, last_refill) VALUES (?, ?, ?)`)
 	if err != nil {
 		return err
 	}

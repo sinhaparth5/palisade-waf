@@ -45,8 +45,6 @@ const secretPrefix = "enc:v1:"
 var secretMetaKeys = []string{
 	"challenge_secret",
 	"email_token",
-	"db_conn_password",
-	"db_conn_dsn",
 	"captcha_secret",
 	"threatintel_api_keys",
 	"sso_client_secret",

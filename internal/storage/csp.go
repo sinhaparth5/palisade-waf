@@ -18,7 +18,7 @@ func (db *DB) SetServiceCSP(id int, policy string) error {
 		_, err := db.exec(`DELETE FROM service_csp WHERE service_id = ?`, id)
 		return err
 	}
-	_, err := db.exec(db.dialect.upsertUpdate("service_csp", []string{"service_id", "policy"}, "?, ?",
+	_, err := db.exec(upsertUpdate("service_csp", []string{"service_id", "policy"}, "?, ?",
 		[]string{"service_id"}, []string{"policy"}), id, policy)
 	return err
 }
@@ -45,7 +45,7 @@ func (db *DB) ListServiceCSP() (map[int]string, error) {
 // AddCSPScript records a script source for a service and reports whether it
 // was new.
 func (db *DB) AddCSPScript(id int, s CSPScript) (bool, error) {
-	res, err := db.exec(db.dialect.upsertIgnore("csp_scripts", []string{"service_id", "origin", "page", "first_seen"}, "?, ?, ?, ?",
+	res, err := db.exec(upsertIgnore("csp_scripts", []string{"service_id", "origin", "page", "first_seen"}, "?, ?, ?, ?",
 		[]string{"service_id", "origin"}), id, s.Origin, s.Page, s.FirstSeen)
 	if err != nil {
 		return false, err
@@ -74,7 +74,7 @@ func (db *DB) ListCSPScripts() (map[int][]CSPScript, error) {
 	return out, rows.Err()
 }
 
-func migrateServiceCSPTable(source, target *DB, _ bool) (int, error) {
+func migrateServiceCSPTable(source, target *DB) (int, error) {
 	policies, err := source.ListServiceCSP()
 	if err != nil {
 		return 0, err
@@ -89,7 +89,7 @@ func migrateServiceCSPTable(source, target *DB, _ bool) (int, error) {
 	return n, nil
 }
 
-func migrateCSPScriptsTable(source, target *DB, _ bool) (int, error) {
+func migrateCSPScriptsTable(source, target *DB) (int, error) {
 	all, err := source.ListCSPScripts()
 	if err != nil {
 		return 0, err
@@ -171,7 +171,7 @@ func (db *DB) ListCSPEnforcement() (map[int]CSPEnforcement, error) {
 	return out, ids.Err()
 }
 
-func migrateCSPApprovedTable(source, target *DB, _ bool) (int, error) {
+func migrateCSPApprovedTable(source, target *DB) (int, error) {
 	all, err := source.ListCSPEnforcement()
 	if err != nil {
 		return 0, err
@@ -188,7 +188,7 @@ func migrateCSPApprovedTable(source, target *DB, _ bool) (int, error) {
 	return n, nil
 }
 
-func migrateCSPEnforceTable(source, target *DB, _ bool) (int, error) {
+func migrateCSPEnforceTable(source, target *DB) (int, error) {
 	all, err := source.ListCSPEnforcement()
 	if err != nil {
 		return 0, err

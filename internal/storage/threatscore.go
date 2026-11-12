@@ -37,7 +37,7 @@ func (db *DB) UpsertIPThreatScore(s IPThreatScore) error {
 	cols := []string{"ip", "total_score", "autoban_score", "bot_score", "asn_score", "geo_score", "ja4_score", "updated_at"}
 	updateCols := []string{"total_score", "autoban_score", "bot_score", "asn_score", "geo_score", "ja4_score", "updated_at"}
 	_, err := db.exec(
-		db.dialect.upsertUpdate("ip_threat_scores", cols, "?, ?, ?, ?, ?, ?, ?, ?", []string{"ip"}, updateCols),
+		upsertUpdate("ip_threat_scores", cols, "?, ?, ?, ?, ?, ?, ?, ?", []string{"ip"}, updateCols),
 		s.IP, s.Total, s.AutobanScore, s.BotScore, s.ASNScore, s.GeoScore, s.JA4Score, s.UpdatedAt.UTC(),
 	)
 	return err
@@ -102,48 +102,17 @@ func (db *DB) GetIPThreatScores(ips []string) (map[string]int, error) {
 // blocked traffic across many IPs/connections — the ja4 package's own store
 // is connection-scoped and forgets fingerprints as soon as the connection
 // closes.
-// bumpJA4ReputationSQL returns the dialect-specific "INSERT ... increment on
-// conflict" statement for BumpJA4Reputation. Unlike every other upsert in
-// this file (a plain "replace with the newly-inserted value", handled
-// generically by dialect.upsertUpdate), this one increments the *existing*
-// row's columns — which needs a different clause per dialect: MySQL's
-// "ON DUPLICATE KEY UPDATE" allows a bare "hits = hits + 1" (unqualified
-// column names there refer to the existing row; VALUES(col) refers to the
-// proposed one), and so does SQLite's "ON CONFLICT DO UPDATE SET". Postgres
-// alone requires the existing-row reference to be qualified with the table
-// name — "hits = hits + 1" is rejected as "ambiguous" (confirmed
-// empirically against a live Postgres instance, not assumed), needing
-// "hits = ja4_reputation.hits + 1" instead.
-func bumpJA4ReputationSQL(d dialect) string {
-	switch d.name {
-	case "mysql":
-		return `INSERT INTO ja4_reputation (ja4, hits, blocked_hits, last_seen) VALUES (?, 1, ?, ?)
-		 ON DUPLICATE KEY UPDATE
-		   hits = hits + 1,
-		   blocked_hits = blocked_hits + ?,
-		   last_seen = VALUES(last_seen)`
-	case "postgres":
-		return `INSERT INTO ja4_reputation (ja4, hits, blocked_hits, last_seen) VALUES (?, 1, ?, ?)
-		 ON CONFLICT(ja4) DO UPDATE SET
-		   hits = ja4_reputation.hits + 1,
-		   blocked_hits = ja4_reputation.blocked_hits + ?,
-		   last_seen = excluded.last_seen`
-	default:
-		return `INSERT INTO ja4_reputation (ja4, hits, blocked_hits, last_seen) VALUES (?, 1, ?, ?)
-		 ON CONFLICT(ja4) DO UPDATE SET
-		   hits = hits + 1,
-		   blocked_hits = blocked_hits + ?,
-		   last_seen = excluded.last_seen`
-	}
-}
-
 func (db *DB) BumpJA4Reputation(ja4 string, blocked bool) (hits, blockedHits int, err error) {
 	blockedInc := 0
 	if blocked {
 		blockedInc = 1
 	}
 	_, err = db.exec(
-		bumpJA4ReputationSQL(db.dialect),
+		`INSERT INTO ja4_reputation (ja4, hits, blocked_hits, last_seen) VALUES (?, 1, ?, ?)
+		 ON CONFLICT(ja4) DO UPDATE SET
+		   hits = hits + 1,
+		   blocked_hits = blocked_hits + ?,
+		   last_seen = excluded.last_seen`,
 		ja4, blockedInc, time.Now().UTC(), blockedInc,
 	)
 	if err != nil {

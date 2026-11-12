@@ -181,7 +181,7 @@ func TestHashSessionTokensMigration(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := db.exec(`INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)`, raw, uid, now)
 	mustNoErr(t, err)
-	_, err = db.exec(`DELETE FROM meta WHERE `+db.dialect.quoteIdent("key")+` = ?`, metaKeySessionsHashed)
+	_, err = db.exec(`DELETE FROM meta WHERE key = ?`, metaKeySessionsHashed)
 	mustNoErr(t, err)
 
 	for range 2 { // the second run must be a no-op

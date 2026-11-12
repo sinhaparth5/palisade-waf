@@ -174,11 +174,11 @@ func (db *DB) ReplaceThreatIntelIPs(sourceID int64, ips []string) error {
 		return err
 	}
 	defer tx.Rollback() //nolint
-	if _, err := tx.ExecContext(context.Background(), db.conn.Rebind(`DELETE FROM threat_intel_ips WHERE source_id = ?`), sourceID); err != nil {
+	if _, err := tx.ExecContext(context.Background(), `DELETE FROM threat_intel_ips WHERE source_id = ?`, sourceID); err != nil {
 		return err
 	}
-	insertStmt := db.dialect.upsertIgnore("threat_intel_ips", []string{"source_id", "ip"}, "?, ?", []string{"source_id", "ip"})
-	stmt, err := tx.PrepareContext(context.Background(), db.conn.Rebind(insertStmt))
+	insertStmt := upsertIgnore("threat_intel_ips", []string{"source_id", "ip"}, "?, ?", []string{"source_id", "ip"})
+	stmt, err := tx.PrepareContext(context.Background(), insertStmt)
 	if err != nil {
 		return err
 	}

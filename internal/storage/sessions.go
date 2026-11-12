@@ -108,24 +108,35 @@ func (db *DB) hashSessionTokens() error {
 	if v, err := db.getMeta(metaKeySessionsHashed); err != nil || v != "" {
 		return err
 	}
-	var tokens []string
-	if err := db.conn.Select(&tokens, `SELECT token FROM sessions`); err != nil {
+	rows, err := db.query(`SELECT token FROM sessions`)
+	if err != nil {
 		return err
 	}
-	tx, err := db.conn.Beginx()
+	defer rows.Close()
+	var tokens []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return err
+		}
+		tokens = append(tokens, t)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	tx, err := db.conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after Commit
 	for _, t := range tokens {
-		if _, err := tx.ExecContext(context.Background(), tx.Rebind(`UPDATE sessions SET token = ? WHERE token = ?`), SessionID(t), t); err != nil {
+		if _, err := tx.ExecContext(context.Background(), `UPDATE sessions SET token = ? WHERE token = ?`, SessionID(t), t); err != nil {
 			return err
 		}
 	}
-	keyCol := db.dialect.quoteIdent("key")
-	if _, err := tx.ExecContext(context.Background(), tx.Rebind(
-		db.dialect.upsertUpdate("meta", []string{keyCol, "value"}, "?, ?", []string{keyCol}, []string{"value"}),
-	), metaKeySessionsHashed, "1"); err != nil {
+	if _, err := tx.ExecContext(context.Background(),
+		upsertUpdate("meta", []string{"key", "value"}, "?, ?", []string{"key"}, []string{"value"}),
+		metaKeySessionsHashed, "1"); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -219,9 +230,7 @@ func (db *DB) TouchSession(id string) error {
 // ListSessions returns the user's session rows for the Settings page's
 // "Registered devices" card: the live session first (which, given one live
 // session per user is enforced at login, is the caller's own device), then
-// signed-out devices newest first. Ordering on the boolean is portable
-// across all three dialects — SQLite and MySQL yield 1/0, Postgres a real
-// boolean, and DESC puts true first in every case. Without it, two logins
+// signed-out devices newest first. Without the boolean order, two logins
 // landing in the same RFC3339 second could list the current device below a
 // dead one.
 func (db *DB) ListSessions(uid int64) ([]Session, error) {

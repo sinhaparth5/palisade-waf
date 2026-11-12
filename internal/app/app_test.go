@@ -50,7 +50,7 @@ func TestRunVersionAndHelp(t *testing.T) {
 	if out, err := run([]string{"--version"}, ""); err != nil || out != "palisade v9.9.9\n" {
 		t.Errorf("version = %q, %v", out, err)
 	}
-	for _, cmd := range []string{"prune", "setup", "gencert", "build-dsn", "healthcheck"} {
+	for _, cmd := range []string{"prune", "setup", "gencert", "healthcheck"} {
 		if _, err := run([]string{cmd, "-h"}, ""); !errors.Is(err, flag.ErrHelp) {
 			t.Errorf("%s -h = %v, want flag.ErrHelp", cmd, err)
 		}
@@ -136,13 +136,19 @@ func TestSetup(t *testing.T) {
 	}
 }
 
-func TestBuildDSN(t *testing.T) {
-	out, err := run([]string{"build-dsn", "--driver", "postgres", "--host", "db", "--username", "u", "--dbname", "waf"}, "p@ss:/w\n")
-	if err != nil || !strings.HasPrefix(out, "postgres://u:p%40ss%3A%2Fw@db:5432/waf") {
-		t.Errorf("dsn = %q, %v", out, err)
-	}
-	if _, err := run([]string{"build-dsn", "--driver", "oracle"}, "\n"); err == nil {
-		t.Error("unknown driver accepted")
+// MySQL/Postgres setups (#300) fail with the migration path, not a
+// half-working open.
+func TestRemovedDBBackends(t *testing.T) {
+	for _, args := range [][]string{
+		{"prune", "--db-driver", "mysql"},
+		{"config", "export", "--db-driver", "postgres"},
+		{"prune", "--db", "postgres://u:p@db:5432/waf?sslmode=require"},
+		{"prune", "--db", "u:p@tcp(db:3306)/waf"},
+		{"prune", "--db", "u@unix(/run/mysqld.sock)/waf"},
+	} {
+		if _, err := run(args, ""); !errors.Is(err, errNoExternalDB) {
+			t.Errorf("%v: err = %v, want errNoExternalDB", args, err)
+		}
 	}
 }
 
@@ -174,9 +180,6 @@ func TestPrune(t *testing.T) {
 		if _, err := run(append([]string{"prune", "--db", path}, args...), ""); err != nil {
 			t.Errorf("%v: %v", args, err)
 		}
-	}
-	if _, err := run([]string{"prune", "--db-driver", "nosuch"}, ""); err == nil {
-		t.Error("unknown driver accepted")
 	}
 
 	db, err := storage.Open(path)

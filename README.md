@@ -14,7 +14,7 @@
 **Palisade** is a web application firewall you can `scp` to a server: a WAF and reverse proxy in a single Go binary, built on [OWASP Coraza](https://github.com/corazawaf/coraza) and the OWASP Core Rule Set, with a built-in admin dashboard. It uses one binary, one SQLite file, CLI flags for bootstrap settings, and dashboard-managed runtime settings. There is no config file, external database, or Node toolchain. Docker is available for local development but is not required.
 
 <div align="center">
-  <img src="static/waf-flow-diagram.png" alt="Request flow: Client to Palisade WAF + Proxy to Backend App(s), with the config and logs database (SQLite, MySQL or Postgres) and the Admin Dashboard attached" width="760">
+  <img src="static/waf-flow-diagram.png" alt="Request flow: Client to Palisade WAF + Proxy to Backend App(s), with the SQLite config and logs database and the Admin Dashboard attached" width="760">
 </div>
 
 ## Features
@@ -56,6 +56,17 @@ curl -fsSL https://waf-install.astrareconslabs.com/palisade-waf/install.sh | sud
 ```
 
 The installer detects the existing binary at `/usr/local/bin/palisade` and switches to upgrade mode. It downloads and verifies the latest release, replaces the binary, rewrites the systemd units, and restarts the service. It skips the interactive prompts. Admin credentials and TLS certificates are never touched on upgrade. Pin a specific version with `curl -fsSL ... | sudo PALISADE_VERSION=v2.5.1 bash`.
+
+**MySQL and Postgres are no longer supported; Palisade stores everything in SQLite.** The installer moves an install that ran on one of them: before replacing the binary it runs `palisade config export` with the old one, then imports the file into `/var/lib/palisade/waf.db`. Services, rules, users, API keys and settings come across. The request log does not, and the old database is left untouched. Releases before v3.2.5 have no `config export`, so upgrade those to v3.2.7 first (`PALISADE_VERSION=v3.2.7`). Without the installer, run the same two steps yourself:
+
+```bash
+# with the previous release, against the old database
+palisade config export --db-driver postgres --db 'postgres://...' --db-key-file /etc/palisade/db.key --out config.json
+# with this release
+palisade config import --db /var/lib/palisade/waf.db --db-key-file /etc/palisade/db.key config.json
+```
+
+Then drop `--db-driver` and point `--db` at the SQLite file. A MySQL or Postgres `--db-driver` or connection string now fails at startup with these steps.
 
 **Versions before v2.5.1 are deprecated.** The installer only installs v2.5.1 or later, and it no longer migrates old Coraza WAF Mod (`coraza-waf-mod`) installs. To move one of those to Palisade, run the v2.5.1 installer once: `curl -fsSL https://raw.githubusercontent.com/sinhaparth5/palisade-waf/v2.5.1/deploy/install.sh | sudo bash`.
 

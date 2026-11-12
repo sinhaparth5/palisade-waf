@@ -31,7 +31,7 @@ Walk the diff with these questions. Flag anything you can't answer from the code
 - Does the change widen a bypass (open paths, challenge exemptions, trusted crawlers, verdict cache key)?
 
 **Data and upgrades**
-- Does the query work on SQLite, MySQL **and** Postgres? (`Rebind`, reserved words, no SQLite date functions, `time.Time` scans.)
+- Does the query avoid SQLite date functions on stored timestamps and scan them as `time.Time`?
 - Does an existing database upgrade cleanly? Can a rolled-back binary still read it?
 - Does a new action string break exact-match consumers (autoban, webhooks, stats, toasts)? Use prefix matches.
 

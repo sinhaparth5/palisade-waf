@@ -53,8 +53,7 @@ func (db *DB) SetAcmeEmail(email string) error { return db.setMeta("acme_email",
 
 func (db *DB) getMeta(key string) (string, error) {
 	var v string
-	query := fmt.Sprintf(`SELECT value FROM meta WHERE %s = ?`, db.dialect.quoteIdent("key"))
-	err := db.queryRow(query, key).Scan(&v)
+	err := db.queryRow(`SELECT value FROM meta WHERE key = ?`, key).Scan(&v)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -62,9 +61,8 @@ func (db *DB) getMeta(key string) (string, error) {
 }
 
 func (db *DB) setMeta(key, value string) error {
-	keyCol := db.dialect.quoteIdent("key")
 	_, err := db.exec(
-		db.dialect.upsertUpdate("meta", []string{keyCol, "value"}, "?, ?", []string{keyCol}, []string{"value"}),
+		upsertUpdate("meta", []string{"key", "value"}, "?, ?", []string{"key"}, []string{"value"}),
 		key, value,
 	)
 	return err

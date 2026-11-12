@@ -34,7 +34,7 @@ func (g ServiceGate) MaintenanceActive(now time.Time) bool {
 func (g ServiceGate) IdleMins() int { return g.IdleSecs / 60 }
 
 // gateTime stores a schedule bound as RFC 3339 text, "" for none: TEXT keeps
-// the zero value out of every dialect's DATETIME range checks.
+// the zero value out of DATETIME comparisons.
 func gateTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
@@ -53,7 +53,7 @@ const gateColumns = `maintenance, maint_message, maint_start, maint_end, bypass_
 func (db *DB) SetServiceGate(id int, g ServiceGate) error {
 	cols := []string{"service_id", "maintenance", "maint_message", "maint_start", "maint_end", "bypass_token",
 		"waiting_room", "wr_max", "wr_idle", "wr_message", "wr_crawlers"}
-	_, err := db.exec(db.dialect.upsertUpdate("service_gate", cols, placeholders(len(cols)), []string{"service_id"}, cols[1:]),
+	_, err := db.exec(upsertUpdate("service_gate", cols, placeholders(len(cols)), []string{"service_id"}, cols[1:]),
 		id, boolToInt(g.Maintenance), g.MaintMsg, gateTime(g.MaintStart), gateTime(g.MaintEnd), g.BypassToken,
 		boolToInt(g.WaitingRoom), g.MaxActive, g.IdleSecs, g.WaitMsg, g.Crawlers)
 	return err
@@ -81,7 +81,7 @@ func (db *DB) ListServiceGates() (map[int]ServiceGate, error) {
 	return out, rows.Err()
 }
 
-func migrateServiceGateTable(source, target *DB, _ bool) (int, error) {
+func migrateServiceGateTable(source, target *DB) (int, error) {
 	gates, err := source.ListServiceGates()
 	if err != nil {
 		return 0, err

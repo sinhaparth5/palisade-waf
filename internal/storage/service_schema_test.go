@@ -76,7 +76,7 @@ func TestSetServiceSchemaNormalizesUnknownMode(t *testing.T) {
 }
 
 // TestServiceOpenAPIRoundtrip covers the service_openapi table (issue #190),
-// including a spec past MySQL's 64 KiB TEXT limit and cleanup on removal.
+// including a spec over 64 KiB and cleanup on removal.
 func TestServiceOpenAPIRoundtrip(t *testing.T) {
 	db := openTestDB(t)
 	if err := db.AddService("api", "api.example.com", "", "http://127.0.0.1:3000", 0, 0); err != nil {

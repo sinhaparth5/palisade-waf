@@ -303,7 +303,7 @@ func (db *DB) SetServiceOpenAPI(id int, spec, mode string) error {
 	if !serviceSchemaModes[mode] {
 		mode = "off"
 	}
-	_, err := db.exec(db.dialect.upsertUpdate("service_openapi", []string{"service_id", "spec", "mode"}, "?, ?, ?",
+	_, err := db.exec(upsertUpdate("service_openapi", []string{"service_id", "spec", "mode"}, "?, ?, ?",
 		[]string{"service_id"}, []string{"spec", "mode"}), id, spec, mode)
 	return err
 }
@@ -377,7 +377,7 @@ func (db *DB) SetServiceMTLS(id int, m ServiceMTLS) error {
 	if m.Mode != "optional" && m.Mode != "required" {
 		m.Mode = "off"
 	}
-	_, err := db.exec(db.dialect.upsertUpdate("service_mtls", []string{"service_id", "mode", "ca_path", "allow_list"}, "?, ?, ?, ?",
+	_, err := db.exec(upsertUpdate("service_mtls", []string{"service_id", "mode", "ca_path", "allow_list"}, "?, ?, ?, ?",
 		[]string{"service_id"}, []string{"mode", "ca_path", "allow_list"}), id, m.Mode, m.CAPath, m.Allow)
 	return err
 }
@@ -417,7 +417,7 @@ func (db *DB) SetServiceMCP(id int, m ServiceMCP) error {
 		_, err := db.exec(`DELETE FROM service_mcp WHERE service_id = ?`, id)
 		return err
 	}
-	_, err := db.exec(db.dialect.upsertUpdate("service_mcp", []string{"service_id", "mode", "path", "origins", "methods", "tools"}, "?, ?, ?, ?, ?, ?",
+	_, err := db.exec(upsertUpdate("service_mcp", []string{"service_id", "mode", "path", "origins", "methods", "tools"}, "?, ?, ?, ?, ?, ?",
 		[]string{"service_id"}, []string{"mode", "path", "origins", "methods", "tools"}), id, m.Mode, m.Path, m.Origins, m.Methods, m.Tools)
 	return err
 }
@@ -449,7 +449,7 @@ func (db *DB) SetServiceRateRules(id int, rules string) error {
 		return err
 	}
 	cols := []string{"service_id", "rules"}
-	_, err := db.exec(db.dialect.upsertUpdate("service_rate_rules", cols, "?, ?", []string{"service_id"}, cols[1:]), id, rules)
+	_, err := db.exec(upsertUpdate("service_rate_rules", cols, "?, ?", []string{"service_id"}, cols[1:]), id, rules)
 	return err
 }
 
@@ -491,7 +491,7 @@ func (db *DB) SetServiceJWT(id int, j ServiceJWT) error {
 		return err
 	}
 	cols := []string{"service_id", "mode", "jwks_url", "public_key", "issuer", "audience", "algorithms", "prefixes"}
-	_, err := db.exec(db.dialect.upsertUpdate("service_jwt", cols, "?, ?, ?, ?, ?, ?, ?, ?", []string{"service_id"}, cols[1:]),
+	_, err := db.exec(upsertUpdate("service_jwt", cols, "?, ?, ?, ?, ?, ?, ?, ?", []string{"service_id"}, cols[1:]),
 		id, j.Mode, j.JWKSURL, j.PublicKey, j.Issuer, j.Audience, j.Algorithms, j.Prefixes)
 	return err
 }

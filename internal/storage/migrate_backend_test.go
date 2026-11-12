@@ -7,16 +7,10 @@ import (
 	"time"
 )
 
-// TestMigrateConfigTo populates a fresh SQLite source across every migrated
-// table (services, IP/geo rules, certificates, API keys, WAF rule
-// overrides, threat-intel sources + synced IPs, webhook config, IP threat
-// scores, JA4 reputation, and meta/settings) and migrates it into whatever
-// backend openTestDB targets — plain SQLite by default (TEST_DB_DRIVER
-// unset), or a live MySQL/Postgres container in CI (TEST_DB_DRIVER set, see
-// ci.yml's test-external-db job). Confirms row counts, preserved primary
-// keys, and that the target's own auto-increment/identity sequence keeps
-// working for a normal insert made after the migration.
-func TestMigrateConfigTo(t *testing.T) {
+// TestMigrateConfigInto fills every config table in a source DB, copies it
+// into a fresh target and checks row counts, preserved primary keys, and
+// that the target's AUTOINCREMENT keeps working for a normal insert after.
+func TestMigrateConfigInto(t *testing.T) {
 	source, err := Open(filepath.Join(t.TempDir(), "source.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -116,10 +110,10 @@ func TestMigrateConfigTo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	targetDriver, targetDSN := testTargetDriverDSN(t)
-	report, err := source.MigrateConfigTo(targetDriver, targetDSN)
+	target := openTestDB(t)
+	report, err := source.migrateConfigInto(target)
 	if err != nil {
-		t.Fatalf("MigrateConfigTo: %v (partial report: %+v)", err, report)
+		t.Fatalf("migrateConfigInto: %v (partial report: %+v)", err, report)
 	}
 	for _, tr := range report.Tables {
 		if tr.Rows == 0 {
@@ -129,12 +123,6 @@ func TestMigrateConfigTo(t *testing.T) {
 	if report.TotalRows == 0 {
 		t.Fatal("expected some rows to migrate")
 	}
-
-	target, err := OpenWithDriver(targetDriver, targetDSN)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer target.Close()
 
 	svcs, err := target.ListServices()
 	if err != nil || len(svcs) != 1 || svcs[0].Name != "svc1" || !svcs[0].CacheEnabled || !svcs[0].AllowLargeJSUploads {
@@ -181,10 +169,10 @@ func TestMigrateConfigTo(t *testing.T) {
 	}
 }
 
-// TestMigrateConfigToSourceErrors: a config table the source can't read
+// TestMigrateConfigIntoSourceErrors: a config table the source can't read
 // stops the migration with that table's name, rather than reporting a
 // partial copy as success.
-func TestMigrateConfigToSourceErrors(t *testing.T) {
+func TestMigrateConfigIntoSourceErrors(t *testing.T) {
 	for _, step := range configSteps {
 		t.Run(step.table, func(t *testing.T) {
 			source, err := Open(filepath.Join(t.TempDir(), "source.db"))
@@ -192,10 +180,10 @@ func TestMigrateConfigToSourceErrors(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer source.Close()
-			if _, err := source.exec(`DROP TABLE ` + source.dialect.quoteIdent(step.table)); err != nil {
+			if _, err := source.exec(`DROP TABLE ` + step.table); err != nil {
 				t.Fatal(err)
 			}
-			_, err = source.MigrateConfigTo("sqlite", filepath.Join(t.TempDir(), "target.db"))
+			_, err = source.migrateConfigInto(openTestDB(t))
 			// Steps that read through a shared List (csp_approved and
 			// service_csp_enforce) may fail one step early; the table is
 			// still named in the error.
@@ -203,8 +191,5 @@ func TestMigrateConfigToSourceErrors(t *testing.T) {
 				t.Errorf("err = %v, want a failure naming %s", err, step.table)
 			}
 		})
-	}
-	if _, err := (&DB{}).MigrateConfigTo("nosuchdriver", "x"); err == nil {
-		t.Error("unknown target driver accepted")
 	}
 }

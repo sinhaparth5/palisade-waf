@@ -90,11 +90,11 @@ signal/mitigation packages, `internal/notify/` for outbound reporting) — see
   addresses, TLS binding, WAF rules dir, DB path, retention) are CLI flags —
   see `palisade --help` (defined in `serve`, `internal/app/serve.go`). All
   runtime knobs (bot protection, ACME email, per-service overrides,
-  etc.) are stored in the database (`meta` table / per-service columns, on
-  SQLite, MySQL or Postgres) and managed from the admin UI.
+  etc.) are stored in the SQLite database (`meta` table / per-service
+  columns) and managed from the admin UI.
 
 See [`CLAUDE.md`](CLAUDE.md) for the architecture rules (request pipeline,
-hot-reload pattern, storage dialects and date/time gotchas, Varnish cache,
+hot-reload pattern, storage and date/time gotchas, Varnish cache,
 etc.) before making non-trivial changes, and [`REVIEW.md`](REVIEW.md) for what
 reviewers check.
 

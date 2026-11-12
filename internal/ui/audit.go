@@ -23,7 +23,6 @@ var auditSkip = map[string]bool{
 	"POST /api/notifications/seen": true,
 	"POST /settings/webhook/test":  true,
 	"POST /settings/email/test":    true,
-	"POST /settings/dbconn/test":   true,
 	"POST /waf-rules/dry-run":      true,
 }
 

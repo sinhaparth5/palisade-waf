@@ -518,9 +518,6 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/settings/webhook/test", h.TestWebhook),
 		g.POST("/settings/email", h.SaveEmailSettings),
 		g.POST("/settings/email/test", h.TestEmailReport),
-		g.POST("/settings/dbconn", h.SaveDBConnConfig),
-		g.POST("/settings/dbconn/test", h.TestDBConnection),
-		g.POST("/settings/dbconn/migrate", h.MigrateDBConfig),
 		g.POST("/settings/api-keys", h.CreateAPIKey),
 		g.DELETE("/settings/api-keys/:id", h.DeleteAPIKey),
 		// POST, not GET: this streams the full DB (password hashes,
@@ -562,9 +559,8 @@ func (h *Handler) render(c *echo.Context, page string, data map[string]any) erro
 	if u := currentUser(c); u != nil {
 		data["UserEmail"], data["Role"] = u.Email, u.Role
 	}
-	// Shell chrome: sidebar status box and bottom status bar. Only the
-	// driver name, never the DSN (it can carry a password).
-	data["Version"], data["DBDriver"], data["WAFOn"] = h.cfg.Version, h.cfg.DB.Driver, h.cfg.WAF.Enabled
+	// Shell chrome: sidebar status box and bottom status bar.
+	data["Version"], data["WAFOn"] = h.cfg.Version, h.cfg.WAF.Enabled
 	// CSRF token for this session: picked up by hx-headers on <body> for all
 	// HTMX requests and by hidden _csrf inputs in plain HTML forms.
 	if _, ok := data["CSRF"]; !ok {

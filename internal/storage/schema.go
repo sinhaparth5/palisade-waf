@@ -1,49 +1,11 @@
 package storage
 
-import (
-	"fmt"
-	"regexp"
-)
-
-// mysqlTextDefault matches a quoted-string DEFAULT clause, e.g.
-// "DEFAULT ”" or "DEFAULT 'inherit'". Every DEFAULT in this schema on a
-// quoted string literal is on a TEXT column (INTEGER/REAL columns here only
-// ever default to bare numbers), so this is safe to apply blanket rather
-// than needing to track column types — see the comment on
-// mysqlWrapTextDefaults for why it's needed at all.
-var mysqlTextDefault = regexp.MustCompile(`DEFAULT '([^']*)'`)
-
-// mysqlWrapTextDefaults rewrites quoted-string DEFAULT clauses into MySQL's
-// parenthesized-expression-default form. MySQL rejects a plain
-// "TEXT ... DEFAULT ”" outright ("BLOB, TEXT, GEOMETRY or JSON column
-// can't have a default value") — confirmed empirically against mysql:8,
-// not assumed — unless the default is written as an expression, which
-// MySQL 8.0.13+ accepts if the literal is wrapped in parentheses:
-// "DEFAULT (”)". SQLite and Postgres both accept a plain quoted-string
-// default on a TEXT column natively and never need this rewrite.
-func mysqlWrapTextDefaults(stmt string) string {
-	return mysqlTextDefault.ReplaceAllString(stmt, "DEFAULT ('$1')")
-}
-
-// schemaStatements returns the ordered list of DDL statements that create
-// every table and index this application needs, rendered for db.dialect.
-// Each entry is executed as its own Exec call rather than one big
-// multi-statement string (the original single-Exec form this replaced):
-// only SQLite's driver executes several semicolon-separated statements in
-// one Exec call by default. MySQL requires the DSN param
-// multiStatements=true, and pgx's default extended-protocol query path
-// rejects a string containing more than one command outright — one
-// statement per Exec call works identically on all three without relying on
-// any driver-specific opt-in.
+// schemaStatements is every table and index, one statement per Exec.
 func (db *DB) schemaStatements() []string {
-	d := db.dialect
-	pk := d.autoIncrementPK()
-	ts := d.timestampType()
-
 	stmts := []string{
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS requests (
-			id           %s,
-			ts           %s NOT NULL,
+		`CREATE TABLE IF NOT EXISTS requests (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			ts           DATETIME NOT NULL,
 			app_name     TEXT NOT NULL,
 			real_ip      TEXT NOT NULL,
 			proxy_ip     TEXT NOT NULL DEFAULT '',
@@ -70,58 +32,44 @@ func (db *DB) schemaStatements() []string {
 			visitor_id   TEXT NOT NULL DEFAULT '',
 			bot_score    INTEGER NOT NULL DEFAULT 0,
 			cache_status TEXT NOT NULL DEFAULT ''
-		)`, pk, ts),
-		d.createIndexIfNotExists("idx_requests_ts", "requests", "ts"),
-		d.createIndexOnText("idx_requests_ip", "requests", "real_ip", 45),
-		d.createIndexIfNotExists("idx_requests_blocked", "requests", "blocked"),
-		d.createIndexOnText("idx_requests_app", "requests", "app_name", 191),
-		d.createIndexIfNotExists("idx_requests_blocked_ts", "requests", "blocked, ts"),
+		)`,
+		"CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests(ts)",
+		"CREATE INDEX IF NOT EXISTS idx_requests_ip ON requests(real_ip)",
+		"CREATE INDEX IF NOT EXISTS idx_requests_blocked ON requests(blocked)",
+		"CREATE INDEX IF NOT EXISTS idx_requests_app ON requests(app_name)",
+		"CREATE INDEX IF NOT EXISTS idx_requests_blocked_ts ON requests(blocked, ts)",
 
-		// app_name/ip/country_code are VARCHAR rather than TEXT here (and in
-		// every other table below with a PRIMARY KEY or UNIQUE constraint on
-		// a string column): MySQL cannot use a TEXT/BLOB column as a primary
-		// key or in a UNIQUE constraint at all — confirmed empirically
-		// against mysql:8 ("BLOB/TEXT column ... used in key specification
-		// without a key length") — while VARCHAR(n), having an inherent
-		// bounded length, works natively for this on all three dialects
-		// (SQLite ignores the length like it does every declared type;
-		// Postgres enforces it, same as it would for TEXT). Lengths are
-		// sized generously for their real content (45 covers the longest
-		// possible IPv6 literal, 255 is a conventional generic-identifier
-		// bound) rather than tightly, since unlike MySQL's index-only
-		// prefix-length trick (see createIndexOnText), this bound is a real
-		// storage constraint enforced on every insert.
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS ip_rules (
-			id         %s,
+		`CREATE TABLE IF NOT EXISTS ip_rules (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			app_name   VARCHAR(255) NOT NULL DEFAULT '',
 			ip         VARCHAR(45) NOT NULL,
 			rule_type  TEXT NOT NULL CHECK(rule_type IN ('block','allow')),
 			note       TEXT NOT NULL DEFAULT '',
-			created_at %s NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(app_name, ip)
-		)`, pk, ts),
+		)`,
 
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS geo_rules (
-			id           %s,
+		`CREATE TABLE IF NOT EXISTS geo_rules (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			app_name     VARCHAR(255) NOT NULL DEFAULT '',
 			country_code VARCHAR(8) NOT NULL,
 			rule_type    TEXT NOT NULL CHECK(rule_type IN ('block','allow')),
-			created_at   %s NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(app_name, country_code)
-		)`, pk, ts),
+		)`,
 
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS meta (
-			%s VARCHAR(255) PRIMARY KEY,
+		`CREATE TABLE IF NOT EXISTS meta (
+			key VARCHAR(255) PRIMARY KEY,
 			value TEXT NOT NULL
-		)`, d.quoteIdent("key")),
+		)`,
 
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS services (
-			id               %s,
+		`CREATE TABLE IF NOT EXISTS services (
+			id               INTEGER PRIMARY KEY AUTOINCREMENT,
 			name             VARCHAR(255) NOT NULL UNIQUE,
 			host             TEXT NOT NULL DEFAULT '',
 			prefix           TEXT NOT NULL DEFAULT '',
 			backend          TEXT NOT NULL,
-			created_at       %s NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			tls_mode         TEXT NOT NULL DEFAULT 'none',
 			tls_cert_path    TEXT NOT NULL DEFAULT '',
 			tls_key_path     TEXT NOT NULL DEFAULT '',
@@ -154,23 +102,22 @@ func (db *DB) schemaStatements() []string {
 			breach_fields    TEXT NOT NULL DEFAULT '',
 			response_inspect TEXT NOT NULL DEFAULT '',
 			cache_rules      TEXT NOT NULL DEFAULT ''
-		)`, pk, ts),
+		)`,
 
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS certificates (
-			id          %s,
+		`CREATE TABLE IF NOT EXISTS certificates (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
 			name        VARCHAR(255) NOT NULL UNIQUE,
 			domains     TEXT     NOT NULL DEFAULT '',
 			expires_at  TEXT     NOT NULL DEFAULT '',
 			cert_path   TEXT     NOT NULL DEFAULT '',
 			key_path    TEXT     NOT NULL DEFAULT '',
-			created_at  %s NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`, pk, ts),
+			created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 
-		// Admin accounts (issue #196), see users.go. email is VARCHAR so
-		// MySQL can put a UNIQUE index on it; the totp_* columns are the
-		// old admin_totp_* meta keys, per user.
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS admin_users (
-			id                  %s,
+		// Admin accounts (issue #196), see users.go. The totp_* columns are
+		// the old admin_totp_* meta keys, per user.
+		`CREATE TABLE IF NOT EXISTS admin_users (
+			id                  INTEGER PRIMARY KEY AUTOINCREMENT,
 			email               VARCHAR(255) NOT NULL UNIQUE,
 			password_hash       TEXT NOT NULL,
 			role                TEXT NOT NULL,
@@ -180,19 +127,19 @@ func (db *DB) schemaStatements() []string {
 			totp_backup_codes   TEXT NOT NULL DEFAULT '',
 			totp_last_counter   TEXT NOT NULL DEFAULT '',
 			webauthn_handle     TEXT NOT NULL DEFAULT '',
-			created_at          %s NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`, pk, ts),
+			created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 
 		// OIDC single sign-on (issue #197), see sso.go. Pending invites are
 		// deleted when used or revoked; an identity binds one user to the
 		// IdP's iss+sub.
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS admin_sso_invites (
-			id         %s,
+		`CREATE TABLE IF NOT EXISTS admin_sso_invites (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			email      VARCHAR(255) NOT NULL UNIQUE,
 			role       TEXT NOT NULL,
-			expires_at %s NOT NULL,
-			created_at %s NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`, pk, ts, ts),
+			expires_at DATETIME NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 		`CREATE TABLE IF NOT EXISTS admin_sso_identities (
 			user_id INTEGER PRIMARY KEY,
 			issuer  VARCHAR(255) NOT NULL,
@@ -202,11 +149,11 @@ func (db *DB) schemaStatements() []string {
 
 		// Password invites (issue #229), see users.go: one live set-password
 		// link per pending user, stored as the token's SHA-256.
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS admin_user_invites (
+		`CREATE TABLE IF NOT EXISTS admin_user_invites (
 			user_id    INTEGER PRIMARY KEY,
 			token_hash VARCHAR(64) NOT NULL UNIQUE,
-			expires_at %s NOT NULL
-		)`, ts),
+			expires_at DATETIME NOT NULL
+		)`,
 
 		// token is 32 random bytes hex-encoded (64 chars, see
 		// DB.CreateSession) — VARCHAR(64) fits exactly.
@@ -225,15 +172,15 @@ func (db *DB) schemaStatements() []string {
 		)`,
 
 		// key_hash is a SHA-256 hex digest (64 chars, see ui.CreateAPIKey).
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS api_keys (
-			id           %s,
+		`CREATE TABLE IF NOT EXISTS api_keys (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			name         TEXT NOT NULL,
 			key_prefix   TEXT NOT NULL,
 			key_hash     VARCHAR(64) NOT NULL UNIQUE,
 			read_only    INTEGER NOT NULL DEFAULT 0,
-			created_at   %s NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			last_used_at %s
-		)`, pk, ts, ts),
+			created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_used_at DATETIME
+		)`,
 
 		`CREATE TABLE IF NOT EXISTS rate_state (
 			ip          VARCHAR(45) PRIMARY KEY,
@@ -241,38 +188,33 @@ func (db *DB) schemaStatements() []string {
 			last_refill TEXT NOT NULL
 		)`,
 
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS waf_disabled_rules (
-			id         %s,
+		`CREATE TABLE IF NOT EXISTS waf_disabled_rules (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			rule_id    INTEGER NOT NULL UNIQUE,
 			reason     TEXT NOT NULL DEFAULT '',
-			created_at %s NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`, pk, ts),
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS waf_service_rule_exceptions (
-			id           %s,
+		`CREATE TABLE IF NOT EXISTS waf_service_rule_exceptions (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			service_name VARCHAR(255) NOT NULL,
 			rule_id      INTEGER NOT NULL,
 			reason       TEXT NOT NULL DEFAULT '',
-			created_at   %s NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(service_name, rule_id)
-		)`, pk, ts),
+		)`,
 
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS waf_custom_rules (
-			id           %s,
+		`CREATE TABLE IF NOT EXISTS waf_custom_rules (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			service_name VARCHAR(255) NOT NULL DEFAULT '',
 			rule         TEXT NOT NULL,
 			note         TEXT NOT NULL DEFAULT '',
 			enabled      INTEGER NOT NULL DEFAULT 1,
-			created_at   %s NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`, pk, ts),
+			created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 
-		// url is VARCHAR(768) rather than the 255 used for other identifier
-		// columns above: 768 chars * 4 bytes (utf8mb4) = 3072 bytes, MySQL's
-		// InnoDB max index key length with the default DYNAMIC row format —
-		// the largest a UNIQUE VARCHAR column can be there at all, needed
-		// headroom since a real block-list URL can be long.
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS threat_intel_sources (
-			id             %s,
+		`CREATE TABLE IF NOT EXISTS threat_intel_sources (
+			id             INTEGER PRIMARY KEY AUTOINCREMENT,
 			label          TEXT NOT NULL,
 			url            VARCHAR(768) NOT NULL UNIQUE,
 			interval_hours INTEGER NOT NULL DEFAULT 24,
@@ -280,8 +222,8 @@ func (db *DB) schemaStatements() []string {
 			last_synced_at TEXT NOT NULL DEFAULT '',
 			last_error     TEXT NOT NULL DEFAULT '',
 			ip_count       INTEGER NOT NULL DEFAULT 0,
-			created_at     %s NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`, pk, ts),
+			created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 
 		`CREATE TABLE IF NOT EXISTS threat_intel_ips (
 			source_id INTEGER NOT NULL,
@@ -297,9 +239,9 @@ func (db *DB) schemaStatements() []string {
 			events           TEXT    NOT NULL DEFAULT 'blocked,challenged',
 			destination_type TEXT    NOT NULL DEFAULT 'generic'
 		)`,
-		d.upsertIgnore("webhook_config", []string{"id"}, "1", []string{"id"}),
+		upsertIgnore("webhook_config", []string{"id"}, "1", []string{"id"}),
 
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS ip_threat_scores (
+		`CREATE TABLE IF NOT EXISTS ip_threat_scores (
 			ip            VARCHAR(45) PRIMARY KEY,
 			total_score   INTEGER NOT NULL DEFAULT 0,
 			autoban_score INTEGER NOT NULL DEFAULT 0,
@@ -307,18 +249,18 @@ func (db *DB) schemaStatements() []string {
 			asn_score     INTEGER NOT NULL DEFAULT 0,
 			geo_score     INTEGER NOT NULL DEFAULT 0,
 			ja4_score     INTEGER NOT NULL DEFAULT 0,
-			updated_at    %s NOT NULL
-		)`, ts),
+			updated_at    DATETIME NOT NULL
+		)`,
 
 		// ja4 fingerprints are a fixed ~36-char format (see ja4.Compute);
 		// VARCHAR(64) leaves headroom without needing to track the exact
 		// spec length here.
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS ja4_reputation (
+		`CREATE TABLE IF NOT EXISTS ja4_reputation (
 			ja4          VARCHAR(64) PRIMARY KEY,
 			hits         INTEGER NOT NULL DEFAULT 0,
 			blocked_hits INTEGER NOT NULL DEFAULT 0,
-			last_seen    %s NOT NULL
-		)`, ts),
+			last_seen    DATETIME NOT NULL
+		)`,
 
 		// Client-certificate policy per service (issue #191). The CA
 		// bundle itself lives on disk next to the service's TLS cert.
@@ -366,13 +308,13 @@ func (db *DB) schemaStatements() []string {
 			service_id INTEGER PRIMARY KEY,
 			policy     TEXT NOT NULL
 		)`,
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS csp_scripts (
+		`CREATE TABLE IF NOT EXISTS csp_scripts (
 			service_id INTEGER NOT NULL,
 			origin     VARCHAR(255) NOT NULL,
 			page       TEXT NOT NULL,
-			first_seen %s NOT NULL,
+			first_seen DATETIME NOT NULL,
 			PRIMARY KEY (service_id, origin)
-		)`, ts),
+		)`,
 
 		// Set-Cookie hardening per service (issue #281): a row means on;
 		// exempt is space-separated cookie names left alone.
@@ -418,26 +360,24 @@ func (db *DB) schemaStatements() []string {
 			wr_crawlers   VARCHAR(16) NOT NULL
 		)`,
 
-		// One OpenAPI document per service (issue #190). Its own table, not
-		// a services column, because a real spec easily outgrows MySQL's
-		// 64 KiB TEXT.
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS service_openapi (
+		// One OpenAPI document per service (issue #190).
+		`CREATE TABLE IF NOT EXISTS service_openapi (
 			service_id INTEGER PRIMARY KEY,
-			spec       %s NOT NULL,
+			spec       TEXT NOT NULL,
 			mode       VARCHAR(16) NOT NULL
-		)`, d.longTextType()),
+		)`,
 
 		// One row per false/true-positive mark an admin makes on a blocked
 		// request from the Logs page (issue #76). Append-only signal log, not
 		// upserted — GetWAFRuleSuggestions aggregates it per (service_name,
 		// rule_id) over a rolling window.
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS waf_rule_feedback (
-			id             %s,
+		`CREATE TABLE IF NOT EXISTS waf_rule_feedback (
+			id             INTEGER PRIMARY KEY AUTOINCREMENT,
 			service_name   VARCHAR(255) NOT NULL,
 			rule_id        INTEGER NOT NULL,
 			false_positive INTEGER NOT NULL,
-			created_at     %s NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`, pk, ts),
+			created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 
 		// One row per registered passkey (issue #78), owned by user_id.
 		// Unlike the single TOTP secret, a user normally
@@ -448,43 +388,29 @@ func (db *DB) schemaStatements() []string {
 		// it's opaque application data the library round-trips, never
 		// queried or filtered on in SQL, so decomposing it would only add
 		// risk of drifting from whatever fields a future library version adds.
-		//
-		// credential_id is VARCHAR(768), not TEXT, for the same reason as
-		// threat_intel_sources.url above: MySQL refuses UNIQUE/indexed TEXT
-		// columns outright ("BLOB/TEXT column ... used in key specification
-		// without a key length" — confirmed against a live mysql:8, not
-		// assumed), and 768 chars * 4 bytes (utf8mb4) = 3072 bytes is the
-		// largest a UNIQUE VARCHAR can be there at all. A base64url-encoded
-		// WebAuthn credential ID is comfortably under that in every
-		// authenticator seen in practice.
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS webauthn_credentials (
-			id            %s,
+		`CREATE TABLE IF NOT EXISTS webauthn_credentials (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id       INTEGER NOT NULL DEFAULT 0,
 			credential_id VARCHAR(768) NOT NULL UNIQUE,
 			data          TEXT NOT NULL,
 			name          TEXT NOT NULL DEFAULT '',
-			created_at    %s NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			last_used_at  TEXT NOT NULL DEFAULT ''
-		)`, pk, ts),
+		)`,
 
 		// Admin audit trail (issue #129): who changed what, from the admin
 		// UI or the REST API. Never holds secret values; see ui.auditLog.
-		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS audit_log (
-			id      %s,
-			ts      %s NOT NULL,
+		`CREATE TABLE IF NOT EXISTS audit_log (
+			id      INTEGER PRIMARY KEY AUTOINCREMENT,
+			ts      DATETIME NOT NULL,
 			actor   TEXT NOT NULL,
 			ip      TEXT NOT NULL DEFAULT '',
 			action  TEXT NOT NULL,
 			target  TEXT NOT NULL DEFAULT '',
 			summary TEXT NOT NULL DEFAULT ''
-		)`, pk, ts),
-		d.createIndexIfNotExists("idx_audit_log_ts", "audit_log", "ts"),
+		)`,
+		"CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(ts)",
 	}
 
-	if d.name == "mysql" {
-		for i, stmt := range stmts {
-			stmts[i] = mysqlWrapTextDefaults(stmt)
-		}
-	}
 	return stmts
 }

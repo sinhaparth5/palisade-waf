@@ -6,12 +6,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 // logQueueSize bounds how many request-log entries can be buffered waiting
@@ -36,8 +33,7 @@ const logBatchMax = 500
 const dropLogInterval = 5 * time.Second
 
 type DB struct {
-	conn          *sqlx.DB
-	dialect       dialect
+	conn          *sql.DB
 	logQueue      chan RequestLog // request path -> runLogWorker (in-memory hooks)
 	writeQueue    chan RequestLog // runLogWorker -> runLogWriter (batched inserts)
 	logDone       chan struct{}
@@ -131,37 +127,15 @@ type RequestLog struct {
 	Exempt bool `json:"-"`
 }
 
-// Open opens the default SQLite-backed store at path. It is a thin wrapper
-// around OpenWithDriver("sqlite", path) kept for backward compatibility with
-// every existing caller (internal/app's default bootstrap path, every storage
-// test) that only ever spoke SQLite before external-database support (issue
-// database-backends) was added — none of them need to change.
+// Open opens the SQLite store at path, creating and migrating it as needed.
 func Open(path string) (*DB, error) {
-	return OpenWithDriver("sqlite", path)
-}
-
-// OpenWithDriver opens a store against the given backend. driverName is one
-// of "sqlite" (default), "mysql" (also accepts "mariadb"), or "postgres"
-// (also accepts "postgresql", "cockroachdb"/"cockroach", or "neon" — all
-// four speak the Postgres wire protocol and share the same driver/dialect,
-// so there is no separate code path per provider, only DSN differences the
-// caller supplies). dsn is a plain SQLite file path for the sqlite dialect,
-// or a driver-appropriate connection string for the others (e.g.
-// "user:pass@tcp(host:3306)/dbname" for MySQL, "postgres://user:pass@host/db
-// ?sslmode=require" for Postgres/CockroachDB/Neon).
-func OpenWithDriver(driverName, dsn string) (*DB, error) {
-	d, err := resolveDialect(driverName)
-	if err != nil {
-		return nil, err
-	}
-	conn, err := d.openDB(dsn)
+	conn, err := openSQLite(path)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 
 	db := &DB{
 		conn:       conn,
-		dialect:    d,
 		logQueue:   make(chan RequestLog, logQueueSize),
 		writeQueue: make(chan RequestLog, logQueueSize),
 		logDone:    make(chan struct{}),
@@ -240,7 +214,7 @@ func (db *DB) runLogWriter() {
 }
 
 // insertRequestBatch stores batch in one transaction and sets each entry's
-// ID. If the transaction fails (Postgres aborts it on the first bad row) the
+// ID. If the transaction fails (one bad row aborts it) the
 // rows are retried one by one, so a single bad entry costs only itself.
 func (db *DB) insertRequestBatch(batch []RequestLog) {
 	if len(batch) > 1 && db.insertRequestTx(batch) == nil {
@@ -264,12 +238,9 @@ func (db *DB) insertRequestBatch(batch []RequestLog) {
 }
 
 // insertRequestTx is the batch path: one prepared INSERT run once per row
-// inside a single transaction, which keeps a real row id per entry on every
-// dialect.
-// ponytail: still one round trip per row on a remote database; a multi-row
-// VALUES insert if that is ever the bottleneck.
+// inside a single transaction, which keeps a real row id per entry.
 func (db *DB) insertRequestTx(batch []RequestLog) (err error) {
-	tx, err := db.conn.Beginx()
+	tx, err := db.conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
@@ -278,25 +249,16 @@ func (db *DB) insertRequestTx(batch []RequestLog) (err error) {
 			_ = tx.Rollback()
 		}
 	}()
-	q := insertRequestSQL
-	if db.dialect.name == "postgres" {
-		q += " RETURNING id"
-	}
-	stmt, err := tx.Preparex(db.conn.Rebind(q))
+	stmt, err := tx.PrepareContext(context.Background(), insertRequestSQL)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close() //nolint:errcheck // the transaction owns the statement
 	ids := make([]int64, len(batch))
 	for i := range batch {
-		args := insertRequestArgs(batch[i])
-		if db.dialect.name == "postgres" {
-			err = stmt.QueryRowContext(context.Background(), args...).Scan(&ids[i])
-		} else {
-			var res sql.Result
-			if res, err = stmt.ExecContext(context.Background(), args...); err == nil {
-				ids[i], err = res.LastInsertId()
-			}
+		var res sql.Result
+		if res, err = stmt.ExecContext(context.Background(), insertRequestArgs(batch[i])...); err == nil {
+			ids[i], err = res.LastInsertId()
 		}
 		if err != nil {
 			return err
@@ -351,39 +313,21 @@ func (db *DB) QueueDepth() int {
 	return len(db.logQueue) + len(db.writeQueue)
 }
 
-// exec, query, and queryRow are the rebinding equivalents of db.conn's own
-// Exec/Query/QueryRow. Every query in this package is written once against
-// "?" placeholders; sqlx.DB.Rebind translates that to the target dialect's
-// native placeholder syntax before the query reaches the driver — a no-op
-// for SQLite and MySQL (both accept "?" natively), but required for
-// Postgres, which only understands positional "$1, $2, ..." placeholders
-// and returns a syntax error on a literal "?". Centralizing the Rebind call
-// here means every existing call site written against "?" keeps working
-// unmodified across all three dialects instead of needing its own Rebind.
+// exec, query and queryRow run without a context, like every query here.
 func (db *DB) exec(query string, args ...any) (sql.Result, error) {
-	return db.conn.ExecContext(context.Background(), db.conn.Rebind(query), args...)
+	return db.conn.ExecContext(context.Background(), query, args...)
 }
 
 func (db *DB) query(query string, args ...any) (*sql.Rows, error) {
-	return db.conn.QueryContext(context.Background(), db.conn.Rebind(query), args...)
+	return db.conn.QueryContext(context.Background(), query, args...)
 }
 
 func (db *DB) queryRow(query string, args ...any) *sql.Row {
-	return db.conn.QueryRowContext(context.Background(), db.conn.Rebind(query), args...)
+	return db.conn.QueryRowContext(context.Background(), query, args...)
 }
 
 // insertReturningID runs an INSERT and returns the id of the new row.
-// SQLite and MySQL support this via the driver's LastInsertId(); Postgres
-// has no equivalent at the wire-protocol level, so an INSERT there must
-// instead append "RETURNING id" and read the new id back like any other
-// query result. Every call site's INSERT targets a table whose primary key
-// column is literally named "id".
 func (db *DB) insertReturningID(query string, args ...any) (int64, error) {
-	if db.dialect.name == "postgres" {
-		var id int64
-		err := db.queryRow(query+" RETURNING id", args...).Scan(&id)
-		return id, err
-	}
 	res, err := db.exec(query, args...)
 	if err != nil {
 		return 0, err
@@ -410,12 +354,8 @@ func (db *DB) Ping(ctx context.Context) error {
 	return db.conn.PingContext(ctx)
 }
 
-// schemaMigrations lists every idempotent "ALTER TABLE ... ADD COLUMN ..."
-// applied to an existing database on every startup, rendered per dialect via
-// dialect.addColumnIfNotExists. Table/column-def pairs, in the same order
-// they were historically added as a single hardcoded SQLite string each —
-// preserved here so a fresh database and an upgraded one converge on an
-// identical schema regardless of dialect.
+// schemaMigrations are the columns added after a table first shipped,
+// applied to an existing database on every startup.
 var schemaMigrations = []struct{ table, columnDef string }{
 	{"requests", "country TEXT NOT NULL DEFAULT ''"},
 	{"requests", "proxy_ip TEXT NOT NULL DEFAULT ''"},
@@ -477,29 +417,13 @@ var schemaMigrations = []struct{ table, columnDef string }{
 }
 
 func (db *DB) migrate() error {
-	// Idempotent column migration for existing databases. MySQL/Postgres
-	// use native "ADD COLUMN IF NOT EXISTS" (see addColumnIfNotExists) and
-	// so never actually error here; SQLite has no such clause and always
-	// errors with "duplicate column" once a column already exists — that
-	// error is expected and intentionally ignored on every startup after
-	// the first, exactly as the single hardcoded statements this loop
-	// replaced always did (each was itself an ignored, //nolint'd Exec).
+	// SQLite has no ADD COLUMN IF NOT EXISTS: once a column exists this
+	// fails with "duplicate column", which is expected and ignored.
 	for _, m := range schemaMigrations {
-		db.exec(db.dialect.addColumnIfNotExists(m.table, m.columnDef)) //nolint
+		db.exec("ALTER TABLE " + m.table + " ADD COLUMN " + m.columnDef) //nolint
 	}
 
 	for _, stmt := range db.schemaStatements() {
-		// CREATE INDEX statements are the one schemaStatements() entry not
-		// safely rerunnable on every dialect: MySQL's CREATE INDEX has no
-		// IF NOT EXISTS clause at all (see dialect.createIndexIfNotExists/
-		// createIndexOnText), so re-running migrate() against an existing
-		// MySQL database (e.g. every server restart) always errors
-		// "Duplicate key name" here — expected and ignored, the same
-		// swallow-the-error convention the ALTER TABLE loop above uses.
-		if strings.HasPrefix(stmt, "CREATE INDEX") {
-			db.exec(stmt) //nolint
-			continue
-		}
 		if _, err := db.exec(stmt); err != nil {
 			return fmt.Errorf("schema: %w", err)
 		}
@@ -513,7 +437,12 @@ func (db *DB) migrate() error {
 	}
 	// TypeSafe ASN classification was removed (#299): drop its stored API
 	// key and call log so neither lingers in the DB or a config export.
-	if _, err := db.exec(`DELETE FROM meta WHERE ` + db.dialect.quoteIdent("key") + ` IN ('typesafe_enabled', 'typesafe_api_key')`); err != nil {
+	if _, err := db.exec(`DELETE FROM meta WHERE key IN ('typesafe_enabled', 'typesafe_api_key')`); err != nil {
+		return err
+	}
+	// The Settings "Database connection" card was removed with MySQL and
+	// Postgres support (#300): drop its saved form, password and DSN included.
+	if _, err := db.exec(`DELETE FROM meta WHERE key LIKE 'db\_conn\_%' ESCAPE '\'`); err != nil {
 		return err
 	}
 	if _, err := db.exec(`DROP TABLE IF EXISTS typesafe_calls`); err != nil {
@@ -523,9 +452,8 @@ func (db *DB) migrate() error {
 	// Seed the notifications baseline at startup (not lazily on first access)
 	// so a block that happens before any admin page has ever been loaded
 	// still counts as "unread" instead of racing the lazy-init.
-	metaKeyCol := db.dialect.quoteIdent("key")
 	_, err := db.exec(
-		db.dialect.upsertIgnore("meta", []string{metaKeyCol, "value"}, "?, ?", []string{metaKeyCol}),
+		upsertIgnore("meta", []string{"key", "value"}, "?, ?", []string{"key"}),
 		metaKeyNotificationsSeenAt, time.Now().UTC().Format(time.RFC3339Nano),
 	)
 	return err

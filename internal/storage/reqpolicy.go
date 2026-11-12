@@ -17,7 +17,7 @@ func (db *DB) SetServiceRequestPolicy(id int, p RequestPolicy) error {
 		_, err := db.exec(`DELETE FROM service_request_policy WHERE service_id = ?`, id)
 		return err
 	}
-	_, err := db.exec(db.dialect.upsertUpdate("service_request_policy",
+	_, err := db.exec(upsertUpdate("service_request_policy",
 		[]string{"service_id", "mode", "methods", "content_types", "max_body_kib"}, "?, ?, ?, ?, ?",
 		[]string{"service_id"}, []string{"mode", "methods", "content_types", "max_body_kib"}),
 		id, p.Mode, strings.Join(p.Methods, " "), strings.Join(p.ContentTypes, " "), p.MaxBodyKiB)
@@ -45,7 +45,7 @@ func (db *DB) ListServiceRequestPolicies() (map[int]RequestPolicy, error) {
 	return out, rows.Err()
 }
 
-func migrateServiceRequestPolicyTable(source, target *DB, _ bool) (int, error) {
+func migrateServiceRequestPolicyTable(source, target *DB) (int, error) {
 	all, err := source.ListServiceRequestPolicies()
 	if err != nil {
 		return 0, err

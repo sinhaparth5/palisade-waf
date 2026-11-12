@@ -55,28 +55,6 @@ document.addEventListener('change', function (e) {
     if (ctl) ctl.classList.toggle('hidden', !t.checked);
   }
 
-  // Settings → Database connection: driver picker.
-  if (t.id === 'dbconn_driver') {
-    var v = t.value;
-    var byId = function (id) { return document.getElementById(id); };
-    byId('dbconn-external-fields').classList.toggle('hidden', v === 'sqlite');
-    byId('dbconn-test-row').classList.toggle('hidden', v === 'sqlite');
-    byId('dbconn-host-label').textContent = v === 'sqlite' ? 'Database file path' : 'Host';
-    byId('dbconn_host').placeholder = v === 'sqlite' ? 'waf.db' : 'db.example.com, 172.18.0.5, or a Docker service name like db';
-    byId('dbconn_port').placeholder = v === 'mysql' ? '3306' : '5432';
-    byId('dbconn_sslmode_mysql').classList.toggle('hidden', v !== 'mysql');
-    byId('dbconn_sslmode_mysql').disabled = (v !== 'mysql');
-    byId('dbconn_sslmode_postgres').classList.toggle('hidden', v !== 'postgres');
-    byId('dbconn_sslmode_postgres').disabled = (v !== 'postgres');
-  }
-
-  // Settings → Database connection: fields vs connection string.
-  if (t.name === 'dbconn_mode') {
-    var dsn = t.value === 'dsn';
-    document.getElementById('dbconn-dsn-field').classList.toggle('hidden', !dsn);
-    document.getElementById('dbconn-fields-group').classList.toggle('hidden', dsn);
-  }
-
   // Certificates: a file input with data-fills loads the file into that
   // textarea, and names the cert from the filename if the field is empty.
   if (t.type === 'file' && t.dataset.fills) {

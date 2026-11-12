@@ -40,7 +40,6 @@ func TestClosedDBErrors(t *testing.T) {
 		"GetAdaptiveConfig":         func() error { return e(db.GetAdaptiveEnforcementConfig()) },
 		"GetAutobanConfig":          func() error { return e(db.GetAutobanConfig()) },
 		"GetCaptchaConfig":          func() error { return e(db.GetCaptchaConfig()) },
-		"GetDBConnConfig":           func() error { return e(db.GetDBConnConfig()) },
 		"GetHoneypotPaths":          func() error { return e(db.GetHoneypotPaths()) },
 		"GetOrCreateWebAuthnHandle": func() error { return e(db.GetOrCreateWebAuthnHandle(1)) },
 		"GetRuleHitCounts":          func() error { return e(db.GetRuleHitCounts(942000, 942999)) },
@@ -79,7 +78,6 @@ func TestClosedDBErrors(t *testing.T) {
 			return db.SetCSPEnforcement(1, CSPEnforcement{Enforce: true, Approved: []string{"inline"}})
 		},
 		"SetCaptchaConfig":         func() error { return db.SetCaptchaConfig(CaptchaConfig{}) },
-		"SetDBConnConfig":          func() error { return db.SetDBConnConfig(DBConnConfig{Driver: "sqlite"}) },
 		"SetHoneypotPaths":         func() error { return db.SetHoneypotPaths([]string{"/wp-admin"}) },
 		"SetRateLimitSettings":     func() error { return db.SetRateLimitSettings(true, 1, 1) },
 		"SetSSOConfig":             func() error { return db.SetSSOConfig(SSOConfig{}) },

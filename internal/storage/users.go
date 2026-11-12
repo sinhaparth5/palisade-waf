@@ -55,7 +55,7 @@ type AdminUser struct {
 }
 
 // NormalizeEmail is the form emails are stored and looked up in, so login
-// is case-insensitive on every dialect (MySQL's collation already was).
+// is case-insensitive.
 func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
 
 const adminUserColumns = `id, email, role, disabled, totp_secret <> '',
@@ -387,7 +387,7 @@ func (db *DB) migrateAdminFromMeta() error {
 			return err
 		}
 	}
-	_, err = db.exec(`DELETE FROM meta WHERE `+db.dialect.quoteIdent("key")+` IN (`+placeholders(len(legacyAdminMetaKeys))+`)`,
+	_, err = db.exec(`DELETE FROM meta WHERE key IN (`+placeholders(len(legacyAdminMetaKeys))+`)`,
 		toAny(legacyAdminMetaKeys)...)
 	return err
 }

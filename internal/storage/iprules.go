@@ -30,7 +30,7 @@ func (db *DB) AddIPRule(appName, ip, ruleType string) error {
 // page). The autoban package uses the note to record why an IP was banned.
 func (db *DB) AddIPRuleWithNote(appName, ip, ruleType, note string) error {
 	_, err := db.exec(
-		db.dialect.upsertUpdate("ip_rules", []string{"app_name", "ip", "rule_type", "note"}, "?, ?, ?, ?",
+		upsertUpdate("ip_rules", []string{"app_name", "ip", "rule_type", "note"}, "?, ?, ?, ?",
 			[]string{"app_name", "ip"}, []string{"rule_type", "note"}),
 		appName, ip, ruleType, note,
 	)

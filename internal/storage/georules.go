@@ -16,7 +16,7 @@ type GeoRule struct {
 
 func (db *DB) AddGeoRule(appName, countryCode, ruleType string) error {
 	_, err := db.exec(
-		db.dialect.upsertUpdate("geo_rules", []string{"app_name", "country_code", "rule_type"}, "?, ?, ?",
+		upsertUpdate("geo_rules", []string{"app_name", "country_code", "rule_type"}, "?, ?, ?",
 			[]string{"app_name", "country_code"}, []string{"rule_type"}),
 		appName, countryCode, ruleType,
 	)

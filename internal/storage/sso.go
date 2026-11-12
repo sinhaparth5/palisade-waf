@@ -172,7 +172,7 @@ func (db *DB) RevokeUserSessions(id int64) error {
 	return err
 }
 
-func migrateSSOIdentitiesTable(source, target *DB, _ bool) (int, error) {
+func migrateSSOIdentitiesTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT user_id, issuer, subject FROM admin_sso_identities`)
 	if err != nil {
 		return 0, err

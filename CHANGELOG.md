@@ -20,6 +20,7 @@ rather than growing this file forever.
 - (#297) Drop the Windows release build
 - (#298) Remove the ClickHouse warehouse mirror
 - (#299) Remove TypeSafe ASN classification
+- (#300) Drop MySQL and Postgres backends, SQLite only
 
 ## [3.2.7] - 2026-11-12
 

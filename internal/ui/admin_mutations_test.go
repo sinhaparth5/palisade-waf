@@ -652,50 +652,6 @@ func url2(v map[string][]string, key string, vals ...string) map[string][]string
 	return v
 }
 
-func TestDBConnHandlers(t *testing.T) {
-	env := newAdminEnv(t)
-	if rec := env.do("POST", "/admin/settings/dbconn", form()); !strings.Contains(rec.Body.String(), "Select a database driver") {
-		t.Errorf("save no driver: %s", rec.Body)
-	}
-	env.do("POST", "/admin/settings/dbconn", form("dbconn_driver", "postgres", "dbconn_host", "db.internal", "dbconn_password", "s3cret", "dbconn_mode", "weird"))
-	cfg, _ := env.db.GetDBConnConfig()
-	if cfg.Driver != "postgres" || cfg.Mode != "fields" || cfg.Password != "s3cret" {
-		t.Errorf("dbconn = %+v", cfg)
-	}
-	if rec := env.do("GET", "/admin/settings", nil); strings.Contains(rec.Body.String(), "s3cret") {
-		t.Error("stored DB password echoed into the settings page")
-	}
-
-	env.seedService("shop", "shop.example.com") // a row the second migrate collides on
-	target := filepath.Join(t.TempDir(), "target.db")
-	for _, tc := range []struct {
-		f    []string
-		want string
-	}{
-		{nil, "select a database driver"},
-		{[]string{"dbconn_driver", "sqlite"}, "file path is required"},
-		{[]string{"dbconn_driver", "mysql", "dbconn_mode", "dsn"}, "connection string is required"},
-		{[]string{"dbconn_driver", "mysql"}, "host is required"},
-		{[]string{"dbconn_driver", "postgres", "dbconn_host", "127.0.0.1", "dbconn_port", "1", "dbconn_username", "u", "dbconn_dbname", "d", "dbconn_sslmode", "disable"}, "Connection failed"},
-		{[]string{"dbconn_driver", "sqlite", "dbconn_host", target}, "Connected successfully"},
-	} {
-		if rec := env.do("POST", "/admin/settings/dbconn/test", form(tc.f...)); !strings.Contains(rec.Body.String(), tc.want) {
-			t.Errorf("test %v: %s", tc.f, rec.Body)
-		}
-	}
-
-	if rec := env.do("POST", "/admin/settings/dbconn/migrate", form()); !strings.Contains(rec.Body.String(), "select a database driver") {
-		t.Errorf("migrate no driver: %s", rec.Body)
-	}
-	if rec := env.do("POST", "/admin/settings/dbconn/migrate", form("dbconn_driver", "sqlite", "dbconn_host", target)); !strings.Contains(rec.Body.String(), "Migrated") {
-		t.Errorf("migrate: %s", rec.Body)
-	}
-	// Running it again hits duplicate keys and reports the failure.
-	if rec := env.do("POST", "/admin/settings/dbconn/migrate", form("dbconn_driver", "sqlite", "dbconn_host", target)); !strings.Contains(rec.Body.String(), "Migration failed") {
-		t.Errorf("re-migrate: %s", rec.Body)
-	}
-}
-
 func TestChangeCredentialsAndBackup(t *testing.T) {
 	env := newAdminEnv(t)
 

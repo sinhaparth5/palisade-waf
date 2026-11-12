@@ -65,8 +65,7 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	adminListen := fs.String("admin-listen", "", "serve the admin UI only on this plain-HTTP address, e.g. 127.0.0.1:9090, and remove it from the public listener (empty = public listener)")
 	maxConns := fs.Int("max-conns-per-ip", 256, "concurrent TCP connections one client IP (IPv6 /64) may hold; trusted proxies, Cloudflare, loopback and trusted IPs are exempt (0 = no cap)")
 	trustedCrawlers := fs.String("trusted-crawlers", "", "extra crawlers that skip the bot challenge, pinned by source: ua=cidr[,cidr];ua2=ip, or ua=https://host to verify Web Bot Auth signatures (empty = none)")
-	dbPath := fs.String("db", "waf.db", "database path (sqlite) or DSN (mysql/postgres)")
-	dbDriver := fs.String("db-driver", "sqlite", "database driver: sqlite, mysql (or mariadb), postgres (or postgresql/cockroachdb/neon)")
+	dbPath, dbDriver := dbFlags(fs)
 	certsDir := fs.String("certs", "./certs", "TLS certificate cache directory")
 	wafRules := fs.String("waf-rules", "", "extra WAF rules directory (empty = OWASP CRS only)")
 	geoDBPath := fs.String("geo-db", "", "GeoIP2 database path (empty = bundled)")
@@ -80,6 +79,9 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	dbKeyFile := fs.String("db-key-file", "", "key file for AES-256-GCM encryption of stored secrets at rest (empty = plaintext)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if fs.NArg() > 0 { // a removed or mistyped subcommand, e.g. build-dsn
+		return fmt.Errorf("unknown command %q", fs.Arg(0))
 	}
 
 	cfg := config.Defaults()
@@ -106,7 +108,6 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 		return fmt.Errorf("--trusted-crawlers: %w", err)
 	}
 	cfg.DB.Path = *dbPath
-	cfg.DB.Driver = *dbDriver
 	cfg.TLS.CacheDir = *certsDir
 	cfg.TLS.FallbackCertFile = *tlsCert
 	cfg.TLS.FallbackKeyFile = *tlsKey
@@ -117,17 +118,18 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 		return fmt.Errorf("--prune-interval must be 0 (off) or at least 1m, got %s", *pruneInterval)
 	}
 
-	if cfg.DB.Driver == "sqlite" {
-		if err := checkWritable(filepath.Dir(cfg.DB.Path)); err != nil {
-			return err
-		}
+	if err := checkSQLite(*dbDriver, cfg.DB.Path); err != nil {
+		return err
+	}
+	if err := checkWritable(filepath.Dir(cfg.DB.Path)); err != nil {
+		return err
 	}
 	if _, err := os.Stat(cfg.TLS.CacheDir); err == nil {
 		if err := checkWritable(cfg.TLS.CacheDir); err != nil {
 			return err
 		}
 	}
-	db, err := storage.OpenWithDriver(cfg.DB.Driver, cfg.DB.Path)
+	db, err := storage.Open(cfg.DB.Path)
 	if err != nil {
 		return fmt.Errorf("db: %w", err)
 	}

@@ -9,7 +9,7 @@ func (db *DB) SetServiceCookiePolicy(id int, on bool, exempt []string) error {
 		_, err := db.exec(`DELETE FROM service_cookie_policy WHERE service_id = ?`, id)
 		return err
 	}
-	_, err := db.exec(db.dialect.upsertUpdate("service_cookie_policy", []string{"service_id", "exempt"}, "?, ?",
+	_, err := db.exec(upsertUpdate("service_cookie_policy", []string{"service_id", "exempt"}, "?, ?",
 		[]string{"service_id"}, []string{"exempt"}), id, strings.Join(exempt, " "))
 	return err
 }
@@ -34,7 +34,7 @@ func (db *DB) ListServiceCookiePolicies() (map[int][]string, error) {
 	return out, rows.Err()
 }
 
-func migrateServiceCookiePolicyTable(source, target *DB, _ bool) (int, error) {
+func migrateServiceCookiePolicyTable(source, target *DB) (int, error) {
 	all, err := source.ListServiceCookiePolicies()
 	if err != nil {
 		return 0, err

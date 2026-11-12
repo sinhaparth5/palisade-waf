@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// MigrationReport summarizes a MigrateConfigTo run: how many rows moved per
-// table, in the order they were migrated.
+// MigrationReport summarizes a config import: how many rows moved per
+// table, in the order they were copied.
 type MigrationReport struct {
 	Tables    []MigrationTableResult
 	TotalRows int
@@ -20,167 +20,60 @@ type MigrationTableResult struct {
 	Rows  int
 }
 
-// MigrateConfigTo copies this DB's *configuration* — everything that makes
-// the WAF behave the same on a new backend — into a freshly-opened
-// connection at targetDriver/targetDSN, and creates that connection's
-// schema along the way (OpenWithDriver always runs migrate() internally, so
-// there is nothing extra to do for "the tables should be created there").
-//
-// Migrated: services, ip_rules, geo_rules, meta (settings, secrets),
-// admin_users (credentials, TOTP), admin_sso_identities, certificates, api_keys, waf_disabled_rules,
-// waf_service_rule_exceptions, waf_custom_rules, threat_intel_sources + their synced
-// threat_intel_ips, webhook_config, ip_threat_scores, ja4_reputation, service_openapi,
-// service_mtls (the CA files it points at stay on disk), service_mcp, service_jwt, service_rate_rules, service_gate, service_csp, csp_scripts,
-// service_cookie_policy, service_request_policy, csp_approved, service_csp_enforce.
-//
-// Deliberately NOT migrated: requests (the access/request log — could be
-// millions of rows on a long-running install; disposable operational
-// history, not configuration, matching the existing `prune` command's own
-// treatment of this table), sessions (recreated on next login), and
-// rate_state (transient token-bucket runtime state that's meaningless to
-// carry across a backend switch).
-//
-// The source (db) is never modified, written to, or closed — only ever
-// read from — so the caller's existing database file/connection is left
-// completely intact regardless of outcome; this is what lets the Settings
-// page keep the original SQLite file as a fallback after switching.
-//
-// Primary key IDs are preserved verbatim on the target rather than
-// re-generated, since services.cert_id and threat_intel_ips.source_id
-// reference other tables' ids by value. A Postgres target additionally
-// needs "OVERRIDING SYSTEM VALUE" on those inserts — confirmed empirically
-// against postgres:16 that its GENERATED ALWAYS AS IDENTITY columns reject
-// an explicit id value ("cannot insert a non-DEFAULT value into column
-// id") without it, and that inserting explicit ids doesn't disturb the
-// identity sequence for rows inserted normally afterward. MySQL's
-// AUTO_INCREMENT and SQLite's AUTOINCREMENT both accept an explicit id
-// with no special syntax.
-//
-// TIMESTAMP/DATETIME-typed columns (created_at, updated_at, last_seen, ...)
-// are scanned and reinserted as typed time.Time, never as a plain string —
-// confirmed empirically that MySQL's DATETIME column rejects the ISO8601
-// 'T'/'Z' string format a *string scan of the same column hands back,
-// while a typed time.Time round-trips correctly through every driver's own
-// wire encoding on all three dialects. Columns that are plain TEXT/VARCHAR
-// in the schema despite holding a timestamp-shaped value (services.
-// tls_expires_at, threat_intel_sources.last_synced_at, sessions.created_at
-// — the last of which isn't migrated at all) are copied as plain strings,
-// which is safe for them specifically since they were never the dialect's
-// native timestamp type to begin with.
-//
-// This is not wrapped in a single cross-database transaction: config-sized
-// row counts make that extra complexity (every insert would need to go
-// through a *sqlx.Tx with its own Rebind, mirroring SaveRateLimitState's
-// existing pattern) disproportionate for a one-shot admin action. A
-// failure partway leaves the target with whatever tables completed before
-// it — the returned MigrationReport always reflects exactly how far it
-// got, even on error, so the admin can see what happened; the recommended
-// recovery is to point Settings at a fresh, empty target and retry rather
-// than trying to resume in place.
-func (db *DB) MigrateConfigTo(targetDriver, targetDSN string) (MigrationReport, error) {
-	target, err := OpenWithDriver(targetDriver, targetDSN)
-	if err != nil {
-		return MigrationReport{}, fmt.Errorf("open target: %w", err)
-	}
-	defer target.Close()
-	return db.migrateConfigInto(target)
-}
-
 // configStep copies one config table from source to target.
 type configStep struct {
 	table string
-	fn    func(source, target *DB, overriding bool) (int, error)
-	// hasIdentitySeq marks tables with an actual auto-increment/identity
-	// id column (as opposed to webhook_config's literal non-identity
-	// PK, or tables with no id column at all) — see the fixup call
-	// in migrateConfigInto for why this matters on a Postgres target.
-	hasIdentitySeq bool
+	fn    func(source, target *DB) (int, error)
 }
 
-// configSteps is every config table, in dependency order. MigrateConfigTo
-// and the config export/import (configfile.go) both use it.
+// configSteps is every config table, in dependency order, for the config
+// export/import (configfile.go). Not copied: requests (log history),
+// sessions and rate_state (runtime state). Ids are kept, since
+// services.cert_id and threat_intel_ips.source_id reference them, and
+// timestamp columns go through time.Time.
 var configSteps = []configStep{
-	{"meta", migrateMetaTable, false},
-	{"admin_users", migrateAdminUsersTable, true},
-	{"admin_sso_identities", migrateSSOIdentitiesTable, false},
-	{"certificates", migrateCertificatesTable, true},
-	{"services", migrateServicesTable, true},
-	{"service_openapi", migrateServiceOpenAPITable, false},
-	{"service_mtls", migrateServiceMTLSTable, false},
-	{"service_mcp", migrateServiceMCPTable, false},
-	{"service_jwt", migrateServiceJWTTable, false},
-	{"service_rate_rules", migrateServiceRateRulesTable, false},
-	{"service_gate", migrateServiceGateTable, false},
-	{"service_csp", migrateServiceCSPTable, false},
-	{"csp_scripts", migrateCSPScriptsTable, false},
-	{"service_cookie_policy", migrateServiceCookiePolicyTable, false},
-	{"service_request_policy", migrateServiceRequestPolicyTable, false},
-	{"csp_approved", migrateCSPApprovedTable, false},
-	{"service_csp_enforce", migrateCSPEnforceTable, false},
-	{"ip_rules", migrateIPRulesTable, true},
-	{"geo_rules", migrateGeoRulesTable, true},
-	{"api_keys", migrateAPIKeysTable, true},
-	{"waf_disabled_rules", migrateWAFDisabledRulesTable, true},
-	{"waf_service_rule_exceptions", migrateWAFServiceExceptionsTable, true},
-	{"waf_custom_rules", migrateWAFCustomRulesTable, true},
-	{"threat_intel_sources", migrateThreatIntelSourcesTable, true},
-	{"threat_intel_ips", migrateThreatIntelIPsTable, false},
-	{"webhook_config", migrateWebhookConfigTable, false},
-	{"ip_threat_scores", migrateIPThreatScoresTable, false},
-	{"ja4_reputation", migrateJA4ReputationTable, false},
+	{"meta", migrateMetaTable},
+	{"admin_users", migrateAdminUsersTable},
+	{"admin_sso_identities", migrateSSOIdentitiesTable},
+	{"certificates", migrateCertificatesTable},
+	{"services", migrateServicesTable},
+	{"service_openapi", migrateServiceOpenAPITable},
+	{"service_mtls", migrateServiceMTLSTable},
+	{"service_mcp", migrateServiceMCPTable},
+	{"service_jwt", migrateServiceJWTTable},
+	{"service_rate_rules", migrateServiceRateRulesTable},
+	{"service_gate", migrateServiceGateTable},
+	{"service_csp", migrateServiceCSPTable},
+	{"csp_scripts", migrateCSPScriptsTable},
+	{"service_cookie_policy", migrateServiceCookiePolicyTable},
+	{"service_request_policy", migrateServiceRequestPolicyTable},
+	{"csp_approved", migrateCSPApprovedTable},
+	{"service_csp_enforce", migrateCSPEnforceTable},
+	{"ip_rules", migrateIPRulesTable},
+	{"geo_rules", migrateGeoRulesTable},
+	{"api_keys", migrateAPIKeysTable},
+	{"waf_disabled_rules", migrateWAFDisabledRulesTable},
+	{"waf_service_rule_exceptions", migrateWAFServiceExceptionsTable},
+	{"waf_custom_rules", migrateWAFCustomRulesTable},
+	{"threat_intel_sources", migrateThreatIntelSourcesTable},
+	{"threat_intel_ips", migrateThreatIntelIPsTable},
+	{"webhook_config", migrateWebhookConfigTable},
+	{"ip_threat_scores", migrateIPThreatScoresTable},
+	{"ja4_reputation", migrateJA4ReputationTable},
 }
 
 // migrateConfigInto copies every config table into an open target.
 func (db *DB) migrateConfigInto(target *DB) (MigrationReport, error) {
-	overriding := target.dialect.name == "postgres"
-	steps := configSteps
-
 	var report MigrationReport
-	for _, step := range steps {
-		n, err := step.fn(db, target, overriding)
+	for _, step := range configSteps {
+		n, err := step.fn(db, target)
 		report.Tables = append(report.Tables, MigrationTableResult{Table: step.table, Rows: n})
 		report.TotalRows += n
 		if err != nil {
 			return report, fmt.Errorf("migrate %s (after %d rows): %w", step.table, n, err)
 		}
-		// Postgres does not auto-advance a GENERATED ALWAYS AS IDENTITY
-		// sequence for an OVERRIDING SYSTEM VALUE insert (confirmed
-		// empirically — only inserts that actually draw from nextval() do)
-		// — without this, the very next normal insert on the target (e.g.
-		// adding a service through the admin UI after switching backends)
-		// can collide with an id that was just migrated and fail with a
-		// duplicate-key error. MySQL's AUTO_INCREMENT and SQLite's
-		// AUTOINCREMENT both self-advance past an explicit value with no
-		// equivalent fixup needed.
-		if overriding && step.hasIdentitySeq && n > 0 {
-			if err := fixPostgresIdentitySequence(target, step.table); err != nil {
-				return report, fmt.Errorf("advance %s identity sequence: %w", step.table, err)
-			}
-		}
 	}
 	return report, nil
-}
-
-// fixPostgresIdentitySequence sets table's identity sequence to continue
-// after the highest id present, so a subsequent normal (non-explicit-id)
-// insert doesn't collide with a row MigrateConfigTo just wrote via
-// OVERRIDING SYSTEM VALUE. Only called when at least one row was migrated
-// into a table that actually has an identity column (see hasIdentitySeq).
-func fixPostgresIdentitySequence(target *DB, table string) error {
-	_, err := target.exec(fmt.Sprintf(
-		`SELECT setval(pg_get_serial_sequence('%s', 'id'), (SELECT MAX(id) FROM %s))`, table, table,
-	))
-	return err
-}
-
-// overridingClause returns " OVERRIDING SYSTEM VALUE" when the target is
-// Postgres and this table has an auto-increment id column — see
-// MigrateConfigTo's doc comment. A no-op ("") for every other case.
-func overridingClause(overriding bool) string {
-	if overriding {
-		return " OVERRIDING SYSTEM VALUE"
-	}
-	return ""
 }
 
 // placeholders returns "?, ?, ..., ?" for n items — used instead of
@@ -195,9 +88,8 @@ func placeholders(n int) string {
 	return strings.Join(ph, ", ")
 }
 
-func migrateMetaTable(source, target *DB, _ bool) (int, error) {
-	keyCol := source.dialect.quoteIdent("key")
-	rows, err := source.query(`SELECT ` + keyCol + `, value FROM meta`)
+func migrateMetaTable(source, target *DB) (int, error) {
+	rows, err := source.query(`SELECT key, value FROM meta`)
 	if err != nil {
 		return 0, err
 	}
@@ -236,7 +128,7 @@ func migrateMetaTable(source, target *DB, _ bool) (int, error) {
 	return n, rows.Err()
 }
 
-func migrateCertificatesTable(source, target *DB, overriding bool) (int, error) {
+func migrateCertificatesTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT id, name, domains, expires_at, cert_path, key_path, created_at FROM certificates`)
 	if err != nil {
 		return 0, err
@@ -251,8 +143,8 @@ func migrateCertificatesTable(source, target *DB, overriding bool) (int, error) 
 		if err := rows.Scan(&id, &name, &domains, &expiresAt, &certPath, &keyPath, &createdAt); err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO certificates (id, name, domains, expires_at, cert_path, key_path, created_at)%s VALUES (%s)`,
-			overridingClause(overriding), placeholders(7))
+		q := fmt.Sprintf(`INSERT INTO certificates (id, name, domains, expires_at, cert_path, key_path, created_at) VALUES (%s)`,
+			placeholders(7))
 		if _, err := target.exec(q, id, name, domains, expiresAt, certPath, keyPath, createdAt); err != nil {
 			return n, err
 		}
@@ -261,7 +153,7 @@ func migrateCertificatesTable(source, target *DB, overriding bool) (int, error) 
 	return n, rows.Err()
 }
 
-func migrateServicesTable(source, target *DB, overriding bool) (int, error) {
+func migrateServicesTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT ` + serviceColumns + ` FROM services`)
 	if err != nil {
 		return 0, err
@@ -274,8 +166,8 @@ func migrateServicesTable(source, target *DB, overriding bool) (int, error) {
 		if err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO services (%s)%s VALUES (%s)`,
-			serviceColumns, overridingClause(overriding), placeholders(38))
+		q := fmt.Sprintf(`INSERT INTO services (%s) VALUES (%s)`,
+			serviceColumns, placeholders(38))
 		if _, err := target.exec(q,
 			s.ID, s.Name, s.Host, s.Prefix, s.Backend, s.CreatedAt, s.TLSMode, s.TLSCertPath, s.TLSKeyPath, s.TLSExpiresAt,
 			s.RateLimitRPS, s.RateLimitBurst, s.BotMode, s.CertID, boolToInt(s.CacheEnabled), boolToInt(s.CacheBySession),
@@ -292,7 +184,7 @@ func migrateServicesTable(source, target *DB, overriding bool) (int, error) {
 	return n, rows.Err()
 }
 
-func migrateIPRulesTable(source, target *DB, overriding bool) (int, error) {
+func migrateIPRulesTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT id, app_name, ip, rule_type, note, created_at FROM ip_rules`)
 	if err != nil {
 		return 0, err
@@ -307,8 +199,8 @@ func migrateIPRulesTable(source, target *DB, overriding bool) (int, error) {
 		if err := rows.Scan(&id, &appName, &ip, &ruleType, &note, &createdAt); err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO ip_rules (id, app_name, ip, rule_type, note, created_at)%s VALUES (%s)`,
-			overridingClause(overriding), placeholders(6))
+		q := fmt.Sprintf(`INSERT INTO ip_rules (id, app_name, ip, rule_type, note, created_at) VALUES (%s)`,
+			placeholders(6))
 		if _, err := target.exec(q, id, appName, ip, ruleType, note, createdAt); err != nil {
 			return n, err
 		}
@@ -317,7 +209,7 @@ func migrateIPRulesTable(source, target *DB, overriding bool) (int, error) {
 	return n, rows.Err()
 }
 
-func migrateGeoRulesTable(source, target *DB, overriding bool) (int, error) {
+func migrateGeoRulesTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT id, app_name, country_code, rule_type, created_at FROM geo_rules`)
 	if err != nil {
 		return 0, err
@@ -332,8 +224,8 @@ func migrateGeoRulesTable(source, target *DB, overriding bool) (int, error) {
 		if err := rows.Scan(&id, &appName, &countryCode, &ruleType, &createdAt); err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO geo_rules (id, app_name, country_code, rule_type, created_at)%s VALUES (%s)`,
-			overridingClause(overriding), placeholders(5))
+		q := fmt.Sprintf(`INSERT INTO geo_rules (id, app_name, country_code, rule_type, created_at) VALUES (%s)`,
+			placeholders(5))
 		if _, err := target.exec(q, id, appName, countryCode, ruleType, createdAt); err != nil {
 			return n, err
 		}
@@ -342,7 +234,7 @@ func migrateGeoRulesTable(source, target *DB, overriding bool) (int, error) {
 	return n, rows.Err()
 }
 
-func migrateAdminUsersTable(source, target *DB, overriding bool) (int, error) {
+func migrateAdminUsersTable(source, target *DB) (int, error) {
 	// Sealed TOTP columns are copied as stored, like meta's secrets.
 	const cols = `id, email, password_hash, role, disabled, totp_secret, totp_pending_secret, totp_backup_codes, totp_last_counter, webauthn_handle, created_at`
 	rows, err := source.query(`SELECT ` + cols + ` FROM admin_users`)
@@ -360,7 +252,7 @@ func migrateAdminUsersTable(source, target *DB, overriding bool) (int, error) {
 		if err := rows.Scan(&id, &email, &hash, &role, &disabled, &totp, &pending, &backup, &counter, &handle, &createdAt); err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO admin_users (%s)%s VALUES (%s)`, cols, overridingClause(overriding), placeholders(11))
+		q := fmt.Sprintf(`INSERT INTO admin_users (%s) VALUES (%s)`, cols, placeholders(11))
 		if _, err := target.exec(q, id, email, hash, role, boolToInt(disabled), totp, pending, backup, counter, handle, createdAt); err != nil {
 			return n, err
 		}
@@ -369,7 +261,7 @@ func migrateAdminUsersTable(source, target *DB, overriding bool) (int, error) {
 	return n, rows.Err()
 }
 
-func migrateAPIKeysTable(source, target *DB, overriding bool) (int, error) {
+func migrateAPIKeysTable(source, target *DB) (int, error) {
 	// key_hash is deliberately included here (unlike ListAPIKeys, which
 	// never selects it for display purposes) — without it a migrated key
 	// would be a useless row that can never authenticate again.
@@ -389,8 +281,8 @@ func migrateAPIKeysTable(source, target *DB, overriding bool) (int, error) {
 		if err := rows.Scan(&id, &name, &prefix, &hash, &readOnly, &createdAt, &lastUsed); err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO api_keys (id, name, key_prefix, key_hash, read_only, created_at, last_used_at)%s VALUES (%s)`,
-			overridingClause(overriding), placeholders(7))
+		q := fmt.Sprintf(`INSERT INTO api_keys (id, name, key_prefix, key_hash, read_only, created_at, last_used_at) VALUES (%s)`,
+			placeholders(7))
 		if _, err := target.exec(q, id, name, prefix, hash, boolToInt(readOnly), createdAt, lastUsed); err != nil {
 			return n, err
 		}
@@ -399,7 +291,7 @@ func migrateAPIKeysTable(source, target *DB, overriding bool) (int, error) {
 	return n, rows.Err()
 }
 
-func migrateWAFDisabledRulesTable(source, target *DB, overriding bool) (int, error) {
+func migrateWAFDisabledRulesTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT id, rule_id, reason, created_at FROM waf_disabled_rules`)
 	if err != nil {
 		return 0, err
@@ -415,8 +307,8 @@ func migrateWAFDisabledRulesTable(source, target *DB, overriding bool) (int, err
 		if err := rows.Scan(&id, &ruleID, &reason, &createdAt); err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO waf_disabled_rules (id, rule_id, reason, created_at)%s VALUES (%s)`,
-			overridingClause(overriding), placeholders(4))
+		q := fmt.Sprintf(`INSERT INTO waf_disabled_rules (id, rule_id, reason, created_at) VALUES (%s)`,
+			placeholders(4))
 		if _, err := target.exec(q, id, ruleID, reason, createdAt); err != nil {
 			return n, err
 		}
@@ -425,7 +317,7 @@ func migrateWAFDisabledRulesTable(source, target *DB, overriding bool) (int, err
 	return n, rows.Err()
 }
 
-func migrateWAFServiceExceptionsTable(source, target *DB, overriding bool) (int, error) {
+func migrateWAFServiceExceptionsTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT id, service_name, rule_id, reason, created_at FROM waf_service_rule_exceptions`)
 	if err != nil {
 		return 0, err
@@ -441,8 +333,8 @@ func migrateWAFServiceExceptionsTable(source, target *DB, overriding bool) (int,
 		if err := rows.Scan(&id, &serviceName, &ruleID, &reason, &createdAt); err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO waf_service_rule_exceptions (id, service_name, rule_id, reason, created_at)%s VALUES (%s)`,
-			overridingClause(overriding), placeholders(5))
+		q := fmt.Sprintf(`INSERT INTO waf_service_rule_exceptions (id, service_name, rule_id, reason, created_at) VALUES (%s)`,
+			placeholders(5))
 		if _, err := target.exec(q, id, serviceName, ruleID, reason, createdAt); err != nil {
 			return n, err
 		}
@@ -451,7 +343,7 @@ func migrateWAFServiceExceptionsTable(source, target *DB, overriding bool) (int,
 	return n, rows.Err()
 }
 
-func migrateWAFCustomRulesTable(source, target *DB, overriding bool) (int, error) {
+func migrateWAFCustomRulesTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT id, service_name, rule, note, enabled, created_at FROM waf_custom_rules`)
 	if err != nil {
 		return 0, err
@@ -467,8 +359,8 @@ func migrateWAFCustomRulesTable(source, target *DB, overriding bool) (int, error
 		if err := rows.Scan(&id, &serviceName, &rule, &note, &enabled, &createdAt); err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO waf_custom_rules (id, service_name, rule, note, enabled, created_at)%s VALUES (%s)`,
-			overridingClause(overriding), placeholders(6))
+		q := fmt.Sprintf(`INSERT INTO waf_custom_rules (id, service_name, rule, note, enabled, created_at) VALUES (%s)`,
+			placeholders(6))
 		if _, err := target.exec(q, id, serviceName, rule, note, enabled, createdAt); err != nil {
 			return n, err
 		}
@@ -477,7 +369,7 @@ func migrateWAFCustomRulesTable(source, target *DB, overriding bool) (int, error
 	return n, rows.Err()
 }
 
-func migrateThreatIntelSourcesTable(source, target *DB, overriding bool) (int, error) {
+func migrateThreatIntelSourcesTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT id, label, url, interval_hours, enabled, last_synced_at, last_error, ip_count, created_at FROM threat_intel_sources`)
 	if err != nil {
 		return 0, err
@@ -494,8 +386,8 @@ func migrateThreatIntelSourcesTable(source, target *DB, overriding bool) (int, e
 		if err := rows.Scan(&id, &label, &url, &intervalHours, &enabled, &lastSyncedAt, &lastError, &ipCount, &createdAt); err != nil {
 			return n, err
 		}
-		q := fmt.Sprintf(`INSERT INTO threat_intel_sources (id, label, url, interval_hours, enabled, last_synced_at, last_error, ip_count, created_at)%s VALUES (%s)`,
-			overridingClause(overriding), placeholders(9))
+		q := fmt.Sprintf(`INSERT INTO threat_intel_sources (id, label, url, interval_hours, enabled, last_synced_at, last_error, ip_count, created_at) VALUES (%s)`,
+			placeholders(9))
 		if _, err := target.exec(q, id, label, url, intervalHours, boolToInt(enabled), lastSyncedAt, lastError, ipCount, createdAt); err != nil {
 			return n, err
 		}
@@ -504,7 +396,7 @@ func migrateThreatIntelSourcesTable(source, target *DB, overriding bool) (int, e
 	return n, rows.Err()
 }
 
-func migrateThreatIntelIPsTable(source, target *DB, _ bool) (int, error) {
+func migrateThreatIntelIPsTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT source_id, ip FROM threat_intel_ips`)
 	if err != nil {
 		return 0, err
@@ -532,7 +424,7 @@ func migrateThreatIntelIPsTable(source, target *DB, _ bool) (int, error) {
 // correctly through each DB's own encryption state — no hand-rolled SQL
 // needed, and no insert-vs-update branching since SetWebhookConfig always
 // UPDATEs the pre-existing row rather than INSERTing a new one.
-func migrateWebhookConfigTable(source, target *DB, _ bool) (int, error) {
+func migrateWebhookConfigTable(source, target *DB) (int, error) {
 	cfg, err := source.GetWebhookConfig()
 	if err != nil {
 		return 0, err
@@ -543,7 +435,7 @@ func migrateWebhookConfigTable(source, target *DB, _ bool) (int, error) {
 	return 1, nil
 }
 
-func migrateIPThreatScoresTable(source, target *DB, _ bool) (int, error) {
+func migrateIPThreatScoresTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT ip, total_score, autoban_score, bot_score, asn_score, geo_score, ja4_score, updated_at FROM ip_threat_scores`)
 	if err != nil {
 		return 0, err
@@ -569,7 +461,7 @@ func migrateIPThreatScoresTable(source, target *DB, _ bool) (int, error) {
 	return n, rows.Err()
 }
 
-func migrateJA4ReputationTable(source, target *DB, _ bool) (int, error) {
+func migrateJA4ReputationTable(source, target *DB) (int, error) {
 	rows, err := source.query(`SELECT ja4, hits, blocked_hits, last_seen FROM ja4_reputation`)
 	if err != nil {
 		return 0, err
@@ -595,7 +487,7 @@ func migrateJA4ReputationTable(source, target *DB, _ bool) (int, error) {
 	return n, rows.Err()
 }
 
-func migrateServiceOpenAPITable(source, target *DB, _ bool) (int, error) {
+func migrateServiceOpenAPITable(source, target *DB) (int, error) {
 	specs, err := source.ListServiceOpenAPI()
 	if err != nil {
 		return 0, err
@@ -610,7 +502,7 @@ func migrateServiceOpenAPITable(source, target *DB, _ bool) (int, error) {
 	return n, nil
 }
 
-func migrateServiceMTLSTable(source, target *DB, _ bool) (int, error) {
+func migrateServiceMTLSTable(source, target *DB) (int, error) {
 	policies, err := source.ListServiceMTLS()
 	if err != nil {
 		return 0, err
@@ -625,7 +517,7 @@ func migrateServiceMTLSTable(source, target *DB, _ bool) (int, error) {
 	return n, nil
 }
 
-func migrateServiceMCPTable(source, target *DB, _ bool) (int, error) {
+func migrateServiceMCPTable(source, target *DB) (int, error) {
 	guards, err := source.ListServiceMCP()
 	if err != nil {
 		return 0, err
@@ -640,7 +532,7 @@ func migrateServiceMCPTable(source, target *DB, _ bool) (int, error) {
 	return n, nil
 }
 
-func migrateServiceJWTTable(source, target *DB, _ bool) (int, error) {
+func migrateServiceJWTTable(source, target *DB) (int, error) {
 	checks, err := source.ListServiceJWT()
 	if err != nil {
 		return 0, err
@@ -655,7 +547,7 @@ func migrateServiceJWTTable(source, target *DB, _ bool) (int, error) {
 	return n, nil
 }
 
-func migrateServiceRateRulesTable(source, target *DB, _ bool) (int, error) {
+func migrateServiceRateRulesTable(source, target *DB) (int, error) {
 	all, err := source.ListServiceRateRules()
 	if err != nil {
 		return 0, err

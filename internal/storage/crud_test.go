@@ -13,9 +13,6 @@ import (
 )
 
 // These tests exercise the plain CRUD/query methods the admin UI relies on.
-// Like every test here they go through openTestDB, so CI reruns them against
-// MySQL and Postgres — the point is as much "this SQL is portable" as
-// "this method works".
 
 func mustNoErr(t *testing.T, err error) {
 	t.Helper()
@@ -139,13 +136,21 @@ func TestMetaBackedSettings(t *testing.T) {
 		}
 	}
 
-	// An upgrade from a DB with TypeSafe settings (#299) drops them.
+	// An upgrade drops TypeSafe settings (#299) and the saved DB connection (#300).
 	mustNoErr(t, db.setMeta("typesafe_api_key", "k"))
+	mustNoErr(t, db.setMeta("db_conn_dsn", "postgres://u:p@h/db")) // #300
+	mustNoErr(t, db.setMeta("db_connection", "kept"))
 	_, err := db.exec(`CREATE TABLE typesafe_calls (id INTEGER)`)
 	mustNoErr(t, err)
 	mustNoErr(t, db.migrate())
 	if v, _ := db.getMeta("typesafe_api_key"); v != "" {
 		t.Errorf("typesafe_api_key survived migrate: %q", v)
+	}
+	if v, _ := db.getMeta("db_conn_dsn"); v != "" {
+		t.Errorf("db_conn_dsn survived migrate: %q", v)
+	}
+	if v, _ := db.getMeta("db_connection"); v != "kept" {
+		t.Errorf("unrelated meta key deleted: %q", v)
 	}
 	if _, err := db.exec(`SELECT 1 FROM typesafe_calls`); err == nil {
 		t.Error("typesafe_calls survived migrate")
@@ -449,14 +454,7 @@ func TestReputationListings(t *testing.T) {
 func TestBackupTo(t *testing.T) {
 	db := openTestDB(t)
 	out := filepath.Join(t.TempDir(), "backup.db")
-	err := db.BackupTo(out)
-	if db.dialect.name != "sqlite" {
-		if err == nil {
-			t.Error("BackupTo should fail on external backends")
-		}
-		return
-	}
-	mustNoErr(t, err)
+	mustNoErr(t, db.BackupTo(out))
 	if fi, err := os.Stat(out); err != nil || fi.Size() == 0 {
 		t.Fatalf("backup file: %v", err)
 	}

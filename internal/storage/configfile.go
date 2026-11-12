@@ -12,10 +12,9 @@ import (
 	"time"
 )
 
-// Config export/import (issue #263): the tables MigrateConfigTo copies, as
-// one JSON file. Both directions go through a temporary SQLite file and the
-// same configSteps, so the file holds exactly what a backend migration
-// would carry, and an import goes through the same per-table code.
+// Config export/import (issue #263): the configSteps tables as one JSON
+// file. Both directions go through a temporary SQLite file and the same
+// per-table copy code.
 //
 // Secrets: the temporary file uses the source's --db-key-file key, so every
 // secret is re-sealed ("enc:v1:") under it. Without a key the secrets would
@@ -231,7 +230,7 @@ func (db *DB) loadTable(table string, rows []map[string]any) error {
 					return fmt.Errorf("column %q: %w", k, err)
 				}
 			}
-			names = append(names, db.dialect.quoteIdent(k))
+			names = append(names, k)
 			args = append(args, v)
 		}
 		q := fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`, table, strings.Join(names, ", "), placeholders(len(names)))

@@ -27,7 +27,7 @@ type RuleHit struct {
 // DisableWAFRule adds (or updates the reason for) a disabled rule.
 func (db *DB) DisableWAFRule(ruleID int, reason string) error {
 	_, err := db.exec(
-		db.dialect.upsertUpdate("waf_disabled_rules", []string{"rule_id", "reason"}, "?, ?",
+		upsertUpdate("waf_disabled_rules", []string{"rule_id", "reason"}, "?, ?",
 			[]string{"rule_id"}, []string{"reason"}),
 		ruleID, reason,
 	)
@@ -165,7 +165,7 @@ type WAFServiceException struct {
 // scoped to one service.
 func (db *DB) DisableWAFRuleForService(serviceName string, ruleID int, reason string) error {
 	_, err := db.exec(
-		db.dialect.upsertUpdate("waf_service_rule_exceptions", []string{"service_name", "rule_id", "reason"}, "?, ?, ?",
+		upsertUpdate("waf_service_rule_exceptions", []string{"service_name", "rule_id", "reason"}, "?, ?, ?",
 			[]string{"service_name", "rule_id"}, []string{"reason"}),
 		serviceName, ruleID, reason,
 	)
