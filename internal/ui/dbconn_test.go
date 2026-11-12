@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // TestResolveDBConnInput exercises the "Database connection" Settings
@@ -19,7 +19,7 @@ import (
 // existing coverage level for Settings-page save/test handlers.
 func TestResolveDBConnInput(t *testing.T) {
 	e := echo.New()
-	newCtx := func(form url.Values) echo.Context {
+	newCtx := func(form url.Values) *echo.Context {
 		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		return e.NewContext(req, httptest.NewRecorder())

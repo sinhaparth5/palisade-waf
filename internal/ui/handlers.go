@@ -17,6 +17,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -37,8 +38,8 @@ import (
 	"palisade/internal/services"
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"golang.org/x/text/language"
 	"golang.org/x/text/language/display"
 )
@@ -62,7 +63,7 @@ const adminCSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-s
 // setCSP adds adminCSP. It runs after hostGuard, so admin paths proxied
 // for a service host keep the backend's own headers.
 func setCSP(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		c.Response().Header().Set("Content-Security-Policy", adminCSP)
 		return next(c)
 	}
@@ -275,7 +276,7 @@ const sessionCookie = "cz_session"
 // sessionAuth is the session-cookie middleware that guards every admin route.
 // Unauthenticated requests are redirected to the login page.
 func (h *Handler) sessionAuth(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		login := h.cfg.Admin.Path + "/login"
 		cookie, err := c.Cookie(sessionCookie)
 		if err != nil || cookie.Value == "" {
@@ -341,7 +342,7 @@ const sessionTouchThrottle = time.Minute
 // those rule out goes to the proxy pipeline too, so the admin UI looks like
 // it isn't there: an unmatched host gets a logged 404 that autoban counts.
 func (h *Handler) hostGuard(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		r := c.Request()
 		if r.Context().Value(adminListenerKey{}) != nil {
 			// The admin listener never proxies.
@@ -395,7 +396,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	// and LoginPost is reachable unauthenticated. 1 MiB is far above any
 	// admin form or PEM chain upload, and Echo returns 413 without buffering
 	// past the cap.
-	bodyLimit := middleware.BodyLimit("1M")
+	bodyLimit := middleware.BodyLimit(1 << 20)
 
 	// admin is the parent group for every route under cfg.Admin.Path.
 	// hostGuard runs first for all of them, public or not; see hostGuard.
@@ -432,7 +433,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	// enforces it. Every mutating route is listed under one of the three
 	// roles, which TestRouteRoles checks. GETs default to viewer.
 	h.routeRoles = map[string]string{}
-	as := func(role string, routes ...*echo.Route) {
+	as := func(role string, routes ...echo.RouteInfo) {
 		for _, r := range routes {
 			h.routeRoles[r.Method+" "+r.Path] = role
 		}
@@ -568,7 +569,7 @@ func (h *Handler) Register(e *echo.Echo) {
 
 // ── Login / logout ────────────────────────────────────────────────────────────
 
-func (h *Handler) LoginPage(c echo.Context) error {
+func (h *Handler) LoginPage(c *echo.Context) error {
 	// Redirect already-authenticated users straight to the dashboard.
 	if cookie, err := c.Cookie(sessionCookie); err == nil && cookie.Value != "" {
 		if valid, _ := h.db.ValidateSession(cookie.Value); valid {
@@ -581,7 +582,7 @@ func (h *Handler) LoginPage(c echo.Context) error {
 	return h.renderLogin(c, "")
 }
 
-func (h *Handler) LoginPost(c echo.Context) error {
+func (h *Handler) LoginPost(c *echo.Context) error {
 	ip := h.clientIP(c.Request())
 	if wait, locked := h.loginLimiter.blocked(ip); locked {
 		log.Printf("admin login: rejected attempt from %s (locked out for %s)", ip, wait.Round(time.Second))
@@ -643,7 +644,7 @@ func (h *Handler) loginSucceeded(ip, account string) {
 
 // issueSession creates the session row, sets the cookie, and lands on the
 // dashboard — the final step of both the password-only and the 2FA flow.
-func (h *Handler) issueSession(c echo.Context, uid int64) error {
+func (h *Handler) issueSession(c *echo.Context, uid int64) error {
 	if err := h.startSession(c, h.clientIP(c.Request()), uid); err != nil {
 		return h.renderLogin(c, "Internal error. Please try again.")
 	}
@@ -658,7 +659,7 @@ const deviceCookie = "cz_device"
 
 // startSession creates the session row and sets the session and device
 // cookies. Shared by the password/2FA and passkey login flows.
-func (h *Handler) startSession(c echo.Context, ip string, uid int64) error {
+func (h *Handler) startSession(c *echo.Context, ip string, uid int64) error {
 	deviceID := ""
 	if ck, err := c.Cookie(deviceCookie); err == nil && len(ck.Value) == 32 {
 		if _, err := hex.DecodeString(ck.Value); err == nil {
@@ -707,7 +708,7 @@ func (h *Handler) startSession(c echo.Context, ip string, uid int64) error {
 	return nil
 }
 
-func (h *Handler) Logout(c echo.Context) error {
+func (h *Handler) Logout(c *echo.Context) error {
 	if cookie, err := c.Cookie(sessionCookie); err == nil {
 		h.db.DeleteSession(storage.SessionID(cookie.Value)) //nolint
 	}
@@ -722,11 +723,11 @@ func (h *Handler) Logout(c echo.Context) error {
 	return c.Redirect(http.StatusFound, h.cfg.Admin.Path+"/login")
 }
 
-func (h *Handler) renderLogin(c echo.Context, errMsg string) error {
+func (h *Handler) renderLogin(c *echo.Context, errMsg string) error {
 	return h.renderLoginStatus(c, http.StatusOK, errMsg)
 }
 
-func (h *Handler) renderLoginStatus(c echo.Context, status int, errMsg string) error {
+func (h *Handler) renderLoginStatus(c *echo.Context, status int, errMsg string) error {
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.Response().WriteHeader(status)
 	sso, _ := h.db.GetSSOConfig()
@@ -740,7 +741,7 @@ func (h *Handler) renderLoginStatus(c echo.Context, status int, errMsg string) e
 
 // ── Dashboard ──────────────────────────────────────────────────────────────────
 
-func (h *Handler) Dashboard(c echo.Context) error {
+func (h *Handler) Dashboard(c *echo.Context) error {
 	stats, err := h.db.GetStats()
 	if err != nil {
 		return err
@@ -951,8 +952,8 @@ func (h *Handler) unreadAlertCount() int {
 // NotificationsStream is an SSE endpoint that pushes the updated unread
 // notification count whenever a new request is blocked, so the bell badge
 // updates live without a page reload.
-func (h *Handler) NotificationsStream(c echo.Context) error {
-	w := c.Response().Writer
+func (h *Handler) NotificationsStream(c *echo.Context) error {
+	w := c.Response()
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -994,20 +995,20 @@ func (h *Handler) NotificationsStream(c echo.Context) error {
 
 // NotificationsPanel renders the bell dropdown contents: the most recent
 // real blocked requests, newest first.
-func (h *Handler) NotificationsPanel(c echo.Context) error {
+func (h *Handler) NotificationsPanel(c *echo.Context) error {
 	rows, err := h.db.ListRequests(true, "", 6, 0)
 	if err != nil {
 		return err
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpls["notifications"].ExecuteTemplate(c.Response().Writer, "notifications-panel", map[string]any{
+	return h.tmpls["notifications"].ExecuteTemplate(c.Response(), "notifications-panel", map[string]any{
 		"Rows":      rows,
 		"AdminPath": h.cfg.Admin.Path,
 	})
 }
 
 // MarkNotificationsSeen clears the unread notification badge.
-func (h *Handler) MarkNotificationsSeen(c echo.Context) error {
+func (h *Handler) MarkNotificationsSeen(c *echo.Context) error {
 	if err := h.db.MarkNotificationsSeen(); err != nil {
 		return err
 	}
@@ -1017,7 +1018,7 @@ func (h *Handler) MarkNotificationsSeen(c echo.Context) error {
 // TrafficSeries returns hourly allowed/blocked request counts for the last
 // 24h as JSON, for the dashboard traffic chart. Gaps with no traffic are
 // filled with zero so the chart stays continuous.
-func (h *Handler) TrafficSeries(c echo.Context) error {
+func (h *Handler) TrafficSeries(c *echo.Context) error {
 	const hours = 24
 	points, err := h.db.GetHourlyTraffic(hours)
 	if err != nil {
@@ -1051,7 +1052,7 @@ func hourlySeries(points []storage.HourlyPoint, hours int) (labels []string, all
 
 // ThreatsSeries returns the top blocked-from countries in the last 24h as
 // JSON, for the dashboard "Recent threats" bar chart.
-func (h *Handler) ThreatsSeries(c echo.Context) error {
+func (h *Handler) ThreatsSeries(c *echo.Context) error {
 	rows, err := h.db.GetTopBlockedCountries(6, 24)
 	if err != nil {
 		return err
@@ -1077,7 +1078,7 @@ const logsPageSize = 50
 // In "live" mode (no filters, page 1) the page also keeps an SSE connection
 // open so brand-new requests get prepended in real time. Any filter, or
 // paging past page 1, freezes the view into a static "history" page.
-func (h *Handler) Logs(c echo.Context) error {
+func (h *Handler) Logs(c *echo.Context) error {
 	q := c.QueryParams()
 
 	filter := storage.LogFilter{
@@ -1128,8 +1129,8 @@ func (h *Handler) Logs(c echo.Context) error {
 
 // LogsStream is an SSE endpoint that pushes pre-rendered HTML log rows, each
 // followed by a JSON "stat" event for the Stats view.
-func (h *Handler) LogsStream(c echo.Context) error {
-	w := c.Response().Writer
+func (h *Handler) LogsStream(c *echo.Context) error {
+	w := c.Response()
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -1173,7 +1174,7 @@ func (h *Handler) LogsStream(c echo.Context) error {
 // LogDetail returns the full detail of one request log entry as JSON,
 // including the proxy IP and captured request headers. Used by the
 // client-side detail modal on the Logs page.
-func (h *Handler) LogDetail(c echo.Context) error {
+func (h *Handler) LogDetail(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -1242,7 +1243,7 @@ func (h *Handler) LogDetail(c echo.Context) error {
 // entry's WAF rule (issue #76) — signal collection only, consumed by
 // GetWAFRuleSuggestions on the WAF Rules page; it never disables anything
 // itself.
-func (h *Handler) MarkLogFeedback(c echo.Context) error {
+func (h *Handler) MarkLogFeedback(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -1265,7 +1266,7 @@ func (h *Handler) MarkLogFeedback(c echo.Context) error {
 // entry's service only (issue #7), reloading the WAF live. Rule and service
 // come from the stored row, never the client, so this can't be aimed at an
 // arbitrary rule/service pair.
-func (h *Handler) CreateLogException(c echo.Context) error {
+func (h *Handler) CreateLogException(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -1337,7 +1338,7 @@ func (h *Handler) ipRulesRowsData(page int) (map[string]any, error) {
 	}, nil
 }
 
-func (h *Handler) IPRulesPage(c echo.Context) error {
+func (h *Handler) IPRulesPage(c *echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	data, err := h.ipRulesRowsData(page)
 	if err != nil {
@@ -1383,7 +1384,7 @@ func (h *Handler) IPRulesPage(c echo.Context) error {
 
 // IPRulesRows renders just the paginated rows partial. The Prev/Next
 // buttons hx-get this so paging never reloads the whole page.
-func (h *Handler) IPRulesRows(c echo.Context) error {
+func (h *Handler) IPRulesRows(c *echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	data, err := h.ipRulesRowsData(page)
 	if err != nil {
@@ -1394,7 +1395,7 @@ func (h *Handler) IPRulesRows(c echo.Context) error {
 
 // SaveAutobanSettings persists the automatic-banning knobs shown on the IP
 // Rules page and hot-reloads the banner so they apply immediately.
-func (h *Handler) SaveAutobanSettings(c echo.Context) error {
+func (h *Handler) SaveAutobanSettings(c *echo.Context) error {
 	cfg := storage.DefaultAutobanConfig()
 	cfg.Enabled = c.FormValue("autoban_enabled") == "1"
 	if n, err := strconv.Atoi(c.FormValue("autoban_threshold")); err == nil && n >= 1 && n <= 1000 {
@@ -1437,7 +1438,7 @@ const honeypotMax = 200
 
 // SaveHoneypots replaces the honeypot path list (issue #130) and swaps it
 // into the registry, which the proxy checks on every 404.
-func (h *Handler) SaveHoneypots(c echo.Context) error {
+func (h *Handler) SaveHoneypots(c *echo.Context) error {
 	var paths []string
 	saveErr := ""
 	raw := strings.Fields(c.FormValue("honeypot_paths"))
@@ -1474,7 +1475,7 @@ const trustedIPsMax = 200
 
 // SaveTrustedIPs replaces the trusted IP list (issue #179) and swaps it into
 // the registry, so its requests skip every blocking stage straight away.
-func (h *Handler) SaveTrustedIPs(c echo.Context) error {
+func (h *Handler) SaveTrustedIPs(c *echo.Context) error {
 	var entries []string
 	for _, e := range strings.Fields(c.FormValue("trusted_ips")) {
 		if !slices.Contains(entries, e) {
@@ -1505,7 +1506,7 @@ func (h *Handler) SaveTrustedIPs(c echo.Context) error {
 
 // SaveAdaptiveSettings persists the adaptive-enforcement knobs shown on the
 // IP Rules page and hot-reloads the policy so they apply immediately.
-func (h *Handler) SaveAdaptiveSettings(c echo.Context) error {
+func (h *Handler) SaveAdaptiveSettings(c *echo.Context) error {
 	cfg := storage.DefaultAdaptiveEnforcementConfig()
 	cfg.Enabled = c.FormValue("adaptive_enabled") == "1"
 	if n, err := strconv.Atoi(c.FormValue("adaptive_high_threshold")); err == nil && n >= 1 && n <= 100 {
@@ -1541,7 +1542,7 @@ func (h *Handler) SaveAdaptiveSettings(c echo.Context) error {
 	})
 }
 
-func (h *Handler) AddIPRule(c echo.Context) error {
+func (h *Handler) AddIPRule(c *echo.Context) error {
 	appName := c.FormValue("app_name")
 	ip := strings.TrimSpace(c.FormValue("ip"))
 	ruleType := c.FormValue("rule_type")
@@ -1580,7 +1581,7 @@ func (h *Handler) AddIPRule(c echo.Context) error {
 	return h.renderPartial(c, "ip_rules", "ip-rules-rows", data)
 }
 
-func (h *Handler) DeleteIPRule(c echo.Context) error {
+func (h *Handler) DeleteIPRule(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -1604,7 +1605,7 @@ func (h *Handler) DeleteIPRule(c echo.Context) error {
 
 // ── Geo Rules ─────────────────────────────────────────────────────────────────
 
-func (h *Handler) GeoRulesPage(c echo.Context) error {
+func (h *Handler) GeoRulesPage(c *echo.Context) error {
 	rules, err := h.db.ListGeoRules()
 	if err != nil {
 		return err
@@ -1632,7 +1633,7 @@ func (h *Handler) GeoRulesPage(c echo.Context) error {
 	})
 }
 
-func (h *Handler) AddGeoRule(c echo.Context) error {
+func (h *Handler) AddGeoRule(c *echo.Context) error {
 	appName := c.FormValue("app_name")
 	code := strings.ToUpper(strings.TrimSpace(c.FormValue("country_code")))
 	ruleType := c.FormValue("rule_type")
@@ -1651,7 +1652,7 @@ func (h *Handler) AddGeoRule(c echo.Context) error {
 	return h.renderPartial(c, "geo_rules", "geo-rules-rows", map[string]any{"Rules": rules})
 }
 
-func (h *Handler) DeleteGeoRule(c echo.Context) error {
+func (h *Handler) DeleteGeoRule(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -1745,7 +1746,7 @@ func (h *Handler) vpatchViews(disabled []storage.DisabledWAFRule, exceptions []s
 	return out, nil
 }
 
-func (h *Handler) WAFRulesPage(c echo.Context) error {
+func (h *Handler) WAFRulesPage(c *echo.Context) error {
 	data, err := h.wafRulesContentData()
 	if err != nil {
 		return err
@@ -1753,7 +1754,7 @@ func (h *Handler) WAFRulesPage(c echo.Context) error {
 	return h.render(c, "waf_rules", data)
 }
 
-func (h *Handler) DisableWAFRule(c echo.Context) error {
+func (h *Handler) DisableWAFRule(c *echo.Context) error {
 	ruleIDStr := strings.TrimSpace(c.FormValue("rule_id"))
 	reason := strings.TrimSpace(c.FormValue("reason"))
 	service := strings.TrimSpace(c.FormValue("service"))
@@ -1778,7 +1779,7 @@ func (h *Handler) DisableWAFRule(c echo.Context) error {
 	return h.renderPartial(c, "waf_rules", "waf-content", data)
 }
 
-func (h *Handler) EnableWAFRule(c echo.Context) error {
+func (h *Handler) EnableWAFRule(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -1794,7 +1795,7 @@ func (h *Handler) EnableWAFRule(c echo.Context) error {
 	return h.renderPartial(c, "waf_rules", "waf-content", data)
 }
 
-func (h *Handler) EnableWAFRuleForService(c echo.Context) error {
+func (h *Handler) EnableWAFRuleForService(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -1814,7 +1815,7 @@ func (h *Handler) EnableWAFRuleForService(c echo.Context) error {
 // used to surface suggested exceptions (issue #76). No hot-reload needed —
 // it only changes which suggestions GetWAFRuleSuggestions returns, not the
 // live WAF engine.
-func (h *Handler) SaveWAFFeedbackConfig(c echo.Context) error {
+func (h *Handler) SaveWAFFeedbackConfig(c *echo.Context) error {
 	cfg := storage.DefaultWAFRuleFeedbackConfig()
 	if n, err := strconv.Atoi(c.FormValue("feedback_threshold")); err == nil && n >= 1 && n <= 1000 {
 		cfg.Threshold = n
@@ -1856,7 +1857,7 @@ const aiUsageRecentLimit = 200
 // (threatscore/typesafeclassify.go) has made — where TypeSafe token usage
 // goes and why, since that classifier is otherwise invisible: it runs off
 // the request hot path and only ever logs a one-line error to stderr.
-func (h *Handler) AIUsagePage(c echo.Context) error {
+func (h *Handler) AIUsagePage(c *echo.Context) error {
 	calls, err := h.db.ListTypeSafeCalls(aiUsageRecentLimit)
 	if err != nil {
 		calls = nil
@@ -1886,7 +1887,7 @@ func (h *Handler) threatIntelData() map[string]any {
 	}
 }
 
-func (h *Handler) ThreatIntelPage(c echo.Context) error {
+func (h *Handler) ThreatIntelPage(c *echo.Context) error {
 	return h.render(c, "threat_intel", h.threatIntelData())
 }
 
@@ -1908,7 +1909,7 @@ func validateOutboundURL(raw string) error {
 	return nil
 }
 
-func (h *Handler) AddThreatIntelSource(c echo.Context) error {
+func (h *Handler) AddThreatIntelSource(c *echo.Context) error {
 	label := strings.TrimSpace(c.FormValue("label"))
 	url := strings.TrimSpace(c.FormValue("url"))
 	hours, err := strconv.Atoi(c.FormValue("interval_hours"))
@@ -1930,7 +1931,7 @@ func (h *Handler) AddThreatIntelSource(c echo.Context) error {
 // AddCrowdSecSource adds a CrowdSec LAPI source (issue #194). The bouncer
 // key is stored sealed and never rendered back; the worker's next poll
 // (within 30s) does the initial sync.
-func (h *Handler) AddCrowdSecSource(c echo.Context) error {
+func (h *Handler) AddCrowdSecSource(c *echo.Context) error {
 	label := strings.TrimSpace(c.FormValue("label"))
 	url := strings.TrimSpace(c.FormValue("url"))
 	key := strings.TrimSpace(c.FormValue("api_key"))
@@ -1946,7 +1947,7 @@ func (h *Handler) AddCrowdSecSource(c echo.Context) error {
 	return h.renderPartial(c, "threat_intel", "intel-rows", h.threatIntelData())
 }
 
-func (h *Handler) DeleteThreatIntelSource(c echo.Context) error {
+func (h *Handler) DeleteThreatIntelSource(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -1958,7 +1959,7 @@ func (h *Handler) DeleteThreatIntelSource(c echo.Context) error {
 	return h.renderPartial(c, "threat_intel", "intel-rows", h.threatIntelData())
 }
 
-func (h *Handler) ToggleThreatIntelSource(c echo.Context) error {
+func (h *Handler) ToggleThreatIntelSource(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -1971,7 +1972,7 @@ func (h *Handler) ToggleThreatIntelSource(c echo.Context) error {
 	return h.renderPartial(c, "threat_intel", "intel-rows", h.threatIntelData())
 }
 
-func (h *Handler) SyncThreatIntelSource(c echo.Context) error {
+func (h *Handler) SyncThreatIntelSource(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -2023,7 +2024,7 @@ func (h *Handler) serviceViews() []ServiceView {
 	return out
 }
 
-func (h *Handler) ServicesPage(c echo.Context) error {
+func (h *Handler) ServicesPage(c *echo.Context) error {
 	poolCerts, _ := h.db.ListCertificates()
 	return h.render(c, "services", map[string]any{
 		"Services":      h.serviceViews(),
@@ -2034,18 +2035,18 @@ func (h *Handler) ServicesPage(c echo.Context) error {
 
 // ServicesRows re-renders just the services table body, polled periodically
 // by the page so the reachability dot updates live.
-func (h *Handler) ServicesRows(c echo.Context) error {
+func (h *Handler) ServicesRows(c *echo.Context) error {
 	return h.servicesRows(c)
 }
 
 // servicesRows renders the service table fragment every service write swaps in.
-func (h *Handler) servicesRows(c echo.Context) error {
+func (h *Handler) servicesRows(c *echo.Context) error {
 	return h.renderPartial(c, "services", "services-rows", h.servicesRowsData(c))
 }
 
 // servicesRowsData is the services-rows input: the rows plus the viewer's
 // role, which picks the Edit or the read-only View button.
-func (h *Handler) servicesRowsData(c echo.Context) map[string]any {
+func (h *Handler) servicesRowsData(c *echo.Context) map[string]any {
 	role := ""
 	if u := currentUser(c); u != nil {
 		role = u.Role
@@ -2056,7 +2057,7 @@ func (h *Handler) servicesRowsData(c echo.Context) map[string]any {
 // wizardError redirects the swap to the wizard's own error box (instead of
 // the services table) via HTMX response headers, so a failed add doesn't
 // clobber the existing rows.
-func (h *Handler) wizardError(c echo.Context, msg string) error {
+func (h *Handler) wizardError(c *echo.Context, msg string) error {
 	c.Response().Header().Set("HX-Retarget", "#wizard-error")
 	c.Response().Header().Set("HX-Reswap", "innerHTML")
 	return c.String(http.StatusOK, msg)
@@ -2081,7 +2082,7 @@ func sanitizeHost(h string) string {
 // matchType picks which of host/prefix gets saved; the wizard only ever
 // collects one of the two from the user. The backend must pass a live
 // reachability probe before it's saved.
-func (h *Handler) AddService(c echo.Context) error {
+func (h *Handler) AddService(c *echo.Context) error {
 	name := strings.TrimSpace(c.FormValue("name"))
 	matchType := c.FormValue("match_type") // "host" | "prefix"
 	matchValue := strings.TrimSpace(c.FormValue("match_value"))
@@ -2134,13 +2135,13 @@ func (h *Handler) AddService(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return err
 	}
-	w := c.Response().Writer
+	w := c.Response()
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, `<div id="wizard-error" hx-swap-oob="true"></div>`)
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
-func (h *Handler) DeleteService(c echo.Context) error {
+func (h *Handler) DeleteService(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -2156,13 +2157,13 @@ func (h *Handler) DeleteService(c echo.Context) error {
 
 // ── Certificate Pool ──────────────────────────────────────────────────────────
 
-func (h *Handler) certError(c echo.Context, msg string) error {
+func (h *Handler) certError(c *echo.Context, msg string) error {
 	c.Response().Header().Set("HX-Retarget", "#cert-error")
 	c.Response().Header().Set("HX-Reswap", "innerHTML")
 	return c.String(http.StatusOK, msg)
 }
 
-func (h *Handler) renderCertRows(c echo.Context) error {
+func (h *Handler) renderCertRows(c *echo.Context) error {
 	certs, _ := h.db.ListCertificates()
 	return h.renderPartial(c, "certificates", "cert-rows", map[string]any{
 		"Certs":     certs,
@@ -2170,7 +2171,7 @@ func (h *Handler) renderCertRows(c echo.Context) error {
 	})
 }
 
-func (h *Handler) CertificatesPage(c echo.Context) error {
+func (h *Handler) CertificatesPage(c *echo.Context) error {
 	certs, _ := h.db.ListCertificates()
 	return h.render(c, "certificates", map[string]any{
 		"Certs": certs,
@@ -2180,7 +2181,7 @@ func (h *Handler) CertificatesPage(c echo.Context) error {
 // AddCertificate uploads a cert+key PEM pair to the shared pool. It parses
 // the certificate first to auto-detect covered domains and the expiry date,
 // then saves to disk and records the paths in the database.
-func (h *Handler) AddCertificate(c echo.Context) error {
+func (h *Handler) AddCertificate(c *echo.Context) error {
 	name := strings.TrimSpace(c.FormValue("name"))
 	certPEM := []byte(c.FormValue("cert_pem"))
 	keyPEM := []byte(c.FormValue("key_pem"))
@@ -2254,7 +2255,7 @@ func uniqueCertName(requested string, domains []string, existing []storage.CertR
 // DeleteCertificate removes a cert from the pool. Services that referenced it
 // are reset to no-TLS by the DB layer, and the registry is reloaded so they
 // stop presenting the cert immediately.
-func (h *Handler) DeleteCertificate(c echo.Context) error {
+func (h *Handler) DeleteCertificate(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -2271,7 +2272,7 @@ func (h *Handler) DeleteCertificate(c echo.Context) error {
 
 // AssignPoolCert links an existing pool cert to a host-matched service. After
 // this call the registry serves that cert for the service's domain over TLS.
-func (h *Handler) AssignPoolCert(c echo.Context) error {
+func (h *Handler) AssignPoolCert(c *echo.Context) error {
 	serviceID, err := strconv.Atoi(c.FormValue("service_id"))
 	if err != nil {
 		return h.tlsModalError(c, "invalid service")
@@ -2313,7 +2314,7 @@ func (h *Handler) AssignPoolCert(c echo.Context) error {
 
 // tlsModalError redirects the swap to the TLS modal's own error box instead
 // of the services table, mirroring wizardError for the add-service wizard.
-func (h *Handler) tlsModalError(c echo.Context, msg string) error {
+func (h *Handler) tlsModalError(c *echo.Context, msg string) error {
 	c.Response().Header().Set("HX-Retarget", "#tls-error")
 	c.Response().Header().Set("HX-Reswap", "innerHTML")
 	return c.String(http.StatusOK, msg)
@@ -2325,9 +2326,9 @@ func (h *Handler) tlsModalError(c echo.Context, msg string) error {
 // alongside it: the header can only be set once, so a caller that also
 // needs its own event (SaveAcmeEmail) must pass it here rather than set
 // HX-Trigger itself, or it would be silently overwritten.
-func (h *Handler) tlsSaved(c echo.Context, extraEvents ...string) error {
+func (h *Handler) tlsSaved(c *echo.Context, extraEvents ...string) error {
 	c.Response().Header().Set("HX-Trigger", strings.Join(append([]string{"tls-saved"}, extraEvents...), ", "))
-	w := c.Response().Writer
+	w := c.Response()
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, `<div id="tls-error" hx-swap-oob="true"></div>`)
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
@@ -2336,7 +2337,7 @@ func (h *Handler) tlsSaved(c echo.Context, extraEvents ...string) error {
 // UploadServiceTLS saves an admin-provided cert+key PEM pair for a
 // host-matched service. The private key is written to disk, never stored
 // in the database (see services.SaveCustomCert).
-func (h *Handler) UploadServiceTLS(c echo.Context) error {
+func (h *Handler) UploadServiceTLS(c *echo.Context) error {
 	id, err := strconv.Atoi(c.FormValue("service_id"))
 	if err != nil {
 		return h.tlsModalError(c, "invalid service")
@@ -2375,7 +2376,7 @@ func (h *Handler) UploadServiceTLS(c echo.Context) error {
 // If no ACME email is stored in the DB yet, it fires a need-acme-email event
 // so the UI can prompt the user first; without an email Let's Encrypt
 // cannot register an account and cert issuance will always fail.
-func (h *Handler) EnableServiceAutoTLS(c echo.Context) error {
+func (h *Handler) EnableServiceAutoTLS(c *echo.Context) error {
 	id, err := strconv.Atoi(c.FormValue("service_id"))
 	if err != nil {
 		return h.tlsModalError(c, "invalid service")
@@ -2411,7 +2412,7 @@ func (h *Handler) EnableServiceAutoTLS(c echo.Context) error {
 // SaveAcmeEmail stores the Let's Encrypt contact email and, if a service_id
 // is provided, immediately enables auto-TLS for that service so the user
 // doesn't have to click "Enable" twice after filling in their email.
-func (h *Handler) SaveAcmeEmail(c echo.Context) error {
+func (h *Handler) SaveAcmeEmail(c *echo.Context) error {
 	email := strings.TrimSpace(c.FormValue("email"))
 	if email == "" || !strings.Contains(email, "@") {
 		c.Response().Header().Set("HX-Retarget", "#acme-email-error")
@@ -2434,7 +2435,7 @@ func (h *Handler) SaveAcmeEmail(c echo.Context) error {
 }
 
 // ClearServiceTLS reverts a service to plain HTTP.
-func (h *Handler) ClearServiceTLS(c echo.Context) error {
+func (h *Handler) ClearServiceTLS(c *echo.Context) error {
 	id, err := strconv.Atoi(c.FormValue("service_id"))
 	if err != nil {
 		return h.tlsModalError(c, "invalid service")
@@ -2449,13 +2450,13 @@ func (h *Handler) ClearServiceTLS(c echo.Context) error {
 }
 
 // rlError mirrors tlsModalError but targets the Rate Limit tab's own error box.
-func (h *Handler) rlError(c echo.Context, msg string) error {
+func (h *Handler) rlError(c *echo.Context, msg string) error {
 	c.Response().Header().Set("HX-Retarget", "#rl-error")
 	c.Response().Header().Set("HX-Reswap", "innerHTML")
 	return c.String(http.StatusOK, msg)
 }
 
-func (h *Handler) SetServiceRateLimit(c echo.Context) error {
+func (h *Handler) SetServiceRateLimit(c *echo.Context) error {
 	id, err := strconv.Atoi(c.FormValue("service_id"))
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid service")
@@ -2484,7 +2485,7 @@ func (h *Handler) SetServiceRateLimit(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return err
 	}
-	w := c.Response().Writer
+	w := c.Response()
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.Response().Header().Set("HX-Trigger", "rl-saved")
 	fmt.Fprint(w, `<div id="rl-error" hx-swap-oob="true"></div>`)
@@ -2495,7 +2496,7 @@ func (h *Handler) SetServiceRateLimit(c echo.Context) error {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
-func (h *Handler) SettingsPage(c echo.Context) error {
+func (h *Handler) SettingsPage(c *echo.Context) error {
 	me := currentUser(c)
 	botEnabled, botThreshold, botTTL, _ := h.db.GetBotSettings()
 	aiPolicy, _ := h.db.GetAICrawlerPolicy()
@@ -2578,7 +2579,7 @@ func (h *Handler) SettingsPage(c echo.Context) error {
 // CreateAPIKey generates a new bearer token for the REST API and shows it to
 // the admin exactly once; only its SHA-256 hash and a display prefix are
 // persisted (see newAPIKey, ui/api.go).
-func (h *Handler) CreateAPIKey(c echo.Context) error {
+func (h *Handler) CreateAPIKey(c *echo.Context) error {
 	name := strings.TrimSpace(c.FormValue("name"))
 	readOnly := c.FormValue("read_only") == "1"
 	apiKeys, _ := h.db.ListAPIKeys()
@@ -2617,7 +2618,7 @@ func (h *Handler) CreateAPIKey(c echo.Context) error {
 
 // DeleteAPIKey revokes a key by deleting its row. Any request already using
 // it fails its next auth check immediately, no cache or TTL to wait out.
-func (h *Handler) DeleteAPIKey(c echo.Context) error {
+func (h *Handler) DeleteAPIKey(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -2633,7 +2634,7 @@ func (h *Handler) DeleteAPIKey(c echo.Context) error {
 }
 
 // sessionCookieValue returns the caller's own session token, or "".
-func sessionCookieValue(c echo.Context) string {
+func sessionCookieValue(c *echo.Context) string {
 	cookie, err := c.Cookie(sessionCookie)
 	if err != nil {
 		return ""
@@ -2642,7 +2643,7 @@ func sessionCookieValue(c echo.Context) string {
 }
 
 // devicesData is the render payload shared by the card and its row list.
-func (h *Handler) devicesData(c echo.Context) map[string]any {
+func (h *Handler) devicesData(c *echo.Context) map[string]any {
 	current := sessionCookieValue(c)
 	return map[string]any{
 		"AdminPath": h.cfg.Admin.Path,
@@ -2660,7 +2661,7 @@ func (h *Handler) devicesData(c echo.Context) map[string]any {
 // The current device is refused either way: the Log out button in the
 // sidebar already signs you out, and doing it from a device list is a
 // confusing way to get there.
-func (h *Handler) RevokeDevice(c echo.Context) error {
+func (h *Handler) RevokeDevice(c *echo.Context) error {
 	// The link carries the session's stored id, never its cookie token (#269).
 	if id := c.Param("token"); id != storage.SessionID(sessionCookieValue(c)) {
 		sess, err := h.db.GetSessionByID(id)
@@ -2682,7 +2683,7 @@ func (h *Handler) RevokeDevice(c echo.Context) error {
 }
 
 // RevokeOtherDevices signs out every session except the caller's own.
-func (h *Handler) RevokeOtherDevices(c echo.Context) error {
+func (h *Handler) RevokeOtherDevices(c *echo.Context) error {
 	if _, err := h.db.RevokeOtherSessions(currentUID(c), storage.SessionID(sessionCookieValue(c))); err != nil {
 		log.Printf("revoke other devices: %v", err)
 	}
@@ -2691,7 +2692,7 @@ func (h *Handler) RevokeOtherDevices(c echo.Context) error {
 
 // SaveBotSettings persists global bot-protection settings and hot-reloads the
 // challenger so changes take effect without a server restart.
-func (h *Handler) SaveBotSettings(c echo.Context) error {
+func (h *Handler) SaveBotSettings(c *echo.Context) error {
 	enabled := c.FormValue("bot_enabled") == "1"
 	threshold, _ := strconv.Atoi(c.FormValue("bot_threshold"))
 	ttl, _ := strconv.Atoi(c.FormValue("bot_ttl"))
@@ -2760,7 +2761,7 @@ func (h *Handler) SaveBotSettings(c echo.Context) error {
 }
 
 // SetServiceBotMode sets the per-service bot protection override (inherit / always / off).
-func (h *Handler) SetServiceBotMode(c echo.Context) error {
+func (h *Handler) SetServiceBotMode(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -2775,7 +2776,7 @@ func (h *Handler) SetServiceBotMode(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	w := c.Response().Writer
+	w := c.Response()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
@@ -2783,7 +2784,7 @@ func (h *Handler) SetServiceBotMode(c echo.Context) error {
 // SetServiceLargeJSUploads opts one service into streaming JavaScript request
 // bodies. This avoids the small, deliberately conservative limit applied to
 // non-file bodies while leaving all header-phase WAF checks active.
-func (h *Handler) SetServiceLargeJSUploads(c echo.Context) error {
+func (h *Handler) SetServiceLargeJSUploads(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -2798,14 +2799,14 @@ func (h *Handler) SetServiceLargeJSUploads(c echo.Context) error {
 	if h.reloadWAF != nil {
 		h.reloadWAF()
 	}
-	w := c.Response().Writer
+	w := c.Response()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
 // SetServiceHTTP3 opts one service's Host into HTTP/3. Takes effect on the
 // next request via the registry reload; no-op until --listen-h3 is set.
-func (h *Handler) SetServiceHTTP3(c echo.Context) error {
+func (h *Handler) SetServiceHTTP3(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -2816,7 +2817,7 @@ func (h *Handler) SetServiceHTTP3(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	w := c.Response().Writer
+	w := c.Response()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
@@ -2825,7 +2826,7 @@ func (h *Handler) SetServiceHTTP3(c echo.Context) error {
 // first is the primary), balancing policy and active health check. Errors
 // are swapped into the tab's error box; success fires backends-saved, which
 // closes the modal.
-func (h *Handler) SetServiceBackends(c echo.Context) error {
+func (h *Handler) SetServiceBackends(c *echo.Context) error {
 	fail := func(msg string) error {
 		c.Response().Header().Set("HX-Retarget", "#svc-backends-error")
 		c.Response().Header().Set("HX-Reswap", "innerHTML")
@@ -2863,7 +2864,7 @@ func (h *Handler) SetServiceBackends(c echo.Context) error {
 
 // SetServiceHosts saves a host-matched service's extra hostnames (one per
 // line, e.g. www.example.com) and which name the others redirect to.
-func (h *Handler) SetServiceHosts(c echo.Context) error {
+func (h *Handler) SetServiceHosts(c *echo.Context) error {
 	fail := func(msg string) error {
 		c.Response().Header().Set("HX-Retarget", "#svc-hosts-error")
 		c.Response().Header().Set("HX-Reswap", "innerHTML")
@@ -2892,7 +2893,7 @@ func (h *Handler) SetServiceHosts(c echo.Context) error {
 }
 
 // aiPolicyForm reads the ai_<category> selects; anything else is dropped.
-func aiPolicyForm(c echo.Context) bot.AIPolicy {
+func aiPolicyForm(c *echo.Context) bot.AIPolicy {
 	p := bot.AIPolicy{}
 	for _, cat := range bot.AICategories {
 		if a := c.FormValue("ai_" + cat); bot.ValidAIAction(a) {
@@ -2904,7 +2905,7 @@ func aiPolicyForm(c echo.Context) bot.AIPolicy {
 
 // SetServiceAICrawlers saves a service's AI crawler policy overrides
 // (issue #187); a category left on inherit takes the global default.
-func (h *Handler) SetServiceAICrawlers(c echo.Context) error {
+func (h *Handler) SetServiceAICrawlers(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -2919,7 +2920,7 @@ func (h *Handler) SetServiceAICrawlers(c echo.Context) error {
 }
 
 // SetServiceBreachCheck saves a service's leaked-password check (issue #188).
-func (h *Handler) SetServiceBreachCheck(c echo.Context) error {
+func (h *Handler) SetServiceBreachCheck(c *echo.Context) error {
 	fail := func(msg string) error {
 		c.Response().Header().Set("HX-Retarget", "#svc-breach-error")
 		c.Response().Header().Set("HX-Reswap", "innerHTML")
@@ -2960,7 +2961,7 @@ const loginPathsMax = 20
 
 // SetServiceLoginPaths saves the paths that get the login protection preset
 // (issue #132). An empty list turns it off.
-func (h *Handler) SetServiceLoginPaths(c echo.Context) error {
+func (h *Handler) SetServiceLoginPaths(c *echo.Context) error {
 	fail := func(msg string) error {
 		c.Response().Header().Set("HX-Retarget", "#svc-login-error")
 		c.Response().Header().Set("HX-Reswap", "innerHTML")
@@ -2993,7 +2994,7 @@ func (h *Handler) SetServiceLoginPaths(c echo.Context) error {
 }
 
 // SetServiceCompress turns response compression on or off for one service.
-func (h *Handler) SetServiceCompress(c echo.Context) error {
+func (h *Handler) SetServiceCompress(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -3004,7 +3005,7 @@ func (h *Handler) SetServiceCompress(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	w := c.Response().Writer
+	w := c.Response()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
@@ -3015,7 +3016,7 @@ func (h *Handler) SetServiceCompress(c echo.Context) error {
 // rejects a mismatching body with 400 — see waf.Engine.SetRequestSchema. A
 // malformed schema is rejected here, before it ever reaches the DB, so a bad
 // save can't later break a WAF reload.
-func (h *Handler) SetServiceSchema(c echo.Context) error {
+func (h *Handler) SetServiceSchema(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -3039,7 +3040,7 @@ func (h *Handler) SetServiceSchema(c echo.Context) error {
 	if h.reloadWAF != nil {
 		h.reloadWAF()
 	}
-	w := c.Response().Writer
+	w := c.Response()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
@@ -3049,7 +3050,7 @@ const openAPIMaxBytes = 2 << 20
 
 // ServiceOpenAPI returns a service's stored OpenAPI spec as plain text, for
 // the edit modal.
-func (h *Handler) ServiceOpenAPI(c echo.Context) error {
+func (h *Handler) ServiceOpenAPI(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -3064,7 +3065,7 @@ func (h *Handler) ServiceOpenAPI(c echo.Context) error {
 // SetServiceOpenAPI uploads, replaces or removes a service's OpenAPI spec
 // (issue #190): a positive security model where only declared operations
 // reach the backend. See waf.Engine.SetOpenAPI.
-func (h *Handler) SetServiceOpenAPI(c echo.Context) error {
+func (h *Handler) SetServiceOpenAPI(c *echo.Context) error {
 	fail := func(msg string) error {
 		c.Response().Header().Set("HX-Retarget", "#svc-openapi-error")
 		c.Response().Header().Set("HX-Reswap", "innerHTML")
@@ -3099,7 +3100,7 @@ func (h *Handler) SetServiceOpenAPI(c echo.Context) error {
 
 // SetServiceMCP saves a service's MCP endpoint guard (issue #234). See
 // waf.Engine.SetMCP.
-func (h *Handler) SetServiceMCP(c echo.Context) error {
+func (h *Handler) SetServiceMCP(c *echo.Context) error {
 	fail := func(msg string) error {
 		c.Response().Header().Set("HX-Retarget", "#svc-mcp-error")
 		c.Response().Header().Set("HX-Reswap", "innerHTML")
@@ -3142,7 +3143,7 @@ const defaultCSP = "script-src 'self'"
 // SetServiceCSP saves a service's report-only CSP (issue #235). The report
 // directives are appended by services.Registry, so the policy can't carry
 // its own.
-func (h *Handler) SetServiceCSP(c echo.Context) error {
+func (h *Handler) SetServiceCSP(c *echo.Context) error {
 	fail := func(msg string) error {
 		c.Response().Header().Set("HX-Retarget", "#svc-csp-error")
 		c.Response().Header().Set("HX-Reswap", "innerHTML")
@@ -3181,7 +3182,7 @@ func (h *Handler) SetServiceCSP(c echo.Context) error {
 
 // SetServiceMTLS saves a service's client-certificate policy (issue #191).
 // An empty CA field keeps the stored bundle; "off" keeps it for later.
-func (h *Handler) SetServiceMTLS(c echo.Context) error {
+func (h *Handler) SetServiceMTLS(c *echo.Context) error {
 	fail := func(msg string) error {
 		c.Response().Header().Set("HX-Retarget", "#svc-mtls-error")
 		c.Response().Header().Set("HX-Reswap", "innerHTML")
@@ -3232,7 +3233,7 @@ func (h *Handler) SetServiceMTLS(c echo.Context) error {
 
 // SetServiceResponseInspect sets a service's response inspection mode
 // (issue #192): "" off, "log" or "block".
-func (h *Handler) SetServiceResponseInspect(c echo.Context) error {
+func (h *Handler) SetServiceResponseInspect(c *echo.Context) error {
 	fail := func(msg string) error {
 		c.Response().Header().Set("HX-Retarget", "#svc-responses-error")
 		c.Response().Header().Set("HX-Reswap", "innerHTML")
@@ -3258,7 +3259,7 @@ func (h *Handler) SetServiceResponseInspect(c echo.Context) error {
 
 // SetServiceCache toggles routing one service's clean traffic through the
 // local Varnish cache and rebuilds the registry so it applies immediately.
-func (h *Handler) SetServiceCache(c echo.Context) error {
+func (h *Handler) SetServiceCache(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -3270,7 +3271,7 @@ func (h *Handler) SetServiceCache(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	w := c.Response().Writer
+	w := c.Response()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
@@ -3279,7 +3280,7 @@ func (h *Handler) SetServiceCache(c echo.Context) error {
 // one service: cached objects are partitioned by the named session cookie's
 // value instead of Varnish refusing to cache any cookie-bearing request.
 // Requires both the checkbox and a non-empty cookie name to take effect.
-func (h *Handler) SetServiceCacheSession(c echo.Context) error {
+func (h *Handler) SetServiceCacheSession(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -3295,7 +3296,7 @@ func (h *Handler) SetServiceCacheSession(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	w := c.Response().Writer
+	w := c.Response()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
@@ -3317,7 +3318,7 @@ func parseOptionalSeconds(raw string) (int, error) {
 // SetServiceCacheTuning configures per-service Varnish TTL floor/ceiling and
 // grace/keep overrides. Each field is optional seconds; blank means "use the
 // VCL's own default" (see deploy/varnish/default.vcl's vcl_backend_response).
-func (h *Handler) SetServiceCacheTuning(c echo.Context) error {
+func (h *Handler) SetServiceCacheTuning(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -3351,7 +3352,7 @@ func (h *Handler) SetServiceCacheTuning(c echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	w := c.Response().Writer
+	w := c.Response()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
@@ -3361,7 +3362,7 @@ func (h *Handler) SetServiceCacheTuning(c echo.Context) error {
 // after a content deploy). Returns a small
 // status fragment rather than the services list, since purging doesn't
 // change any row's displayed state.
-func (h *Handler) PurgeServiceCache(c echo.Context) error {
+func (h *Handler) PurgeServiceCache(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return c.HTML(http.StatusOK, `<span class="text-red-600">invalid service id</span>`)
@@ -3401,7 +3402,7 @@ func fmtMiB(b uint64) string {
 // Varnish-wide counters from varnishstat (best-effort — an error is shown,
 // not fatal) plus per-service hit ratios from the request log's
 // cache_status, which varnishstat can't split by service.
-func (h *Handler) ServicesCacheStats(c echo.Context) error {
+func (h *Handler) ServicesCacheStats(c *echo.Context) error {
 	vcfg, err := h.db.GetVarnishConfig()
 	if err != nil {
 		return err
@@ -3441,7 +3442,7 @@ func (h *Handler) ServicesCacheStats(c echo.Context) error {
 // (or pointed back at their backends) without a restart. The listen address
 // must be loopback: Varnish sits behind the WAF, and a non-local address
 // would let clients hit the cache with unscrubbed traffic.
-func (h *Handler) SaveVarnishConfig(c echo.Context) error {
+func (h *Handler) SaveVarnishConfig(c *echo.Context) error {
 	enabled := c.FormValue("varnish_enabled") == "1"
 	addr := strings.TrimSpace(c.FormValue("varnish_addr"))
 	if addr == "" {
@@ -3483,7 +3484,7 @@ func (h *Handler) SaveVarnishConfig(c echo.Context) error {
 
 // SaveRateLimitConfig persists the global rate-limit settings (enabled/rps/
 // burst), then hot-reloads the limiter in the proxy handler.
-func (h *Handler) SaveRateLimitConfig(c echo.Context) error {
+func (h *Handler) SaveRateLimitConfig(c *echo.Context) error {
 	enabled := c.FormValue("rl_enabled") == "1"
 	rps, _ := strconv.ParseFloat(strings.TrimSpace(c.FormValue("rl_rps")), 64)
 	burst, _ := strconv.Atoi(strings.TrimSpace(c.FormValue("rl_burst")))
@@ -3528,7 +3529,7 @@ func (h *Handler) SaveRateLimitConfig(c echo.Context) error {
 }
 
 // SaveWebhookConfig persists the webhook delivery settings.
-func (h *Handler) SaveWebhookConfig(c echo.Context) error {
+func (h *Handler) SaveWebhookConfig(c *echo.Context) error {
 	url := strings.TrimSpace(c.FormValue("webhook_url"))
 	secret := strings.TrimSpace(c.FormValue("webhook_secret"))
 	enabled := c.FormValue("webhook_enabled") == "1"
@@ -3569,7 +3570,7 @@ func (h *Handler) SaveWebhookConfig(c echo.Context) error {
 // TestWebhook sends a single synthetic "blocked" event to the currently
 // saved webhook URL/destination type, mirroring TestEmailReport's pattern
 // (test against saved settings, ignoring the enabled toggle).
-func (h *Handler) TestWebhook(c echo.Context) error {
+func (h *Handler) TestWebhook(c *echo.Context) error {
 	if h.sendTestWebhook == nil {
 		return c.HTML(http.StatusOK,
 			`<span class="text-red-600 text-[13px]">Webhook delivery is not available.</span>`)
@@ -3586,7 +3587,7 @@ func (h *Handler) TestWebhook(c echo.Context) error {
 // Cloudflare API token; everything else is hardcoded in the mailer package).
 // A blank token field keeps the stored token, so re-saving other fields never
 // wipes the credential, and the token is never echoed back into the page.
-func (h *Handler) SaveEmailSettings(c echo.Context) error {
+func (h *Handler) SaveEmailSettings(c *echo.Context) error {
 	stored, _ := h.db.GetEmailConfig()
 
 	cfg := storage.EmailConfig{
@@ -3625,7 +3626,7 @@ func (h *Handler) SaveEmailSettings(c echo.Context) error {
 // scorer's classifier via h.scorer, the same "Reload after save" pattern
 // used for geo rules. A blank key field keeps the stored one, mirroring
 // SaveEmailSettings, and the key is never echoed back into the page.
-func (h *Handler) SaveTypeSafeSettings(c echo.Context) error {
+func (h *Handler) SaveTypeSafeSettings(c *echo.Context) error {
 	stored, _ := h.db.GetTypeSafeConfig()
 
 	cfg := storage.TypeSafeConfig{
@@ -3659,7 +3660,7 @@ func (h *Handler) SaveTypeSafeSettings(c echo.Context) error {
 
 // TestEmailReport sends a report for the last 24 hours right now, using the
 // saved settings. Returns an inline HTML fragment for HTMX.
-func (h *Handler) TestEmailReport(c echo.Context) error {
+func (h *Handler) TestEmailReport(c *echo.Context) error {
 	if h.sendReportNow == nil {
 		return c.HTML(http.StatusOK,
 			`<span class="text-red-600 text-[13px]">Email reporting is not available.</span>`)
@@ -3674,7 +3675,7 @@ func (h *Handler) TestEmailReport(c echo.Context) error {
 
 // ExportLogs streams the filtered request log as NDJSON (one JSON object per
 // line). Accepts the same from/to/app/status query parameters as the Logs page.
-func (h *Handler) ExportLogs(c echo.Context) error {
+func (h *Handler) ExportLogs(c *echo.Context) error {
 	q := c.QueryParams()
 	filter := storage.LogFilter{
 		AppName:     q.Get("app"),
@@ -3688,7 +3689,7 @@ func (h *Handler) ExportLogs(c echo.Context) error {
 	}
 
 	filename := "waf-logs-" + time.Now().UTC().Format("2006-01-02") + ".ndjson"
-	w := c.Response().Writer
+	w := c.Response()
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	w.Header().Set("Cache-Control", "no-store")
@@ -3748,7 +3749,7 @@ func (h *Handler) dbConnCardData(cfg storage.DBConnConfig, saveOK bool, saveErr 
 // validate before persisting) and TestDBConnection (to actually dial it).
 // sqlite has no host/port/credentials, so its Host field doubles as the
 // database file path — the same convention storage.DBConnFields.Host uses.
-func resolveDBConnInput(c echo.Context) (driver, dsn string, err error) {
+func resolveDBConnInput(c *echo.Context) (driver, dsn string, err error) {
 	driver = strings.TrimSpace(c.FormValue("dbconn_driver"))
 	if driver == "" {
 		return "", "", fmt.Errorf("select a database driver")
@@ -3791,7 +3792,7 @@ func resolveDBConnInput(c echo.Context) (driver, dsn string, err error) {
 // after a restart with the flags TestDBConnection shows on a successful
 // test. Saving here never touches that live connection or requires a
 // successful test first, so an admin can save a draft mid-edit.
-func (h *Handler) SaveDBConnConfig(c echo.Context) error {
+func (h *Handler) SaveDBConnConfig(c *echo.Context) error {
 	cfg := storage.DBConnConfig{
 		Driver:   strings.TrimSpace(c.FormValue("dbconn_driver")),
 		Mode:     c.FormValue("dbconn_mode"),
@@ -3835,7 +3836,7 @@ func (h *Handler) SaveDBConnConfig(c echo.Context) error {
 // success, shows the --db-driver/--db flag values needed to actually switch
 // the running server over, since that always requires a restart (see
 // SaveDBConnConfig's doc comment).
-func (h *Handler) TestDBConnection(c echo.Context) error {
+func (h *Handler) TestDBConnection(c *echo.Context) error {
 	driver, dsn, err := resolveDBConnInput(c)
 	if err != nil {
 		return c.HTML(http.StatusOK,
@@ -3865,7 +3866,7 @@ func (h *Handler) TestDBConnection(c echo.Context) error {
 // than overwriting (the confirm dialog on the button says this). Like
 // Save/Test, this never switches the live connection — that still needs a
 // restart with the flags TestDBConnection shows.
-func (h *Handler) MigrateDBConfig(c echo.Context) error {
+func (h *Handler) MigrateDBConfig(c *echo.Context) error {
 	driver, dsn, err := resolveDBConnInput(c)
 	if err != nil {
 		return c.HTML(http.StatusOK,
@@ -3902,7 +3903,7 @@ func migrationReportHTML(report storage.MigrationReport) string {
 	return b.String()
 }
 
-func (h *Handler) ChangeCredentials(c echo.Context) error {
+func (h *Handler) ChangeCredentials(c *echo.Context) error {
 	currentPassword := c.FormValue("current_password")
 	newEmail := strings.TrimSpace(c.FormValue("new_email"))
 	newPassword := c.FormValue("new_password")
@@ -3944,17 +3945,19 @@ func (h *Handler) ChangeCredentials(c echo.Context) error {
 	return c.Redirect(http.StatusFound, h.cfg.Admin.Path+"/login")
 }
 
-func (h *Handler) BackupDB(c echo.Context) error {
+func (h *Handler) BackupDB(c *echo.Context) error {
 	tmp := fmt.Sprintf("%s/palisade-backup-%d.db", os.TempDir(), time.Now().UnixNano())
 	if err := h.db.BackupTo(tmp); err != nil {
 		return fmt.Errorf("backup: %w", err)
 	}
 	defer os.Remove(tmp)
 	filename := fmt.Sprintf("palisade-%s.db", time.Now().Format("2006-01-02"))
-	return c.Attachment(tmp, filename)
+	// Echo v5 reads files through an fs.FS, which rejects absolute paths.
+	c.Response().Header().Set(echo.HeaderContentDisposition, `attachment; filename="`+filename+`"`)
+	return c.FileFS(filepath.Base(tmp), os.DirFS(filepath.Dir(tmp)))
 }
 
-func (h *Handler) render(c echo.Context, page string, data map[string]any) error {
+func (h *Handler) render(c *echo.Context, page string, data map[string]any) error {
 	t, ok := h.tmpls[page]
 	if !ok {
 		return fmt.Errorf("template %q not found", page)
@@ -4002,11 +4005,11 @@ func (h *Handler) render(c echo.Context, page string, data map[string]any) error
 	// authenticated admin panel anyway: these pages shouldn't be restorable
 	// from cache after logout.
 	c.Response().Header().Set("Cache-Control", "no-store")
-	return t.ExecuteTemplate(c.Response().Writer, "base", data)
+	return t.ExecuteTemplate(c.Response(), "base", data)
 }
 
 // renderPartial executes a named sub-template from a page template (used for HTMX swaps).
-func (h *Handler) renderPartial(c echo.Context, page, tmplName string, data any) error {
+func (h *Handler) renderPartial(c *echo.Context, page, tmplName string, data any) error {
 	t, ok := h.tmpls[page]
 	if !ok {
 		return fmt.Errorf("template %q not found", page)
@@ -4019,5 +4022,5 @@ func (h *Handler) renderPartial(c echo.Context, page, tmplName string, data any)
 		}
 	}
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return t.ExecuteTemplate(c.Response().Writer, tmplName, data)
+	return t.ExecuteTemplate(c.Response(), tmplName, data)
 }

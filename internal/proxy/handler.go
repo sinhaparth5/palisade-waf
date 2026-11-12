@@ -34,7 +34,7 @@ import (
 	"palisade/internal/services"
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 const serverHeader = "Palisade"
@@ -204,7 +204,7 @@ func NewHandler(registry *services.Registry, engine *waf.Engine, wafByService ma
 // fake range API). Must run before serving.
 func (h *Handler) SetBreachChecker(c *breach.Checker) { h.breach = c }
 
-func (h *Handler) Handle(c echo.Context) error {
+func (h *Handler) Handle(c *echo.Context) error {
 	start := time.Now()
 
 	// mark reports how long has elapsed since the last mark (or since start,
@@ -220,7 +220,7 @@ func (h *Handler) Handle(c echo.Context) error {
 	}
 
 	r := c.Request()
-	w := c.Response().Writer
+	w := c.Response()
 	w.Header().Set("Server", serverHeader)
 
 	reqID := generateRequestID()
@@ -483,7 +483,7 @@ func (h *Handler) Handle(c echo.Context) error {
 			mark("gate")
 			// Logged unblocked: a queued browser polls every few seconds,
 			// and blocked rows would count against its JA4 fingerprint.
-			h.logChallenged(r, appName, clientIP, c.Response().Status, reason, time.Since(start), meta)
+			h.logChallenged(r, appName, clientIP, responseStatus(c), reason, time.Since(start), meta)
 			return err
 		}
 	}
@@ -1213,4 +1213,13 @@ func canonicalRedirect(r *http.Request, app *storage.Service) string {
 		scheme = "https"
 	}
 	return scheme + "://" + target + r.URL.RequestURI()
+}
+
+// responseStatus is the status echo recorded for c's response (0 when its
+// writer isn't echo's *Response).
+func responseStatus(c *echo.Context) int {
+	if r, err := echo.UnwrapResponse(c.Response()); err == nil {
+		return r.Status
+	}
+	return 0
 }

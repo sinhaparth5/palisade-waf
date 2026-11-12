@@ -15,7 +15,7 @@ import (
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/ratelimit"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // Benchmarks for the whole Handle pipeline (issue #109). Baseline numbers

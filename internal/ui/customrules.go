@@ -13,7 +13,7 @@ import (
 	"palisade/internal/security/waf"
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // Custom WAF rules (issue #112): SecRules stored in the DB and compiled into
@@ -61,7 +61,7 @@ func (h *Handler) checkCustomRule(r *storage.WAFCustomRule) error {
 	return nil
 }
 
-func (h *Handler) renderWAFContent(c echo.Context) error {
+func (h *Handler) renderWAFContent(c *echo.Context) error {
 	data, err := h.wafRulesContentData()
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ func (h *Handler) renderWAFContent(c echo.Context) error {
 
 // SaveCustomRule handles POST /admin/waf-rules/custom: adds a rule, or
 // updates one when the form carries its id.
-func (h *Handler) SaveCustomRule(c echo.Context) error {
+func (h *Handler) SaveCustomRule(c *echo.Context) error {
 	r := storage.WAFCustomRule{Rule: c.FormValue("rules"), ServiceName: c.FormValue("service"), Note: c.FormValue("note"), Enabled: true}
 	if v := c.FormValue("id"); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
@@ -94,7 +94,7 @@ func (h *Handler) SaveCustomRule(c echo.Context) error {
 }
 
 // ToggleCustomRule handles POST /admin/waf-rules/custom/:id/toggle.
-func (h *Handler) ToggleCustomRule(c echo.Context) error {
+func (h *Handler) ToggleCustomRule(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -107,7 +107,7 @@ func (h *Handler) ToggleCustomRule(c echo.Context) error {
 }
 
 // DeleteCustomRule handles DELETE /admin/waf-rules/custom/:id.
-func (h *Handler) DeleteCustomRule(c echo.Context) error {
+func (h *Handler) DeleteCustomRule(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -128,7 +128,7 @@ type apiCustomRuleRequest struct {
 	Enabled     *bool  `json:"enabled"` // default true
 }
 
-func (h *Handler) APIListCustomRules(c echo.Context) error {
+func (h *Handler) APIListCustomRules(c *echo.Context) error {
 	rules, err := h.db.ListWAFCustomRules()
 	if err != nil {
 		return apiError(c, http.StatusInternalServerError, err.Error())
@@ -137,7 +137,7 @@ func (h *Handler) APIListCustomRules(c echo.Context) error {
 }
 
 // apiSaveCustomRule backs both POST (id 0) and PUT /waf-rules/custom/:id.
-func (h *Handler) apiSaveCustomRule(c echo.Context, id int64) error {
+func (h *Handler) apiSaveCustomRule(c *echo.Context, id int64) error {
 	var req apiCustomRuleRequest
 	if err := c.Bind(&req); err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid JSON body")
@@ -176,9 +176,9 @@ func (h *Handler) apiSaveCustomRule(c echo.Context, id int64) error {
 	return c.NoContent(status)
 }
 
-func (h *Handler) APICreateCustomRule(c echo.Context) error { return h.apiSaveCustomRule(c, 0) }
+func (h *Handler) APICreateCustomRule(c *echo.Context) error { return h.apiSaveCustomRule(c, 0) }
 
-func (h *Handler) APIUpdateCustomRule(c echo.Context) error {
+func (h *Handler) APIUpdateCustomRule(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
 		return apiError(c, http.StatusBadRequest, "invalid id")
@@ -186,7 +186,7 @@ func (h *Handler) APIUpdateCustomRule(c echo.Context) error {
 	return h.apiSaveCustomRule(c, id)
 }
 
-func (h *Handler) APIDeleteCustomRule(c echo.Context) error {
+func (h *Handler) APIDeleteCustomRule(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid id")

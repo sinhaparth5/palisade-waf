@@ -1,6 +1,6 @@
 package proxy
 
-import "github.com/labstack/echo/v4"
+import "github.com/labstack/echo/v5"
 
 // SecurityMiddleware sets hardening HTTP headers on every response:
 // standard browser security directives (Server: Palisade is set by the handler).
@@ -8,7 +8,7 @@ import "github.com/labstack/echo/v4"
 // all carry the same baseline security posture.
 func SecurityMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			h := c.Response().Header()
 
 			// ── Browser hardening ─────────────────────────────────────────────────

@@ -16,7 +16,7 @@ import (
 	"palisade/internal/services"
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )

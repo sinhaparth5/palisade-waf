@@ -9,7 +9,7 @@ import (
 
 	"palisade/internal/config"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // TestAdminBodyLimit checks the 1 MiB body cap is wired onto both the

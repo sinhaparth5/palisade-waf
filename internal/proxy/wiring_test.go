@@ -12,7 +12,7 @@ import (
 	"palisade/internal/security/ratelimit"
 	"palisade/internal/security/waf"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestChallengeRoutesFollowReload(t *testing.T) {
@@ -92,7 +92,7 @@ func TestReloadWAFAndRateLimit(t *testing.T) {
 func TestSecurityMiddlewareHeaders(t *testing.T) {
 	e := echo.New()
 	e.Use(proxy.SecurityMiddleware())
-	e.GET("/", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	e.GET("/", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
 
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**Palisade** is a single-binary Go WAF + reverse proxy: embedded Coraza v3 (OWASP CRS), Echo for HTTP/routing, a pluggable SQL store (SQLite via pure-Go modernc by default; MySQL/MariaDB and Postgres/CockroachDB/Neon via `--db-driver`), and an HTMX + Tailwind admin UI served from the same binary.
+**Palisade** is a single-binary Go WAF + reverse proxy: embedded Coraza v3 (OWASP CRS), Echo v5 for HTTP/routing (`*echo.Context`; Echo is only a handler, `main.go` owns every `http.Server`, issue #277), a pluggable SQL store (SQLite via pure-Go modernc by default; MySQL/MariaDB and Postgres/CockroachDB/Neon via `--db-driver`), and an HTMX + Tailwind admin UI served from the same binary.
 
 Naming: module/binary/service/user are `palisade`; data `/var/lib/palisade`, key `/etc/palisade`, logs `/var/log/palisade`, metrics `palisade_*`, `Server` header says `Palisade`. The repo was renamed from `coraza-waf-mod` to `palisade-waf` after v2.5.0; release assets are `palisade-waf-linux-*` (`ASSET` in Makefile, `PACKAGE_NAME` in `ci.yml`, `ASSET_NAME` in `install.sh`). `install.sh` pins with `PALISADE_VERSION`, supports v2.5.1+ only. Pre-rename GHCR images stay at `ghcr.io/sinhaparth5/coraza-waf-mod`. Only the Coraza *engine* keeps the Coraza name.
 

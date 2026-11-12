@@ -8,7 +8,7 @@ import (
 
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // RegisterProbes adds the liveness and readiness probes used by load
@@ -18,10 +18,10 @@ import (
 // the whole WAF out of a load balancer.
 func RegisterProbes(e *echo.Echo, db *storage.DB) {
 	probe := []string{http.MethodGet, http.MethodHead}
-	e.Match(probe, "/_cz/healthz", func(c echo.Context) error {
+	e.Match(probe, "/_cz/healthz", func(c *echo.Context) error {
 		return c.String(http.StatusOK, "ok")
 	})
-	e.Match(probe, "/_cz/readyz", func(c echo.Context) error {
+	e.Match(probe, "/_cz/readyz", func(c *echo.Context) error {
 		ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
 		defer cancel()
 		if err := db.Ping(ctx); err != nil {

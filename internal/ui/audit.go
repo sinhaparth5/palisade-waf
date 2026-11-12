@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"palisade/internal/storage"
 )
@@ -49,7 +49,7 @@ const auditPageSize = 10
 // group it wraps. It runs after authentication, so the actor is known: the
 // signed-in user's email, or the API key apiKeyAuth stored in the context.
 func (h *Handler) auditLog(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		r := c.Request()
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
 			return next(c)
@@ -73,7 +73,7 @@ func (h *Handler) auditLog(next echo.HandlerFunc) echo.HandlerFunc {
 			_ = json.Unmarshal(raw, &jsonBody) // a malformed body fails in the handler instead
 		}
 
-		if err := next(c); err != nil || c.Response().Status >= 400 || auditFailed(c) {
+		if err := next(c); err != nil || responseStatus(c) >= 400 || auditFailed(c) {
 			return err
 		}
 
@@ -85,8 +85,8 @@ func (h *Handler) auditLog(next echo.HandlerFunc) echo.HandlerFunc {
 			actor = "admin"
 		}
 		var target []string
-		for i, name := range c.ParamNames() {
-			target = append(target, name+"="+auditValue(c.ParamValues()[i]))
+		for _, pv := range c.PathValues() {
+			target = append(target, pv.Name+"="+auditValue(pv.Value))
 		}
 		e := storage.AuditEntry{
 			Actor:   actor,
@@ -144,7 +144,7 @@ const auditFailedKey = "audit_failed"
 // render/renderPartial so new handlers are covered without remembering to.
 // ponytail: a "Saved, but applying failed" message also counts as a failure,
 // so that rare half-applied save goes unrecorded.
-func markAuditFailure(c echo.Context, data any) {
+func markAuditFailure(c *echo.Context, data any) {
 	m, ok := data.(map[string]any)
 	if !ok {
 		return
@@ -160,7 +160,7 @@ func markAuditFailure(c echo.Context, data any) {
 // auditFailed reports whether the handler rejected the request while still
 // answering 200: flagged by markAuditFailure, or an htmx error box swap
 // (HX-Retarget, the fail() helpers in the service handlers).
-func auditFailed(c echo.Context) bool {
+func auditFailed(c *echo.Context) bool {
 	failed, _ := c.Get(auditFailedKey).(bool)
 	return failed || c.Response().Header().Get("HX-Retarget") != ""
 }
@@ -190,11 +190,20 @@ func (h *Handler) auditRowsData(page int) (map[string]any, error) {
 }
 
 // AuditRows renders one page of the audit card for its Prev/Next buttons.
-func (h *Handler) AuditRows(c echo.Context) error {
+func (h *Handler) AuditRows(c *echo.Context) error {
 	page, _ := strconv.Atoi(c.QueryParam("page"))
 	data, err := h.auditRowsData(page)
 	if err != nil {
 		return err
 	}
 	return h.renderPartial(c, "settings", "audit-rows", data)
+}
+
+// responseStatus is the status echo recorded for c's response (0 when its
+// writer isn't echo's *Response).
+func responseStatus(c *echo.Context) int {
+	if r, err := echo.UnwrapResponse(c.Response()); err == nil {
+		return r.Status
+	}
+	return 0
 }

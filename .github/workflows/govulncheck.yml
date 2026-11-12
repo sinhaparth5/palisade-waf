@@ -38,14 +38,11 @@ jobs:
 
       # IGNORE lists advisories reviewed as not applicable. govulncheck has no
       # ignore flag, so the JSON output is filtered and any other called
-      # vulnerability still fails the job.
-      #   GO-2026-6872, GO-2026-6875: echo v4 (no fix; v5.4+ only). They cover
-      #   Echo's c.RealIP() and middleware.Proxy defaults; Palisade uses
-      #   neither (client IP is proxy.ClientIP, the proxy is httputil). Drop
-      #   these when moving to echo v5.
+      # vulnerability still fails the job. Empty since the move to echo v5
+      # (issue #277); add an id only with a note on why it doesn't apply.
       - name: Run govulncheck
         env:
-          IGNORE: GO-2026-6872 GO-2026-6875
+          IGNORE: ""
         run: |
           go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -format json ./... > vuln.json
           called=$(jq -r 'select(.finding.trace[0].function != null) | .finding.osv' vuln.json | sort -u)

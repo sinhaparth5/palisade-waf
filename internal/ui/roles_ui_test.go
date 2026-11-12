@@ -51,7 +51,7 @@ func routeFor(env *adminEnv, target string) string {
 	method, path, _ := strings.Cut(target, " ")
 	path, _, _ = strings.Cut(path, "?")
 	match := ""
-	for _, r := range env.e.Routes() {
+	for _, r := range env.e.Router().Routes() {
 		if r.Method != method {
 			continue
 		}

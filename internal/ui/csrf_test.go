@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 const testSession = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -21,7 +21,7 @@ func runCSRF(t *testing.T, req *http.Request) (reached bool, status int) {
 	c := e.NewContext(req, rec)
 
 	h := &Handler{}
-	err := h.csrfProtect(func(echo.Context) error {
+	err := h.csrfProtect(func(*echo.Context) error {
 		reached = true
 		return nil
 	})(c)

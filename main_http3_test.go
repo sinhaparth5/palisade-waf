@@ -17,7 +17,7 @@ import (
 	"palisade/internal/services"
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/quic-go/quic-go/http3"
 )
 
@@ -52,7 +52,7 @@ func TestHTTP3PerServiceOptIn(t *testing.T) {
 	}
 
 	e := echo.New()
-	e.Any("/*", func(c echo.Context) error { return c.String(http.StatusOK, c.Request().Proto) })
+	e.Any("/*", func(c *echo.Context) error { return c.String(http.StatusOK, c.Request().Proto) })
 
 	addr := freeUDPAddr(t)
 	srv, err := startHTTP3(e, addr, &tls.Config{Certificates: []tls.Certificate{selfSigned(t)}}, reg)

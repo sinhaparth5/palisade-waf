@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 //go:embed blockpage.html
@@ -30,7 +30,7 @@ var blockMessages = map[string][2]string{
 
 // deny writes a block response: a readable page for browsers, the JSON body
 // (plus request_id) for everything else. reason must be a blockMessages key.
-func deny(c echo.Context, status int, reason, reqID string, body map[string]any) error {
+func deny(c *echo.Context, status int, reason, reqID string, body map[string]any) error {
 	c.Response().Header().Set("X-WAF-Block-Reason", reason)
 	if !strings.Contains(c.Request().Header.Get("Accept"), "text/html") {
 		body["request_id"] = reqID

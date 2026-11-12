@@ -11,7 +11,7 @@ import (
 	"palisade/internal/services"
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // TestHostGuardBlocksAdminOnServiceDomain reproduces a reported bug: with a
@@ -44,7 +44,7 @@ func TestHostGuardBlocksAdminOnServiceDomain(t *testing.T) {
 		registry:   reg,
 		staticJS:   fstest.MapFS{},
 		staticImgs: fstest.MapFS{},
-		proxyHandle: func(c echo.Context) error {
+		proxyHandle: func(c *echo.Context) error {
 			proxyCalls++
 			proxiedHost = c.Request().Host
 			return c.NoContent(http.StatusTeapot) // distinct sentinel status
@@ -111,7 +111,7 @@ func TestHostGuardBlocksAPIOnServiceDomain(t *testing.T) {
 		db:            db,
 		registry:      reg,
 		apiKeyLimiter: newLoginLimiter(),
-		proxyHandle: func(c echo.Context) error {
+		proxyHandle: func(c *echo.Context) error {
 			proxyCalls++
 			return c.NoContent(http.StatusTeapot)
 		},

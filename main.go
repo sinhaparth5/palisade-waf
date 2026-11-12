@@ -59,8 +59,8 @@ import (
 	"palisade/internal/storage"
 	"palisade/internal/ui"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/crypto/acme/autocert"
@@ -472,21 +472,21 @@ func main() {
 	}
 
 	e := echo.New()
-	e.HideBanner = true
-	hardenServer(e.Server)
-	hardenServer(e.TLSServer)
+	// Echo v5 is only a handler; the servers are ours.
+	srv := &http.Server{Handler: e}
+	hardenServer(srv)
 	e.Use(middleware.Recover())
 	e.Use(proxy.SecurityMiddleware())
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		// Health probes arrive every few seconds; logging them buries real traffic.
-		Skipper: func(c echo.Context) bool {
+		Skipper: func(c *echo.Context) bool {
 			p := c.Request().URL.Path
 			return p == "/_cz/healthz" || p == "/_cz/readyz"
 		},
 		LogURI:    true,
 		LogStatus: true,
 		LogMethod: true,
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
 			log.Printf("%s %s -> %d", v.Method, v.URI, v.Status)
 			return nil
 		},
@@ -531,24 +531,24 @@ func main() {
 
 	// Challenge routes must be registered before the catch-all proxy route so
 	// Echo routes them to the challenger, not the backend.
-	e.GET("/_cz/challenge", func(c echo.Context) error {
-		h.ServeChallengePage(c.Response().Writer, c.Request())
+	e.GET("/_cz/challenge", func(c *echo.Context) error {
+		h.ServeChallengePage(c.Response(), c.Request())
 		return nil
 	})
-	e.POST("/_cz/verify", func(c echo.Context) error {
-		h.ServeChallengeVerify(c.Response().Writer, c.Request())
+	e.POST("/_cz/verify", func(c *echo.Context) error {
+		h.ServeChallengeVerify(c.Response(), c.Request())
 		return nil
 	})
-	e.GET("/_cz/fp.js", func(c echo.Context) error {
-		h.ServeFingerprintJS(c.Response().Writer, c.Request())
+	e.GET("/_cz/fp.js", func(c *echo.Context) error {
+		h.ServeFingerprintJS(c.Response(), c.Request())
 		return nil
 	})
 	// Logo + favicon for the challenge page. Served under /_cz/ (not the
 	// admin path) because the challenge renders on every proxied domain.
-	e.GET("/_cz/logo.svg", func(c echo.Context) error {
+	e.GET("/_cz/logo.svg", func(c *echo.Context) error {
 		data, err := staticImgs.ReadFile("static/imgs/logo.svg")
 		if err != nil {
-			return echo.NewHTTPError(http.StatusNotFound)
+			return echo.ErrNotFound
 		}
 		c.Response().Header().Set("Cache-Control", "public, max-age=86400")
 		return c.Blob(http.StatusOK, "image/svg+xml", data)
@@ -612,7 +612,7 @@ func main() {
 	// TLS only starts when --listen-tls is provided. Certificate config
 	// (ACME email, per-service certs) lives entirely in the DB.
 	if cfg.ListenAddrTLS != "" {
-		if err := startTLS(e, cfg, registry, db, appCount, connLimit, extra...); err != nil && err != http.ErrServerClosed {
+		if err := startTLS(srv, e, cfg, registry, db, appCount, connLimit, extra...); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("tls server: %v", err)
 		}
 		return
@@ -623,9 +623,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("server: %v", err)
 	}
-	e.Listener = connLimit.Listener(ln)
-	done := shutdownOnSignal(e, extra...)
-	if err := e.Start(cfg.ListenAddr); err != nil && err != http.ErrServerClosed {
+	done := shutdownOnSignal(append(extra, srv)...)
+	if err := srv.Serve(connLimit.Listener(ln)); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server: %v", err)
 	}
 	<-done
@@ -636,7 +635,7 @@ func main() {
 // on cfg.ListenAddr (ACME challenge handler + HTTPS redirect) and HTTPS on
 // cfg.ListenAddrTLS. Per-service custom certs take priority over autocert by
 // SNI (see services.Registry.GetCertificateFunc).
-func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db *storage.DB, appCount int, connLimit *proxy.ConnLimiter, extra ...shutdowner) error {
+func startTLS(s *http.Server, e *echo.Echo, cfg *config.Config, registry *services.Registry, db *storage.DB, appCount int, connLimit *proxy.ConnLimiter, extra ...shutdowner) error {
 	email, _ := db.GetAcmeEmail()
 	primaryDomain, _ := db.GetPrimaryDomain()
 
@@ -694,7 +693,6 @@ func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db 
 		}
 	}()
 
-	s := e.TLSServer
 	s.Addr = cfg.ListenAddrTLS
 	prevConnState := s.ConnState
 	s.ConnState = func(conn net.Conn, state http.ConnState) {
@@ -768,11 +766,9 @@ func startTLS(e *echo.Echo, cfg *config.Config, registry *services.Registry, db 
 	if err != nil {
 		return fmt.Errorf("https listener: %w", err)
 	}
-	e.TLSListener = tls.NewListener(connLimit.Listener(tlsLn), s.TLSConfig)
-
 	log.Printf("palisade TLS on %s (waf=%v, apps=%d)", cfg.ListenAddrTLS, cfg.WAF.Enabled, appCount)
-	done := shutdownOnSignal(e, servers...)
-	if err := e.StartServer(s); err != http.ErrServerClosed {
+	done := shutdownOnSignal(append(servers, s)...)
+	if err := s.Serve(tls.NewListener(connLimit.Listener(tlsLn), s.TLSConfig)); err != http.ErrServerClosed {
 		return err
 	}
 	<-done
@@ -796,7 +792,7 @@ func startHTTP3(e *echo.Echo, addr string, tlsConf *tls.Config, registry *servic
 
 	altSvc := fmt.Sprintf(`h3=":%s"; ma=86400`, port)
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			if registry.HTTP3Host(c.Request().Host) {
 				c.Response().Header().Set("Alt-Svc", altSvc)
 			}
@@ -917,11 +913,12 @@ func startCacheReturn(db *storage.DB, registry *services.Registry) {
 	}
 }
 
-// shutdownOnSignal drains the servers on SIGINT/SIGTERM. The returned channel
+// shutdownOnSignal drains the servers on SIGINT/SIGTERM, in order (pass the
+// main server last). The returned channel
 // closes once the drain is done; main must wait on it, because Serve returns
 // as soon as Shutdown starts and main's deferred db.Close would otherwise
 // close the log queue under requests still in flight.
-func shutdownOnSignal(e *echo.Echo, extraServers ...shutdowner) <-chan struct{} {
+func shutdownOnSignal(servers ...shutdowner) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -934,18 +931,12 @@ func shutdownOnSignal(e *echo.Echo, extraServers ...shutdowner) <-chan struct{} 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		for _, srv := range extraServers {
+		for _, srv := range servers {
 			if err := srv.Shutdown(ctx); err != nil {
 				log.Printf("http shutdown: %v", err)
 				if closeErr := srv.Close(); closeErr != nil {
 					log.Printf("http close: %v", closeErr)
 				}
-			}
-		}
-		if err := e.Shutdown(ctx); err != nil {
-			log.Printf("server shutdown: %v", err)
-			if closeErr := e.Close(); closeErr != nil {
-				log.Printf("server close: %v", closeErr)
 			}
 		}
 	}()

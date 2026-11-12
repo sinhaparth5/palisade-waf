@@ -7,7 +7,7 @@ import (
 
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // The Logs page Stats view is a GoAccess-style live summary. The browser does
@@ -55,7 +55,7 @@ func newStatEvent(e storage.RequestLog) statEvent {
 
 // LogStatsSeed handles GET /admin/logs/stats: the last hour of requests
 // (capped at statsSeedLimit, newest kept) for the Stats view to start from.
-func (h *Handler) LogStatsSeed(c echo.Context) error {
+func (h *Handler) LogStatsSeed(c *echo.Context) error {
 	since := time.Now().Add(-statsSeedWindow)
 	rows, err := h.db.ListRecentRequestLogs(since, statsSeedLimit)
 	if err != nil {

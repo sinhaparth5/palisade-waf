@@ -17,7 +17,7 @@ import (
 	"palisade/internal/services"
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // newTestAPIHandler builds a Handler backed by a real (temp-file) SQLite DB,

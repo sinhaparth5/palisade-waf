@@ -38,7 +38,7 @@ import (
 	"palisade/internal/services"
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // newTestHandler builds a fully wired Handler backed by a temp SQLite DB and

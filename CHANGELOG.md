@@ -16,6 +16,7 @@ rather than growing this file forever.
 - (#274) Run the Docker image as a non-root user
 - (#275) Tighten the systemd sandbox in install.sh
 - (#276) Pin GitHub Actions to commit SHAs
+- (#277) Move to Echo v5
 
 ## [3.2.3] - 2026-11-12
 

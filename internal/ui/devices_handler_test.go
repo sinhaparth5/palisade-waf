@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"palisade/internal/config"
 	"palisade/internal/security/geo"
@@ -49,8 +49,7 @@ func TestRevokeDevice(t *testing.T) {
 		}
 		c := e.NewContext(req, httptest.NewRecorder())
 		c.Set(ctxUser, me)
-		c.SetParamNames("token")
-		c.SetParamValues(storage.SessionID(target)) // links carry the stored id
+		c.SetPathValues(echo.PathValues{{Name: "token", Value: storage.SessionID(target)}}) // links carry the stored id
 		if err := h.RevokeDevice(c); err != nil {
 			t.Fatal(err)
 		}

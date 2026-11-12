@@ -7,8 +7,8 @@ import (
 	"io/fs"
 	"path"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 )
 
 // assetStamp hashes every embedded admin asset (paths and contents), so a
@@ -40,14 +40,14 @@ var precompressed = map[string]bool{".woff2": true, ".woff": true, ".png": true,
 // staticGzip compresses text assets; small files aren't worth the framing.
 var staticGzip = middleware.GzipWithConfig(middleware.GzipConfig{
 	MinLength: 1024,
-	Skipper:   func(c echo.Context) bool { return precompressed[path.Ext(c.Request().URL.Path)] },
+	Skipper:   func(c *echo.Context) bool { return precompressed[path.Ext(c.Request().URL.Path)] },
 })
 
 // staticCache lets the browser keep a stamped asset for a year without
 // revalidating: the stamp changes whenever any asset does. Unstamped URLs
 // (fonts and flags referenced from vendor CSS) keep the default headers.
 func (h *Handler) staticCache(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		if c.QueryParam("v") == h.assetVer {
 			c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}

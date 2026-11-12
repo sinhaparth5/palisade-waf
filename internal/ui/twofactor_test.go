@@ -20,7 +20,7 @@ import (
 	"palisade/internal/storage"
 
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 const (

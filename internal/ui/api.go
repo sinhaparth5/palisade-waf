@@ -18,8 +18,8 @@ import (
 	"palisade/internal/services"
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 )
 
 // apiKeyTouchThrottle bounds how often a successful auth writes last_used_at
@@ -47,7 +47,7 @@ func newAPIKey() (raw, prefix, hash string, err error) {
 // page for an API client to be sent to) and skips csrfProtect: a bearer
 // token lives in a header, not a cookie, so CSRF doesn't apply to it.
 func (h *Handler) apiKeyAuth(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		ip := h.clientIP(c.Request())
 		if wait, locked := h.apiKeyLimiter.blocked(ip); locked {
 			return c.JSON(http.StatusTooManyRequests, map[string]string{
@@ -98,7 +98,7 @@ func (h *Handler) apiKeyAuth(next echo.HandlerFunc) echo.HandlerFunc {
 // per-route to every mutating endpoint below rather than group-wide, since a
 // read-only key must still reach every GET endpoint.
 func (h *Handler) requireWrite(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		if ro, _ := c.Get("api_key_read_only").(bool); ro {
 			return apiError(c, http.StatusForbidden, "this API key is read-only")
 		}
@@ -114,7 +114,7 @@ func (h *Handler) requireWrite(next echo.HandlerFunc) echo.HandlerFunc {
 // domain (see hostGuard in handlers.go).
 func (h *Handler) RegisterAPI(e *echo.Echo) {
 	api := e.Group(h.cfg.Admin.Path + "/api/v1")
-	api.Use(h.hostGuard, middleware.BodyLimit("1M"), h.apiKeyAuth, h.auditLog)
+	api.Use(h.hostGuard, middleware.BodyLimit(1<<20), h.apiKeyAuth, h.auditLog)
 
 	api.GET("/services", h.APIListServices)
 	api.POST("/services", h.APICreateService, h.requireWrite)
@@ -150,17 +150,17 @@ func (h *Handler) RegisterAPI(e *echo.Echo) {
 	api.GET("/metrics", echo.WrapHandler(metrics.Handler()))
 }
 
-func apiError(c echo.Context, status int, msg string) error {
+func apiError(c *echo.Context, status int, msg string) error {
 	return c.JSON(status, map[string]string{"error": msg})
 }
 
 // ── Services ─────────────────────────────────────────────────────────────────
 
-func (h *Handler) APIListServices(c echo.Context) error {
+func (h *Handler) APIListServices(c *echo.Context) error {
 	return c.JSON(http.StatusOK, h.registry.List())
 }
 
-func (h *Handler) APIGetService(c echo.Context) error {
+func (h *Handler) APIGetService(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid id")
@@ -175,7 +175,7 @@ func (h *Handler) APIGetService(c echo.Context) error {
 // APIPurgeService evicts a service's cached objects from Varnish — all of
 // them, or only those under the optional JSON "path" prefix. Meant for
 // deploy pipelines (purge right after shipping new content).
-func (h *Handler) APIPurgeService(c echo.Context) error {
+func (h *Handler) APIPurgeService(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid id")
@@ -219,7 +219,7 @@ type apiCreateServiceRequest struct {
 	Burst          int      `json:"rate_limit_burst"`
 }
 
-func (h *Handler) APICreateService(c echo.Context) error {
+func (h *Handler) APICreateService(c *echo.Context) error {
 	var req apiCreateServiceRequest
 	if err := c.Bind(&req); err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid JSON body")
@@ -314,7 +314,7 @@ type apiUpdateServiceRequest struct {
 	SchemaMode          *string  `json:"schema_mode"`    // "off" | "log" | "enforce"
 }
 
-func (h *Handler) APIUpdateService(c echo.Context) error {
+func (h *Handler) APIUpdateService(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid id")
@@ -465,7 +465,7 @@ func (h *Handler) APIUpdateService(c echo.Context) error {
 	return c.JSON(http.StatusOK, svc)
 }
 
-func (h *Handler) APIDeleteService(c echo.Context) error {
+func (h *Handler) APIDeleteService(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid id")
@@ -497,7 +497,7 @@ func normalizeIPOrCIDR(ip string) (string, error) {
 	return "", &net.ParseError{Type: "IP address or CIDR", Text: ip}
 }
 
-func (h *Handler) APIListIPRules(c echo.Context) error {
+func (h *Handler) APIListIPRules(c *echo.Context) error {
 	rules, err := h.db.ListIPRules()
 	if err != nil {
 		return apiError(c, http.StatusInternalServerError, err.Error())
@@ -511,7 +511,7 @@ type apiIPRuleRequest struct {
 	RuleType string `json:"rule_type"` // "block" | "allow"
 }
 
-func (h *Handler) APICreateIPRule(c echo.Context) error {
+func (h *Handler) APICreateIPRule(c *echo.Context) error {
 	var req apiIPRuleRequest
 	if err := c.Bind(&req); err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid JSON body")
@@ -532,7 +532,7 @@ func (h *Handler) APICreateIPRule(c echo.Context) error {
 	return c.JSON(http.StatusCreated, map[string]string{"app_name": req.AppName, "ip": ip, "rule_type": req.RuleType})
 }
 
-func (h *Handler) APIDeleteIPRule(c echo.Context) error {
+func (h *Handler) APIDeleteIPRule(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid id")
@@ -558,7 +558,7 @@ func (h *Handler) APIDeleteIPRule(c echo.Context) error {
 // "Auto" badge logic can still tell the two sources apart.
 const apiBanNotePrefix = "Banned via API — "
 
-func (h *Handler) APIListBans(c echo.Context) error {
+func (h *Handler) APIListBans(c *echo.Context) error {
 	rules, err := h.db.ListIPRules()
 	if err != nil {
 		return apiError(c, http.StatusInternalServerError, err.Error())
@@ -577,7 +577,7 @@ type apiBanRequest struct {
 	Reason string `json:"reason"`
 }
 
-func (h *Handler) APICreateBan(c echo.Context) error {
+func (h *Handler) APICreateBan(c *echo.Context) error {
 	var req apiBanRequest
 	if err := c.Bind(&req); err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid JSON body")
@@ -602,7 +602,7 @@ func (h *Handler) APICreateBan(c echo.Context) error {
 // APIDeleteBan unbans by ip_rules row id. It's identical to deleting any other
 // IP rule (auto-banned or manual), since that's literally what unban is
 // today on the IP Rules page.
-func (h *Handler) APIDeleteBan(c echo.Context) error {
+func (h *Handler) APIDeleteBan(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		return apiError(c, http.StatusBadRequest, "invalid id")
@@ -626,7 +626,7 @@ const (
 
 // APIListLogs pages request logs newest first. Query: app, ip, status
 // (2xx|3xx|4xx|5xx|blocked|cache_error), from/to (RFC 3339), limit, offset.
-func (h *Handler) APIListLogs(c echo.Context) error {
+func (h *Handler) APIListLogs(c *echo.Context) error {
 	f := storage.LogFilter{
 		AppName:     c.QueryParam("app"),
 		IP:          c.QueryParam("ip"),
@@ -671,8 +671,8 @@ func (h *Handler) APIListLogs(c echo.Context) error {
 
 // APILogsStream sends each new request log as a JSON server-sent event,
 // with a comment line every apiStreamPing so idle proxies keep it open.
-func (h *Handler) APILogsStream(c echo.Context) error {
-	w := c.Response().Writer
+func (h *Handler) APILogsStream(c *echo.Context) error {
+	w := c.Response()
 	rc := http.NewResponseController(w) // unlike echo's Flush, never panics
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -708,7 +708,7 @@ func (h *Handler) APILogsStream(c echo.Context) error {
 
 // APIStats returns the dashboard numbers: totals, the last-minute strip,
 // top firing rules and top blocked countries (last 24h).
-func (h *Handler) APIStats(c echo.Context) error {
+func (h *Handler) APIStats(c *echo.Context) error {
 	totals, err := h.db.GetStats()
 	if err != nil {
 		return apiError(c, http.StatusInternalServerError, err.Error())
@@ -738,7 +738,7 @@ func (h *Handler) APIStats(c echo.Context) error {
 	})
 }
 
-func (h *Handler) APIListGeoRules(c echo.Context) error {
+func (h *Handler) APIListGeoRules(c *echo.Context) error {
 	rules, err := h.db.ListGeoRules()
 	if err != nil {
 		return apiError(c, http.StatusInternalServerError, err.Error())
@@ -748,7 +748,7 @@ func (h *Handler) APIListGeoRules(c echo.Context) error {
 
 // APIListRuleExceptions returns the globally disabled rules and the
 // per-service exceptions.
-func (h *Handler) APIListRuleExceptions(c echo.Context) error {
+func (h *Handler) APIListRuleExceptions(c *echo.Context) error {
 	global, err := h.db.ListDisabledWAFRules()
 	if err != nil {
 		return apiError(c, http.StatusInternalServerError, err.Error())
@@ -762,7 +762,7 @@ func (h *Handler) APIListRuleExceptions(c echo.Context) error {
 
 // APIListVPatches returns the shipped virtual patches with hit counts and
 // where each is switched off.
-func (h *Handler) APIListVPatches(c echo.Context) error {
+func (h *Handler) APIListVPatches(c *echo.Context) error {
 	disabled, err := h.db.ListDisabledWAFRules()
 	if err != nil {
 		return apiError(c, http.StatusInternalServerError, err.Error())

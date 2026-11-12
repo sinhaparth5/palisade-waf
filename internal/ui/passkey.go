@@ -11,7 +11,7 @@ import (
 	"palisade/internal/security/passkey"
 
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // pkEnrollTTL bounds how long a passkey registration ceremony can take —
@@ -57,7 +57,7 @@ func (s *pkEnrollStore) take(uid int64) (session *webauthn.SessionData, name str
 // passkeysCardData builds the settings card's rendering state: the list of
 // registered passkeys plus whether this request is even in a context
 // WebAuthn can work in (see passkey.IsSecureContext).
-func (h *Handler) passkeysCardData(c echo.Context, extra map[string]any) map[string]any {
+func (h *Handler) passkeysCardData(c *echo.Context, extra map[string]any) map[string]any {
 	rows, _ := h.db.ListWebAuthnCredentials(currentUID(c))
 	data := map[string]any{
 		"AdminPath":     h.cfg.Admin.Path,
@@ -75,7 +75,7 @@ func (h *Handler) passkeysCardData(c echo.Context, extra map[string]any) map[str
 // user: builds the WebAuthn challenge, parks the session server-side,
 // and returns the JSON options the browser's navigator.credentials.create()
 // call needs.
-func (h *Handler) BeginPasskeyEnrollment(c echo.Context) error {
+func (h *Handler) BeginPasskeyEnrollment(c *echo.Context) error {
 	if !passkey.IsSecureContext(c.Request()) {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Passkeys need HTTPS with a real hostname (or localhost). This admin panel isn't being reached that way right now.",
@@ -101,7 +101,7 @@ func (h *Handler) BeginPasskeyEnrollment(c echo.Context) error {
 
 // FinishPasskeyEnrollment validates the browser's attestation response and
 // saves the new passkey.
-func (h *Handler) FinishPasskeyEnrollment(c echo.Context) error {
+func (h *Handler) FinishPasskeyEnrollment(c *echo.Context) error {
 	uid := currentUID(c)
 	session, name, ok := h.pkEnroll.take(uid)
 	if !ok {
@@ -119,7 +119,7 @@ func (h *Handler) FinishPasskeyEnrollment(c echo.Context) error {
 // DisableTOTP demands — a session already controls this account regardless,
 // and removing one of possibly several passkeys is far less destructive
 // than turning off the entire second factor.
-func (h *Handler) DeletePasskey(c echo.Context) error {
+func (h *Handler) DeletePasskey(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
@@ -135,7 +135,7 @@ func (h *Handler) DeletePasskey(c echo.Context) error {
 
 // BeginPasskeyLogin starts a login ceremony for the pending (password
 // already verified) login, mirroring LoginTOTPPost's cz_2fa-cookie gate.
-func (h *Handler) BeginPasskeyLogin(c echo.Context) error {
+func (h *Handler) BeginPasskeyLogin(c *echo.Context) error {
 	ip := h.clientIP(c.Request())
 	if _, locked := h.loginLimiter.blocked(ip); locked {
 		return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "Too many failed attempts. Try again later."})
@@ -154,7 +154,7 @@ func (h *Handler) BeginPasskeyLogin(c echo.Context) error {
 
 // FinishPasskeyLogin validates the browser's assertion and, on success,
 // completes the login exactly like a correct TOTP code would.
-func (h *Handler) FinishPasskeyLogin(c echo.Context) error {
+func (h *Handler) FinishPasskeyLogin(c *echo.Context) error {
 	ip := h.clientIP(c.Request())
 	if wait, locked := h.loginLimiter.blocked(ip); locked {
 		log.Printf("admin login: rejected passkey attempt from %s (locked out for %s)", ip, wait.Round(time.Second))

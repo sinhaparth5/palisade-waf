@@ -7,7 +7,7 @@ import (
 
 	"palisade/internal/proxy"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 const (
@@ -107,6 +107,6 @@ func (h *Handler) clientIP(r *http.Request) string {
 // True when the request arrived over TLS directly or, behind a TLS-terminating
 // proxy, via X-Forwarded-Proto (spoofing that header can only *add* the flag,
 // which locks the spoofer out of plain HTTP, never the reverse).
-func secureCookie(c echo.Context) bool {
+func secureCookie(c *echo.Context) bool {
 	return c.Scheme() == "https"
 }

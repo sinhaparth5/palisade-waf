@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/template/parse"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"palisade/internal/storage"
 )
@@ -158,7 +158,7 @@ func scope(app string) string {
 }
 
 // Search renders the top bar search results for ?q=.
-func (h *Handler) Search(c echo.Context) error {
+func (h *Handler) Search(c *echo.Context) error {
 	raw := strings.TrimSpace(c.QueryParam("q"))
 	q := strings.ToLower(raw)
 	data := map[string]any{"Q": raw}

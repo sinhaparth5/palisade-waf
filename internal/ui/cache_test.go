@@ -10,7 +10,7 @@ import (
 
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestAPIPurgeService(t *testing.T) {

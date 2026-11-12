@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"net/http"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // csrfHeader / csrfField are where a request may carry its CSRF token.
@@ -30,7 +30,7 @@ func csrfToken(sessionValue string) string {
 
 // csrfFromContext returns the CSRF token for the request's session, or ""
 // when there is no session cookie (login page).
-func (h *Handler) csrfFromContext(c echo.Context) string {
+func (h *Handler) csrfFromContext(c *echo.Context) string {
 	ck, err := c.Cookie(sessionCookie)
 	if err != nil || ck.Value == "" {
 		return ""
@@ -44,7 +44,7 @@ func (h *Handler) csrfFromContext(c echo.Context) string {
 // because Lax still sends the cookie on top-level cross-site GET navigation
 // and doesn't cover older/embedded clients.
 func (h *Handler) csrfProtect(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		switch c.Request().Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 			return next(c)

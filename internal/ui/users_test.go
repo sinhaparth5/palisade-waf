@@ -26,7 +26,7 @@ func TestRouteRoles(t *testing.T) {
 	params := strings.NewReplacer(":id", "1", ":token", "x")
 
 	checked := 0
-	for _, r := range env.e.Routes() {
+	for _, r := range env.e.Router().Routes() {
 		key := r.Method + " " + r.Path
 		mutating := r.Method == http.MethodPost || r.Method == http.MethodPut ||
 			r.Method == http.MethodPatch || r.Method == http.MethodDelete

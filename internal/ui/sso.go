@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"golang.org/x/oauth2"
 
 	"palisade/internal/security/egress"
@@ -37,7 +37,7 @@ const ssoCookie = "cz_sso"
 // ssoTimeout bounds every call to the IdP during one login step.
 const ssoTimeout = 15 * time.Second
 
-func (h *Handler) ssoCallbackURL(c echo.Context) string {
+func (h *Handler) ssoCallbackURL(c *echo.Context) string {
 	return c.Scheme() + "://" + c.Request().Host + h.cfg.Admin.Path + "/login/sso/callback"
 }
 
@@ -49,7 +49,7 @@ func ssoContext() (context.Context, context.CancelFunc) {
 	return oidc.ClientContext(ctx, egress.Client(ssoTimeout)), cancel
 }
 
-func (h *Handler) ssoClient(ctx context.Context, c echo.Context, cfg storage.SSOConfig) (*oidc.Provider, *oauth2.Config, error) {
+func (h *Handler) ssoClient(ctx context.Context, c *echo.Context, cfg storage.SSOConfig) (*oidc.Provider, *oauth2.Config, error) {
 	p, err := oidc.NewProvider(ctx, cfg.Issuer)
 	if err != nil {
 		return nil, nil, err
@@ -79,7 +79,7 @@ func randHex(n int) string {
 }
 
 // SSOStart redirects to the IdP's authorization endpoint.
-func (h *Handler) SSOStart(c echo.Context) error {
+func (h *Handler) SSOStart(c *echo.Context) error {
 	cfg, _ := h.db.GetSSOConfig()
 	if cfg.Issuer == "" {
 		return c.Redirect(http.StatusFound, h.cfg.Admin.Path+"/login")
@@ -113,7 +113,7 @@ type ssoClaims struct {
 
 // SSOCallback finishes the login. Every refusal lands on the login page
 // with a reason; none creates a user.
-func (h *Handler) SSOCallback(c echo.Context) error {
+func (h *Handler) SSOCallback(c *echo.Context) error {
 	ck, _ := c.Cookie(ssoCookie)
 	c.SetCookie(&http.Cookie{Name: ssoCookie, Path: h.cfg.Admin.Path + "/login/sso", MaxAge: -1, HttpOnly: true, Secure: secureCookie(c)})
 	var parts []string
@@ -164,7 +164,7 @@ type verifiedClaims struct {
 
 // ssoVerify redeems the code with the PKCE verifier and returns the
 // verified ID token's identity and claims.
-func (h *Handler) ssoVerify(ctx context.Context, c echo.Context, cfg storage.SSOConfig, code, nonce, verifier string) (*verifiedClaims, error) {
+func (h *Handler) ssoVerify(ctx context.Context, c *echo.Context, cfg storage.SSOConfig, code, nonce, verifier string) (*verifiedClaims, error) {
 	p, oc, err := h.ssoClient(ctx, c, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("discovery: %w", err)
@@ -245,7 +245,7 @@ func (h *Handler) ssoUser(cfg storage.SSOConfig, cl *verifiedClaims) (*storage.A
 
 // ── Settings: SSO card and invites (owner only) ──────────────────────────────
 
-func (h *Handler) ssoCardData(c echo.Context, cfg storage.SSOConfig, saveErr string) map[string]any {
+func (h *Handler) ssoCardData(c *echo.Context, cfg storage.SSOConfig, saveErr string) map[string]any {
 	return map[string]any{
 		"AdminPath":      h.cfg.Admin.Path,
 		"SSOIssuer":      cfg.Issuer,
@@ -261,7 +261,7 @@ func (h *Handler) ssoCardData(c echo.Context, cfg storage.SSOConfig, saveErr str
 // SaveSSOSettings stores the SSO config after checking discovery works. An
 // empty issuer turns SSO off; existing SSO users then can't sign in until
 // it is back.
-func (h *Handler) SaveSSOSettings(c echo.Context) error {
+func (h *Handler) SaveSSOSettings(c *echo.Context) error {
 	stored, _ := h.db.GetSSOConfig()
 	cfg := storage.SSOConfig{
 		Issuer:       strings.TrimRight(strings.TrimSpace(c.FormValue("issuer")), "/"),
@@ -314,7 +314,7 @@ func checkIssuer(cfg storage.SSOConfig) error {
 }
 
 // CreateSSOInvite invites an email to sign in with SSO under a role.
-func (h *Handler) CreateSSOInvite(c echo.Context) error {
+func (h *Handler) CreateSSOInvite(c *echo.Context) error {
 	email := storage.NormalizeEmail(c.FormValue("email"))
 	if !strings.Contains(email, "@") {
 		return h.renderUsersCard(c, errors.New("enter a valid email"))
@@ -323,7 +323,7 @@ func (h *Handler) CreateSSOInvite(c echo.Context) error {
 }
 
 // RenewSSOInvite restarts an invite's 7 days.
-func (h *Handler) RenewSSOInvite(c echo.Context) error {
+func (h *Handler) RenewSSOInvite(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -332,7 +332,7 @@ func (h *Handler) RenewSSOInvite(c echo.Context) error {
 }
 
 // RevokeSSOInvite deletes a pending invite.
-func (h *Handler) RevokeSSOInvite(c echo.Context) error {
+func (h *Handler) RevokeSSOInvite(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")

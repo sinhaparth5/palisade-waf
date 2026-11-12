@@ -11,7 +11,7 @@ import (
 	"palisade/internal/security/waf"
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // WAF rule dry-run (issue #8): replay recently logged requests through two
@@ -89,7 +89,7 @@ func dryRunDiff(base, cand *waf.Engine, logs []storage.RequestLog) ([]dryRunHit,
 }
 
 // WAFDryRun handles POST /admin/waf-rules/dry-run.
-func (h *Handler) WAFDryRun(c echo.Context) error {
+func (h *Handler) WAFDryRun(c *echo.Context) error {
 	render := func(data map[string]any) error {
 		return h.renderPartial(c, "waf_rules", "waf-dryrun-result", data)
 	}

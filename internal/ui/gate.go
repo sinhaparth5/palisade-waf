@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"palisade/internal/storage"
 )
@@ -21,7 +21,7 @@ const gateTimeLayout = "2006-01-02T15:04"
 // SetServiceGate saves a service's maintenance mode and waiting room (issue
 // #198). Turning maintenance on mints a bypass token if there is none;
 // new_bypass replaces it, revoking links already handed out.
-func (h *Handler) SetServiceGate(c echo.Context) error {
+func (h *Handler) SetServiceGate(c *echo.Context) error {
 	fail := func(msg string) error {
 		c.Response().Header().Set("HX-Retarget", "#svc-gate-error")
 		c.Response().Header().Set("HX-Reswap", "innerHTML")

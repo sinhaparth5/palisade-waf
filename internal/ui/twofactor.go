@@ -20,7 +20,7 @@ import (
 	"palisade/internal/storage"
 
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	qrcode "github.com/skip2/go-qrcode"
 )
 
@@ -161,7 +161,7 @@ func (s *twoFAStore) delete(token string) {
 
 // pendingEntry resolves the cz_2fa cookie to a live pending login, returning
 // the token alongside so handlers can delete it on success.
-func (h *Handler) pendingEntry(c echo.Context) (string, *twoFAEntry) {
+func (h *Handler) pendingEntry(c *echo.Context) (string, *twoFAEntry) {
 	ck, err := c.Cookie(twoFACookie)
 	if err != nil || ck.Value == "" {
 		return "", nil
@@ -174,7 +174,7 @@ func (h *Handler) pendingEntry(c echo.Context) (string, *twoFAEntry) {
 // form. Deliberately does NOT reset loginLimiter — the password is already
 // known-correct to whoever got here, so resetting on every password round
 // would let an attacker launder TOTP guesses by re-posting the password.
-func (h *Handler) beginTOTPStage(c echo.Context, u *storage.AdminUser) error {
+func (h *Handler) beginTOTPStage(c *echo.Context, u *storage.AdminUser) error {
 	token, err := h.twoFA.create(u.ID, u.Email)
 	if err != nil {
 		return h.renderLogin(c, "Internal error. Please try again.")
@@ -195,7 +195,7 @@ func (h *Handler) beginTOTPStage(c echo.Context, u *storage.AdminUser) error {
 // authenticator code, a one-time backup code, or an emailed recovery code,
 // in that order. Failures feed the same per-IP and per-account limiters as
 // password failures, so 2FA doesn't open a fresh brute-force surface.
-func (h *Handler) LoginTOTPPost(c echo.Context) error {
+func (h *Handler) LoginTOTPPost(c *echo.Context) error {
 	ip := h.clientIP(c.Request())
 	if wait, locked := h.loginLimiter.blocked(ip); locked {
 		log.Printf("admin login: rejected 2FA attempt from %s (locked out for %s)", ip, wait.Round(time.Second))
@@ -272,7 +272,7 @@ func (h *Handler) verifySecondFactor(entry *twoFAEntry, code string) bool {
 // LoginTOTPEmail emails a one-time recovery code for the pending login via
 // the existing Cloudflare Email Service mailer — the fallback for an admin
 // whose authenticator (and backup codes) aren't at hand.
-func (h *Handler) LoginTOTPEmail(c echo.Context) error {
+func (h *Handler) LoginTOTPEmail(c *echo.Context) error {
 	ip := h.clientIP(c.Request())
 	if _, locked := h.loginLimiter.blocked(ip); locked {
 		return h.renderLoginStatus(c, http.StatusTooManyRequests,
@@ -311,7 +311,7 @@ func (h *Handler) emailRecoveryAvailable() bool {
 	return err == nil && cfg.Token != "" && cfg.To != ""
 }
 
-func (h *Handler) renderLoginTOTP(c echo.Context, uid int64, status int, errMsg, notice string) error {
+func (h *Handler) renderLoginTOTP(c *echo.Context, uid int64, status int, errMsg, notice string) error {
 	passkeysEnabled, _ := h.passkeys.Enabled(uid)
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.Response().WriteHeader(status)
@@ -330,7 +330,7 @@ func (h *Handler) renderLoginTOTP(c echo.Context, uid int64, status int, errMsg,
 
 // twoFACardData builds the settings card's default (no enrollment in
 // progress) rendering state.
-func (h *Handler) twoFACardData(c echo.Context, extra map[string]any) map[string]any {
+func (h *Handler) twoFACardData(c *echo.Context, extra map[string]any) map[string]any {
 	enabled, _ := h.db.TOTPEnabled(currentUID(c))
 	data := map[string]any{
 		"AdminPath":   h.cfg.Admin.Path,
@@ -345,7 +345,7 @@ func (h *Handler) twoFACardData(c echo.Context, extra map[string]any) map[string
 // StartTOTPEnrollment generates a fresh secret and shows the QR code +
 // manual key with the confirm form. Nothing is enforced until the admin
 // proves their authenticator works (ConfirmTOTPEnrollment).
-func (h *Handler) StartTOTPEnrollment(c echo.Context) error {
+func (h *Handler) StartTOTPEnrollment(c *echo.Context) error {
 	secret, err := totp.GenerateSecret()
 	if err != nil {
 		return err
@@ -356,7 +356,7 @@ func (h *Handler) StartTOTPEnrollment(c echo.Context) error {
 	return h.renderTOTPEnrollment(c, secret, "")
 }
 
-func (h *Handler) renderTOTPEnrollment(c echo.Context, secret, errMsg string) error {
+func (h *Handler) renderTOTPEnrollment(c *echo.Context, secret, errMsg string) error {
 	uri := totp.ProvisioningURI(secret, currentUser(c).Email, totpIssuer)
 	png, err := qrcode.Encode(uri, qrcode.Medium, 220)
 	// template.URL: html/template's URL filter rejects data: URIs from plain
@@ -378,7 +378,7 @@ func (h *Handler) renderTOTPEnrollment(c echo.Context, secret, errMsg string) er
 // match, activates 2FA and hands out the one-time backup codes — shown once,
 // stored only as SHA-256 hashes (they're high-entropy random, same reasoning
 // as API keys).
-func (h *Handler) ConfirmTOTPEnrollment(c echo.Context) error {
+func (h *Handler) ConfirmTOTPEnrollment(c *echo.Context) error {
 	uid := currentUID(c)
 	pending, err := h.db.GetPendingTOTPSecret(uid)
 	if err != nil {
@@ -410,7 +410,7 @@ func (h *Handler) ConfirmTOTPEnrollment(c echo.Context) error {
 // DisableTOTP turns 2FA off. It demands a current authenticator or backup
 // code, not just the session cookie: a hijacked session shouldn't be able to
 // quietly remove the second factor.
-func (h *Handler) DisableTOTP(c echo.Context) error {
+func (h *Handler) DisableTOTP(c *echo.Context) error {
 	uid := currentUID(c)
 	secret, err := h.db.GetTOTPSecret(uid)
 	if err != nil {

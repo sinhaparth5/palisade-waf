@@ -8,7 +8,7 @@ import (
 
 	"palisade/internal/storage"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 func TestProbes(t *testing.T) {
@@ -18,7 +18,7 @@ func TestProbes(t *testing.T) {
 	}
 	e := echo.New()
 	RegisterProbes(e, db)
-	e.Any("/*", func(c echo.Context) error { return c.String(http.StatusTeapot, "proxied") })
+	e.Any("/*", func(c *echo.Context) error { return c.String(http.StatusTeapot, "proxied") })
 
 	get := func(method, path string) int {
 		rec := httptest.NewRecorder()

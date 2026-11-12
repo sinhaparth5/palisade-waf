@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"palisade/internal/security/waitroom"
 	"palisade/internal/storage"
@@ -66,7 +66,7 @@ func (h *Handler) ticketSig(service, ticket, clientKey string) string {
 // gate applies maintenance and the waiting room to a request that passed
 // the blocklists, challenge and rate limits. A non-empty reason means it
 // answered the request itself (err is the write's result).
-func (h *Handler) gate(c echo.Context, app *storage.Service, clientKey string, crawler bool, reqID string) (reason string, err error) {
+func (h *Handler) gate(c *echo.Context, app *storage.Service, clientKey string, crawler bool, reqID string) (reason string, err error) {
 	g, now := app.Gate, time.Now()
 	r := c.Request()
 
@@ -147,7 +147,7 @@ func (h *Handler) gate(c echo.Context, app *storage.Service, clientKey string, c
 // gatePage writes a 503 like deny: the branded page for browsers (with a
 // meta refresh when refresh > 0, so the queue works without JavaScript),
 // JSON for everything else.
-func gatePage(c echo.Context, reason, reqID, title, msg string, refresh int) error {
+func gatePage(c *echo.Context, reason, reqID, title, msg string, refresh int) error {
 	c.Response().Header().Set("X-WAF-Block-Reason", reason)
 	c.Response().Header().Set("Cache-Control", "no-store")
 	if !strings.Contains(c.Request().Header.Get("Accept"), "text/html") {

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"palisade/internal/storage"
 )
@@ -19,17 +19,17 @@ import (
 // whose rank is at least roleRank[r].
 var roleRank = map[string]int{storage.RoleViewer: 1, storage.RoleAdmin: 2, storage.RoleOwner: 3}
 
-// ctxUser is the echo.Context key sessionAuth stores the signed-in user under.
+// ctxUser is the *echo.Context key sessionAuth stores the signed-in user under.
 const ctxUser = "admin_user"
 
 // currentUser returns the signed-in user, or nil outside sessionAuth.
-func currentUser(c echo.Context) *storage.AdminUser {
+func currentUser(c *echo.Context) *storage.AdminUser {
 	u, _ := c.Get(ctxUser).(*storage.AdminUser)
 	return u
 }
 
 // currentUID is currentUser's id, 0 when nobody is signed in.
-func currentUID(c echo.Context) int64 {
+func currentUID(c *echo.Context) int64 {
 	if u := currentUser(c); u != nil {
 		return u.ID
 	}
@@ -41,7 +41,7 @@ func currentUID(c echo.Context) int64 {
 // mutating route needs admin, so a route someone forgot to declare is
 // still closed to viewers (TestRouteRoles also fails on it).
 func (h *Handler) requireRole(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		r := c.Request()
 		need, ok := h.routeRoles[r.Method+" "+c.Path()]
 		if !ok {
@@ -59,7 +59,7 @@ func (h *Handler) requireRole(next echo.HandlerFunc) echo.HandlerFunc {
 
 // ── Settings: users card (owner only) ────────────────────────────────────────
 
-func (h *Handler) usersCardData(c echo.Context, errMsg string) map[string]any {
+func (h *Handler) usersCardData(c *echo.Context, errMsg string) map[string]any {
 	users, _ := h.db.ListAdminUsers()
 	invites, _ := h.db.ListSSOInvites()
 	sso, _ := h.db.GetSSOConfig()
@@ -73,7 +73,7 @@ func (h *Handler) usersCardData(c echo.Context, errMsg string) map[string]any {
 	}
 }
 
-func (h *Handler) renderUsersCard(c echo.Context, err error) error {
+func (h *Handler) renderUsersCard(c *echo.Context, err error) error {
 	msg := ""
 	if err != nil {
 		msg = err.Error()
@@ -83,7 +83,7 @@ func (h *Handler) renderUsersCard(c echo.Context, err error) error {
 
 // CreateUser adds a password-less account and emails it a set-password
 // link (issue #229).
-func (h *Handler) CreateUser(c echo.Context) error {
+func (h *Handler) CreateUser(c *echo.Context) error {
 	email := storage.NormalizeEmail(c.FormValue("email"))
 	role := c.FormValue("role")
 	switch {
@@ -101,7 +101,7 @@ func (h *Handler) CreateUser(c echo.Context) error {
 }
 
 // ResendUserInvite replaces a pending user's link and sends it again.
-func (h *Handler) ResendUserInvite(c echo.Context) error {
+func (h *Handler) ResendUserInvite(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -116,7 +116,7 @@ func (h *Handler) ResendUserInvite(c echo.Context) error {
 // sendUserInvite emails user id their link. When that fails (often: email
 // isn't set up) the user still exists, so the card shows the link once for
 // the owner to pass on, rather than an error.
-func (h *Handler) sendUserInvite(c echo.Context, id int64, token string) error {
+func (h *Handler) sendUserInvite(c *echo.Context, id int64, token string) error {
 	u, err := h.db.GetAdminUser(id)
 	if err != nil || u == nil {
 		return h.renderUsersCard(c, cmp.Or(err, errors.New("user not found")))
@@ -136,12 +136,12 @@ func (h *Handler) sendUserInvite(c echo.Context, id int64, token string) error {
 // ── Invite page (public) ─────────────────────────────────────────────────────
 
 // InvitePage shows the set-password form for a live invite token.
-func (h *Handler) InvitePage(c echo.Context) error {
+func (h *Handler) InvitePage(c *echo.Context) error {
 	return h.renderInvite(c, "")
 }
 
 // InvitePost sets the invited user's password and signs them in.
-func (h *Handler) InvitePost(c echo.Context) error {
+func (h *Handler) InvitePost(c *echo.Context) error {
 	password := c.FormValue("password")
 	if password != c.FormValue("confirm_password") {
 		return h.renderInvite(c, "Passwords do not match.")
@@ -171,7 +171,7 @@ func (h *Handler) InvitePost(c echo.Context) error {
 
 // renderInvite renders the login page's set-password stage, or the dead-link
 // message when the token isn't live (unknown, spent and expired look alike).
-func (h *Handler) renderInvite(c echo.Context, errMsg string) error {
+func (h *Handler) renderInvite(c *echo.Context, errMsg string) error {
 	ip := h.clientIP(c.Request())
 	if _, locked := h.loginLimiter.blocked(ip); locked {
 		return h.renderLoginStatus(c, http.StatusTooManyRequests, "Too many failed attempts. Try again later.")
@@ -198,7 +198,7 @@ func (h *Handler) renderInvite(c echo.Context, errMsg string) error {
 
 // UpdateUser applies one owner action to a user: change role, disable,
 // enable, or reset 2FA. The last-owner guard lives in storage.
-func (h *Handler) UpdateUser(c echo.Context) error {
+func (h *Handler) UpdateUser(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")
@@ -223,7 +223,7 @@ func (h *Handler) UpdateUser(c echo.Context) error {
 }
 
 // DeleteUser removes a user with their sessions and passkeys.
-func (h *Handler) DeleteUser(c echo.Context) error {
+func (h *Handler) DeleteUser(c *echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid id")

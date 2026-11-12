@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"palisade/internal/config"
@@ -100,7 +100,7 @@ func newAdminEnv(t *testing.T) *adminEnv {
 		reloadAutoban,
 		threatscore.New(db, func(string) int { return 0 }),
 		reloadAdaptive,
-		func(c echo.Context) error { return c.String(http.StatusTeapot, "proxied") },
+		func(c *echo.Context) error { return c.String(http.StatusTeapot, "proxied") },
 	)
 	if err != nil {
 		t.Fatal(err)
