@@ -14,11 +14,9 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-11-12
+
 - (#315) Admin setup accepts a non-email login, says it configured an account it skipped, and has no password reset
 
-## [3.3.0] - 2026-11-12
-
-- (#314) Return a JSON challenge_required to API calls instead of redirecting them to the challenge page
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.0...main
-[3.3.0]: https://github.com/sinhaparth5/palisade-waf/compare/v3.2.9...v3.3.0
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.1...main
+[3.3.1]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.0...v3.3.1
