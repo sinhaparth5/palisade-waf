@@ -1,8 +1,7 @@
 // Package mailer sends the daily report email over SMTP with implicit TLS
 // (SMTPS, port 465) — the only submission mode Cloudflare Email Service
 // supports. Credentials live in the DB meta table (storage.EmailConfig),
-// entered through the admin UI; they are never shipped in the binary or read
-// from config.yaml.
+// entered through the admin UI; they are never shipped in the binary.
 package mailer
 
 import (

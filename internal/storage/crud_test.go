@@ -89,15 +89,6 @@ func TestServiceMutations(t *testing.T) {
 	}
 }
 
-func TestMigrateConfigAppsRunsOnce(t *testing.T) {
-	db := openTestDB(t)
-	mustNoErr(t, db.MigrateConfigApps([]ConfigApp{{Name: "a", Host: "a.test", Backend: "http://10.0.0.1"}}))
-	mustNoErr(t, db.MigrateConfigApps([]ConfigApp{{Name: "b", Host: "b.test", Backend: "http://10.0.0.2"}}))
-	if svcs, _ := db.ListServices(); len(svcs) != 1 || svcs[0].Name != "a" {
-		t.Fatalf("services = %+v", svcs)
-	}
-}
-
 func TestRuleRemoval(t *testing.T) {
 	db := openTestDB(t)
 	mustNoErr(t, db.AddIPRule("", "1.2.3.4", "block"))

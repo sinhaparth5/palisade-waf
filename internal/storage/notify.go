@@ -66,7 +66,7 @@ func (db *DB) SetWebhookConfig(cfg WebhookConfig) error {
 // Cloudflare-only — host, port, username and sender address are hardcoded in
 // the mailer package; only the recipient list and the API token are
 // configurable. Stored in the meta table and managed from the admin UI — the
-// token never lives in config.yaml or the binary.
+// token never lives in the binary.
 type EmailConfig struct {
 	Enabled bool
 	Token   string // Cloudflare API token with Email Sending: Edit (SMTP password)

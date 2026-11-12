@@ -336,12 +336,6 @@ func main() {
 		defer asnLookup.Close()
 	}
 
-	// One-time migration marker: no config file to migrate from, but we still
-	// need to set the "already migrated" flag so the DB doesn't wait for it.
-	if err := db.MigrateConfigApps(nil); err != nil {
-		log.Fatalf("migrate config apps: %v", err)
-	}
-
 	registry, err := services.New(db)
 	if err != nil {
 		log.Fatalf("services registry: %v", err)

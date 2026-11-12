@@ -37,7 +37,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - Run `go test -race` on packages where you touched shared state or a `Reload*` swap.
 - Reviews follow `REVIEW.md` (every finding needs a concrete input/state → breakage scenario).
 
-**CLI flags** — there is no config file; every bootstrap setting is a flag (`main.go`), every runtime knob lives in the DB and is edited in the admin UI. Comments mentioning "config.yaml" are historical.
+**CLI flags** — there is no config file; every bootstrap setting is a flag (`main.go`), every runtime knob lives in the DB and is edited in the admin UI.
 
 ```
 --listen :8080   --listen-tls   --listen-h3 (needs --listen-tls)   --trusted-proxies ip,cidr
@@ -156,7 +156,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - **Per-path rate limits** (`services/raterules.go`, table `service_rate_rules`, issue #280): per service, one `METHOD /prefix rate burst` per line (`*` method, rate `N`/`N/s`/`N/m`/`N/h`), raw prefix match on the service path, longest wins, a named method beats `*`. After the per-service limit, skipped for open paths and trusted IPs; one `ratelimit.Limiter` per rule keyed by `ClientKey`, rebuilt on `Reload`. 429 logs `rate_limited:path <rule>`. The janitor only evicts buckets that have refilled, so slow rates aren't reset after 5 minutes idle.
 - **Request policy** (`services/reqpolicy.go`, table `service_request_policy` on `Service.Policy`, issue #282, off by default): allowed methods (HEAD rides on GET), request Content-Types (`type/*` wildcards) and max body KiB per service. Stage 4.9, after the JWT check and before the WAF; skipped for open paths and trusted IPs. Enforce → 405/415/413 `policy_violation` (not scored by autoban); log → `policy_violation:log`. A body of unknown length is capped with `http.MaxBytesReader` while it streams. Presets (JSON API, HTML forms, Uploads) only fill the form, in `services.js`.
 - **Cookie hardening** (`services/cookies.go`, table `service_cookie_policy`, issue #281, off by default): in the client-side response hook, adds `HttpOnly`, `SameSite=Lax` and (only when the client connection is TLS) `Secure` to backend `Set-Cookie`s missing them; listed cookie names are left alone. Stack headers (`X-Powered-By`, `X-AspNet*`, `X-Runtime`, `X-Generator`, `Via`, `X-Varnish`) are stripped from every service in `modify`.
-- Rate limiter: in-process token bucket, persisted every 10s. Redis support was removed; `migrate()` deletes leftover keys and the `redis_mode` column is unused.
+- Rate limiter: in-process token bucket, persisted every 10s. The old `services.redis_mode` column is unused.
 - Hot reload: `ReloadWAF`, `ReloadBotProtection`, `ReloadRateLimit` swap under RWMutex; SIGHUP rebuilds the WAF; SIGINT/SIGTERM shut down gracefully (10s) and drain the log queue. `main`/`startTLS` must block on the channel `shutdownOnSignal` returns: `Serve` returns as soon as `Shutdown` starts, and the deferred `db.Close` would otherwise run under in-flight requests.
 - In TLS mode the `:80` ACME/redirect listener is bound before serving, so a taken port fails startup rather than silently breaking cert renewal.
 

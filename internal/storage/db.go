@@ -526,11 +526,6 @@ func (db *DB) migrate() error {
 		return err
 	}
 
-	// Redis support was removed; drop its leftover settings so the saved
-	// Redis password doesn't linger in the database. Existing services keep
-	// their unused redis_mode column (default ''), which nothing reads.
-	db.exec(`DELETE FROM meta WHERE ` + db.dialect.quoteIdent("key") + ` IN ('redis_addr', 'redis_password', 'redis_ns_key', 'ratelimit_backend')`) //nolint // best-effort cleanup; nothing reads these keys
-
 	// Seed the notifications baseline at startup (not lazily on first access)
 	// so a block that happens before any admin page has ever been loaded
 	// still counts as "unread" instead of racing the lazy-init.

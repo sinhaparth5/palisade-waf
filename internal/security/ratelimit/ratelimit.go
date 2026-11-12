@@ -69,7 +69,7 @@ type Limiter struct {
 }
 
 // NewWithParams builds an always-enabled Limiter directly from RPS and burst
-// values, for use by per-service limiters that don't come from config.yaml.
+// values, for the per-service and per-path limiters.
 func NewWithParams(rps float64, burst int) *Limiter {
 	l := &Limiter{
 		enabled: true,

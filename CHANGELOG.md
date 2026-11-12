@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#285) Remove Redis leftovers and historical comments
+
 ## [3.2.6] - 2026-11-12
 
 - (#284) Shrink the embedded icon and flag assets

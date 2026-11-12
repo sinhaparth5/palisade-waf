@@ -1,6 +1,6 @@
-// Package services holds the set of backend apps the proxy routes to.
-// Unlike config.yaml's static apps: list, this is DB-backed and can change
-// at runtime (added/edited/removed from the admin UI) without a restart.
+// Package services holds the set of backend apps the proxy routes to. It is
+// DB-backed and changes at runtime (added/edited/removed from the admin UI)
+// without a restart.
 package services
 
 import (

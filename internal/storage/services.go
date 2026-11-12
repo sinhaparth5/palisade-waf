@@ -594,31 +594,3 @@ func (db *DB) ListServices() ([]Service, error) {
 func (db *DB) GetService(id int) (Service, error) {
 	return db.scanService(db.queryRow(`SELECT `+serviceColumns+` FROM services WHERE id = ?`, id))
 }
-
-const metaKeyServicesMigrated = "services_migrated_from_config"
-
-// ConfigApp is the subset of a legacy config.yaml apps: entry needed to
-// seed the services table on first startup.
-type ConfigApp struct {
-	Name, Host, Prefix, Backend string
-}
-
-// MigrateConfigApps copies legacy config.yaml apps: entries into the
-// services table, exactly once. Safe to call on every startup — after the
-// first successful run it's a no-op even if the services table is later
-// emptied by the admin.
-func (db *DB) MigrateConfigApps(apps []ConfigApp) error {
-	done, err := db.getMeta(metaKeyServicesMigrated)
-	if err != nil {
-		return err
-	}
-	if done != "" {
-		return nil
-	}
-	for _, a := range apps {
-		if err := db.AddService(a.Name, a.Host, a.Prefix, a.Backend, 0, 0); err != nil {
-			return fmt.Errorf("migrate app %q: %w", a.Name, err)
-		}
-	}
-	return db.setMeta(metaKeyServicesMigrated, "1")
-}
