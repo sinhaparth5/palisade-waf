@@ -14,6 +14,7 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#265) Run fuzz tests in CI and cover the request parsers
 - (#264) Split handlers.go and db.go into per-feature files
 - (#263) Export and import configuration as a file
 - (#262) REST API write endpoints for geo rules, rule exceptions and virtual patches

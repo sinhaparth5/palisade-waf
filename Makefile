@@ -13,7 +13,7 @@ LDFLAGS  := -s -w -X main.version=$(VERSION)
 # input, so a clean local `make lint` and CI never disagree on results.
 LINT_VERSION := v2.14.0
 
-.PHONY: build generate css run test bench lint hooks clean dist checksums tag
+.PHONY: build generate css run test bench fuzz lint hooks clean dist checksums tag
 
 build: hooks generate
 	go build -ldflags "-X main.version=$(VERSION)" -o $(BINARY) .
@@ -52,6 +52,18 @@ test: hooks
 BENCH_COUNT ?= 6
 bench:
 	go test -run '^$$' -bench . -benchmem -count $(BENCH_COUNT) ./internal/proxy/ ./internal/security/waf/ | tee bench.txt
+
+# Runs every Fuzz* target for FUZZTIME each (issue #265). A failure leaves
+# its input under the package's testdata/fuzz/<Target>/; commit it so the
+# case runs in plain `go test` from then on.
+FUZZTIME ?= 30s
+fuzz:
+	@set -e; for f in $$(grep -rl --include='*_test.go' '^func Fuzz' internal); do \
+		for t in $$(sed -n 's/^func \(Fuzz[A-Za-z0-9_]*\)(.*/\1/p' $$f); do \
+			echo "== $$t ($$(dirname $$f))"; \
+			go test ./$$(dirname $$f) -run '^$$' -fuzz "^$$t$$" -fuzztime $(FUZZTIME); \
+		done; \
+	done
 
 # Requires golangci-lint $(LINT_VERSION) — https://golangci-lint.run/welcome/install/
 # Config lives in .golangci.yml. Same command CI and the pre-commit hook run.
