@@ -527,6 +527,8 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/settings/backup", h.BackupDB),
 		// POST for the same reason: users, password hashes and sealed secrets.
 		g.POST("/settings/config-export", h.ExportConfig),
+		// Profiles expose memory contents and the command line (issue #267).
+		g.GET("/debug/pprof/*", h.Pprof),
 	)
 }
 
