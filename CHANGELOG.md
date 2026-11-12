@@ -14,6 +14,7 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#283) Enforce mode for the script inventory CSP
 - (#282) Per-service request policy: methods, content types and body size
 - (#281) Harden backend cookies and response headers per service
 - (#267) Owner-only pprof endpoint

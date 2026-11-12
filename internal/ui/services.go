@@ -39,6 +39,9 @@ type ServiceView struct {
 	RateRules    string              // per-path rate limits, "" when none
 	CSP          string              // report-only policy, "" when off
 	Scripts      []storage.CSPScript // script sources its reports named
+	CSPEnforce   bool                // enforcing (issue #283)
+	CSPApproved  []string            // approved inventory entries
+	CSPRecent    bool                // a source first seen in the last 7 days
 	CookiesOn    bool                // Set-Cookie hardening (issue #281)
 	CookieExempt string              // cookie names it leaves alone, space-separated
 }
@@ -59,12 +62,16 @@ func (h *Handler) serviceViews() []ServiceView {
 	cspPolicies, _ := h.db.ListServiceCSP()
 	scripts, _ := h.db.ListCSPScripts()
 	cookies, _ := h.db.ListServiceCookiePolicies()
+	cspEnforce, _ := h.db.ListCSPEnforcement()
+	weekAgo := time.Now().Add(-7 * 24 * time.Hour)
 	out := make([]ServiceView, len(list))
 	for i, s := range list {
 		healthy, known := h.registry.IsHealthy(s.Name)
 		out[i] = ServiceView{Service: s, Healthy: healthy, Known: known, CertName: certMap[s.CertID], Health: h.registry.BackendHealth(s.Name), OpenAPIMode: modes[s.ID], MTLS: mtls[s.ID], MCP: mcp[s.ID], JWT: jwts[s.ID], RateRules: rateRules[s.ID], CSP: cspPolicies[s.ID], Scripts: scripts[s.ID]}
 		exempt, on := cookies[s.ID]
 		out[i].CookiesOn, out[i].CookieExempt = on, strings.Join(exempt, " ")
+		out[i].CSPEnforce, out[i].CSPApproved = cspEnforce[s.ID].Enforce, cspEnforce[s.ID].Approved
+		out[i].CSPRecent = slices.ContainsFunc(out[i].Scripts, func(sc storage.CSPScript) bool { return sc.FirstSeen.After(weekAgo) })
 	}
 	return out
 }
@@ -680,7 +687,8 @@ func (h *Handler) SetServiceCSP(c *echo.Context) error {
 		return fail("invalid service id")
 	}
 	policy := ""
-	if c.FormValue("csp_mode") == "report" {
+	mode := c.FormValue("csp_mode")
+	if mode == "report" || mode == "enforce" {
 		policy = strings.Join(strings.Fields(c.FormValue("csp_policy")), " ")
 		if policy == "" {
 			policy = defaultCSP
@@ -696,7 +704,29 @@ func (h *Handler) SetServiceCSP(c *echo.Context) error {
 		}
 		policy = strings.TrimSuffix(policy, ";")
 	}
+	// Approvals (issue #283) must name entries of this service's inventory.
+	var approved []string
+	if policy == "" { // off keeps approvals, like the inventory
+		cur, err := h.db.ListCSPEnforcement()
+		if err != nil {
+			return fail(err.Error())
+		}
+		approved = cur[id].Approved
+	} else {
+		all, err := h.db.ListCSPScripts()
+		if err != nil {
+			return fail(err.Error())
+		}
+		for _, o := range c.Request().PostForm["csp_approved"] {
+			if slices.ContainsFunc(all[id], func(s storage.CSPScript) bool { return s.Origin == o }) && !slices.Contains(approved, o) {
+				approved = append(approved, o)
+			}
+		}
+	}
 	if err := h.db.SetServiceCSP(id, policy); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.db.SetCSPEnforcement(id, storage.CSPEnforcement{Enforce: mode == "enforce", Approved: approved}); err != nil {
 		return fail(err.Error())
 	}
 	if err := h.registry.Reload(h.db); err != nil {

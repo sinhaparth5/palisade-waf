@@ -177,7 +177,7 @@ func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
 }
 
 func (db *DB) RemoveService(id int) error {
-	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_jwt", "service_rate_rules", "service_gate", "service_csp", "csp_scripts", "service_cookie_policy", "service_request_policy"} {
+	for _, t := range []string{"service_openapi", "service_mtls", "service_mcp", "service_jwt", "service_rate_rules", "service_gate", "service_csp", "csp_scripts", "service_cookie_policy", "service_request_policy", "csp_approved", "service_csp_enforce"} {
 		if _, err := db.exec(`DELETE FROM `+t+` WHERE service_id = ?`, id); err != nil {
 			return err
 		}

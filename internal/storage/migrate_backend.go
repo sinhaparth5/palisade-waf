@@ -31,7 +31,7 @@ type MigrationTableResult struct {
 // waf_service_rule_exceptions, waf_custom_rules, threat_intel_sources + their synced
 // threat_intel_ips, webhook_config, ip_threat_scores, ja4_reputation, service_openapi,
 // service_mtls (the CA files it points at stay on disk), service_mcp, service_jwt, service_rate_rules, service_gate, service_csp, csp_scripts,
-// service_cookie_policy, service_request_policy.
+// service_cookie_policy, service_request_policy, csp_approved, service_csp_enforce.
 //
 // Deliberately NOT migrated: requests (the access/request log — could be
 // millions of rows on a long-running install; disposable operational
@@ -115,6 +115,8 @@ var configSteps = []configStep{
 	{"csp_scripts", migrateCSPScriptsTable, false},
 	{"service_cookie_policy", migrateServiceCookiePolicyTable, false},
 	{"service_request_policy", migrateServiceRequestPolicyTable, false},
+	{"csp_approved", migrateCSPApprovedTable, false},
+	{"service_csp_enforce", migrateCSPEnforceTable, false},
 	{"ip_rules", migrateIPRulesTable, true},
 	{"geo_rules", migrateGeoRulesTable, true},
 	{"api_keys", migrateAPIKeysTable, true},

@@ -21,6 +21,7 @@ import (
 	"palisade/internal/security/threatscore"
 	"palisade/internal/services"
 	"palisade/internal/storage"
+	"slices"
 	"strings"
 	"time"
 
@@ -93,6 +94,7 @@ var funcs = template.FuncMap{
 	"contains": strings.Contains,
 	"aiPolicy": bot.ParseAIPolicy,
 	"join":     strings.Join,
+	"has":      slices.Contains[[]string, string],
 	"splitComma": func(s string) []string {
 		var out []string
 		for _, p := range strings.Split(s, ",") {

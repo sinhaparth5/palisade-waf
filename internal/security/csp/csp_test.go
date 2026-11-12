@@ -131,3 +131,20 @@ func TestHeader(t *testing.T) {
 		t.Errorf("got %q / %q", h, ep)
 	}
 }
+
+func TestEnforcePolicy(t *testing.T) {
+	for _, tc := range []struct {
+		policy   string
+		approved []string
+		want     string
+	}{
+		{"script-src 'self'", nil, "script-src 'self'"},
+		{"default-src 'none'; Script-Src 'self' https://a.example", []string{"https://cdn.example", "https://a.example"}, "script-src 'self' https://a.example https://cdn.example"},
+		{"img-src *", []string{"inline", "eval", "wasm-eval", "data:", "trusted-types-sink"}, "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' data:"},
+		{"script-src-elem x; script-src https://only.example", nil, "script-src https://only.example"},
+	} {
+		if got := EnforcePolicy(tc.policy, tc.approved); got != tc.want {
+			t.Errorf("EnforcePolicy(%q, %q) = %q, want %q", tc.policy, tc.approved, got, tc.want)
+		}
+	}
+}

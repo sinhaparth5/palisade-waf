@@ -225,6 +225,10 @@ func (r *Registry) Reload(db *storage.DB) error {
 		return err
 	}
 	cspNames := map[int]string{}
+	cspEnforce, err := db.ListCSPEnforcement()
+	if err != nil {
+		return err
+	}
 	cookiePolicies, err := db.ListServiceCookiePolicies()
 	if err != nil {
 		return err
@@ -380,8 +384,15 @@ func (r *Registry) Reload(db *storage.DB) error {
 		compress := s.CompressEnabled
 		cookieExempt, cookiesOn := cookiePolicies[s.ID]
 		var cspHeader, cspEndpoints string
+		cspName := "Content-Security-Policy-Report-Only"
 		if p := cspPolicies[s.ID]; p != "" {
 			cspNames[s.ID] = name
+			// Enforce (issue #283): the policy's script-src plus the
+			// approved sources, blocking; new sources are blocked and
+			// still reported to the inventory for approval.
+			if e := cspEnforce[s.ID]; e.Enforce {
+				p, cspName = csp.EnforcePolicy(p, e.Approved), "Content-Security-Policy"
+			}
 			cspHeader, cspEndpoints = csp.Header(s.ID, p)
 		}
 		clientModify := func(resp *http.Response) error {
@@ -394,9 +405,9 @@ func (r *Registry) Reload(db *storage.DB) error {
 			if cookiesOn {
 				hardenCookies(resp, cookieExempt)
 			}
-			// Report-only CSP (issue #235): only documents run a policy.
+			// Script inventory CSP (issues #235, #283): only documents run a policy.
 			if cspHeader != "" && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
-				resp.Header.Add("Content-Security-Policy-Report-Only", cspHeader)
+				resp.Header.Add(cspName, cspHeader)
 				resp.Header.Add("Reporting-Endpoints", cspEndpoints)
 			}
 			return modify(resp)

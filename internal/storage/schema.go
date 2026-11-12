@@ -382,6 +382,17 @@ func (db *DB) schemaStatements() []string {
 			exempt     TEXT NOT NULL
 		)`,
 
+		// CSP enforce mode (issue #283): approved inventory entries, and a
+		// row per service that sends them as an enforcing policy.
+		`CREATE TABLE IF NOT EXISTS csp_approved (
+			service_id INTEGER NOT NULL,
+			origin     VARCHAR(255) NOT NULL,
+			PRIMARY KEY (service_id, origin)
+		)`,
+		`CREATE TABLE IF NOT EXISTS service_csp_enforce (
+			service_id INTEGER PRIMARY KEY
+		)`,
+
 		// Accepted methods, Content-Types and body size per service
 		// (issue #282); lists are space-separated.
 		`CREATE TABLE IF NOT EXISTS service_request_policy (

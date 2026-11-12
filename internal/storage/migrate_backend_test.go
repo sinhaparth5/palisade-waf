@@ -55,6 +55,9 @@ func TestMigrateConfigTo(t *testing.T) {
 	if err := source.SetServiceCSP(1, "script-src 'self'"); err != nil {
 		t.Fatal(err)
 	}
+	if err := source.SetCSPEnforcement(1, CSPEnforcement{Enforce: true, Approved: []string{"https://cdn.example", "inline"}}); err != nil {
+		t.Fatal(err)
+	}
 	if err := source.SetServiceCookiePolicy(1, true, []string{"csrf_js", "theme"}); err != nil {
 		t.Fatal(err)
 	}

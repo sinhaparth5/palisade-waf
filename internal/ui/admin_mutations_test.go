@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -1072,9 +1073,29 @@ func TestSetServiceCSP(t *testing.T) {
 		}
 	}
 
+	// Enforce (issue #283): only this service's inventory can be approved.
+	if _, err := env.db.AddCSPScript(svc.ID, storage.CSPScript{Origin: "https://cdn.example", Page: "/", FirstSeen: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	rec = env.do("POST", path, url.Values{"csp_mode": {"enforce"}, "csp_policy": {""}, "csp_approved": {"https://cdn.example", "https://evil.example"}})
+	wantCode(t, "enforce", rec.Code, 200, rec.Body.String())
+	if !strings.Contains(rec.Body.String(), `data-csp-enforce="1" data-csp-recent="1"`) {
+		t.Errorf("row data lacks enforce/recent: %s", rec.Body)
+	}
+	if got, _ := env.db.ListCSPEnforcement(); !got[svc.ID].Enforce || !slices.Equal(got[svc.ID].Approved, []string{"https://cdn.example"}) {
+		t.Errorf("enforcement = %+v", got[svc.ID])
+	}
+	env.do("POST", path, url.Values{"csp_mode": {"report"}, "csp_approved": {"https://cdn.example"}})
+	if got, _ := env.db.ListCSPEnforcement(); got[svc.ID].Enforce || len(got[svc.ID].Approved) != 1 {
+		t.Errorf("report-only should keep approvals and stop enforcing: %+v", got[svc.ID])
+	}
+
 	env.do("POST", path, form("csp_mode", "off"))
 	if got, _ := env.db.ListServiceCSP(); len(got) != 0 {
 		t.Errorf("off should remove the policy: %+v", got)
+	}
+	if got, _ := env.db.ListCSPEnforcement(); len(got[svc.ID].Approved) != 1 {
+		t.Errorf("off should keep approvals: %+v", got[svc.ID])
 	}
 }
 

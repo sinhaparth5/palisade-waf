@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +34,37 @@ const (
 func Header(serviceID int, policy string) (csp, endpoints string) {
 	u := ReportPath + "?s=" + strconv.Itoa(serviceID)
 	return policy + "; report-uri " + u + "; report-to palisade-csp", `palisade-csp="` + u + `"`
+}
+
+// EnforcePolicy is the script-src an enforcing service sends as
+// Content-Security-Policy (issue #283): the sources of the report-only
+// policy's script-src ('self' when it has none) plus the approved inventory
+// entries. Only script-src is taken, so other directives the admin wrote
+// stay unenforced. Pass the result to Header for the report endpoints.
+func EnforcePolicy(policy string, approved []string) string {
+	srcs := []string{"'self'"}
+	for _, d := range strings.Split(policy, ";") {
+		if f := strings.Fields(d); len(f) > 0 && strings.EqualFold(f[0], "script-src") {
+			srcs = f[1:]
+			break
+		}
+	}
+	for _, a := range approved {
+		switch a {
+		case "inline":
+			a = "'unsafe-inline'"
+		case "eval":
+			a = "'unsafe-eval'"
+		case "wasm-eval":
+			a = "'wasm-unsafe-eval'"
+		case "trusted-types-policy", "trusted-types-sink":
+			continue // not script-src sources
+		}
+		if !slices.Contains(srcs, a) {
+			srcs = append(srcs, a)
+		}
+	}
+	return "script-src " + strings.Join(srcs, " ")
 }
 
 // Store is the part of storage.DB the collector uses.

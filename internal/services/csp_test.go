@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"palisade/internal/storage"
 )
 
 // TestCSPReportOnlyHeader covers issue #235: the report-only policy goes on
@@ -59,5 +61,20 @@ func TestCSPReportOnlyHeader(t *testing.T) {
 	}
 	if got := get("plain", "/").Get("Content-Security-Policy-Report-Only"); got != "" {
 		t.Errorf("service without a policy got one: %q", got)
+	}
+
+	// Enforce (issue #283): the approved sources join script-src, blocking.
+	if err := db.SetCSPEnforcement(shopID, storage.CSPEnforcement{Enforce: true, Approved: []string{"https://cdn.example", "inline"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Reload(db); err != nil {
+		t.Fatal(err)
+	}
+	hdr = get("shop", "/")
+	if got := hdr.Get("Content-Security-Policy"); !strings.HasPrefix(got, "script-src 'self' https://cdn.example 'unsafe-inline'; report-uri /_cz/csp-report?s=") {
+		t.Errorf("enforcing CSP = %q", got)
+	}
+	if got := hdr.Get("Content-Security-Policy-Report-Only"); got != "" {
+		t.Errorf("enforcing service also sent report-only: %q", got)
 	}
 }

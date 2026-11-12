@@ -150,6 +150,16 @@
   var jwtForm = document.getElementById('svc-jwt-form');
   var cspForm = document.getElementById('svc-csp-form');
   var cookiesForm = document.getElementById('svc-cookies-form');
+  var cspRecent = false;
+  var cspMode = document.getElementById('svc-csp-mode');
+  function cspSync() {
+    document.getElementById('svc-csp-recent').classList.toggle('hidden', !(cspRecent && cspMode.value === 'enforce'));
+  }
+  cspMode.addEventListener('change', cspSync);
+  document.getElementById('svc-csp-revert').addEventListener('click', function () {
+    cspMode.value = 'report';
+    cspForm.requestSubmit();
+  });
   var policyForm = document.getElementById('svc-policy-form');
   document.getElementById('svc-policy-preset').addEventListener('change', function () {
     var o = this.selectedOptions[0];
@@ -323,7 +333,25 @@
 
     cspForm.setAttribute('hx-post', adminPath + '/services/csp/' + d.id);
     htmx.process(cspForm);
-    document.getElementById('svc-csp-mode').value = d.csp ? 'report' : 'off';
+    document.getElementById('svc-csp-mode').value = d.csp ? (d.cspEnforce === '1' ? 'enforce' : 'report') : 'off';
+    var sources = document.getElementById('svc-csp-sources');
+    var approved = (d.cspApproved || '').split(' ');
+    sources.replaceChildren();
+    (d.cspScripts || '').split(' ').filter(Boolean).forEach(function (o) {
+      var label = document.createElement('label');
+      label.className = 'flex items-center gap-2 cursor-pointer';
+      var box = document.createElement('input');
+      box.type = 'checkbox';
+      box.name = 'csp_approved';
+      box.value = o;
+      box.checked = approved.indexOf(o) >= 0;
+      label.append(box, document.createTextNode(o));
+      sources.append(label);
+    });
+    if (!sources.children.length) sources.textContent = 'No sources reported yet.';
+    cspRecent = d.cspRecent === '1';
+    cspSync();
+    document.getElementById('svc-csp-revert').classList.toggle('hidden', d.cspEnforce !== '1');
     document.getElementById('svc-csp-policy').value = d.csp || "script-src 'self'";
 
     cookiesForm.setAttribute('hx-post', adminPath + '/services/cookies/' + d.id);

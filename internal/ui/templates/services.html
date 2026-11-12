@@ -476,8 +476,14 @@
         <select id="svc-csp-mode" name="csp_mode" class="field text-[13px] mb-4">
           <option value="off">Off</option>
           <option value="report">Report only</option>
+          <option value="enforce">Enforce: block sources not approved</option>
         </select>
+        <p class="field-label">Approved sources</p>
+        <p class="text-[12px] text-slate-500 mb-2 leading-[1.5]">Enforce sends <code class="font-mono">Content-Security-Policy</code> with the policy's <code class="font-mono">script-src</code> plus the sources ticked here. Other sources are blocked and still reported, so a new one shows up here for approval.</p>
+        <div id="svc-csp-sources" class="mb-3 flex flex-col gap-1 font-mono text-[12px] text-ink"></div>
+        <p id="svc-csp-recent" role="alert" class="hidden text-[12px] text-amber-700 mb-3">New script sources were reported in the last 7 days. The inventory may not have settled; enforcing now can break pages that load them.</p>
         <button type="submit" class="btn-primary w-full">Save</button>
+        <button type="button" id="svc-csp-revert" class="hidden btn-ghost w-full mt-2">Return to report-only</button>
       </form>
       <div id="svc-csp-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
 
@@ -942,7 +948,8 @@
       data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
       data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}"
       data-schema="{{.RequestSchema}}" data-schema-mode="{{.SchemaMode}}" data-openapi-mode="{{.OpenAPIMode}}"
-      data-mcp-mode="{{.MCP.Mode}}" data-mcp-path="{{.MCP.Path}}" data-mcp-origins="{{.MCP.Origins}}" data-mcp-methods="{{.MCP.Methods}}" data-mcp-tools="{{.MCP.Tools}}" data-csp="{{.CSP}}"
+      data-mcp-mode="{{.MCP.Mode}}" data-mcp-path="{{.MCP.Path}}" data-mcp-origins="{{.MCP.Origins}}" data-mcp-methods="{{.MCP.Methods}}" data-mcp-tools="{{.MCP.Tools}}" data-csp="{{.CSP}}" data-csp-enforce="{{if .CSPEnforce}}1{{else}}0{{end}}" data-csp-recent="{{if .CSPRecent}}1{{else}}0{{end}}"
+      data-csp-scripts="{{range $i, $s := .Scripts}}{{if $i}} {{end}}{{$s.Origin}}{{end}}" data-csp-approved="{{join .CSPApproved " "}}"
       data-cookies="{{if .CookiesOn}}1{{else}}0{{end}}" data-cookie-exempt="{{.CookieExempt}}"
       data-policy-mode="{{.Policy.Mode}}" data-policy-methods="{{join .Policy.Methods " "}}" data-policy-types="{{join .Policy.ContentTypes " "}}" data-policy-kib="{{.Policy.MaxBodyKiB}}"
       data-jwt-mode="{{.JWT.Mode}}" data-jwt-jwks="{{.JWT.JWKSURL}}" data-jwt-key="{{.JWT.PublicKey}}" data-jwt-issuer="{{.JWT.Issuer}}"
@@ -1017,11 +1024,11 @@
   {{template "svc-kv" (map "K" "OpenAPI" "V" (or .OpenAPIMode "No spec"))}}
   {{template "svc-kv" (map "K" "MCP guard" "V" (or .MCP.Mode "Off"))}}
   {{template "svc-kv" (map "K" "JWT verification" "V" (or .JWT.Mode "Off"))}}
-  {{template "svc-kv" (map "K" "CSP report-only" "V" (or .CSP "Off"))}}
+  {{template "svc-kv" (map "K" (or (and .CSPEnforce "CSP enforced") "CSP report-only") "V" (or .CSP "Off"))}}
   {{template "svc-kv" (map "K" "Request policy" "V" (or .Policy.Mode "Off"))}}
   {{template "svc-kv" (map "K" "Cookie hardening" "V" (or (and .CookiesOn (or (and .CookieExempt (print "On, except " .CookieExempt)) "On")) "Off"))}}
   {{if .Scripts}}<p class="pt-2 text-slate-500">Script sources</p>
-  <ul class="my-2 border border-line bg-surface p-3 font-mono text-[12px] text-ink">{{range .Scripts}}<li class="flex flex-wrap justify-between gap-x-3"><span class="break-all">{{.Origin}}</span><span class="text-slate-500">{{.Page}} · {{fmtTimeFull .FirstSeen}}</span></li>{{end}}</ul>{{end}}
+  <ul class="my-2 border border-line bg-surface p-3 font-mono text-[12px] text-ink">{{range .Scripts}}<li class="flex flex-wrap justify-between gap-x-3"><span class="break-all">{{.Origin}}{{if has $.CSPApproved .Origin}} · approved{{end}}</span><span class="text-slate-500">{{.Page}} · {{fmtTimeFull .FirstSeen}}</span></li>{{end}}</ul>{{end}}
   {{template "svc-kv" (map "K" "Inspect responses" "V" (or .ResponseInspect "Off"))}}
 
   {{template "svc-view-head" "Cache"}}

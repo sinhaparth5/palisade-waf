@@ -105,3 +105,102 @@ func migrateCSPScriptsTable(source, target *DB, _ bool) (int, error) {
 	}
 	return n, nil
 }
+
+// CSPEnforcement is a service's enforce switch and approved inventory
+// entries (issue #283).
+type CSPEnforcement struct {
+	Enforce  bool
+	Approved []string // csp_scripts origins
+}
+
+// SetCSPEnforcement replaces a service's approved sources and enforce flag.
+func (db *DB) SetCSPEnforcement(id int, e CSPEnforcement) error {
+	for _, t := range []string{"csp_approved", "service_csp_enforce"} {
+		if _, err := db.exec(`DELETE FROM `+t+` WHERE service_id = ?`, id); err != nil {
+			return err
+		}
+	}
+	for _, o := range e.Approved {
+		if _, err := db.exec(`INSERT INTO csp_approved (service_id, origin) VALUES (?, ?)`, id, o); err != nil {
+			return err
+		}
+	}
+	if e.Enforce {
+		_, err := db.exec(`INSERT INTO service_csp_enforce (service_id) VALUES (?)`, id)
+		return err
+	}
+	return nil
+}
+
+// ListCSPEnforcement returns every service's enforce flag and approved
+// sources by service id.
+func (db *DB) ListCSPEnforcement() (map[int]CSPEnforcement, error) {
+	out := map[int]CSPEnforcement{}
+	rows, err := db.query(`SELECT service_id, origin FROM csp_approved ORDER BY origin`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int
+		var o string
+		if err := rows.Scan(&id, &o); err != nil {
+			return nil, err
+		}
+		e := out[id]
+		e.Approved = append(e.Approved, o)
+		out[id] = e
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	ids, err := db.query(`SELECT service_id FROM service_csp_enforce`)
+	if err != nil {
+		return nil, err
+	}
+	defer ids.Close()
+	for ids.Next() {
+		var id int
+		if err := ids.Scan(&id); err != nil {
+			return nil, err
+		}
+		e := out[id]
+		e.Enforce = true
+		out[id] = e
+	}
+	return out, ids.Err()
+}
+
+func migrateCSPApprovedTable(source, target *DB, _ bool) (int, error) {
+	all, err := source.ListCSPEnforcement()
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for id, e := range all {
+		for _, o := range e.Approved {
+			if _, err := target.exec(`INSERT INTO csp_approved (service_id, origin) VALUES (?, ?)`, id, o); err != nil {
+				return n, err
+			}
+			n++
+		}
+	}
+	return n, nil
+}
+
+func migrateCSPEnforceTable(source, target *DB, _ bool) (int, error) {
+	all, err := source.ListCSPEnforcement()
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for id, e := range all {
+		if e.Enforce {
+			if _, err := target.exec(`INSERT INTO service_csp_enforce (service_id) VALUES (?)`, id); err != nil {
+				return n, err
+			}
+			n++
+		}
+	}
+	return n, nil
+}
