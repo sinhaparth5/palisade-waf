@@ -16,6 +16,7 @@ Requires **Go 1.27+**.
 make build       # go generate (minifies JS) + go build -> ./palisade
 make generate    # regenerate minified JS only
 make css         # recompile Tailwind (standalone CLI into .cache/, no Node) — output is committed
+make icons       # subset the hugeicons font to the hgi-* names in use — output is committed
 make test        # go test ./...
 make bench       # proxy pipeline benchmarks -> bench.txt (see BENCHMARKS.md)
 make fuzz        # every Fuzz* target for FUZZTIME (default 30s) each
@@ -131,7 +132,7 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 - Form controls use the `.field`, `.field-label`, `.btn-ghost` and `.tag` classes from `tailwind.css`, not long utility strings.
 - Reuse partials in `templates/components/` (`card_header`, `panel_header`, `management_hero`, `empty_state`, `confirm_modal`, `toggle_switch`, `remove_btn`, `rule_type_badge`, `rule_ring_row`, `ring`, `section_head`, `pager`).
 - Management pages (IP Rules, Geo Rules, Services, Certificates, WAF Rules, Threat Intel): `management-hero`, then one full-width `card border-t-4 border-t-edge p-5` primary-action card, supporting panels in a grid **below** it. Inline submit for single-row forms, button below for multi-row.
-- Icon names (`hgi-*`) are not validated; a wrong one renders blank. Check against `curl -s https://cdn.hugeicons.com/font/hgi-stroke-rounded.css | grep -oE '\.hgi-[a-z0-9-]+'`.
+- Icons (issue #284): the embedded hugeicons font/CSS is a subset of the `hgi-*` names used in templates, `static/js/src` and `internal/ui` Go. After adding or removing an icon run `make icons` (full set cached in `.cache/hugeicons`, fonttools via `uvx`) and commit `internal/ui/vendor/hugeicons/`; `TestIconsInSubset` fails on a name missing from it, and `scripts/subset-icons.py` refuses one not in hugeicons. Flags: only ISO alpha-2 country flags; ones over 4 KB are 96x72 WebP (CSS points at `.webp`).
 
 **JS/CSS**
 - JS source in `static/js/src/`, minified to `static/js/dist/` (embedded). No Node/npm in this repo.

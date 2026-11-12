@@ -13,7 +13,7 @@ LDFLAGS  := -s -w -X main.version=$(VERSION)
 # input, so a clean local `make lint` and CI never disagree on results.
 LINT_VERSION := v2.14.0
 
-.PHONY: build generate css run test bench fuzz lint hooks clean dist checksums tag
+.PHONY: build generate css icons run test bench fuzz lint hooks clean dist checksums tag
 
 build: hooks generate
 	go build -ldflags "-X main.version=$(VERSION)" -o $(BINARY) .
@@ -40,6 +40,20 @@ css:
 		chmod +x "$(TAILWIND_BIN)"; \
 	fi
 	"$(TAILWIND_BIN)" -i static/css/tailwind.css -o static/css/dist/tailwind.min.css --minify
+
+# Subset the hugeicons font and stylesheet to the hgi-* names the admin UI
+# uses (issue #284). The full set (byte-identical to what was vendored) is
+# downloaded to .cache/ once; fonttools runs through uvx, so nothing is
+# installed. Run it (and commit the result) after adding or removing an icon;
+# TestIconsInSubset fails until you do.
+ICONS_DIR := internal/ui/vendor/hugeicons
+icons:
+	@mkdir -p .cache/hugeicons
+	@[ -f .cache/hugeicons/full.css ] || curl -fsSLo .cache/hugeicons/full.css https://cdn.hugeicons.com/font/hgi-stroke-rounded.css
+	@[ -f .cache/hugeicons/full.woff2 ] || curl -fsSLo .cache/hugeicons/full.woff2 https://cdn.hugeicons.com/font/hgi-stroke-rounded.woff2
+	codes=$$(python3 scripts/subset-icons.py .cache/hugeicons/full.css $(ICONS_DIR)/hgi-stroke-rounded.css) && \
+	uvx --from 'fonttools[woff]==4.55.3' pyftsubset .cache/hugeicons/full.woff2 --unicodes="$$codes" \
+		--flavor=woff2 --layout-features='' --no-hinting --desubroutinize --output-file=$(ICONS_DIR)/hgi-stroke-rounded.woff2
 
 run: build
 	./$(BINARY)

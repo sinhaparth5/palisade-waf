@@ -14,6 +14,7 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#284) Shrink the embedded icon and flag assets
 - (#283) Enforce mode for the script inventory CSP
 - (#282) Per-service request policy: methods, content types and body size
 - (#281) Harden backend cookies and response headers per service
