@@ -213,6 +213,7 @@ func TestServeStartupErrors(t *testing.T) {
 		"db driver":          {"--db-driver", "postgres"},
 		"db dsn":             {"--db", "postgres://u:p@db/waf"},
 		"removed command":    {"build-dsn"},
+		"removed flag":       {"--warehouse-url", "http://ch:8123"},
 		"db key":             {"--db-key-file", short},
 		"access log":         {"--access-log", filepath.Join(short, "a.log")},
 		"listen taken":       {"--listen", busy},

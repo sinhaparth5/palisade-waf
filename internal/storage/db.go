@@ -416,6 +416,16 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"services", "cache_rules TEXT NOT NULL DEFAULT ''"},
 }
 
+// removedMetaKeys are the settings of removed features: TypeSafe (#299) and
+// the Settings "Database connection" card (#300), secrets included. migrate
+// deletes them and a config import skips them, so neither an old database
+// nor an old export keeps them around.
+var removedMetaKeys = []any{
+	"typesafe_enabled", "typesafe_api_key",
+	"db_conn_driver", "db_conn_mode", "db_conn_dsn", "db_conn_host", "db_conn_port",
+	"db_conn_username", "db_conn_password", "db_conn_dbname", "db_conn_sslmode", "db_conn_extra",
+}
+
 func (db *DB) migrate() error {
 	// SQLite has no ADD COLUMN IF NOT EXISTS: once a column exists this
 	// fails with "duplicate column", which is expected and ignored.
@@ -435,17 +445,10 @@ func (db *DB) migrate() error {
 	if err := db.hashSessionTokens(); err != nil {
 		return err
 	}
-	// TypeSafe ASN classification was removed (#299): drop its stored API
-	// key and call log so neither lingers in the DB or a config export.
-	if _, err := db.exec(`DELETE FROM meta WHERE key IN ('typesafe_enabled', 'typesafe_api_key')`); err != nil {
+	if _, err := db.exec(`DELETE FROM meta WHERE key IN (`+placeholders(len(removedMetaKeys))+`)`, removedMetaKeys...); err != nil {
 		return err
 	}
-	// The Settings "Database connection" card was removed with MySQL and
-	// Postgres support (#300): drop its saved form, password and DSN included.
-	if _, err := db.exec(`DELETE FROM meta WHERE key LIKE 'db\_conn\_%' ESCAPE '\'`); err != nil {
-		return err
-	}
-	if _, err := db.exec(`DROP TABLE IF EXISTS typesafe_calls`); err != nil {
+	if _, err := db.exec(`DROP TABLE IF EXISTS typesafe_calls`); err != nil { // TypeSafe call log (#299)
 		return err
 	}
 

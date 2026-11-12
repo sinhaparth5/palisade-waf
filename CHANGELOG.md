@@ -22,6 +22,7 @@ rather than growing this file forever.
 - (#299) Remove TypeSafe ASN classification
 - (#300) Drop MySQL and Postgres backends, SQLite only
 - (#303) Rename docker-compose.yml to compose.yml
+- (#302) Verify the feature removals leave a clean upgrade and no residue
 
 ## [3.2.7] - 2026-11-12
 

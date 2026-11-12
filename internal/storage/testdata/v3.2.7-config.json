@@ -1,0 +1,166 @@
+{
+  "format": "palisade-config",
+  "version": 1,
+  "exported_at": "2026-11-12T14:49:57.267434499Z",
+  "sealed": true,
+  "tables": {
+    "admin_sso_identities": [],
+    "admin_users": [
+      {
+        "created_at": "2026-11-12T14:49:47.872378465Z",
+        "disabled": 0,
+        "email": "owner@example.test",
+        "id": 1,
+        "password_hash": "$2a$12$q0pHk1PnVlelB/Yr8vALq.qnalfRXZRH2oGymAoUS.360NagDK4Ly",
+        "role": "owner",
+        "totp_backup_codes": "",
+        "totp_last_counter": "",
+        "totp_pending_secret": "",
+        "totp_secret": "",
+        "webauthn_handle": ""
+      }
+    ],
+    "api_keys": [],
+    "certificates": [],
+    "csp_approved": [],
+    "csp_scripts": [],
+    "geo_rules": [],
+    "ip_rules": [
+      {
+        "app_name": "",
+        "created_at": "2026-11-12T14:49:47Z",
+        "id": 1,
+        "ip": "203.0.113.9",
+        "note": "fixture",
+        "rule_type": "block"
+      }
+    ],
+    "ip_threat_scores": [],
+    "ja4_reputation": [],
+    "meta": [
+      {
+        "key": "sessions_hashed",
+        "value": "1"
+      },
+      {
+        "key": "notifications_seen_at",
+        "value": "2026-11-12T14:49:47.661929674Z"
+      },
+      {
+        "key": "typesafe_enabled",
+        "value": "1"
+      },
+      {
+        "key": "typesafe_api_key",
+        "value": "enc:v1:zs2YiDskLRgHDafX9j98Es0nVM3PwrjDKT9wP10sdV/6KtBgJLz793DA"
+      },
+      {
+        "key": "db_conn_driver",
+        "value": "postgres"
+      },
+      {
+        "key": "db_conn_mode",
+        "value": "fields"
+      },
+      {
+        "key": "db_conn_host",
+        "value": "db.internal"
+      },
+      {
+        "key": "db_conn_port",
+        "value": ""
+      },
+      {
+        "key": "db_conn_username",
+        "value": "waf"
+      },
+      {
+        "key": "db_conn_dbname",
+        "value": "waf"
+      },
+      {
+        "key": "db_conn_sslmode",
+        "value": ""
+      },
+      {
+        "key": "db_conn_extra",
+        "value": ""
+      },
+      {
+        "key": "db_conn_password",
+        "value": "enc:v1:Uoz4S19mAScSWF4W12LQOx5d+2psmMLacwIwzmIPmzTUXKlOhIo="
+      },
+      {
+        "key": "db_conn_dsn",
+        "value": "enc:v1:+Zft1SMjwCK0+c6CsjdRTKO8JoXGC6c3W+78//5M+Tj/DTn3SUFknf2w3jWxyKuhcG7oiXXCDwMepVB0K7pje9iS1QC8"
+      }
+    ],
+    "service_cookie_policy": [],
+    "service_csp": [],
+    "service_csp_enforce": [],
+    "service_gate": [],
+    "service_jwt": [],
+    "service_mcp": [],
+    "service_mtls": [],
+    "service_openapi": [],
+    "service_rate_rules": [],
+    "service_request_policy": [],
+    "services": [
+      {
+        "ai_crawler_policy": "",
+        "allow_large_js_uploads": 0,
+        "backend": "http://127.0.0.1:9000",
+        "bot_mode": "inherit",
+        "breach_action": "",
+        "breach_fields": "",
+        "cache_by_session": 0,
+        "cache_enabled": 0,
+        "cache_grace": 0,
+        "cache_keep": 0,
+        "cache_rules": "",
+        "cache_ttl_ceiling": 0,
+        "cache_ttl_floor": 0,
+        "canonical_host": "",
+        "cert_id": 0,
+        "compress_enabled": 0,
+        "created_at": "2026-11-12T14:49:47Z",
+        "extra_backends": "",
+        "health_interval": 0,
+        "health_path": "",
+        "host": "shop.example.test",
+        "host_aliases": "",
+        "http3_enabled": 0,
+        "id": 1,
+        "lb_policy": "round_robin",
+        "login_paths": "",
+        "name": "shop",
+        "prefix": "",
+        "rate_limit_burst": 0,
+        "rate_limit_rps": 0,
+        "request_schema": "",
+        "response_inspect": "",
+        "schema_mode": "off",
+        "session_cookie_name": "",
+        "tls_cert_path": "",
+        "tls_expires_at": "",
+        "tls_key_path": "",
+        "tls_mode": "none"
+      }
+    ],
+    "threat_intel_ips": [],
+    "threat_intel_sources": [],
+    "waf_custom_rules": [],
+    "waf_disabled_rules": [],
+    "waf_service_rule_exceptions": [],
+    "webhook_config": [
+      {
+        "destination_type": "generic",
+        "enabled": 0,
+        "events": "blocked,challenged",
+        "id": 1,
+        "secret": "",
+        "url": ""
+      }
+    ]
+  }
+}

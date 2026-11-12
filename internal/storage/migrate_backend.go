@@ -99,12 +99,19 @@ func migrateMetaTable(source, target *DB) (int, error) {
 	for _, k := range secretMetaKeys {
 		isSecret[k] = true
 	}
+	removed := make(map[any]bool, len(removedMetaKeys))
+	for _, k := range removedMetaKeys {
+		removed[k] = true
+	}
 
 	n := 0
 	for rows.Next() {
 		var key, value string
 		if err := rows.Scan(&key, &value); err != nil {
 			return n, err
+		}
+		if removed[key] {
+			continue
 		}
 		if isSecret[key] {
 			// value may be sealed under the source's own encryption key (or

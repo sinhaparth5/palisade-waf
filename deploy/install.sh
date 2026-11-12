@@ -203,6 +203,16 @@ if [ "$IS_UPGRADE" = "1" ] && [ -f "${UNIT_PATH}" ]; then
 		OLD_DB_DRIVER=""
 	fi
 fi
+# A flag removed in this release (#298, #300) left in the flags file would
+# stop the upgraded server in a restart loop, so refuse before changing
+# anything. A MySQL/Postgres --db-driver here needs the README's manual
+# config export/import, since the unit itself still says sqlite.
+if [ "$IS_UPGRADE" = "1" ] && [ -f "${FLAGS_FILE}" ] &&
+	grep -qE '^[^#]*(--warehouse-url|--db-driver[= ]+[^s ])' "${FLAGS_FILE}"; then
+	err "${FLAGS_FILE} sets a flag this release removed: --warehouse-url, or a MySQL/Postgres --db-driver."
+	printf '  Remove it (for MySQL/Postgres, move to SQLite first: see the README), then run this again.\n' >&2
+	exit 1
+fi
 CONFIG_EXPORT="${VAR_DIR}/config-export.json"
 KEY_ARGS=()
 if [ -f "${DB_KEY_FILE}" ]; then

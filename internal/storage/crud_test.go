@@ -136,26 +136,6 @@ func TestMetaBackedSettings(t *testing.T) {
 		}
 	}
 
-	// An upgrade drops TypeSafe settings (#299) and the saved DB connection (#300).
-	mustNoErr(t, db.setMeta("typesafe_api_key", "k"))
-	mustNoErr(t, db.setMeta("db_conn_dsn", "postgres://u:p@h/db")) // #300
-	mustNoErr(t, db.setMeta("db_connection", "kept"))
-	_, err := db.exec(`CREATE TABLE typesafe_calls (id INTEGER)`)
-	mustNoErr(t, err)
-	mustNoErr(t, db.migrate())
-	if v, _ := db.getMeta("typesafe_api_key"); v != "" {
-		t.Errorf("typesafe_api_key survived migrate: %q", v)
-	}
-	if v, _ := db.getMeta("db_conn_dsn"); v != "" {
-		t.Errorf("db_conn_dsn survived migrate: %q", v)
-	}
-	if v, _ := db.getMeta("db_connection"); v != "kept" {
-		t.Errorf("unrelated meta key deleted: %q", v)
-	}
-	if _, err := db.exec(`SELECT 1 FROM typesafe_calls`); err == nil {
-		t.Error("typesafe_calls survived migrate")
-	}
-
 	// First read initializes to now, so a fresh install has no backlog badge.
 	seen, err := db.NotificationsSeenAt()
 	mustNoErr(t, err)
