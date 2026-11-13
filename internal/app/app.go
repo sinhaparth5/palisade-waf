@@ -343,7 +343,7 @@ func readLine(r io.Reader) string {
 // whose password is then replaced (issue #315), or --reset-2fa, which
 // clears their TOTP and passkeys (issue #317). Domain and ACME email are
 // always overwritten (safe to update during upgrades).
-// Invoked as: palisade setup --db path --list-users, or
+// Invoked as: palisade setup --db path --list-users | --audit [--limit n], or
 // palisade setup --db path --admin-email email [--reset-password] [--reset-2fa] [--domain d] [--acme-email e]
 // Password is read from stdin (one line), except for --reset-2fa alone.
 func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
@@ -355,14 +355,19 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 	domain := fs.String("domain", "", "primary domain for ACME (Let's Encrypt)")
 	acmeEmail := fs.String("acme-email", "", "ACME contact email (defaults to admin email)")
 	listUsers := fs.Bool("list-users", false, "print every admin user and exit (reads only)")
+	audit := fs.Bool("audit", false, "print the newest admin audit log rows and exit (reads only)")
+	limit := fs.Int("limit", 50, "rows --audit prints (at most 1000)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *listUsers {
-		if *adminEmail != "" || *reset || *reset2FA || *domain != "" {
-			return errors.New("--list-users takes only --db")
+	if *listUsers || *audit {
+		if *adminEmail != "" || *reset || *reset2FA || *domain != "" || *listUsers && *audit {
+			return errors.New("--list-users and --audit each take only --db (and --limit for --audit)")
 		}
-		return printAdminUsers(*dbDriver, *dbPath, stdout)
+		if *listUsers {
+			return printAdminUsers(*dbDriver, *dbPath, stdout)
+		}
+		return printAudit(*dbDriver, *dbPath, *limit, stdout)
 	}
 	if *adminEmail == "" {
 		return errors.New("--admin-email is required")
@@ -460,6 +465,44 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 	return nil
 }
 
+// termSafe quotes s if it holds control bytes or invalid UTF-8. Emails bound
+// from an IdP, API key names and audit summaries could hold anything; they
+// must not send escape sequences to the operator's terminal.
+func termSafe(s string) string {
+	if q := strconv.Quote(s); q[1:len(q)-1] != s {
+		return q
+	}
+	return s
+}
+
+// printAudit is `setup --audit` (issue #318): the newest audit rows, for an
+// owner who can't sign in to see who changed their account. It only reads.
+func printAudit(driver, path string, limit int, stdout io.Writer) error {
+	if limit < 1 {
+		return errors.New("--limit must be at least 1")
+	}
+	db, err := openDB(driver, path)
+	if err != nil {
+		return fmt.Errorf("db: %w", err)
+	}
+	defer db.Close()
+	rows, total, err := db.ListAudit(min(limit, 1000), 0)
+	if err != nil {
+		return err
+	}
+	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "TIME (UTC)\tACTOR\tIP\tACTION\tTARGET\tSUMMARY")
+	for _, e := range rows {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", e.TS.UTC().Format("2006-01-02 15:04:05"),
+			termSafe(e.Actor), termSafe(e.IP), termSafe(e.Action), termSafe(e.Target), termSafe(e.Summary))
+	}
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "%d of %d rows\n", len(rows), total)
+	return nil
+}
+
 // printAdminUsers is `setup --list-users` (issue #316): one row per admin
 // user for an owner locked out of the Users page. It only reads and never
 // prints hashes, secrets or tokens.
@@ -502,13 +545,7 @@ func printAdminUsers(driver, path string, stdout io.Writer) error {
 				lastAt, last = at, day(at)+" UTC from "+s.IP
 			}
 		}
-		// An email bound from an IdP or an old setup could hold anything;
-		// quote it rather than send control bytes to the terminal.
-		email := u.Email
-		if q := strconv.Quote(email); q[1:len(q)-1] != email {
-			email = q
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", email, u.Role, yes(u.Disabled), yes(u.TOTPEnabled),
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", termSafe(u.Email), u.Role, yes(u.Disabled), yes(u.TOTPEnabled),
 			len(keys), yes(u.SSO), yes(u.Invited), day(u.CreatedAt), last)
 	}
 	return w.Flush()

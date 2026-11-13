@@ -275,6 +275,46 @@ func TestSetupReset2FA(t *testing.T) {
 	}
 }
 
+// TestSetupAudit pins issue #318: newest audit rows first, every field,
+// --limit, control bytes quoted, no writes.
+func TestSetupAudit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "waf.db")
+	db, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 3 {
+		if err := db.InsertAudit(storage.AuditEntry{Actor: "admin", IP: "203.0.113.1", Action: fmt.Sprintf("POST /rule-%d", i), Target: "id=7", Summary: "note=\x1b[31mred"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+	before, _ := os.ReadFile(path)
+
+	out, err := run([]string{"setup", "--db", path, "--audit", "--limit", "2"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	row := regexp.MustCompile(`^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d +admin +203\.0\.113\.1 +POST /rule-(\d) +id=7 +"note=\\x1b\[31mred"$`)
+	if len(lines) != 4 || !strings.HasPrefix(lines[0], "TIME (UTC)") || lines[3] != "2 of 3 rows" ||
+		row.FindStringSubmatch(lines[1]) == nil || row.FindStringSubmatch(lines[1])[1] != "2" ||
+		row.FindStringSubmatch(lines[2]) == nil || row.FindStringSubmatch(lines[2])[1] != "1" {
+		t.Fatalf("output:\n%s", out)
+	}
+	if strings.Contains(out, "\x1b") {
+		t.Error("raw escape byte reached the terminal")
+	}
+	if after, _ := os.ReadFile(path); !bytes.Equal(before, after) {
+		t.Error("--audit changed the database")
+	}
+	for _, args := range [][]string{{"--limit", "0"}, {"--list-users"}, {"--admin-email", "a@example.com"}} {
+		if _, err := run(append([]string{"setup", "--db", path, "--audit"}, args...), ""); err == nil {
+			t.Errorf("--audit %v accepted", args)
+		}
+	}
+}
+
 // TestSetupListUsers pins issue #316: one row per user with its sign-in
 // state, nothing secret, no writes.
 func TestSetupListUsers(t *testing.T) {

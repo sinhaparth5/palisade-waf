@@ -14,6 +14,7 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#318) Read the admin audit log from the shell (setup --audit)
 - (#317) Reset an admin's 2FA from the shell (setup --reset-2fa)
 - (#316) List admin users from the shell (setup --list-users)
 
