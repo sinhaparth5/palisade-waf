@@ -14,13 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.3.2] - 2026-11-13
+
 - (#318) Read the admin audit log from the shell (setup --audit)
 - (#317) Reset an admin's 2FA from the shell (setup --reset-2fa)
 - (#316) List admin users from the shell (setup --list-users)
 
-## [3.3.1] - 2026-11-12
-
-- (#315) Admin setup accepts a non-email login, says it configured an account it skipped, and has no password reset
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.1...main
-[3.3.1]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.0...v3.3.1
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.2...main
+[3.3.2]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.1...v3.3.2
