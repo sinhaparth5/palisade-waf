@@ -340,16 +340,18 @@ func readLine(r io.Reader) string {
 // runSetup seeds admin credentials and optional TLS config into the DB.
 // Idempotent for admin credentials: when an admin exists (upgrades, re-runs)
 // the account is left alone unless --reset-password names an existing user,
-// whose password is then replaced (issue #315). Domain and ACME email are
+// whose password is then replaced (issue #315), or --reset-2fa, which
+// clears their TOTP and passkeys (issue #317). Domain and ACME email are
 // always overwritten (safe to update during upgrades).
 // Invoked as: palisade setup --db path --list-users, or
-// palisade setup --db path --admin-email email [--reset-password] [--domain d] [--acme-email e]
-// Password is read from stdin (one line).
+// palisade setup --db path --admin-email email [--reset-password] [--reset-2fa] [--domain d] [--acme-email e]
+// Password is read from stdin (one line), except for --reset-2fa alone.
 func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
 	dbPath, dbDriver := dbFlags(fs)
 	adminEmail := fs.String("admin-email", "", "admin email address (the login name)")
 	reset := fs.Bool("reset-password", false, "replace the password of the existing user --admin-email")
+	reset2FA := fs.Bool("reset-2fa", false, "turn off TOTP and remove the passkeys of the existing user --admin-email")
 	domain := fs.String("domain", "", "primary domain for ACME (Let's Encrypt)")
 	acmeEmail := fs.String("acme-email", "", "ACME contact email (defaults to admin email)")
 	listUsers := fs.Bool("list-users", false, "print every admin user and exit (reads only)")
@@ -357,7 +359,7 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 		return err
 	}
 	if *listUsers {
-		if *adminEmail != "" || *reset || *domain != "" {
+		if *adminEmail != "" || *reset || *reset2FA || *domain != "" {
 			return errors.New("--list-users takes only --db")
 		}
 		return printAdminUsers(*dbDriver, *dbPath, stdout)
@@ -370,10 +372,12 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 		return fmt.Errorf("--admin-email %q is not an email address (it is the login name, e.g. you@example.com)", *adminEmail)
 	}
 
-	fmt.Fprint(os.Stderr, "Admin password: ")
-	password := readLine(stdin)
-	if password == "" {
-		return errors.New("password cannot be empty")
+	var password string
+	if *reset || !*reset2FA {
+		fmt.Fprint(os.Stderr, "Admin password: ")
+		if password = readLine(stdin); password == "" {
+			return errors.New("password cannot be empty")
+		}
 	}
 
 	db, err := openDB(*dbDriver, *dbPath)
@@ -392,7 +396,7 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 		return ui.ValidateAdminPassword(context.Background(), breach.New(hibpURL), *adminEmail, password)
 	}
 	switch {
-	case *reset:
+	case *reset || *reset2FA:
 		u, err := db.GetAdminUserByEmail(*adminEmail)
 		if err != nil {
 			return err
@@ -400,16 +404,33 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 		if u == nil {
 			return fmt.Errorf("no admin user %q to reset", storage.NormalizeEmail(*adminEmail))
 		}
-		if err := validate(); err != nil {
-			return err
+		audit := func(action string) error {
+			return db.InsertAudit(storage.AuditEntry{Actor: "palisade setup (shell)", Action: action, Target: fmt.Sprintf("id=%d", u.ID), Summary: "email=" + u.Email})
 		}
-		if err := db.UpdateAdminCredentials(u.ID, "", password); err != nil { // also signs out their sessions
-			return err
+		if *reset {
+			if err := validate(); err != nil {
+				return err
+			}
+			if err := db.UpdateAdminCredentials(u.ID, "", password); err != nil { // also signs out their sessions
+				return err
+			}
+			if err := audit("setup --reset-password"); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "setup: password reset for %s; their sessions were signed out\n", u.Email)
 		}
-		if err := db.InsertAudit(storage.AuditEntry{Actor: "palisade setup (shell)", Action: "setup --reset-password", Target: fmt.Sprintf("id=%d", u.ID), Summary: "email=" + u.Email}); err != nil {
-			return err
+		if *reset2FA {
+			if err := db.ResetAdminUser2FA(u.ID); err != nil {
+				return err
+			}
+			if _, err := db.RevokeOtherSessions(u.ID, ""); err != nil {
+				return err
+			}
+			if err := audit("setup --reset-2fa"); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "setup: 2FA reset for %s (TOTP off, passkeys removed); their sessions were signed out\n", u.Email)
 		}
-		fmt.Fprintf(stdout, "setup: password reset for %s; their sessions were signed out\n", u.Email)
 	case n > 0:
 		fmt.Fprintln(stdout, "setup: an admin account already exists, password unchanged (use --reset-password to change it)")
 	default:

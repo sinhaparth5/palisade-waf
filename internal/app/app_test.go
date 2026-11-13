@@ -195,6 +195,86 @@ func TestSetupMessagesAndReset(t *testing.T) {
 	}
 }
 
+// TestSetupReset2FA pins issue #317: --reset-2fa alone needs no password,
+// clears TOTP and passkeys, keeps the password, signs out and audits; it
+// combines with --reset-password.
+func TestSetupReset2FA(t *testing.T) {
+	fakeHIBP(t)
+	path := filepath.Join(t.TempDir(), "waf.db")
+	db, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	uid, _ := db.CreateAdminUser("a@example.com", "long-enough-password", storage.RoleOwner)
+	enroll := func() string {
+		t.Helper()
+		if err := db.SetPendingTOTPSecret(uid, "JBSWY3DPEHPK3PXP"); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.EnableTOTP(uid, []string{"backup-hash"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.AddWebAuthnCredential(uid, "cred-1", "key", []byte(`{}`)); err != nil {
+			t.Fatal(err)
+		}
+		token, err := db.CreateSession(uid, "203.0.113.1", "test", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return token
+	}
+	check := func(name, token string) {
+		t.Helper()
+		if on, _ := db.TOTPEnabled(uid); on {
+			t.Errorf("%s: TOTP still on", name)
+		}
+		if ok, _ := db.ConsumeTOTPBackupCode(uid, "backup-hash"); ok {
+			t.Errorf("%s: backup code still works", name)
+		}
+		if on, _ := db.WebAuthnEnabled(uid); on {
+			t.Errorf("%s: passkey still there", name)
+		}
+		if ok, _ := db.ValidateSession(token); ok {
+			t.Errorf("%s: session survived", name)
+		}
+	}
+	setup := func(stdin string, extra ...string) (string, error) {
+		return run(append([]string{"setup", "--db", path}, extra...), stdin)
+	}
+
+	if _, err := setup("", "--admin-email", "b@example.com", "--reset-2fa"); err == nil {
+		t.Error("unknown user accepted")
+	}
+	token := enroll()
+	out, err := setup("", "--admin-email", "a@example.com", "--reset-2fa")
+	if err != nil || !strings.Contains(out, "2FA reset for a@example.com") {
+		t.Fatalf("reset: %q, %v", out, err)
+	}
+	check("2fa only", token)
+	if u, _ := db.CheckAdminLogin("a@example.com", "long-enough-password"); u == nil || u.TOTPEnabled {
+		t.Errorf("password login after reset: %+v", u)
+	}
+
+	token = enroll()
+	out, err = setup("another-long-password\n", "--admin-email", "a@example.com", "--reset-2fa", "--reset-password")
+	if err != nil || !strings.Contains(out, "password reset") || !strings.Contains(out, "2FA reset") {
+		t.Fatalf("both: %q, %v", out, err)
+	}
+	check("both", token)
+	if u, _ := db.CheckAdminLogin("a@example.com", "another-long-password"); u == nil {
+		t.Error("new password refused")
+	}
+	var actions []string
+	rows, _, _ := db.ListAudit(10, 0)
+	for _, r := range rows {
+		actions = append(actions, r.Action)
+	}
+	if got := strings.Join(actions, ","); got != "setup --reset-2fa,setup --reset-password,setup --reset-2fa" {
+		t.Errorf("audit = %s", got)
+	}
+}
+
 // TestSetupListUsers pins issue #316: one row per user with its sign-in
 // state, nothing secret, no writes.
 func TestSetupListUsers(t *testing.T) {

@@ -14,6 +14,7 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#317) Reset an admin's 2FA from the shell (setup --reset-2fa)
 - (#316) List admin users from the shell (setup --list-users)
 
 ## [3.3.1] - 2026-11-12
