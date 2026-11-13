@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -191,6 +192,48 @@ func TestSetupMessagesAndReset(t *testing.T) {
 	}
 	if rows, _, _ := db.ListAudit(10, 0); len(rows) != 1 || rows[0].Action != "setup --reset-password" {
 		t.Errorf("audit = %+v", rows)
+	}
+}
+
+// TestSetupListUsers pins issue #316: one row per user with its sign-in
+// state, nothing secret, no writes.
+func TestSetupListUsers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "waf.db")
+	db, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, _ := db.CreateAdminUser("owner@example.com", "long-enough-password", storage.RoleOwner)
+	if _, err := db.CreateSession(owner, "203.0.113.1", "test", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddWebAuthnCredential(owner, "cred-1", "key", []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := db.InviteAdminUser("new@example.com", storage.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	before, _ := os.ReadFile(path)
+
+	out, err := run([]string{"setup", "--db", path, "--list-users"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "EMAIL") ||
+		!regexp.MustCompile(`^owner@example\.com +owner +- +- +1 +- +- +\S+ \S+ +\S+ \S+ UTC from 203\.0\.113\.1$`).MatchString(lines[1]) ||
+		!regexp.MustCompile(`^new@example\.com +viewer +- +- +0 +- +yes .* never$`).MatchString(lines[2]) {
+		t.Fatalf("output:\n%s", out)
+	}
+	if strings.Contains(out, "$2a$") {
+		t.Error("printed a password hash")
+	}
+	if after, _ := os.ReadFile(path); !bytes.Equal(before, after) {
+		t.Error("--list-users changed the database")
+	}
+	if _, err := run([]string{"setup", "--db", path, "--list-users", "--admin-email", "a@example.com"}, ""); err == nil {
+		t.Error("--list-users with --admin-email accepted")
 	}
 }
 

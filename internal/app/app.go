@@ -24,7 +24,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"palisade/internal/security/breach"
@@ -340,7 +342,8 @@ func readLine(r io.Reader) string {
 // the account is left alone unless --reset-password names an existing user,
 // whose password is then replaced (issue #315). Domain and ACME email are
 // always overwritten (safe to update during upgrades).
-// Invoked as: palisade setup --db path --admin-email email [--reset-password] [--domain d] [--acme-email e]
+// Invoked as: palisade setup --db path --list-users, or
+// palisade setup --db path --admin-email email [--reset-password] [--domain d] [--acme-email e]
 // Password is read from stdin (one line).
 func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
@@ -349,8 +352,15 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 	reset := fs.Bool("reset-password", false, "replace the password of the existing user --admin-email")
 	domain := fs.String("domain", "", "primary domain for ACME (Let's Encrypt)")
 	acmeEmail := fs.String("acme-email", "", "ACME contact email (defaults to admin email)")
+	listUsers := fs.Bool("list-users", false, "print every admin user and exit (reads only)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *listUsers {
+		if *adminEmail != "" || *reset || *domain != "" {
+			return errors.New("--list-users takes only --db")
+		}
+		return printAdminUsers(*dbDriver, *dbPath, stdout)
 	}
 	if *adminEmail == "" {
 		return errors.New("--admin-email is required")
@@ -427,6 +437,60 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 	}
 	log.Printf("setup: ACME configured for domain %s (contact: %s)", *domain, contactEmail)
 	return nil
+}
+
+// printAdminUsers is `setup --list-users` (issue #316): one row per admin
+// user for an owner locked out of the Users page. It only reads and never
+// prints hashes, secrets or tokens.
+func printAdminUsers(driver, path string, stdout io.Writer) error {
+	db, err := openDB(driver, path)
+	if err != nil {
+		return fmt.Errorf("db: %w", err)
+	}
+	defer db.Close()
+	users, err := db.ListAdminUsers()
+	if err != nil {
+		return err
+	}
+	yes := func(b bool) string {
+		if b {
+			return "yes"
+		}
+		return "-"
+	}
+	day := func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04") }
+	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "EMAIL\tROLE\tDISABLED\tTOTP\tPASSKEYS\tSSO\tINVITED\tCREATED\tLAST SESSION")
+	for _, u := range users {
+		keys, err := db.ListWebAuthnCredentials(u.ID)
+		if err != nil {
+			return err
+		}
+		sessions, err := db.ListSessions(u.ID)
+		if err != nil {
+			return err
+		}
+		last := "never"
+		var lastAt time.Time
+		for _, s := range sessions {
+			at := s.LastActiveAt
+			if s.CreatedAt.After(at) {
+				at = s.CreatedAt
+			}
+			if at.After(lastAt) {
+				lastAt, last = at, day(at)+" UTC from "+s.IP
+			}
+		}
+		// An email bound from an IdP or an old setup could hold anything;
+		// quote it rather than send control bytes to the terminal.
+		email := u.Email
+		if q := strconv.Quote(email); q[1:len(q)-1] != email {
+			email = q
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", email, u.Role, yes(u.Disabled), yes(u.TOTPEnabled),
+			len(keys), yes(u.SSO), yes(u.Invited), day(u.CreatedAt), last)
+	}
+	return w.Flush()
 }
 
 // runGencert generates a self-signed ECDSA P-256 certificate and writes PEM

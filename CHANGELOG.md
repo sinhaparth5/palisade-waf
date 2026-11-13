@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#316) List admin users from the shell (setup --list-users)
+
 ## [3.3.1] - 2026-11-12
 
 - (#315) Admin setup accepts a non-email login, says it configured an account it skipped, and has no password reset
