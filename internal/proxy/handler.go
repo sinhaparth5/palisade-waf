@@ -567,6 +567,7 @@ func (h *Handler) Handle(c *echo.Context) error {
 	checkOpts := waf.CheckOptions{}
 	if app != nil {
 		checkOpts.AllowLargeJavaScriptUploads = app.AllowLargeJSUploads
+		checkOpts.MultipartLimit = int64(app.MultipartLimitMB) << 20
 		if app.Prefix != "" && services.PrefixMatch(r.URL.Path, app.Prefix) {
 			checkOpts.Path = services.StripPrefix(r.URL.Path, app.Prefix)
 		}

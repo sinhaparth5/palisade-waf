@@ -265,6 +265,10 @@ func TestServiceSettingHandlers(t *testing.T) {
 		{"/admin/services/bot/0", nil, 400},
 		{"/admin/services/uploads/" + id, []string{"enabled", "1"}, 200},
 		{"/admin/services/uploads/x", nil, 400},
+		{"/admin/services/uploads/" + id, []string{"multipart_mb", "257"}, 400},
+		{"/admin/services/uploads/" + id, []string{"multipart_mb", "-1"}, 400},
+		{"/admin/services/uploads/" + id, []string{"multipart_mb", "x"}, 400},
+		{"/admin/services/uploads/" + id, []string{"enabled", "1", "multipart_mb", "64"}, 200},
 		{"/admin/services/http3/" + id, []string{"enabled", "1"}, 200},
 		{"/admin/services/http3/x", nil, 400},
 		{"/admin/services/compress/" + id, []string{"enabled", "1"}, 200},
@@ -289,6 +293,11 @@ func TestServiceSettingHandlers(t *testing.T) {
 	} {
 		rec := env.do("POST", tc.path, form(tc.f...))
 		wantCode(t, tc.path+" "+strings.Join(tc.f, "="), rec.Code, tc.want, rec.Body.String())
+	}
+
+	// The last uploads save set the multipart limit (issue #319).
+	if got, _ := env.h.db.GetService(svc.ID); got.MultipartLimitMB != 64 || !got.AllowLargeJSUploads {
+		t.Errorf("uploads tab saved %+v", got)
 	}
 
 	// Backend list errors land in the tab's error box, escaped.
@@ -336,7 +345,7 @@ func TestServiceSettingHandlers(t *testing.T) {
 		!got.CacheBySession || got.SessionCookieName != "sid" || got.CacheTTLFloor != 60 || got.CacheTTLCeiling != 600 || got.CacheGrace != 10 || got.CacheRules != "cache /assets/\nbypass /api/" {
 		t.Errorf("service = %+v", got)
 	}
-	if env.count("waf") != 2 { // uploads + schema
+	if env.count("waf") != 3 { // uploads twice + schema
 		t.Errorf("waf reloads = %d", env.count("waf"))
 	}
 

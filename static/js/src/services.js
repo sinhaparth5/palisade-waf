@@ -272,6 +272,7 @@
     uploadsForm.setAttribute('hx-post', adminPath + '/services/uploads/' + d.id);
     htmx.process(uploadsForm);
     largeJSUploadsToggle.checked = d.largeJsUploads === '1';
+    document.getElementById('svc-multipart-mb').value = d.multipartMb === '0' ? '' : (d.multipartMb || '');
 
     http3Form.setAttribute('hx-post', adminPath + '/services/http3/' + d.id);
     htmx.process(http3Form);

@@ -78,6 +78,10 @@ type CheckOptions struct {
 	// a body that is buffered for inspection (http.ResponseController's
 	// method). Bodies that stream uninspected never get a deadline.
 	SetReadDeadline func(time.Time) error
+
+	// MultipartLimit is the service's multipart body limit in bytes (issue
+	// #319). Zero means requestBodyLimit; it is capped at MaxMultipartLimit.
+	MultipartLimit int64
 }
 
 // requestBodyLimit is the SecRequestBodyLimit value passed to Coraza and the
@@ -87,6 +91,13 @@ type CheckOptions struct {
 // file parts to FILES/FILES_TMP_NAMES rather than ARGS, so CRS's argument
 // rules never scan the payload — a 3.5 MiB upload measures at ~28ms.
 const requestBodyLimit = 13107200
+
+// MaxMultipartLimit caps a service's raised multipart limit (issue #319).
+// Check holds the whole body in memory, so concurrent uploads at the cap cost
+// that much RAM each. It is also Coraza's SecRequestBodyLimit: Check enforces
+// the per-service limit itself, before Coraza sees the body.
+// ponytail: whole body in RAM; spool to disk if services need GB uploads.
+const MaxMultipartLimit = 256 << 20
 
 // noFilesBodyLimit is the same idea for every other inspectable body — the
 // limit ModSecurity spells SecRequestBodyNoFilesLimit, and the reason that
@@ -169,7 +180,7 @@ SecRequestBodyAccess On
 SecRequestBodyLimit %d
 SecRequestBodyLimitAction Reject
 SecDebugLogLevel 0
-`, requestBodyLimit) + responseDirectives
+`, MaxMultipartLimit) + responseDirectives
 	if len(disabledRuleIDs) > 0 {
 		ids := make([]string, len(disabledRuleIDs))
 		for i, id := range disabledRuleIDs {
@@ -409,6 +420,9 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 		limit := int64(noFilesBodyLimit)
 		if mode == inspectFiles {
 			limit = requestBodyLimit
+			if opts.MultipartLimit > 0 {
+				limit = min(opts.MultipartLimit, MaxMultipartLimit)
+			}
 		}
 		orig := r.Body
 		if opts.SetReadDeadline != nil {
@@ -436,20 +450,15 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 		case int64(len(body)) <= limit:
 			r.Body = io.NopCloser(bytes.NewReader(body))
 			buffered = true
-		case mode == inspectNoFiles:
-			// Coraza cannot enforce this one for us (see noFilesBodyLimit),
-			// so the refusal is issued here — matching, not inventing, the
-			// SecRequestBodyLimitAction Reject posture the multipart path
-			// gets from Coraza itself. r.Body is restored so the request
-			// stays well-formed for whatever unwinds it.
+		default:
+			// Over the limit for its kind. Check refuses it rather than
+			// Coraza: Coraza ignores the no-files limit (see
+			// noFilesBodyLimit), and its multipart limit is set to
+			// MaxMultipartLimit so a service can raise its own (#319). r.Body
+			// is restored so the request stays well-formed for whatever
+			// unwinds it.
 			r.Body = &bodyReplay{Reader: io.MultiReader(bytes.NewReader(body), orig), Closer: orig}
 			return &Result{Blocked: true, Status: http.StatusRequestEntityTooLarge, Action: "deny"}, nil
-		default:
-			// Over-limit multipart with more bytes still on the wire: chain
-			// the buffered head with the unread tail so the proxy can forward
-			// the full upload if the configured action is ProcessPartial
-			// rather than Reject.
-			r.Body = &bodyReplay{Reader: io.MultiReader(bytes.NewReader(body), orig), Closer: orig}
 		}
 	}
 

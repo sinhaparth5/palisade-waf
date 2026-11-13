@@ -175,7 +175,7 @@ func migrateServicesTable(source, target *DB) (int, error) {
 			return n, err
 		}
 		q := fmt.Sprintf(`INSERT INTO services (%s) VALUES (%s)`,
-			serviceColumns, placeholders(38))
+			serviceColumns, placeholders(39))
 		if _, err := target.exec(q,
 			s.ID, s.Name, s.Host, s.Prefix, s.Backend, s.CreatedAt, s.TLSMode, s.TLSCertPath, s.TLSKeyPath, s.TLSExpiresAt,
 			s.RateLimitRPS, s.RateLimitBurst, s.BotMode, s.CertID, boolToInt(s.CacheEnabled), boolToInt(s.CacheBySession),
@@ -183,7 +183,7 @@ func migrateServicesTable(source, target *DB) (int, error) {
 			boolToInt(s.AllowLargeJSUploads), s.RequestSchema, s.SchemaMode, boolToInt(s.HTTP3Enabled), boolToInt(s.CompressEnabled),
 			strings.Join(s.ExtraBackends, "\n"), s.LBPolicy, s.HealthPath, s.HealthInterval,
 			strings.Join(s.HostAliases, "\n"), s.CanonicalHost, strings.Join(s.LoginPaths, "\n"), s.AICrawlerPolicy,
-			s.BreachAction, strings.Join(s.BreachFields, "\n"), s.ResponseInspect, s.CacheRules,
+			s.BreachAction, strings.Join(s.BreachFields, "\n"), s.ResponseInspect, s.CacheRules, s.MultipartLimitMB,
 		); err != nil {
 			return n, err
 		}

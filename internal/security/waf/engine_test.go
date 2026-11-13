@@ -2,6 +2,7 @@ package waf
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"io"
 	"net/http"
@@ -75,32 +76,45 @@ func TestCheckBodyReadErrorIsClientFault(t *testing.T) {
 	}
 }
 
-// TestCheckBodyOverLimit sends a multipart body one byte past
-// SecRequestBodyLimit through a counting reader: Coraza must reject it (413,
-// the recommended config's SecRequestBodyLimitAction) while Check reads at
-// most limit+1 bytes into memory instead of buffering the whole upload.
+// TestCheckBodyOverLimit sends multipart bodies through a counting reader:
+// one past the limit is refused with 413 while Check reads at most limit+1
+// bytes into memory instead of buffering the whole upload. A service's
+// MultipartLimit (issue #319) moves the limit both ways.
 func TestCheckBodyOverLimit(t *testing.T) {
 	e := newTestEngine(t)
+	for _, tc := range []struct {
+		name        string
+		size, limit int
+		want413     bool
+	}{
+		{"default, over", requestBodyLimit + 10, 0, true},
+		{"raised, under", requestBodyLimit + 10, 20 << 20, false},
+		{"raised, over", 20<<20 + 10, 20 << 20, true},
+		{"lowered, over", 1<<20 + 10, 1 << 20, true},
+	} {
+		cr := &countingReader{r: bytes.NewReader(bytes.Repeat([]byte("a"), tc.size))}
+		r := httptest.NewRequest("POST", "http://app.example.com/upload", cr)
+		r.Header.Set("Content-Type", "multipart/form-data; boundary=xyz")
+		r.Header.Set("User-Agent", "Mozilla/5.0")
+		r.Header.Set("Accept", "*/*")
 
-	over := requestBodyLimit + 10
-	cr := &countingReader{r: bytes.NewReader(bytes.Repeat([]byte("a"), over))}
-	r := httptest.NewRequest("POST", "http://app.example.com/upload", cr)
-	r.Header.Set("Content-Type", "multipart/form-data; boundary=xyz")
-	r.Header.Set("User-Agent", "Mozilla/5.0")
-	r.Header.Set("Accept", "*/*")
-
-	res, err := e.Check(r, "203.0.113.9")
-	if err != nil {
-		t.Fatalf("check: %v", err)
-	}
-	if !res.Blocked || res.Status != 413 {
-		t.Errorf("over-limit body: blocked=%v status=%d, want blocked with 413", res.Blocked, res.Status)
-	}
-	if cr.n > requestBodyLimit+1 {
-		t.Errorf("check read %d bytes off the wire, want at most limit+1 (%d)", cr.n, requestBodyLimit+1)
-	}
-	if got := e.cache.order.Len(); got != 0 {
-		t.Errorf("over-limit request must never be cached, got %d cache entries", got)
+		cached := e.cache.order.Len()
+		res, err := e.CheckWithOptions(r, "203.0.113.9", CheckOptions{MultipartLimit: int64(tc.limit)})
+		if err != nil {
+			t.Fatalf("%s: check: %v", tc.name, err)
+		}
+		if got := res.Blocked && res.Status == 413; got != tc.want413 {
+			t.Errorf("%s: blocked=%v status=%d, want 413 %v", tc.name, res.Blocked, res.Status, tc.want413)
+		}
+		limit := cmp.Or(tc.limit, requestBodyLimit)
+		if cr.n > int64(limit)+1 {
+			t.Errorf("%s: read %d bytes off the wire, want at most limit+1 (%d)", tc.name, cr.n, limit+1)
+		}
+		if tc.want413 {
+			if e.cache.order.Len() != cached {
+				t.Errorf("%s: over-limit request was cached", tc.name)
+			}
+		}
 	}
 }
 

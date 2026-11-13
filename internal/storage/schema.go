@@ -101,7 +101,8 @@ func (db *DB) schemaStatements() []string {
 			breach_action    TEXT NOT NULL DEFAULT '',
 			breach_fields    TEXT NOT NULL DEFAULT '',
 			response_inspect TEXT NOT NULL DEFAULT '',
-			cache_rules      TEXT NOT NULL DEFAULT ''
+			cache_rules      TEXT NOT NULL DEFAULT '',
+			multipart_limit_mb INTEGER NOT NULL DEFAULT 0
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS certificates (

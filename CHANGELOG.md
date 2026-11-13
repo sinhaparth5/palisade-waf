@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#319) Make the multipart request body limit configurable
+
 ## [3.3.2] - 2026-11-13
 
 - (#318) Read the admin audit log from the shell (setup --audit)

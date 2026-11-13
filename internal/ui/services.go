@@ -283,6 +283,12 @@ func (h *Handler) SetServiceBotMode(c *echo.Context) error {
 	return h.tmpls["services"].ExecuteTemplate(w, "services-rows", h.servicesRowsData(c))
 }
 
+const multipartRangeErr = "multipart limit must be 0 (default 12.5 MiB) to 256 MiB"
+
+// validMultipartMB checks a service's multipart limit in MiB (issue #319):
+// 0 keeps the default, the rest are capped at waf.MaxMultipartLimit.
+func validMultipartMB(mb int) bool { return mb >= 0 && mb <= waf.MaxMultipartLimit>>20 }
+
 // SetServiceLargeJSUploads opts one service into streaming JavaScript request
 // bodies. This avoids the small, deliberately conservative limit applied to
 // non-file bodies while leaving all header-phase WAF checks active.
@@ -292,7 +298,16 @@ func (h *Handler) SetServiceLargeJSUploads(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
 	}
 	enabled := c.FormValue("enabled") == "1"
+	mb := 0
+	if v := strings.TrimSpace(c.FormValue("multipart_mb")); v != "" {
+		if mb, err = strconv.Atoi(v); err != nil || !validMultipartMB(mb) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": multipartRangeErr})
+		}
+	}
 	if err := h.db.SetServiceLargeJSUploads(id, enabled); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if err := h.db.SetServiceMultipartLimit(id, mb); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	if err := h.registry.Reload(h.db); err != nil {
