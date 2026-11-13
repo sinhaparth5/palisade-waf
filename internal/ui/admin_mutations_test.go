@@ -251,6 +251,43 @@ func TestAddAndDeleteService(t *testing.T) {
 	}
 }
 
+// TestRenameService pins issue #320: the Name form renames a service,
+// moves its name-keyed rules and rebuilds the WAF engines; empty, taken and
+// unknown are refused in the form's error box.
+func TestRenameService(t *testing.T) {
+	env := newAdminEnv(t)
+	svc := env.seedService("shop", "shop.example.com")
+	env.seedService("blog", "blog.example.com")
+	if err := env.db.AddIPRule("shop", "198.51.100.7", "block"); err != nil {
+		t.Fatal(err)
+	}
+	id := itoa(svc.ID)
+	for _, tc := range []struct{ id, name, want string }{
+		{id, " ", "cannot be empty"}, {id, "blog", "already called blog"}, {"x", "a", "invalid service"}, {"99999", "a", "not found"},
+	} {
+		rec := env.do("POST", "/admin/services/name/"+tc.id, form("name", tc.name))
+		if rec.Header().Get("HX-Retarget") != "#svc-name-error" || !strings.Contains(rec.Body.String(), tc.want) {
+			t.Errorf("%q: %s", tc.name, rec.Body)
+		}
+	}
+	rec := env.do("POST", "/admin/services/name/"+id, form("name", " store "))
+	if rec.Header().Get("HX-Trigger") != "name-saved" {
+		t.Fatalf("rename: %s", rec.Body)
+	}
+	if got, _ := env.db.GetService(svc.ID); got.Name != "store" {
+		t.Errorf("name = %q", got.Name)
+	}
+	if rules, _ := env.db.ListIPRules(); len(rules) != 1 || rules[0].AppName != "store" {
+		t.Errorf("ip rules = %+v", rules)
+	}
+	if m := env.h.registry.Match("shop.example.com", "/"); m == nil || m.Name != "store" {
+		t.Errorf("registry match = %+v", m)
+	}
+	if env.count("waf") != 1 {
+		t.Errorf("waf reloads = %d", env.count("waf"))
+	}
+}
+
 func TestServiceSettingHandlers(t *testing.T) {
 	env := newAdminEnv(t)
 	svc := env.seedService("shop", "shop.example.com")
@@ -500,7 +537,7 @@ func TestCertificateAndTLSHandlers(t *testing.T) {
 	if got, _ := env.db.GetService(host.ID); got.TLSMode != "custom" {
 		t.Errorf("tls mode = %q", got.TLSMode)
 	}
-	if _, err := os.Stat(filepath.Join("certs", "services", "shop")); err != nil {
+	if _, err := os.Stat(filepath.Join("certs", "services", "by-id", itoa(host.ID), "key.pem")); err != nil {
 		t.Errorf("custom cert dir: %v", err)
 	}
 

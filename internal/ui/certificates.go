@@ -217,7 +217,7 @@ func (h *Handler) UploadServiceTLS(c *echo.Context) error {
 		return h.tlsModalError(c, err.Error())
 	}
 
-	certPath, keyPath, expiresAt, err := services.SaveCustomCert(svc.Name, certPEM, keyPEM)
+	certPath, keyPath, expiresAt, err := services.SaveCustomCert(svc.ID, certPEM, keyPEM)
 	if err != nil {
 		return h.tlsModalError(c, err.Error())
 	}

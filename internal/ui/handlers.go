@@ -473,6 +473,7 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/services/compress/:id", h.SetServiceCompress),
 		g.POST("/services/backends/:id", h.SetServiceBackends),
 		g.POST("/services/hosts/:id", h.SetServiceHosts),
+		g.POST("/services/name/:id", h.RenameService),
 		g.POST("/services/schema/:id", h.SetServiceSchema),
 		g.POST("/services/openapi/:id", h.SetServiceOpenAPI),
 		g.POST("/services/mcp/:id", h.SetServiceMCP),

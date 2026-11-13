@@ -84,7 +84,7 @@ func mtlsRegistry(t *testing.T, ca testCA, allow string) *Registry {
 			t.Fatal(err)
 		}
 	}
-	path, err := SaveClientCA("secure", ca.pem)
+	path, err := SaveClientCA(1, ca.pem)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,11 +109,11 @@ func TestSaveClientCARejects(t *testing.T) {
 		"not CA":  leafPEM,
 		"key":     append(append([]byte{}, ca.pem...), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: []byte{1}})...),
 	} {
-		if _, err := SaveClientCA("svc", in); err == nil {
+		if _, err := SaveClientCA(2, in); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	if _, err := SaveClientCA("svc", ca.pem); err != nil {
+	if _, err := SaveClientCA(2, ca.pem); err != nil {
 		t.Fatalf("valid CA rejected: %v", err)
 	}
 }

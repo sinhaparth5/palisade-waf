@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,17 +16,19 @@ import (
 const certsRootDir = "certs/services"
 const certPoolRootDir = "certs/pool"
 
-var unsafeNameChars = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
-
-func certDir(name string) string {
-	return filepath.Join(certsRootDir, unsafeNameChars.ReplaceAllString(name, "_"))
+// certDir is where a service's uploaded files live, keyed by id so a
+// rename (#320) or two names that sanitize alike never share files. Older
+// uploads under certs/services/<name>/ keep working: the DB stores full
+// paths, and by-id/ can't clash with them (those dirs hold only files).
+func certDir(id int) string {
+	return filepath.Join(certsRootDir, "by-id", strconv.Itoa(id))
 }
 
 // SaveCustomCert validates an uploaded cert+key PEM pair and writes them to
-// disk under certs/services/<name>/ — the key file is written 0600, never
+// disk under certDir(id) — the key file is written 0600, never
 // stored in the database. Returns the file paths and the leaf certificate's
 // expiry so the UI can show it.
-func SaveCustomCert(name string, certPEM, keyPEM []byte) (certPath, keyPath string, expiresAt time.Time, err error) {
+func SaveCustomCert(id int, certPEM, keyPEM []byte) (certPath, keyPath string, expiresAt time.Time, err error) {
 	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
 		return "", "", time.Time{}, fmt.Errorf("invalid cert/key pair: %w", err)
@@ -37,7 +38,7 @@ func SaveCustomCert(name string, certPEM, keyPEM []byte) (certPath, keyPath stri
 		return "", "", time.Time{}, fmt.Errorf("parse certificate: %w", err)
 	}
 
-	dir := certDir(name)
+	dir := certDir(id)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", "", time.Time{}, fmt.Errorf("create cert dir: %w", err)
 	}

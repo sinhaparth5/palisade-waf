@@ -35,7 +35,7 @@ func TestRegistryTLSLookups(t *testing.T) {
 	}
 	svcs, _ := db.ListServices()
 	certPEM, keyPEM := selfSignedPair(t, "custom.test")
-	certPath, keyPath, exp, err := SaveCustomCert("custom", certPEM, keyPEM)
+	certPath, keyPath, exp, err := SaveCustomCert(1, certPEM, keyPEM)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestSaveCustomCertRejectsMismatchedKey(t *testing.T) {
 	t.Chdir(t.TempDir())
 	certPEM, _ := selfSignedPair(t, "a.test")
 	_, otherKey := selfSignedPair(t, "b.test")
-	if _, _, _, err := SaveCustomCert("a", certPEM, otherKey); err == nil {
+	if _, _, _, err := SaveCustomCert(2, certPEM, otherKey); err == nil {
 		t.Error("mismatched key accepted")
 	}
 	if _, _, err := SavePoolCert(1, certPEM, otherKey); err == nil {

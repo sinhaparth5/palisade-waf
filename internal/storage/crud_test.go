@@ -513,3 +513,43 @@ func TestHourlyTrafficSorted(t *testing.T) {
 		t.Errorf("hourly = %+v", pts)
 	}
 }
+
+// TestRenameServiceMovesRules pins issue #320: a rename carries every
+// name-keyed row to the new name, a leftover row under the new name loses,
+// and another service's rows stay put.
+func TestRenameServiceMovesRules(t *testing.T) {
+	db := openTestDB(t)
+	mustNoErr(t, db.AddService("shop", "shop.test", "", "http://10.0.0.1", 0, 0))
+	mustNoErr(t, db.AddService("blog", "blog.test", "", "http://10.0.0.3", 0, 0))
+	id := serviceByName(t, db, "shop").ID
+	for _, name := range []string{"shop", "blog"} {
+		mustNoErr(t, db.AddIPRule(name, "198.51.100.7", "block"))
+		mustNoErr(t, db.AddGeoRule(name, "DE", "block"))
+		mustNoErr(t, db.DisableWAFRuleForService(name, 942100, "fp"))
+		mustNoErr(t, db.SaveWAFCustomRule(WAFCustomRule{ServiceName: name, Rule: `SecAction "id:1000001,pass"`, Enabled: true}))
+		mustNoErr(t, db.MarkWAFRuleFeedback(name, 942100, true))
+	}
+	mustNoErr(t, db.AddIPRule("store", "198.51.100.7", "allow")) // left by a deleted service
+
+	mustNoErr(t, db.UpdateService(id, "store", "shop.test", "", "http://10.0.0.1"))
+	count := func(name string) (n int) {
+		for _, tb := range serviceNameTables {
+			var c int
+			mustNoErr(t, db.queryRow(`SELECT COUNT(*) FROM `+tb.table+` WHERE `+tb.col+` = ?`, name).Scan(&c))
+			n += c
+		}
+		return n
+	}
+	if got := [3]int{count("shop"), count("store"), count("blog")}; got != [3]int{0, 5, 5} {
+		t.Errorf("rows under shop/store/blog = %v, want [0 5 5]", got)
+	}
+	rules, _ := db.ListIPRules()
+	for _, r := range rules {
+		if r.AppName == "store" && r.RuleType != "block" {
+			t.Errorf("leftover rule won: %+v", r)
+		}
+	}
+	if err := db.UpdateService(id, "blog", "shop.test", "", "http://10.0.0.1"); err == nil || count("store") != 5 {
+		t.Errorf("rename onto a live service: %v, store rows %d", err, count("store"))
+	}
+}

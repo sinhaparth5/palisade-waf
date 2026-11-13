@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -174,12 +175,42 @@ func (db *DB) AddService(name, host, prefix, backend string, rps float64, burst 
 	return err
 }
 
+// serviceNameTables are the tables that key per-service rows on the
+// service's name rather than its id. A rename carries them along (#320).
+var serviceNameTables = []struct{ table, col string }{
+	{"ip_rules", "app_name"}, {"geo_rules", "app_name"},
+	{"waf_service_rule_exceptions", "service_name"}, {"waf_custom_rules", "service_name"},
+	{"waf_rule_feedback", "service_name"},
+}
+
+// UpdateService saves a service's name and routing. A new name moves the
+// service's IP/geo rules, WAF exceptions, custom rules and rule feedback
+// with it, in one transaction; on a clash with a leftover row under the new
+// name (from a deleted service) the moving row wins. Request logs keep the
+// name they were logged under.
 func (db *DB) UpdateService(id int, name, host, prefix, backend string) error {
-	_, err := db.exec(
-		`UPDATE services SET name = ?, host = ?, prefix = ?, backend = ? WHERE id = ?`,
-		name, host, prefix, backend, id,
-	)
-	return err
+	ctx := context.Background()
+	tx, err := db.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+	var old string
+	if err := tx.QueryRowContext(ctx, `SELECT name FROM services WHERE id = ?`, id).Scan(&old); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE services SET name = ?, host = ?, prefix = ?, backend = ? WHERE id = ?`,
+		name, host, prefix, backend, id); err != nil {
+		return err
+	}
+	if name != old {
+		for _, t := range serviceNameTables {
+			if _, err := tx.ExecContext(ctx, `UPDATE OR REPLACE `+t.table+` SET `+t.col+` = ? WHERE `+t.col+` = ?`, name, old); err != nil { //nolint:gosec // table/column names are constants above
+				return err
+			}
+		}
+	}
+	return tx.Commit()
 }
 
 func (db *DB) RemoveService(id int) error {

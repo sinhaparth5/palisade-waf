@@ -1320,7 +1320,7 @@ func TestClientCertMTLS(t *testing.T) {
 	if err := db.AddService("secure", "secure.test", "", backend.URL, 0, 0); err != nil {
 		t.Fatal(err)
 	}
-	caPath, err := services.SaveClientCA("secure", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}))
+	caPath, err := services.SaveClientCA(1, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}))
 	if err != nil {
 		t.Fatal(err)
 	}

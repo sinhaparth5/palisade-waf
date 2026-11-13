@@ -220,6 +220,11 @@
   function openModal(d) {
     var adminPath = botForm.dataset.adminPath || '/admin';
     nameLabel.textContent = d.name;
+    var nameForm = document.getElementById('svc-name-form');
+    nameForm.setAttribute('hx-post', adminPath + '/services/name/' + d.id);
+    htmx.process(nameForm);
+    document.getElementById('svc-name').value = d.name;
+    document.getElementById('svc-name-error').textContent = '';
 
     rlIdInput.value = d.id;
     rpsInput.value = parseFloat(d.rps) > 0 ? d.rps : '';
@@ -466,6 +471,7 @@
   document.body.addEventListener('rl-saved', closeModal);
   document.body.addEventListener('backends-saved', closeModal);
   document.body.addEventListener('hosts-saved', closeModal);
+  document.body.addEventListener('name-saved', closeModal);
   document.body.addEventListener('login-saved', closeModal);
   document.body.addEventListener('breach-saved', closeModal);
   document.body.addEventListener('gate-saved', closeModal);

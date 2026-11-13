@@ -40,12 +40,12 @@ type ClientCert struct {
 }
 
 // SaveClientCA validates a PEM bundle of CA certificates and writes it to
-// certs/services/<name>/client-ca.pem, returning the path.
-func SaveClientCA(name string, caPEM []byte) (string, error) {
+// certDir(id)/client-ca.pem, returning the path.
+func SaveClientCA(id int, caPEM []byte) (string, error) {
 	if _, err := parseClientCAs(caPEM); err != nil {
 		return "", err
 	}
-	dir := certDir(name)
+	dir := certDir(id)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create cert dir: %w", err)
 	}

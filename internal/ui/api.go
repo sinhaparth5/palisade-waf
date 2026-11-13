@@ -489,7 +489,8 @@ func (h *Handler) APIUpdateService(c *echo.Context) error {
 	if err := h.registry.Reload(h.db); err != nil {
 		return apiError(c, http.StatusInternalServerError, err.Error())
 	}
-	if (req.AllowLargeJSUploads != nil || schemaChanged) && h.reloadWAF != nil {
+	// Per-service WAF engines are keyed by name, so a rename rebuilds them.
+	if (req.AllowLargeJSUploads != nil || schemaChanged || name != existing.Name) && h.reloadWAF != nil {
 		h.reloadWAF()
 	}
 	svc, err := h.db.GetService(id)

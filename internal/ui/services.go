@@ -386,6 +386,49 @@ func (h *Handler) SetServiceBackends(c *echo.Context) error {
 	return h.servicesRows(c)
 }
 
+// RenameService changes a service's name (issue #320). Rules keyed on the
+// name move with it (storage.UpdateService); the per-service WAF engines are
+// keyed on it too, so they are rebuilt.
+func (h *Handler) RenameService(c *echo.Context) error {
+	fail := func(msg string) error {
+		c.Response().Header().Set("HX-Retarget", "#svc-name-error")
+		c.Response().Header().Set("HX-Reswap", "innerHTML")
+		return c.String(http.StatusOK, html.EscapeString(msg))
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return fail("invalid service id")
+	}
+	svc, err := h.db.GetService(id)
+	if err != nil {
+		return fail("service not found")
+	}
+	name := strings.TrimSpace(c.FormValue("name"))
+	switch name {
+	case "":
+		return fail("name cannot be empty")
+	case svc.Name:
+		c.Response().Header().Set("HX-Trigger", "name-saved")
+		return h.servicesRows(c)
+	}
+	for _, s := range h.registry.List() {
+		if s.Name == name {
+			return fail("another service is already called " + name)
+		}
+	}
+	if err := h.db.UpdateService(id, name, svc.Host, svc.Prefix, svc.Backend); err != nil {
+		return fail(err.Error())
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return fail(err.Error())
+	}
+	if h.reloadWAF != nil {
+		h.reloadWAF()
+	}
+	c.Response().Header().Set("HX-Trigger", "name-saved")
+	return h.servicesRows(c)
+}
+
 // SetServiceHosts saves a host-matched service's extra hostnames (one per
 // line, e.g. www.example.com) and which name the others redirect to.
 func (h *Handler) SetServiceHosts(c *echo.Context) error {
@@ -890,7 +933,7 @@ func (h *Handler) SetServiceMTLS(c *echo.Context) error {
 		return fail("The allowlist is larger than 64 KiB.")
 	}
 	if caPEM := strings.TrimSpace(c.FormValue("mtls_ca")); caPEM != "" {
-		if m.CAPath, err = services.SaveClientCA(svc.Name, []byte(caPEM+"\n")); err != nil {
+		if m.CAPath, err = services.SaveClientCA(svc.ID, []byte(caPEM+"\n")); err != nil {
 			return fail(err.Error())
 		}
 	}
