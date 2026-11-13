@@ -14,14 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.3.3] - 2026-11-13
+
 - (#320) Improve Services
 - (#319) Make the multipart request body limit configurable
 
-## [3.3.2] - 2026-11-13
-
-- (#318) Read the admin audit log from the shell (setup --audit)
-- (#317) Reset an admin's 2FA from the shell (setup --reset-2fa)
-- (#316) List admin users from the shell (setup --list-users)
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.2...main
-[3.3.2]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.1...v3.3.2
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.3...main
+[3.3.3]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.2...v3.3.3
