@@ -24,7 +24,7 @@ generate:
 # Recompile the admin UI stylesheet (static/css/tailwind.css ->
 # static/css/dist/tailwind.min.css) with the standalone Tailwind CLI — a
 # single native binary, no Node/npm. The output is committed and //go:embed-ed
-# (assets.go), so build/dist/CI never need this tool; run it (and commit the
+# (static/static.go), so build/dist/CI never need this tool; run it (and commit the
 # result) whenever templates, static/js/src, or internal/ui Go handlers
 # add/remove a utility class. Missing CLI is auto-downloaded to a git-ignored
 # local cache (no sudo, arch/OS-aware); TAILWIND_BIN points at an existing

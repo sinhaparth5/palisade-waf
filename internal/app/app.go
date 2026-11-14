@@ -34,8 +34,8 @@ import (
 	"palisade/internal/ui"
 )
 
-// Assets are the //go:embed trees. They live at the repo root, where
-// //go:embed can reach static/, and are passed in.
+// Assets are the //go:embed trees from package static, passed in so tests
+// can use empty ones.
 type Assets struct{ JS, CSS, Imgs embed.FS }
 
 // hibpURL is the leaked-password range API setup checks against (empty =

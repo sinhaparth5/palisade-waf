@@ -380,7 +380,7 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	// Logo for the challenge page. Served under /_cz/ (not the admin path)
 	// because the challenge renders on every proxied domain.
 	e.GET("/_cz/logo.svg", func(c *echo.Context) error {
-		data, err := assets.Imgs.ReadFile("static/imgs/logo.svg")
+		data, err := assets.Imgs.ReadFile("imgs/logo.svg")
 		if err != nil {
 			return echo.ErrNotFound
 		}
