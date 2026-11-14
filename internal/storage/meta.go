@@ -92,3 +92,10 @@ func (db *DB) NotificationsSeenAt() (time.Time, error) {
 func (db *DB) MarkNotificationsSeen() error {
 	return db.setMeta(metaKeyNotificationsSeenAt, time.Now().UTC().Format(time.RFC3339Nano))
 }
+
+// GetExtSetting returns a setting of a binary built on palisade
+// (internal/ext), kept in meta under "ext:"+key.
+func (db *DB) GetExtSetting(key string) (string, error) { return db.getMeta("ext:" + key) }
+
+// SetExtSetting stores a setting for GetExtSetting.
+func (db *DB) SetExtSetting(key, value string) error { return db.setMeta("ext:"+key, value) }

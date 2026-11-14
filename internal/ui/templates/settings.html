@@ -149,6 +149,16 @@
   {{end}}
   {{end}}
 
+  {{if .ExtCards}}
+  <!-- ── Pro (cards from internal/ext) ────────────────────────────────────── -->
+  <section id="settings-pro" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-pro-title">
+    {{template "settings-section-title" (map "ID" "settings-pro-title" "Title" "Palisade Pro" "Copy" "License and Pro features.")}}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      {{range .ExtCards}}{{.}}{{end}}
+    </div>
+  </section>
+  {{end}}
+
   <!-- ── Activity ─────────────────────────────────────────────────────────── -->
   <section id="settings-activity" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-activity-title">
     {{template "settings-section-title" (map "ID" "settings-activity-title" "Title" "Activity" "Copy" "Every change made from this dashboard or the REST API.")}}

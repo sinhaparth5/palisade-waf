@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"palisade/internal/config"
+	"palisade/internal/ext"
 	"palisade/internal/notify/metrics"
 	"palisade/internal/proxy"
 	"palisade/internal/security/blocklist"
@@ -158,28 +159,29 @@ type Handler struct {
 	proxyHandle     echo.HandlerFunc
 	accountLimiter  *loginLimiter     // per-account login throttle, next to the per-IP loginLimiter
 	routeRoles      map[string]string // "METHOD /admin/path" → minimum role, filled by Register
+	extCards        []ext.Card        // Settings cards from ext.Mounts, filled by Register
 }
 
 // NewHandler builds the UI handler. jsFS must contain the minified JS
-// assets at "static/js/dist/*" (see assets.go in the repo root); it's
-// served under /<admin_path>/static/js/. cssFS must contain the compiled
-// Tailwind stylesheet at "static/css/dist/*" (built by `make css`, committed,
-// embedded — no CDN); it's served under /<admin_path>/static/css/. imgsFS
-// must contain "static/imgs/*"; it's served under /<admin_path>/static/imgs/.
+// assets at "js/dist/*" (see package static); it's served under
+// /<admin_path>/static/js/. cssFS must contain the compiled Tailwind
+// stylesheet at "css/dist/*" (built by `make css`, committed, embedded — no
+// CDN); it's served under /<admin_path>/static/css/. imgsFS must contain
+// "imgs/*"; it's served under /<admin_path>/static/imgs/.
 // proxyHandle is the reverse-proxy pipeline's own route handler
 // (proxy.Handler.Handle, the same func registered for the catch-all "/*"
 // route in internal/app); see hostGuard for why the admin/API routes need to be
 // able to hand a request off to it.
 func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist, geoBl *geo.Blocker, registry *services.Registry, bc *LogBroadcaster, jsFS embed.FS, cssFS embed.FS, imgsFS embed.FS, reloadBot func(*challenge.Challenger), buildChallenger func(bool, int, int) *challenge.Challenger, reloadRateLimit func(), reloadWAF func(), syncThreatIntel func(int64), sendReportNow func() error, sendTestWebhook func() error, sendLoginCode func(string) error, sendInvite func(to, inviter, role, link string) error, reloadAutoban func(), scorer *threatscore.Scorer, reloadAdaptive func(), proxyHandle echo.HandlerFunc) (*Handler, error) {
-	sub, err := fs.Sub(jsFS, "static/js/dist")
+	sub, err := fs.Sub(jsFS, "js/dist")
 	if err != nil {
 		return nil, fmt.Errorf("sub static/js/dist: %w", err)
 	}
-	cssSub, err := fs.Sub(cssFS, "static/css/dist")
+	cssSub, err := fs.Sub(cssFS, "css/dist")
 	if err != nil {
 		return nil, fmt.Errorf("sub static/css/dist: %w", err)
 	}
-	imgsSub, err := fs.Sub(imgsFS, "static/imgs")
+	imgsSub, err := fs.Sub(imgsFS, "imgs")
 	if err != nil {
 		return nil, fmt.Errorf("sub static/imgs: %w", err)
 	}
@@ -530,6 +532,22 @@ func (h *Handler) Register(e *echo.Echo) {
 		// Profiles expose memory contents and the command line (issue #267).
 		g.GET("/debug/pprof/*", h.Pprof),
 	)
+
+	// Add-ons from a binary built on palisade (palisade-pro). A route
+	// without a valid role would be open to every user, so refuse to start.
+	h.extCards = nil
+	for _, mount := range ext.Mounts {
+		f := mount(ext.Env{DB: h.db, AdminPath: base})
+		for _, r := range f.Routes {
+			if !storage.ValidRole(r.Role) {
+				panic("ext route " + r.Method + " " + r.Path + " has no valid role")
+			}
+			as(r.Role, g.Add(r.Method, r.Path, r.Handler))
+		}
+		if f.Card != nil {
+			h.extCards = append(h.extCards, f.Card)
+		}
+	}
 }
 
 func (h *Handler) render(c *echo.Context, page string, data map[string]any) error {

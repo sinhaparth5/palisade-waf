@@ -47,7 +47,14 @@ func (h *Handler) SettingsPage(c *echo.Context) error {
 		invites, _ = h.db.ListSSOInvites()
 		sso, _ = h.db.GetSSOConfig()
 	}
+	var extCards []template.HTML
+	for _, card := range h.extCards {
+		if html := card(c, me.Role); html != "" {
+			extCards = append(extCards, html)
+		}
+	}
 	return h.render(c, "settings", map[string]any{
+		"ExtCards":               extCards,
 		"AdminEmail":             me.Email,
 		"Users":                  users,
 		"Invites":                invites,
