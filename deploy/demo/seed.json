@@ -1,0 +1,40 @@
+{
+  "format": "palisade-config",
+  "version": 1,
+  "exported_at": "2026-11-14T00:00:00Z",
+  "sealed": false,
+  "tables": {
+    "meta": [
+      {
+        "key": "autoban_enabled",
+        "value": "1"
+      }
+    ],
+    "services": [
+      {
+        "name": "shop",
+        "prefix": "/",
+        "backend": "http://app:80",
+        "rate_limit_rps": 5,
+        "rate_limit_burst": 20
+      }
+    ],
+    "geo_rules": [
+      {
+        "app_name": "",
+        "country_code": "RU",
+        "rule_type": "block"
+      }
+    ],
+    "webhook_config": [
+      {
+        "id": 1,
+        "destination_type": "generic",
+        "enabled": 0,
+        "events": "blocked,challenged",
+        "secret": "",
+        "url": ""
+      }
+    ]
+  }
+}

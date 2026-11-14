@@ -1,0 +1,55 @@
+# Public demo: docker compose up -d, then put the admin port (9090) behind
+# Cloudflare or a TLS proxy. Only the admin UI is published; the proxy sees
+# synthetic traffic alone, so no visitor's IP lands in the shared logs.
+# reset.sh wipes everything nightly.
+name: palisade-demo
+
+services:
+  # Loads seed.json into a fresh volume (--replace makes reruns harmless).
+  seed:
+    build: ../..
+    command: [config, import, --replace, --db, /data/waf.db, /seed.json]
+    volumes: [data:/data, ./seed.json:/seed.json:ro]
+    networks: [demo]
+
+  waf:
+    build: ../..
+    command:
+      - --db=/data/waf.db
+      - --certs=/data/certs
+      - --retention=1
+      - --prune-interval=1h
+      - --trusted-proxies=172.30.0.10
+      - --admin-listen=:9090
+      - --demo=${DEMO_LOGIN:-demo@palisade.dev:try-palisade}
+    ports: ["9090:9090"]
+    volumes: [data:/data]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      seed: {condition: service_completed_successfully}
+    networks: [demo]
+    restart: unless-stopped
+
+  app:
+    image: nginx:1.27-alpine
+    networks: [demo]
+    restart: unless-stopped
+
+  traffic:
+    image: curlimages/curl:8.10.1
+    entrypoint: [sh, /traffic.sh]
+    volumes: [./traffic.sh:/traffic.sh:ro]
+    depends_on: [waf]
+    networks:
+      demo: {ipv4_address: 172.30.0.10}
+    restart: unless-stopped
+
+volumes:
+  data:
+
+networks:
+  demo:
+    ipam:
+      config: [{subnet: 172.30.0.0/24}]

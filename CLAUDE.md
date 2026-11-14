@@ -48,7 +48,10 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 --db-key-file path (encrypt secrets at rest)
 --admin-allow ip,cidr (who may reach /admin)   --admin-listen addr (plain-HTTP admin-only listener)
 --max-conns-per-ip 256 (concurrent TCP conns per client; 0 = off)
+--demo email:password (public demo: shared viewer, created/reset at startup, shown on login)
 ```
+
+- `--demo` account (`isDemo` in `ui/users.go`): sessions via `CreateSharedSession` (no one-session rule), no per-account lockout, every write but logout/notifications-seen is 403, and its device list shows only the caller's own session. Refuses an email that belongs to an owner/admin.
 
 **Subcommands**: `prune [--retention d] [--vacuum]`, `setup --admin-email ...` (password on stdin, idempotent; the email must pass `storage.ValidEmail`, since the login field is `type="email"`; `--reset-password` replaces an existing user's password, signs out their sessions and writes an audit row, issue #315; `--reset-2fa` turns off TOTP, removes passkeys, signs out and audits, alone without a password prompt or with `--reset-password`, issue #317; `--list-users` prints every admin user read-only, issue #316; `--audit [--limit n]` prints the newest audit rows read-only, at most 1000, issue #318; both quote control bytes via `termSafe`), `config export [--out f] | import [--replace] f` (needs `--db-key-file` for sealed secrets), `gencert --hosts ...`, `healthcheck [--url]` (scratch image has no curl), `--version`.
 

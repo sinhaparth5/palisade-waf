@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v5"
 
@@ -49,11 +50,35 @@ func (h *Handler) requireRole(next echo.HandlerFunc) echo.HandlerFunc {
 				need = storage.RoleViewer
 			}
 		}
-		if u := currentUser(c); u == nil || roleRank[u.Role] < roleRank[need] {
+		u := currentUser(c)
+		if u == nil || roleRank[u.Role] < roleRank[need] {
 			return c.String(http.StatusForbidden, "Your role can't do this.")
+		}
+		// The shared demo account can't change its password or second
+		// factors, or sign other visitors out: only these writes are left.
+		if h.isDemo(u) && r.Method != http.MethodGet && r.Method != http.MethodHead {
+			switch strings.TrimPrefix(c.Path(), h.cfg.Admin.Path) {
+			case "/logout", "/api/notifications/seen":
+			default:
+				return c.String(http.StatusForbidden, "Disabled in the demo.")
+			}
 		}
 		return next(c)
 	}
+}
+
+// isDemo reports whether u is the --demo account.
+func (h *Handler) isDemo(u *storage.AdminUser) bool {
+	return u != nil && h.cfg.Admin.DemoEmail != "" && u.Email == h.cfg.Admin.DemoEmail
+}
+
+// isDemoUID is isDemo for a user id; free when --demo is off.
+func (h *Handler) isDemoUID(uid int64) bool {
+	if h.cfg.Admin.DemoEmail == "" {
+		return false
+	}
+	u, _ := h.db.GetAdminUser(uid)
+	return h.isDemo(u)
 }
 
 // ── Settings: users card (owner only) ────────────────────────────────────────

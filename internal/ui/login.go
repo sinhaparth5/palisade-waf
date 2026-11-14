@@ -39,7 +39,9 @@ func (h *Handler) LoginPost(c *echo.Context) error {
 	// Per account as well as per IP, so guesses spread over many IPs
 	// still stop. Unknown emails get an entry too, so a lockout can't
 	// reveal which emails exist.
-	if wait, locked := h.accountLimiter.blocked(account); locked {
+	// The demo account's password is public, so locking it would only let
+	// one visitor lock out the rest; the per-IP limit still applies.
+	if wait, locked := h.accountLimiter.blocked(account); locked && account != h.cfg.Admin.DemoEmail {
 		log.Printf("admin login: rejected attempt for locked account from %s (locked out for %s)", ip, wait.Round(time.Second))
 		return h.renderLoginStatus(c, http.StatusTooManyRequests,
 			"Too many failed attempts. Try again later.")
@@ -73,7 +75,10 @@ func (h *Handler) LoginPost(c *echo.Context) error {
 // loginFailed counts a failed password or second-factor attempt against
 // both the IP and the account, and reports whether either is now locked.
 func (h *Handler) loginFailed(ip, account string) bool {
-	ipLocked, accountLocked := h.loginLimiter.fail(ip), h.accountLimiter.fail(account)
+	ipLocked, accountLocked := h.loginLimiter.fail(ip), false
+	if account != h.cfg.Admin.DemoEmail {
+		accountLocked = h.accountLimiter.fail(account)
+	}
 	if ipLocked || accountLocked {
 		log.Printf("admin login: locked out after %d failed attempts (ip %s locked=%v, account locked=%v)",
 			maxLoginFailures, ip, ipLocked, accountLocked)
@@ -120,6 +125,16 @@ func (h *Handler) startSession(c *echo.Context, ip string, uid int64) error {
 	// browser: same IP and same "Browser on OS" label. The label ignores the
 	// version, so a browser update doesn't count as a new device either.
 	ua := c.Request().UserAgent()
+	// Demo visitors share one account and may share an IP and browser,
+	// so none of them may replace or revoke another's session.
+	if h.isDemoUID(uid) {
+		token, err := h.db.CreateSharedSession(uid, ip, ua, deviceID)
+		if err != nil {
+			return err
+		}
+		h.setSessionCookies(c, token, deviceID)
+		return nil
+	}
 	if sessions, err := h.db.ListSessions(uid); err == nil {
 		for _, s := range sessions {
 			if s.IP == ip && browserOS(s.UserAgent) == browserOS(ua) {
@@ -131,6 +146,11 @@ func (h *Handler) startSession(c *echo.Context, ip string, uid int64) error {
 	if err != nil {
 		return err
 	}
+	h.setSessionCookies(c, token, deviceID)
+	return nil
+}
+
+func (h *Handler) setSessionCookies(c *echo.Context, token, deviceID string) {
 	c.SetCookie(&http.Cookie{ //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 		Name:     sessionCookie,
 		Value:    token,
@@ -149,7 +169,6 @@ func (h *Handler) startSession(c *echo.Context, ip string, uid int64) error {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secureCookie(c),
 	})
-	return nil
 }
 
 func (h *Handler) Logout(c *echo.Context) error {
@@ -180,5 +199,7 @@ func (h *Handler) renderLoginStatus(c *echo.Context, status int, errMsg string) 
 		"AdminPath": h.cfg.Admin.Path,
 		"Asset":     h.assetVer,
 		"SSOName":   ssoProviderName(sso),
+		"DemoEmail": h.cfg.Admin.DemoEmail,
+		"DemoPass":  h.cfg.Admin.DemoPassword,
 	})
 }

@@ -85,7 +85,11 @@ func (h *Handler) deviceRows(uid int64, current string) []deviceRow {
 		return nil
 	}
 	rows := make([]deviceRow, 0, len(sessions))
+	demo := h.isDemoUID(uid) // other demo visitors' IPs are not this visitor's business
 	for _, s := range sessions {
+		if demo && s.ID != storage.SessionID(current) {
+			continue
+		}
 		country := h.geoBl.LookupCountry(s.IP)
 		location, flag := "Unknown", ""
 		if name := countryName(country); name != "" {

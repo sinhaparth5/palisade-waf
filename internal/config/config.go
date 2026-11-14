@@ -56,6 +56,10 @@ type AdminConfig struct {
 	Path   string   // URL path prefix for the admin UI (always "/admin")
 	Allow  []string // --admin-allow: client IPs/CIDRs that may reach it; empty = any
 	Listen string   // --admin-listen: serve it only on this address; empty = the public listener
+	// --demo: a shared, read-only viewer account for a public demo, shown
+	// on the login page. Empty email = off.
+	DemoEmail    string
+	DemoPassword string
 }
 
 type RateLimitConfig struct {

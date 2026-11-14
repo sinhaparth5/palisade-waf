@@ -129,6 +129,11 @@
           </p>
 
           {{else}}
+          {{if .DemoEmail}}
+          <div class="mb-5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm px-4 py-3" role="note">
+            <strong>Live demo.</strong> Sign in as <span class="font-mono">{{.DemoEmail}}</span> with password <span class="font-mono">{{.DemoPass}}</span>. Read-only; the data resets nightly.
+          </div>
+          {{end}}
           <form action="{{.AdminPath}}/login" method="POST" novalidate>
 
             <!-- Email -->
@@ -139,7 +144,8 @@
                 name="email"
                 type="email"
                 autocomplete="email"
-                placeholder="admin@example.com"
+                placeholder="admin@example.com"{{if .DemoEmail}}
+                value="{{.DemoEmail}}"{{end}}
                 required
                 class="field px-4 py-3.5"/>
             </div>
@@ -156,7 +162,8 @@
                   name="password"
                   type="password"
                   autocomplete="current-password"
-                  placeholder="Password"
+                  placeholder="Password"{{if .DemoPass}}
+                  value="{{.DemoPass}}"{{end}}
                   required
                   class="field px-4 py-3.5 pr-12"/>
                 <button type="button" id="pw-toggle" aria-label="Show password" aria-pressed="false"

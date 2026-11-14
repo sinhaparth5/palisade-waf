@@ -160,6 +160,16 @@ func (db *DB) hashSessionTokens() error {
 // locks them out until the intruder's session happens to expire. Other
 // users' sessions are untouched.
 func (db *DB) CreateSession(uid int64, ip, userAgent, deviceID string) (string, error) {
+	return db.createSession(uid, ip, userAgent, deviceID, true)
+}
+
+// CreateSharedSession is CreateSession without signing out the user's
+// other sessions, for the --demo account that many visitors share.
+func (db *DB) CreateSharedSession(uid int64, ip, userAgent, deviceID string) (string, error) {
+	return db.createSession(uid, ip, userAgent, deviceID, false)
+}
+
+func (db *DB) createSession(uid int64, ip, userAgent, deviceID string, revokeOthers bool) (string, error) {
 	// Opportunistically sweep aged-out rows — logins are the only way the
 	// table grows, so pruning here keeps it bounded without a background
 	// goroutine (the prune CLI covers deployments that never log in again).
@@ -178,8 +188,10 @@ func (db *DB) CreateSession(uid int64, ip, userAgent, deviceID string) (string, 
 			return "", err
 		}
 	}
-	if _, err := db.exec(`UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at = ''`, now, uid); err != nil {
-		return "", err
+	if revokeOthers {
+		if _, err := db.exec(`UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at = ''`, now, uid); err != nil {
+			return "", err
+		}
 	}
 	_, err := db.exec(
 		`INSERT INTO sessions (token, user_id, created_at, ip, user_agent, last_active_at, revoked_at, device_id)

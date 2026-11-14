@@ -77,6 +77,7 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	accessLogMaxSizeMB := fs.Int("access-log-max-size-mb", 100, "rotate access log after this many MB")
 	accessLogMaxBackups := fs.Int("access-log-max-backups", 5, "number of rotated access log files to keep")
 	dbKeyFile := fs.String("db-key-file", "", "key file for AES-256-GCM encryption of stored secrets at rest (empty = plaintext)")
+	demo := fs.String("demo", "", "public demo: email:password of a shared read-only viewer account, created or reset at startup and shown on the login page (empty = off)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -95,6 +96,13 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	cfg.TrustedProxies = splitCSV(*trustedProxies)
 	cfg.Admin.Allow = splitCSV(*adminAllow)
 	cfg.Admin.Listen = *adminListen
+	if *demo != "" {
+		email, password, _ := strings.Cut(*demo, ":")
+		if !storage.ValidEmail(email) || password == "" {
+			return errors.New("--demo must be email:password, e.g. demo@example.com:demo-password")
+		}
+		cfg.Admin.DemoEmail, cfg.Admin.DemoPassword = storage.NormalizeEmail(email), password
+	}
 	// An entry that doesn't parse would be skipped, and an empty list means
 	// "any client", so a typo must stop startup rather than open the UI.
 	for _, a := range cfg.Admin.Allow {
@@ -144,6 +152,13 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 			return fmt.Errorf("db-key-file: %w", err)
 		}
 		log.Printf("secrets-at-rest encryption enabled (key file %s)", *dbKeyFile)
+	}
+
+	if cfg.Admin.DemoEmail != "" {
+		if err := ensureDemoUser(db, cfg.Admin.DemoEmail, cfg.Admin.DemoPassword); err != nil {
+			return fmt.Errorf("--demo: %w", err)
+		}
+		log.Printf("demo mode: shared viewer account %s", cfg.Admin.DemoEmail)
 	}
 
 	engine, wafByService, err := buildWAFAll(db, cfg.WAF)
@@ -910,4 +925,27 @@ func buildRateLimit(db *storage.DB) *ratelimit.Limiter {
 	l.StartPersistence(db)
 	log.Printf("rate limit: in-memory backend with DB persistence (%.2g rps, burst %d)", rps, burst)
 	return l
+}
+
+// ensureDemoUser makes the --demo account a viewer that logs in with
+// password. It never touches an owner or admin of the same email, and its
+// password skips ValidateAdminPassword since it is printed on the login page.
+func ensureDemoUser(db *storage.DB, email, password string) error {
+	u, err := db.GetAdminUserByEmail(email)
+	if err != nil {
+		return err
+	}
+	if u == nil {
+		_, err = db.CreateAdminUser(email, password, storage.RoleViewer)
+		return err
+	}
+	if u.Role != storage.RoleViewer {
+		return fmt.Errorf("%s is an existing %s; the demo account must be a viewer", email, u.Role)
+	}
+	if ok, err := db.CheckAdminLogin(email, password); err != nil {
+		return err
+	} else if ok == nil {
+		return db.UpdateAdminCredentials(u.ID, "", password)
+	}
+	return nil
 }
