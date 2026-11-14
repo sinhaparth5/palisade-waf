@@ -14,6 +14,10 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- Add `--demo` mode and a self-resetting public demo stack served over HTTPS with Caddy
+- Move embedded UI assets into an importable `static` package
+- Add `internal/ext` hooks for add-on routes, settings cards and config reload
+
 ## [3.3.3] - 2026-11-13
 
 - (#320) Improve Services
