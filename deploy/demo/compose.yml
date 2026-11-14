@@ -1,7 +1,7 @@
-# Public demo: docker compose up -d, then put the admin port (9090) behind
-# Cloudflare or a TLS proxy. Only the admin UI is published; the proxy sees
-# synthetic traffic alone, so no visitor's IP lands in the shared logs.
-# reset.sh wipes everything nightly.
+# Public demo: DEMO_DOMAIN=demo.example.com docker compose up -d --build
+# (DNS pointing at this host, ports 80/443 open). Caddy serves the admin UI
+# over HTTPS; the WAF's proxy sees synthetic traffic alone, so no visitor's
+# IP lands in the shared logs. reset.sh wipes the demo data nightly.
 name: palisade-demo
 
 services:
@@ -19,10 +19,10 @@ services:
       - --certs=/data/certs
       - --retention=1
       - --prune-interval=1h
-      - --trusted-proxies=172.30.0.10
+      - --trusted-proxies=172.30.0.10,172.30.0.11
       - --admin-listen=:9090
       - --demo=${DEMO_LOGIN:-demo@palisade.dev:try-palisade}
-    ports: ["9090:9090"]
+    ports: ["127.0.0.1:9090:9090"]
     volumes: [data:/data]
     read_only: true
     cap_drop: [ALL]
@@ -44,6 +44,18 @@ services:
     depends_on: [waf]
     networks:
       demo: {ipv4_address: 172.30.0.10}
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    environment: [DEMO_DOMAIN]
+    ports: ["80:80", "443:443"]
+    # A bind mount, not a volume, so reset.sh's down -v keeps the certs
+    # (Let's Encrypt allows 5 duplicate certs a week).
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile:ro, ./.caddy-data:/data]
+    depends_on: [waf]
+    networks:
+      demo: {ipv4_address: 172.30.0.11}
     restart: unless-stopped
 
 volumes:

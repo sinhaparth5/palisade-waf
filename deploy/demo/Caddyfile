@@ -1,0 +1,5 @@
+# DEMO_DOMAIN (e.g. demo.example.com) gets a Let's Encrypt cert on first start.
+{$DEMO_DOMAIN:localhost} {
+	redir / /admin
+	reverse_proxy waf:9090
+}
