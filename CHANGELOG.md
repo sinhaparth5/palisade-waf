@@ -14,14 +14,11 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.3.4] - 2026-11-14
+
 - Add `--demo` mode and a self-resetting public demo stack served over HTTPS with Caddy
 - Move embedded UI assets into an importable `static` package
 - Add `internal/ext` hooks for add-on routes, settings cards and config reload
 
-## [3.3.3] - 2026-11-13
-
-- (#320) Improve Services
-- (#319) Make the multipart request body limit configurable
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.3...main
-[3.3.3]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.2...v3.3.3
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.4...main
+[3.3.4]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.3...v3.3.4
