@@ -301,7 +301,13 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 		if err != nil {
 			log.Printf("captcha config: %v", err)
 		}
-		return challenge.New(secret, ttl, threshold).WithCaptcha(cc.Provider, cc.SiteKey, cc.Secret)
+		// Re-read: cluster sync can replace the secret (shared by every node).
+		s, err := db.GetOrCreateChallengeSecret()
+		if err != nil {
+			log.Printf("challenge secret: %v; keeping the current one", err)
+			s = secret
+		}
+		return challenge.New(s, ttl, threshold).WithCaptcha(cc.Provider, cc.SiteKey, cc.Secret)
 	}
 
 	var ch *challenge.Challenger

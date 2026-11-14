@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -134,6 +136,11 @@ func (db *DB) ImportConfig(r io.Reader, replace bool) (MigrationReport, error) {
 				return fmt.Errorf("import %s: %w", step.table, err)
 			}
 		}
+		// A different key would replace every secret with ones nothing
+		// here can open; tmp seals with db's key, so this tries it.
+		if _, err := tmp.getSecretMeta("challenge_secret"); err != nil {
+			return err
+		}
 		// Copy into a scratch DB first, so a row the copy can't read fails
 		// before prepareConfigImport empties the target (issue #308).
 		// ponytail: not a transaction; a target-side I/O error mid-copy can
@@ -152,6 +159,47 @@ func (db *DB) ImportConfig(r io.Reader, replace bool) (MigrationReport, error) {
 		return err
 	})
 	return report, err
+}
+
+// volatileConfig is config the server rewrites while running (caches,
+// counters, sync bookkeeping): ConfigDigest ignores it.
+var volatileConfig = map[string][]string{
+	"ip_threat_scores": nil, "ja4_reputation": nil, "threat_intel_ips": nil, "csp_scripts": nil,
+	"api_keys":             {"last_used_at"},
+	"admin_users":          {"totp_last_counter"},
+	"threat_intel_sources": {"last_synced_at", "last_error", "ip_count"},
+}
+
+var volatileMeta = []string{"email_report_sent_for", metaKeyNotificationsSeenAt, metaKeySessionsHashed}
+
+// ConfigDigest hashes the stored configuration, so a cluster can tell
+// when it changed. Unlike ExportConfig it is stable: secrets are hashed as
+// stored, not re-sealed with a fresh nonce.
+func (db *DB) ConfigDigest() (string, error) {
+	h := sha256.New()
+	enc := json.NewEncoder(h)
+	for _, step := range configSteps {
+		cols, skip := volatileConfig[step.table]
+		if skip && cols == nil {
+			continue
+		}
+		rows, err := db.dumpTable(step.table)
+		if err != nil {
+			return "", err
+		}
+		for _, row := range rows {
+			for _, c := range cols {
+				delete(row, c)
+			}
+			if k, _ := row["key"].(string); step.table == "meta" && slices.Contains(volatileMeta, k) {
+				continue
+			}
+			if err := enc.Encode([]any{step.table, row}); err != nil {
+				return "", err
+			}
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // prepareConfigImport checks the target is empty, or empties it on replace.

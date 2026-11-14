@@ -14,6 +14,9 @@ import (
 type Env struct {
 	DB        *storage.DB
 	AdminPath string
+	// Reload re-reads every runtime setting from DB, after something
+	// replaced the configuration underneath the server.
+	Reload func() error
 }
 
 // Route is an admin route under the admin path, behind the session, CSRF,
@@ -29,7 +32,10 @@ type Card func(c *echo.Context, role string) template.HTML
 // Feature is one mounted add-on.
 type Feature struct {
 	Routes []Route
-	Card   Card
+	// Open routes skip the session, CSRF, audit log and Role: the handler
+	// must authenticate the caller itself. --admin-allow still applies.
+	Open []Route
+	Card Card
 }
 
 // Mounts are called once per admin UI, from init functions appending here.

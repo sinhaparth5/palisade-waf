@@ -537,7 +537,10 @@ func (h *Handler) Register(e *echo.Echo) {
 	// without a valid role would be open to every user, so refuse to start.
 	h.extCards = nil
 	for _, mount := range ext.Mounts {
-		f := mount(ext.Env{DB: h.db, AdminPath: base})
+		f := mount(ext.Env{DB: h.db, AdminPath: base, Reload: h.reloadAll})
+		for _, r := range f.Open {
+			admin.Add(r.Method, r.Path, r.Handler, bodyLimit)
+		}
 		for _, r := range f.Routes {
 			if !storage.ValidRole(r.Role) {
 				panic("ext route " + r.Method + " " + r.Path + " has no valid role")

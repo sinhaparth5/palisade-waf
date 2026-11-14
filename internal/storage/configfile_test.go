@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func exportConfig(t *testing.T, db *DB) string {
@@ -97,6 +98,8 @@ func TestConfigExportSealed(t *testing.T) {
 	defer src.Close()
 	mustNoErr(t, src.EnableSecretEncryption(key))
 	seedConfig(t, src)
+	_, err = src.GetOrCreateChallengeSecret()
+	mustNoErr(t, err)
 	file := exportConfig(t, src)
 	if strings.Contains(file, "tok-secret") || strings.Count(file, secretPrefix) < 3 {
 		t.Fatalf("secrets not sealed in export:\n%s", file)
@@ -104,6 +107,11 @@ func TestConfigExportSealed(t *testing.T) {
 
 	if _, err := openTestDB(t).ImportConfig(strings.NewReader(file), false); err == nil {
 		t.Fatal("sealed file imported without a key")
+	}
+	wrong := openTestDB(t)
+	mustNoErr(t, wrong.EnableSecretEncryption(bytes.Repeat([]byte{8}, 32)))
+	if _, err := wrong.ImportConfig(strings.NewReader(file), true); err == nil {
+		t.Fatal("sealed file imported with a different key")
 	}
 	dst, err := Open(filepath.Join(t.TempDir(), "dst.db"))
 	mustNoErr(t, err)
@@ -120,5 +128,30 @@ func TestConfigExportSealed(t *testing.T) {
 	u, _ := dst.GetAdminUserByEmail("owner@example.com")
 	if s, err := dst.GetTOTPSecret(u.ID); err != nil || s != "JBSWY3DPEHPK3PXP" {
 		t.Errorf("totp = %q, %v", s, err)
+	}
+}
+
+func TestConfigDigest(t *testing.T) {
+	db := openTestDB(t)
+	mustNoErr(t, db.EnableSecretEncryption(bytes.Repeat([]byte{7}, 32)))
+	seedConfig(t, db)
+	digest := func() string {
+		t.Helper()
+		d, err := db.ConfigDigest()
+		mustNoErr(t, err)
+		return d
+	}
+	a := digest()
+	if b := digest(); a != b {
+		t.Fatal("digest changed with nothing changed")
+	}
+	mustNoErr(t, db.setMeta("email_report_sent_for", "2026-11-14"))
+	mustNoErr(t, db.UpsertIPThreatScore(IPThreatScore{IP: "203.0.113.9", Total: 5, UpdatedAt: time.Now()}))
+	if b := digest(); a != b {
+		t.Error("digest changed on runtime-only state")
+	}
+	mustNoErr(t, db.setMeta("trusted_ips", "198.51.100.1"))
+	if b := digest(); a == b {
+		t.Error("digest unchanged after a config change")
 	}
 }

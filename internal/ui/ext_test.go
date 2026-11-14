@@ -62,3 +62,21 @@ func TestExtRouteNeedsRole(t *testing.T) {
 	}()
 	newAdminEnv(t)
 }
+
+func TestExtOpenRouteAndReload(t *testing.T) {
+	var reload func() error
+	saved := ext.Mounts
+	ext.Mounts = append(ext.Mounts[:len(ext.Mounts):len(ext.Mounts)], func(env ext.Env) ext.Feature {
+		reload = env.Reload
+		return ext.Feature{Open: []ext.Route{{Method: http.MethodGet, Path: "/ext-open",
+			Handler: func(c *echo.Context) error { return c.String(http.StatusOK, "open") }}}}
+	})
+	t.Cleanup(func() { ext.Mounts = saved })
+	env := newAdminEnv(t)
+	if rec := env.doWith(http.MethodGet, "/admin/ext-open", nil, ""); rec.Code != http.StatusOK {
+		t.Errorf("open route without a session = %d, want 200", rec.Code)
+	}
+	if err := reload(); err != nil {
+		t.Errorf("reload: %v", err)
+	}
+}
