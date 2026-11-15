@@ -34,6 +34,7 @@ const dropLogInterval = 5 * time.Second
 
 type DB struct {
 	conn          *sql.DB
+	path          string
 	logQueue      chan RequestLog // request path -> runLogWorker (in-memory hooks)
 	writeQueue    chan RequestLog // runLogWorker -> runLogWriter (batched inserts)
 	logDone       chan struct{}
@@ -136,6 +137,7 @@ func Open(path string) (*DB, error) {
 
 	db := &DB{
 		conn:       conn,
+		path:       path,
 		logQueue:   make(chan RequestLog, logQueueSize),
 		writeQueue: make(chan RequestLog, logQueueSize),
 		logDone:    make(chan struct{}),
@@ -147,6 +149,10 @@ func Open(path string) (*DB, error) {
 	go db.runLogWriter()
 	return db, nil
 }
+
+// Path is the SQLite file Open was given, for add-ons that keep files
+// beside it.
+func (db *DB) Path() string { return db.path }
 
 // runLogWorker is stage one of the log pipeline (issue #259). It drains
 // logQueue on one goroutine, runs the hooks that only need memory (autoban,
