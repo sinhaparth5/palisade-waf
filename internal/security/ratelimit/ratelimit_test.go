@@ -229,3 +229,21 @@ func TestClientKey(t *testing.T) {
 		}
 	}
 }
+
+func TestSetShare(t *testing.T) {
+	t.Cleanup(func() { SetShare(1) })
+	SetShare(0.5)
+	l := NewWithParams(0.001, 10)
+	defer l.Stop()
+	n := 0
+	for l.Allow("1.2.3.4").Allowed {
+		n++
+	}
+	if n != 5 {
+		t.Fatalf("half of burst 10 allowed %d, want 5", n)
+	}
+	SetShare(1)
+	if !NewWithParams(0.001, 10).Allow("1.2.3.4").Allowed {
+		t.Fatal("full share should allow")
+	}
+}

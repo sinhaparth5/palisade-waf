@@ -4,8 +4,10 @@
 package ratelimit
 
 import (
+	"math"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"palisade/internal/config"
@@ -22,6 +24,19 @@ func ClientKey(ip string) string {
 	}
 	p, _ := a.Prefix(64) // can't fail: 64 is in range for IPv6
 	return p.String()
+}
+
+// share scales every limiter's rate and burst (float64 bits; 0 means 1).
+var share atomic.Uint64
+
+// SetShare makes every limiter enforce f (0 < f ≤ 1) of its configured
+// rate and burst, for an add-on that spreads one limit over several
+// servers. Anything else restores the full limit.
+func SetShare(f float64) {
+	if !(f > 0 && f < 1) {
+		f = 0
+	}
+	share.Store(math.Float64bits(f))
 }
 
 // BucketState is a serialisable snapshot of a single IP's token bucket,
@@ -131,6 +146,9 @@ func (l *Limiter) AllowScaled(ip string, scale float64) Result {
 func (l *Limiter) allow(ip string, rate, burst float64) Result {
 	if !l.enabled {
 		return Result{Allowed: true}
+	}
+	if f := math.Float64frombits(share.Load()); f > 0 {
+		rate, burst = rate*f, max(1, burst*f)
 	}
 
 	now := time.Now()
