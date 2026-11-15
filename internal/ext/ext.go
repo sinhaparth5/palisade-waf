@@ -40,3 +40,8 @@ type Feature struct {
 
 // Mounts are called once per admin UI, from init functions appending here.
 var Mounts []func(Env) Feature
+
+// OnBan are called after autoban adds a new global block rule for ip (an
+// IP or CIDR). They run on the ban's goroutine, so return quickly. Append
+// from a Mount, before traffic starts.
+var OnBan []func(ip, reason string)

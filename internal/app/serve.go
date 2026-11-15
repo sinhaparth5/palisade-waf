@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"palisade/internal/config"
+	"palisade/internal/ext"
 	"palisade/internal/notify/accesslog"
 	"palisade/internal/notify/mailer"
 	"palisade/internal/notify/metrics"
@@ -250,6 +251,9 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 			log.Printf("autoban: blocklist reload: %v", err)
 		}
 	}, func(ip, reason string) {
+		for _, f := range ext.OnBan {
+			f(ip, reason)
+		}
 		if err := emailReporter.SendBanAlert(ip, reason); err != nil {
 			log.Printf("autoban: ban alert email for %s: %v", ip, err)
 		}
