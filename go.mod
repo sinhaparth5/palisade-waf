@@ -11,18 +11,18 @@ require (
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/goccy/go-yaml v1.19.2
 	github.com/kaptinlin/jsonschema v0.9.10
-	github.com/klauspost/compress v1.20.3
-	github.com/labstack/echo/v5 v5.4.4
+	github.com/klauspost/compress v1.20.4
+	github.com/labstack/echo/v5 v5.4.5
 	github.com/oschwald/geoip2-golang v1.13.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
 	github.com/quic-go/quic-go v0.65.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/tdewolff/minify/v2 v2.24.19
-	golang.org/x/crypto v0.58.0
-	golang.org/x/oauth2 v0.37.0
-	golang.org/x/text v0.43.0
-	modernc.org/sqlite v1.61.1
+	golang.org/x/crypto v0.59.0
+	golang.org/x/oauth2 v0.38.0
+	golang.org/x/text v0.44.0
+	modernc.org/sqlite v1.62.0
 )
 
 require (
@@ -56,12 +56,12 @@ require (
 	github.com/valllabh/ocsf-schema-golang v1.0.3 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	golang.org/x/net v0.61.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
-	modernc.org/libc v1.79.0 // indirect
+	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 	rsc.io/binaryregexp v0.2.0 // indirect
