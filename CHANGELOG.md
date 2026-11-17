@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-11-17
+
 - (#328) Helm chart: single-replica deployment with a persistent /data volume
 - (#329) Keep the database across Kubernetes upgrades, rollbacks and uninstalls
 - (#330) Load the DB key, first admin and TLS files from Kubernetes Secrets
@@ -27,11 +29,5 @@ rather than growing this file forever.
 - (#338) Publish the Helm chart with each release and test it in CI
 - (#339) Kubernetes and Helm documentation
 
-## [3.3.4] - 2026-11-14
-
-- Add `--demo` mode and a self-resetting public demo stack served over HTTPS with Caddy
-- Move embedded UI assets into an importable `static` package
-- Add `internal/ext` hooks for add-on routes, settings cards and config reload
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.4...main
-[3.3.4]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.3...v3.3.4
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.0...main
+[3.4.0]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.4...v3.4.0
