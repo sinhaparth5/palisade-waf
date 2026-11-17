@@ -290,6 +290,22 @@ for 5 minutes).
 With `networkPolicy.enabled`, add Prometheus's namespace to `adminFrom`;
 with `admin.allow`, add the pod CIDR Prometheus runs in.
 
+## Access log
+
+```yaml
+accessLog:
+  stdout: true
+```
+
+Every request is written to stdout as one nginx combined line, so `kubectl logs` and a node agent (Fluent Bit, Promtail, Vector) pick it up. Nothing is rotated or written under `/data`. Server messages go to stderr and start with a date instead of a client IP, so a shipper can tell them apart by stream or format:
+
+```
+203.0.113.7 - - [17/Nov/2026:10:04:12 +0000] "GET /?q=x HTTP/1.1" 403 - "-" "curl/8.11.1"
+2026/11/17 10:04:15 palisade listening on [::]:8080 (plain HTTP, waf=true, apps=1)
+```
+
+`kubectl logs` merges both; read only the access lines with `kubectl logs deploy/<release>-palisade -c palisade | grep -v '^[0-9]\{4\}/'`.
+
 ## Your data
 
 Everything Palisade stores lives in `/data` on the PVC `<release>-palisade-data`:

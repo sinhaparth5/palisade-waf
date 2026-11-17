@@ -76,7 +76,7 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	pruneInterval := fs.Duration("prune-interval", 0, "prune request logs older than --retention in-process at this interval, e.g. 24h (0 = off; for deployments with no external scheduler, like Docker)")
 	tlsCert := fs.String("tls-cert", "", "PEM certificate file for HTTPS fallback (self-signed)")
 	tlsKey := fs.String("tls-key", "", "PEM private key file for HTTPS fallback (self-signed)")
-	accessLogPath := fs.String("access-log", "", "nginx-style access log file path (empty = disabled)")
+	accessLogPath := fs.String("access-log", "", "nginx-style access log file path, - for stdout without rotation (empty = disabled)")
 	accessLogMaxSizeMB := fs.Int("access-log-max-size-mb", 100, "rotate access log after this many MB")
 	accessLogMaxBackups := fs.Int("access-log-max-backups", 5, "number of rotated access log files to keep")
 	dbKeyFile := fs.String("db-key-file", "", "key file for AES-256-GCM encryption of stored secrets at rest (empty = plaintext)")

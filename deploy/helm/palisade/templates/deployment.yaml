@@ -129,6 +129,12 @@ spec:
             {{- with .Values.admin.allow }}
             - --admin-allow={{ join "," . }}
             {{- end }}
+            {{- if .Values.accessLog.stdout }}
+            {{- if index .Values.flags "access-log" }}
+            {{- fail "accessLog.stdout and flags.access-log both set; use one" }}
+            {{- end }}
+            - --access-log=-
+            {{- end }}
             {{- range $name, $value := .Values.flags }}
             {{- if or (kindIs "bool" $value) (kindIs "float64" $value) (kindIs "int64" $value) $value }}
             - {{ printf "--%s=%v" $name $value | quote }}

@@ -2,6 +2,7 @@ package accesslog
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -182,5 +183,42 @@ func TestWriterRotationWithZeroBackups(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("current file must still exist: %v", err)
+	}
+}
+
+// "-" writes to stdout, never rotates (no file named "-" appears) and Close
+// leaves stdout open for whatever else writes there.
+func TestWriterStdout(t *testing.T) {
+	t.Chdir(t.TempDir())
+	r, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := os.Stdout
+	os.Stdout = pw
+	t.Cleanup(func() { os.Stdout = orig })
+
+	w, err := New(Stdout, 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := storage.RequestLog{RealIP: "203.0.113.7", Method: "GET", Path: "/", Status: 200, Timestamp: time.Unix(0, 0).UTC()}
+	w.Push(entry)
+	w.Push(entry)
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pw.WriteString("after close\n"); err != nil {
+		t.Fatalf("stdout closed by Close: %v", err)
+	}
+	pw.Close() //nolint
+	out, _ := io.ReadAll(r)
+
+	line := FormatLine(entry) + "\n"
+	if want := line + line + "after close\n"; string(out) != want {
+		t.Errorf("stdout =\n%q\nwant\n%q", out, want)
+	}
+	if m, _ := filepath.Glob("-*"); len(m) > 0 {
+		t.Errorf("files created: %v", m)
 	}
 }

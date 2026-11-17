@@ -28,6 +28,12 @@ flags:
   geo-db: ""
   access-log: ""
 
+# nginx combined access lines on stdout, for kubectl logs and node log
+# agents (Fluent Bit, Promtail, Vector). Nothing is written to /data. Server
+# logs go to stderr, so a shipper can split the two by stream.
+accessLog:
+  stdout: false
+
 # Key that seals stored secrets (TOTP, webhook and email tokens) in waf.db,
 # passed as --db-key-file. Losing it makes those secrets unreadable.
 dbKey:

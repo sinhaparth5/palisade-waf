@@ -82,8 +82,13 @@ type Writer struct {
 	closed       bool
 }
 
-// New opens (or creates) path in append mode. maxSizeMB and maxBackups
-// control in-house rotation: once a write would push the file past
+// Stdout is the --access-log value that writes lines to standard output for
+// kubectl logs and log shippers, with no rotation. Server logs go to stderr
+// (Go's log package), so the two streams never mix.
+const Stdout = "-"
+
+// New opens (or creates) path in append mode, or uses standard output for
+// Stdout. maxSizeMB and maxBackups control in-house rotation of a file: once a write would push the file past
 // maxSizeMB, the current file is rotated to path.1 (shifting any existing
 // path.1..path.N up by one, dropping anything beyond maxBackups) before the
 // write proceeds.
@@ -93,6 +98,9 @@ func New(path string, maxSizeMB, maxBackups int) (*Writer, error) {
 	}
 	if maxBackups < 0 {
 		maxBackups = 0
+	}
+	if path == Stdout {
+		return &Writer{f: os.Stdout, path: path}, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // G301: log dir readable by log shippers, as nginx does
 		return nil, fmt.Errorf("access log: create directory: %w", err)
@@ -127,7 +135,7 @@ func (w *Writer) Push(entry storage.RequestLog) {
 	if w.closed {
 		return
 	}
-	if w.size+int64(len(line)) > w.maxSizeBytes {
+	if w.path != Stdout && w.size+int64(len(line)) > w.maxSizeBytes {
 		if err := w.rotateLocked(); err != nil {
 			log.Printf("access log: rotate: %v", err)
 			// Fall through and keep writing to the current file — a failed
@@ -192,5 +200,8 @@ func (w *Writer) Close() error {
 		return nil
 	}
 	w.closed = true
+	if w.path == Stdout {
+		return nil
+	}
 	return w.f.Close()
 }
