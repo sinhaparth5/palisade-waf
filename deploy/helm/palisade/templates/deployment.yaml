@@ -22,6 +22,9 @@ spec:
         {{- end }}
       annotations:
         kubectl.kubernetes.io/default-container: palisade
+        {{- if .Values.varnish.enabled }}
+        checksum/vcl: {{ .Files.Get "files/default.vcl" | sha256sum }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -183,6 +186,55 @@ spec:
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+        {{- with .Values.varnish }}
+        {{- if .enabled }}
+        # Shares the pod's loopback with Palisade, so the Varnish addresses
+        # in Settings stay 127.0.0.1:6081 and :6082. While varnishd is down
+        # Palisade serves cached services straight from the backend (fail
+        # open), so the shell restarts it in place instead of letting the
+        # container exit: a crashed container would take the pod out of the
+        # Service's endpoints.
+        - name: varnish
+          image: "{{ .image.repository }}:{{ .image.tag }}"
+          imagePullPolicy: {{ .image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - trap 'kill $p 2>/dev/null; exit 0' TERM INT; while :; do varnishd -F "$@" & p=$!; wait $p; sleep 2; done
+            - varnishd
+          args:
+            - -a
+            - 127.0.0.1:6081
+            - -f
+            - /etc/varnish/default.vcl
+            - -s
+            - malloc,{{ .size }}
+            # Same limits as install.sh: big backend headers (issue #212).
+            - -p
+            - http_resp_hdr_len=32k
+            - -p
+            - http_resp_size=64k
+            - -p
+            - http_req_hdr_len=32k
+            - -p
+            - http_req_size=64k
+            - -p
+            - workspace_backend=128k
+            - -p
+            - workspace_client=128k
+          securityContext:
+            {{- toYaml .securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          volumeMounts:
+            - name: varnish-vcl
+              mountPath: /etc/varnish
+              readOnly: true
+            # Working directory: shared memory log and compiled VCL.
+            - name: varnish-work
+              mountPath: /var/lib/varnish
+        {{- end }}
+        {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
@@ -213,6 +265,14 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 1Mi
+        {{- end }}
+        {{- if .Values.varnish.enabled }}
+        - name: varnish-vcl
+          configMap:
+            name: {{ include "palisade.fullname" . }}-varnish
+        - name: varnish-work
+          emptyDir:
+            sizeLimit: 512Mi
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}

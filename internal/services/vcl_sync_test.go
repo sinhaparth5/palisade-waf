@@ -33,3 +33,19 @@ func TestInstallVCLMatchesDefault(t *testing.T) {
 		t.Error("install.sh's VCL heredoc differs from deploy/varnish/default.vcl — copy the file into the heredoc verbatim")
 	}
 }
+
+// The Helm chart can't read files outside its directory, so it keeps its own
+// copy for the Varnish sidecar's ConfigMap (issue #334).
+func TestHelmVCLMatchesDefault(t *testing.T) {
+	want, err := os.ReadFile("../../deploy/varnish/default.vcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile("../../deploy/helm/palisade/files/default.vcl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Error("deploy/helm/palisade/files/default.vcl differs from deploy/varnish/default.vcl — copy the file over")
+	}
+}

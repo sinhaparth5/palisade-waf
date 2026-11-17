@@ -1,0 +1,11 @@
+{{- if .Values.varnish.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "palisade.fullname" . }}-varnish
+  labels:
+    {{- include "palisade.labels" . | nindent 4 }}
+data:
+  default.vcl: |
+{{ .Files.Get "files/default.vcl" | indent 4 }}
+{{- end }}

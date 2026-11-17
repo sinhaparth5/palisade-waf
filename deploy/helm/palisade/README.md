@@ -84,6 +84,26 @@ Traefik entry point) and passes the address on in `X-Forwarded-For`.
 Where the load balancer supports it, `externalTrafficPolicy: Local` without
 PROXY protocol works too.
 
+## Backends
+
+Point a service's Backend (admin UI, Services) at the backend's Kubernetes
+Service by its DNS name, `http://<service>.<namespace>.svc.cluster.local:<port>`,
+e.g. `http://shop.shop.svc.cluster.local:8080`. The name stays the same
+when pods are replaced, and kube-proxy spreads requests over the ready pods.
+Shorter forms (`shop.shop`, `shop.shop.svc`) also resolve through the pod's
+DNS search list; the full name doesn't depend on it. Don't use pod IPs: they
+change with every restart. A ClusterIP works but changes if the Service is
+recreated.
+
+To have Palisade balance and health-check pods itself (Extra backends,
+`least_conn`, Health path), make the Service headless (`clusterIP: None`)
+and list each pod of a StatefulSet by name,
+`http://<pod>.<service>.<namespace>.svc.cluster.local:<port>`. Behind a
+Deployment, one ClusterIP Service is simpler.
+
+With `networkPolicy.egress` set, allow the backends' namespaces
+([NetworkPolicy](#networkpolicy)).
+
 ## Admin UI
 
 By default the admin UI, its API and `/admin/metrics` listen only on
@@ -189,6 +209,36 @@ has to carry UDP and TCP on one IP. On GKE that needs the backend
 service-based load balancer (`service.annotations`:
 `cloud.google.com/l4-rbs: enabled`, set when the Service is created);
 the default one refuses the Service with "mixed protocol is not supported".
+
+## Varnish
+
+`varnish.enabled: true` runs varnishd (the official `varnish` image) as a
+sidecar for the per-service Cache. Containers in a pod share the loopback
+interface, so nothing changes in Palisade: varnishd listens on
+`127.0.0.1:6081` and fetches misses from Palisade's cache-return listener on
+`127.0.0.1:6082`, both unreachable from outside the pod. The VCL is
+`files/default.vcl`, a copy of `deploy/varnish/default.vcl`, with the same
+raised header limits as `install.sh`. Then, in the admin UI, turn on
+Settings → Varnish Cache and Cache on each service.
+
+`varnish.size` is the cache memory (`-s malloc`). Raise
+`varnish.resources.limits.memory` with it: the default 512Mi fits the default
+256m plus varnishd itself. The sidecar runs as the image's `varnish` user
+with a read-only root filesystem.
+
+Varnish failing never takes the site down: while varnishd is starting or
+has stopped, Palisade serves cached services straight from the backend and
+logs the cache status as `ERROR`. A crashed varnishd is restarted inside the
+container, so the pod stays Ready meanwhile. The cache is in memory and
+starts empty with every pod.
+
+The Services page's "Cache performance" card needs `varnishstat`, which the
+Palisade image doesn't have, so it shows an error; the per-service hit
+ratio from the request log works. For Varnish's own counters:
+
+```sh
+kubectl -n palisade exec deploy/waf-palisade -c varnish -- varnishstat -1 -f MAIN.cache_hit -f MAIN.cache_miss
+```
 
 ## Your data
 

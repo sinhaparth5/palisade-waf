@@ -26,6 +26,11 @@ admin.existingSecret:
   kubectl -n {{ .Release.Namespace }} exec -i deploy/{{ include "palisade.fullname" . }} -- \
     /palisade setup --db /data/waf.db --admin-email you@example.com
 {{- end }}
+{{- if .Values.varnish.enabled }}
+
+Varnish runs as a sidecar. Turn it on in the admin UI: Settings, Varnish
+Cache, then Cache on each service.
+{{- end }}
 {{- if and .Values.dbKey.create (not .Values.dbKey.existingSecret) }}
 
 Back up Secret {{ include "palisade.dbKeySecret" . }} with the volume: stored

@@ -199,6 +199,34 @@ resources:
   limits:
     memory: 1Gi
 
+# Varnish as a sidecar for the per-service Cache (README.md, "Varnish").
+# Turn it on in the admin UI afterwards: Settings, Varnish Cache, then
+# Cache on each service. The VCL is files/default.vcl.
+varnish:
+  enabled: false
+  image:
+    repository: varnish
+    tag: "7.6"
+    pullPolicy: IfNotPresent
+  # Cache memory (varnishd -s malloc). Count it in resources.limits.memory
+  # plus about 100Mi for varnishd itself.
+  size: 256m
+  # The image's varnish user. Root filesystem read-only; the working
+  # directory is an in-memory emptyDir.
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+  resources:
+    requests:
+      cpu: 50m
+      memory: 320Mi
+    limits:
+      memory: 512Mi
+
 # Limits who can reach the pod. Needs a CNI that enforces NetworkPolicy
 # (GKE Dataplane V2, Calico, Cilium). kubectl port-forward is not affected.
 networkPolicy:
