@@ -40,6 +40,10 @@ func TestRunConfig(t *testing.T) {
 	if err := runConfig([]string{"import", "--db", dst, "-"}, strings.NewReader(stdout.String()), nil); err == nil {
 		t.Fatal("second import without --replace succeeded")
 	}
+	// Seed mode: a database with config is left alone, and still exits 0.
+	if err := runConfig([]string{"import", "--db", dst, "--if-empty", "-"}, strings.NewReader(stdout.String()), nil); err != nil {
+		t.Fatalf("--if-empty over config: %v", err)
+	}
 	if err := runConfig([]string{"import", "--db", dst, "--replace", "-"}, strings.NewReader(stdout.String()), nil); err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +56,7 @@ func TestRunConfig(t *testing.T) {
 		t.Fatalf("imported services = %+v", svcs)
 	}
 
-	for _, args := range [][]string{nil, {"dump"}, {"import", "--db", dst}, {"export", "--bogus"}} {
+	for _, args := range [][]string{nil, {"dump"}, {"import", "--db", dst}, {"export", "--bogus"}, {"import", "--db", dst, "--replace", "--if-empty", file}, {"import", "--db", dst, "--if-empty", filepath.Join(dir, "missing.json")}} {
 		if err := runConfig(args, nil, nil); err == nil {
 			t.Errorf("%v: accepted", args)
 		}

@@ -306,6 +306,30 @@ Every request is written to stdout as one nginx combined line, so `kubectl logs`
 
 `kubectl logs` merges both; read only the access lines with `kubectl logs deploy/<release>-palisade -c palisade | grep -v '^[0-9]\{4\}/'`.
 
+## GitOps
+
+Keep services and rules in Git (Argo CD, Flux) as a `palisade config export` file. An init container imports it before the server starts.
+
+```sh
+palisade config export --db waf.db --db-key-file db.key > config.json
+kubectl -n palisade create secret generic palisade-config --from-file=config.json
+```
+
+```yaml
+config:
+  existingSecret: palisade-config   # or existingConfigMap
+  mode: seed
+```
+
+- **`seed`** (default): imports only into a database with no configuration, so a new install starts from the file and later changes made in the admin UI survive upgrades. Once the database has config the import is skipped (`config import: skipped` in the init container's log).
+- **`replace`**: empties the config tables and imports the file at every pod start, so Git is the only source and UI edits last until the next restart. A changed Secret or ConfigMap doesn't restart the pod by itself: bump a `podAnnotations` value with it, or use a tool that restarts on change.
+
+The file covers settings (`meta`), admin users and SSO identities, API keys, services with every per-service tab (OpenAPI, mTLS, MCP, JWT, rate rules, backend CA, maintenance, CSP, cookies, request policy), certificate records, IP and geo rules, WAF rule exceptions and custom rules, threat intel sources, the webhook and threat scores. It never holds request logs, the audit log, sessions or passkeys. Users that the file gives a different id lose their sessions and passkeys on a `replace` import. Uploaded certificate files live under `/data/certs`, not in the file; upload them again or use `tls.existingSecret`.
+
+An export made with `--db-key-file` keeps its secrets (TOTP, webhook and email tokens, the challenge secret) sealed under that key, so the release must use the same key: put it in the Secret named by `dbKey.existingSecret`. The import refuses a sealed file with a different key and changes nothing. Without a key file the export leaves secrets out, and TOTP users enroll again.
+
+The setup init container runs after the import and creates `admin.email` only when the file brought no admin.
+
 ## Your data
 
 Everything Palisade stores lives in `/data` on the PVC `<release>-palisade-data`:

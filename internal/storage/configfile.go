@@ -151,14 +151,62 @@ func (db *DB) ImportConfig(r io.Reader, replace bool) (MigrationReport, error) {
 		}); err != nil {
 			return err
 		}
+		before, err := db.userEmails()
+		if err != nil {
+			return err
+		}
 		if err := db.prepareConfigImport(replace); err != nil {
 			return err
 		}
-		var err error
-		report, err = tmp.migrateConfigInto(db)
-		return err
+		if report, err = tmp.migrateConfigInto(db); err != nil {
+			return err
+		}
+		return db.dropMovedUserRows(before)
 	})
 	return report, err
+}
+
+// userRowTables are keyed by admin_users.id but not exported, so they
+// survive a replace import while the ids they point at are rewritten.
+var userRowTables = []string{"sessions", "webauthn_credentials", "admin_user_invites"}
+
+func (db *DB) userEmails() (map[int64]string, error) {
+	rows, err := db.query(`SELECT id, email FROM admin_users`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var email string
+		if err := rows.Scan(&id, &email); err != nil {
+			return nil, err
+		}
+		m[id] = email
+	}
+	return m, rows.Err()
+}
+
+// dropMovedUserRows deletes the sessions, passkeys and invites of every user
+// id that no longer belongs to the same email after a replace import, so
+// they can't sign someone in as whoever the file gave that id.
+func (db *DB) dropMovedUserRows(before map[int64]string) error {
+	for id, email := range before {
+		var n int
+		if err := db.queryRow(`SELECT COUNT(*) FROM admin_users WHERE id = ? AND email = ?`, id, email).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			continue
+		}
+		for _, t := range userRowTables {
+			if _, err := db.exec(`DELETE FROM `+t+` WHERE user_id = ?`, id); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // volatileConfig is config the server rewrites while running (caches,

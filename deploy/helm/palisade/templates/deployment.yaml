@@ -25,8 +25,8 @@ spec:
         {{- if .Values.varnish.enabled }}
         checksum/vcl: {{ .Files.Get "files/default.vcl" | sha256sum }}
         {{- end }}
-        {{- with .Values.podAnnotations }}
-        {{- toYaml . | nindent 8 }}
+        {{- range $k, $v := .Values.podAnnotations }}
+        {{ $k }}: {{ $v | toString | quote }}
         {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
@@ -43,7 +43,14 @@ spec:
       {{- if and .Values.tls.acme.domain (not .Values.admin.email) }}
       {{- fail "tls.acme.domain needs admin.email: the setup init container stores it" }}
       {{- end }}
-      {{- if or $backup .Values.admin.email $selfSigned }}
+      {{- $config := or .Values.config.existingSecret .Values.config.existingConfigMap }}
+      {{- if and .Values.config.existingSecret .Values.config.existingConfigMap }}
+      {{- fail "config.existingSecret and config.existingConfigMap both set; use one" }}
+      {{- end }}
+      {{- if not (has .Values.config.mode (list "seed" "replace")) }}
+      {{- fail "config.mode must be seed or replace" }}
+      {{- end }}
+      {{- if or $backup .Values.admin.email $selfSigned $config }}
       initContainers:
       {{- end }}
       {{- if $backup }}
@@ -62,6 +69,34 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+      {{- end }}
+      {{- if $config }}
+        # Before setup, so a seed import still sees an empty database.
+        - name: config
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - config
+            - import
+            - --db=/data/waf.db
+            {{- if include "palisade.dbKeySecret" . }}
+            - --db-key-file=/etc/palisade/key/{{ .Values.dbKey.secretKey }}
+            {{- end }}
+            - {{ eq .Values.config.mode "replace" | ternary "--replace" "--if-empty" }}
+            - /etc/palisade/config/{{ .Values.config.key }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/palisade/config
+              readOnly: true
+            {{- if include "palisade.dbKeySecret" . }}
+            - name: db-key
+              mountPath: /etc/palisade/key
+              readOnly: true
+            {{- end }}
       {{- end }}
       {{- if .Values.admin.email }}
         # Creates the first owner; a no-op once any admin exists.
@@ -259,6 +294,18 @@ spec:
         - name: admin
           secret:
             secretName: {{ required "admin.existingSecret is required with admin.email" .Values.admin.existingSecret }}
+            defaultMode: 0400
+        {{- end }}
+        {{- with .Values.config.existingSecret }}
+        - name: config
+          secret:
+            secretName: {{ . }}
+            defaultMode: 0400
+        {{- end }}
+        {{- with .Values.config.existingConfigMap }}
+        - name: config
+          configMap:
+            name: {{ . }}
             defaultMode: 0400
         {{- end }}
         {{- if .Values.tls.existingSecret }}

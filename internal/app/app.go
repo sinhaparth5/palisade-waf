@@ -245,7 +245,7 @@ func dbDiskSize(path string) int64 {
 // export without one.
 func runConfig(args []string, stdin io.Reader, stdout io.Writer) error {
 	if len(args) == 0 || (args[0] != "export" && args[0] != "import") {
-		return errors.New("usage: palisade config export [--out file] | import [--replace] file (plus --db, --db-key-file)")
+		return errors.New("usage: palisade config export [--out file] | import [--replace | --if-empty] file (plus --db, --db-key-file)")
 	}
 	cmd := args[0]
 	fs := flag.NewFlagSet("config "+cmd, flag.ContinueOnError)
@@ -253,6 +253,7 @@ func runConfig(args []string, stdin io.Reader, stdout io.Writer) error {
 	keyFile := fs.String("db-key-file", "", "the server's key file: secrets are exported sealed under it, and sealed files need it to import")
 	out := fs.String("out", "", "export: write here instead of stdout (created 0600)")
 	replace := fs.Bool("replace", false, "import: empty the config tables first instead of refusing a database that has config")
+	ifEmpty := fs.Bool("if-empty", false, "import: succeed without changes on a database that has config (seed once)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -292,7 +293,14 @@ func runConfig(args []string, stdin io.Reader, stdout io.Writer) error {
 		defer f.Close()
 		r = f
 	}
+	if *ifEmpty && *replace {
+		return errors.New("--if-empty and --replace exclude each other")
+	}
 	rep, err := db.ImportConfig(r, *replace)
+	if *ifEmpty && errors.Is(err, storage.ErrConfigNotEmpty) {
+		log.Printf("config import: skipped, %v", err)
+		return nil
+	}
 	if err != nil {
 		return err
 	}

@@ -46,6 +46,18 @@ dbKey:
   # the volume it belongs to.
   create: true
 
+# Declarative config (README.md, "GitOps"): a file from palisade config
+# export, imported by an init container before the server starts.
+config:
+  # Secret or ConfigMap holding the file; set one. A Secret suits a file
+  # with users, API keys or sealed secrets in it.
+  existingSecret: ""
+  existingConfigMap: ""
+  key: config.json
+  # seed: import only into a database without config, so UI edits survive
+  # upgrades. replace: overwrite the config tables at every pod start.
+  mode: seed
+
 # First owner account, created by an init container running palisade setup
 # when the DB has no admin yet. An existing admin is never changed; reset a
 # password with palisade setup --reset-password (see README.md).

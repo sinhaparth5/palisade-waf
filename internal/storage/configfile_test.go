@@ -155,3 +155,42 @@ func TestConfigDigest(t *testing.T) {
 		t.Error("digest unchanged after a config change")
 	}
 }
+
+// TestConfigReplaceUserIDs: a replace import rewrites admin_users with the
+// file's ids. Sessions and passkeys of an id that now belongs to someone
+// else are dropped; a user who keeps their id stays signed in.
+func TestConfigReplaceUserIDs(t *testing.T) {
+	src := openTestDB(t)
+	_, err := src.CreateAdminUser("bob@example.com", "a long enough password", "owner")
+	mustNoErr(t, err)
+	_, err = src.CreateAdminUser("carol@example.com", "a long enough password", "admin")
+	mustNoErr(t, err)
+	file := exportConfig(t, src)
+
+	dst := openTestDB(t)
+	alice, err := dst.CreateAdminUser("alice@example.com", "a long enough password", "owner") // id 1, bob's in the file
+	mustNoErr(t, err)
+	tok, err := dst.CreateSession(alice, "", "", "")
+	mustNoErr(t, err)
+	mustNoErr(t, dst.AddWebAuthnCredential(alice, "cred-alice", "key", []byte(`{}`)))
+
+	_, err = dst.ImportConfig(strings.NewReader(file), true)
+	mustNoErr(t, err)
+	if ok, _ := dst.ValidateSession(tok); ok {
+		t.Error("alice's session now signs in as bob")
+	}
+	if creds, _ := dst.ListWebAuthnCredentials(alice); len(creds) != 0 {
+		t.Errorf("alice's passkey now belongs to bob: %+v", creds)
+	}
+
+	// Same file again: bob keeps id 1 and his session.
+	bob, err := dst.GetAdminUserByEmail("bob@example.com")
+	mustNoErr(t, err)
+	tok, err = dst.CreateSession(bob.ID, "", "", "")
+	mustNoErr(t, err)
+	_, err = dst.ImportConfig(strings.NewReader(file), true)
+	mustNoErr(t, err)
+	if ok, _ := dst.ValidateSession(tok); !ok {
+		t.Error("an unchanged user was signed out by a replace import")
+	}
+}
