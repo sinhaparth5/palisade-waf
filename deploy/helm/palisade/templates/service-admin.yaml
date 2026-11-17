@@ -1,0 +1,21 @@
+{{- if .Values.admin.port }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "palisade.fullname" . }}-admin
+  labels:
+    {{- include "palisade.labels" . | nindent 4 }}
+  {{- with .Values.admin.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: admin
+      port: {{ .Values.admin.service.port }}
+      targetPort: admin
+      protocol: TCP
+  selector:
+    {{- include "palisade.selectorLabels" . | nindent 4 }}
+{{- end }}

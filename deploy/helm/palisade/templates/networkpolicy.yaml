@@ -1,0 +1,50 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $np := .Values.networkPolicy }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "palisade.fullname" . }}
+  labels:
+    {{- include "palisade.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "palisade.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    {{- if $np.egress }}
+    - Egress
+    {{- end }}
+  ingress:
+    - ports:
+        - port: http
+          protocol: TCP
+        {{- if include "palisade.tls" . }}
+        - port: https
+          protocol: TCP
+        {{- if .Values.tls.http3 }}
+        - port: h3
+          protocol: UDP
+        {{- end }}
+        {{- end }}
+      {{- with $np.publicFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- if and .Values.admin.port $np.adminFrom }}
+    - ports:
+        - port: admin
+          protocol: TCP
+      from:
+        {{- toYaml $np.adminFrom | nindent 8 }}
+    {{- end }}
+  {{- with $np.egress }}
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

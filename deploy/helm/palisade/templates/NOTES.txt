@@ -6,7 +6,11 @@ lost every time the pod is recreated, including on helm upgrade.
 {{- end }}
 
 Open the admin UI locally:
-{{- if include "palisade.tls" . }}
+{{- if .Values.admin.port }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "palisade.fullname" . }}-admin 9090:{{ .Values.admin.service.port }}
+  then http://127.0.0.1:9090/admin
+It is not served on the public Service (admin.port).
+{{- else if include "palisade.tls" . }}
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "palisade.fullname" . }} 8443:{{ .Values.service.httpsPort }}
   then https://127.0.0.1:8443/admin
 {{- else }}

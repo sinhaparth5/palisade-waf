@@ -19,6 +19,7 @@ rather than growing this file forever.
 - (#330) Load the DB key, first admin and TLS files from Kubernetes Secrets
 - (#331) Resolve the real client IP behind Kubernetes Ingress and cloud load balancers
 - (#332) TLS options on Kubernetes: Ingress termination, built-in ACME, cert-manager
+- (#333) Separate admin Service and NetworkPolicy in the Helm chart
 
 ## [3.3.4] - 2026-11-14
 

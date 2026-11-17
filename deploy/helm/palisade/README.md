@@ -84,6 +84,56 @@ Traefik entry point) and passes the address on in `X-Forwarded-For`.
 Where the load balancer supports it, `externalTrafficPolicy: Local` without
 PROXY protocol works too.
 
+## Admin UI
+
+By default the admin UI, its API and `/admin/metrics` listen only on
+`admin.port` (9090, `--admin-listen`) behind the ClusterIP Service
+`<release>-palisade-admin`. On the public Service, `/admin` goes through the
+proxy pipeline like any other path, so it reaches a backend or a 404, never
+the login page. Reach it with a port-forward, which needs nothing else open:
+
+```sh
+kubectl -n palisade port-forward svc/waf-palisade-admin 9090:9090
+# then http://127.0.0.1:9090/admin
+```
+
+The admin port is plain HTTP. To use it from a browser without a
+port-forward, give it its own Ingress, for example on an internal ingress
+class, a host only reachable over the VPN, or behind an SSO proxy
+(`admin.ingress`, routes only `/admin`). Over that Ingress, the controller's
+`X-Forwarded-Proto` keeps the session cookies `Secure`, and
+`flags.trusted-proxies` lets the login throttle and `admin.allow` see the
+real client IP ([Client IP](#client-ip)). `admin.allow` (`--admin-allow`)
+then limits who may use it by IP. `admin.port: 0` puts the admin UI back on
+the public port.
+
+### NetworkPolicy
+
+`networkPolicy.enabled` adds one NetworkPolicy for the pod. It needs a CNI
+that enforces it (GKE Dataplane V2, Calico, Cilium):
+
+```yaml
+networkPolicy:
+  enabled: true
+  # The public ports only from the ingress controller (empty: anyone; a
+  # LoadBalancer Service needs that)
+  publicFrom:
+    - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+  # The admin port only from the internal ingress controller (empty: nobody)
+  adminFrom:
+    - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-internal}}
+  # Outbound only to DNS, the backends' namespace and Let's Encrypt (empty: anywhere)
+  egress:
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: shop}}}]
+    - to: [{ipBlock: {cidr: 0.0.0.0/0, except: [10.0.0.0/8, 169.254.0.0/16]}}]
+      ports: [{port: 443}]
+```
+
+`kubectl port-forward` isn't subject to it, so the admin UI stays reachable
+that way with `adminFrom` empty. Restricting egress, remember everything
+Palisade calls out to: the backends, Let's Encrypt, `api.pwnedpasswords.com`
+(password checks), webhooks, the email API, JWKS URLs and threat feeds.
+
 ## TLS
 
 Pick one of three setups. Each has a values file in `examples/`.
@@ -108,9 +158,9 @@ keep the `Secure` flag. Set `flags.trusted-proxies` as in
 [Client IP](#client-ip). The chart refuses `ingress.enabled` together with
 Palisade's own TLS: plain HTTP would only redirect, in a loop.
 
-**2. Palisade terminates TLS with its built-in ACME.** `tls.acme.domain` is
-the admin UI's domain; the `setup` init container stores it with the contact
-address on every start. Other services get certificates by turning on ACME
+**2. Palisade terminates TLS with its built-in ACME.** The `setup` init
+container stores `tls.acme.domain` as the primary domain, with the contact
+address, on every start. Other services get certificates by turning on ACME
 in the admin UI. Let's Encrypt checks the HTTP-01 challenge on port 80 of
 the Service (the container's 8080), so keep that port reachable from the
 internet, `loadBalancerSourceRanges` included, or issuing and renewing fail.

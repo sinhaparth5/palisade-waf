@@ -24,7 +24,6 @@ flags:
   # seems to come from the controller.
   trusted-proxies: ""
   trusted-crawlers: ""
-  admin-allow: ""
   waf-rules: ""
   geo-db: ""
   access-log: ""
@@ -49,6 +48,25 @@ admin:
   # Secret holding the password (12+ characters).
   existingSecret: ""
   passwordKey: password
+  # The admin UI, API and metrics listen only on this port (--admin-listen,
+  # plain HTTP) behind their own ClusterIP Service. /admin on the public
+  # Service then goes to the proxy like any other path. 0 serves the admin
+  # UI on the public port instead.
+  port: 9090
+  # Client IPs or CIDRs that may use the admin UI (--admin-allow); everyone
+  # else gets a 404. Empty: anyone who can reach the port.
+  allow: []
+  service:
+    port: 9090
+    annotations: {}
+  # A separate Ingress for the admin Service, e.g. on an internal ingress
+  # class, a VPN-only host or behind an SSO proxy. Only /admin is routed.
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts: []
+    tls: []
 
 # HTTPS served by Palisade itself (README.md, "TLS"). Leave it off to
 # terminate TLS at an Ingress instead. Setting any option below turns it on.
@@ -62,7 +80,7 @@ tls:
   # a self-signed one at every start.
   existingSecret: ""
   containerPort: 8443
-  # Let's Encrypt for the admin UI's domain, stored by the setup init
+  # Let's Encrypt for the primary domain (setup --domain), stored by the init
   # container (needs admin.email). Services turn ACME on in the admin UI.
   # Port 80 of the Service must be reachable from the internet, or issuing
   # and renewing fail. Certificates are kept in /data/certs on the volume.
@@ -180,6 +198,22 @@ resources:
     memory: 256Mi
   limits:
     memory: 1Gi
+
+# Limits who can reach the pod. Needs a CNI that enforces NetworkPolicy
+# (GKE Dataplane V2, Calico, Cilium). kubectl port-forward is not affected.
+networkPolicy:
+  enabled: false
+  # Peers (NetworkPolicyPeer) that may reach the public ports, e.g. the
+  # ingress controller's namespace. Empty: anyone, which a LoadBalancer
+  # Service with externalTrafficPolicy Local needs.
+  publicFrom: []
+  # Peers that may reach the admin port. Empty: none.
+  adminFrom: []
+  # Rules (NetworkPolicyEgressRule) for where Palisade may connect, on top
+  # of DNS. Empty: anywhere. Restricting it, include the backends and
+  # anything you use of Let's Encrypt, api.pwnedpasswords.com, webhooks,
+  # email, JWKS URLs and threat feeds.
+  egress: []
 
 nodeSelector: {}
 tolerations: []

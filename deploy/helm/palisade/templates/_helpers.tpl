@@ -52,3 +52,41 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 {{- toYaml $p }}
 {{- end }}
+
+{{/* An Ingress sending path on every host to the Service name/port. */}}
+{{- define "palisade.ingress" -}}
+{{- $v := .values }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "palisade.labels" .root | nindent 4 }}
+  {{- with $v.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $v.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with $v.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range $v.hosts | default (list "") }}
+    - http:
+        paths:
+          - path: {{ $.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $.name }}
+                port:
+                  name: {{ $.port }}
+      {{- with . }}
+      host: {{ . | quote }}
+      {{- end }}
+    {{- end }}
+{{- end }}

@@ -120,6 +120,12 @@ spec:
             - --h3-advertise-port={{ .Values.service.httpsPort }}
             {{- end }}
             {{- end }}
+            {{- if .Values.admin.port }}
+            - --admin-listen=:{{ .Values.admin.port }}
+            {{- end }}
+            {{- with .Values.admin.allow }}
+            - --admin-allow={{ join "," . }}
+            {{- end }}
             {{- range $name, $value := .Values.flags }}
             {{- if or (kindIs "bool" $value) (kindIs "float64" $value) (kindIs "int64" $value) $value }}
             - {{ printf "--%s=%v" $name $value | quote }}
@@ -145,6 +151,11 @@ spec:
               containerPort: {{ .Values.tls.containerPort }}
               protocol: UDP
             {{- end }}
+            {{- end }}
+            {{- if .Values.admin.port }}
+            - name: admin
+              containerPort: {{ .Values.admin.port }}
+              protocol: TCP
             {{- end }}
           startupProbe:
             {{- include "palisade.probe" (dict "root" . "probe" .Values.startupProbe) | nindent 12 }}
