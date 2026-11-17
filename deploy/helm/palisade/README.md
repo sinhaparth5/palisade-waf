@@ -41,6 +41,53 @@ helm install waf ./deploy/helm/palisade -n palisade \
   certificate as the fallback; per-service and ACME certificates still come
   from the admin UI. Plain HTTP then only redirects and answers ACME.
 
+## Client IP
+
+IP rules, autoban, rate limits and the threat score key on the client's
+address. Palisade has to see the real one, not the proxy or the node.
+
+**LoadBalancer Service straight to Palisade.** Keep the source address with
+`externalTrafficPolicy: Local`; without it the node rewrites it to its own:
+
+```sh
+helm upgrade waf ./deploy/helm/palisade --reuse-values \
+  --set service.type=LoadBalancer --set service.externalTrafficPolicy=Local
+```
+
+**Behind an Ingress controller.** The controller's own Service needs
+`externalTrafficPolicy: Local`, and Palisade has to trust the controller's
+`X-Forwarded-For`. Pod IPs change, so trust the cluster's pod CIDR:
+
+```sh
+kubectl get nodes -o jsonpath='{.items[*].spec.podCIDR}'   # one range per node
+gcloud container clusters describe <cluster> --format='value(clusterIpv4Cidr)'   # GKE: the whole range
+
+# ingress-nginx
+helm install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx --create-namespace \
+  --set controller.service.externalTrafficPolicy=Local
+# or Traefik
+helm install traefik traefik/traefik -n traefik --create-namespace \
+  --set service.spec.externalTrafficPolicy=Local
+
+helm upgrade waf ./deploy/helm/palisade --reuse-values --set flags.trusted-proxies=10.0.0.0/14
+kubectl -n palisade create ingress palisade --class=nginx --rule="/*=waf-palisade:80"   # or --class=traefik
+```
+
+Both controllers ignore an `X-Forwarded-For` from the client by default and
+send the address they saw, so a client can't spoof it. Turning on
+`use-forwarded-headers` (ingress-nginx) or `forwardedHeaders.insecure`
+(Traefik) would let it, unless the controller only trusts the load balancer.
+Any pod in the cluster can reach Palisade from a trusted address; use a
+NetworkPolicy to limit that.
+
+**PROXY protocol** isn't supported. A load balancer that only passes the
+client address that way (DigitalOcean, Hetzner, AWS NLB with instance
+targets) should send it to an Ingress controller, which reads it
+(`use-proxy-protocol` in ingress-nginx, `proxyProtocol.trustedIPs` on a
+Traefik entry point) and passes the address on in `X-Forwarded-For`.
+Where the load balancer supports it, `externalTrafficPolicy: Local` without
+PROXY protocol works too.
+
 ## Your data
 
 Everything Palisade stores lives in `/data` on the PVC `<release>-palisade-data`:

@@ -19,6 +19,9 @@ flags:
   # No cron in the pod, so prune request logs in-process.
   prune-interval: 24h
   max-conns-per-ip: 256
+  # Whose X-Forwarded-For to believe: the pod CIDR behind an in-cluster
+  # Ingress controller (README.md, "Client IP"). Unset, every request
+  # seems to come from the controller.
   trusted-proxies: ""
   trusted-crawlers: ""
   admin-allow: ""
