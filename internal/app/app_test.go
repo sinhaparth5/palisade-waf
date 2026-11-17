@@ -51,7 +51,7 @@ func TestRunVersionAndHelp(t *testing.T) {
 	if out, err := run([]string{"--version"}, ""); err != nil || out != "palisade v9.9.9\n" {
 		t.Errorf("version = %q, %v", out, err)
 	}
-	for _, cmd := range []string{"prune", "setup", "gencert", "healthcheck"} {
+	for _, cmd := range []string{"prune", "backup", "setup", "gencert", "healthcheck"} {
 		if _, err := run([]string{cmd, "-h"}, ""); !errors.Is(err, flag.ErrHelp) {
 			t.Errorf("%s -h = %v, want flag.ErrHelp", cmd, err)
 		}

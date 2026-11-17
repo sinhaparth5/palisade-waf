@@ -440,6 +440,32 @@ func TestBackupTo(t *testing.T) {
 	}
 }
 
+// BackupFile must copy the file as it is: no migration, so a pre-upgrade
+// backup keeps the old schema.
+func TestBackupFileSkipsMigrate(t *testing.T) {
+	dir := t.TempDir()
+	src, dst := filepath.Join(dir, "old.db"), filepath.Join(dir, "copy.db")
+	conn, err := openSQLite(src)
+	mustNoErr(t, err)
+	_, err = conn.ExecContext(context.Background(), `CREATE TABLE legacy (x INTEGER)`)
+	mustNoErr(t, err)
+	mustNoErr(t, conn.Close())
+
+	mustNoErr(t, BackupFile(src, dst))
+	conn, err = openSQLite(dst)
+	mustNoErr(t, err)
+	defer conn.Close()
+	var tables string
+	mustNoErr(t, conn.QueryRowContext(context.Background(),
+		`SELECT group_concat(name) FROM sqlite_master WHERE type = 'table'`).Scan(&tables))
+	if tables != "legacy" {
+		t.Errorf("backup tables = %q, want only legacy", tables)
+	}
+	if err := BackupFile(src, dst); err == nil {
+		t.Error("backup over an existing file succeeded")
+	}
+}
+
 // A stalled database must not stop scoring (issue #259): with nothing
 // draining the write queue, every entry still reaches the in-memory hooks
 // and the overflow is counted, not silently lost.

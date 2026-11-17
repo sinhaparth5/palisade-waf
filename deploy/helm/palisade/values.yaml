@@ -35,6 +35,12 @@ extraVolumeMounts: []
 
 persistence:
   enabled: true
+  # Mount a PVC that already exists (an earlier install, another tool)
+  # instead of creating one. size/storageClass/accessMode are then ignored.
+  existingClaim: ""
+  # helm uninstall leaves the PVC (and the database) in place. Delete it on
+  # purpose with: kubectl delete pvc <release>-palisade-data
+  keepOnUninstall: true
   size: 2Gi
   # "" uses the cluster's default StorageClass.
   storageClass: ""
@@ -52,6 +58,13 @@ service:
   loadBalancerSourceRanges: []
 
 containerPort: 8080
+
+# An init container copies waf.db to /data/backups/waf-<UTC time>.db every
+# time the pod starts, before the server (possibly a newer version) opens and
+# migrates it. Needs persistence; each backup is about the size of the DB.
+backup:
+  enabled: true
+  keep: 5
 
 podAnnotations: {}
 podLabels: {}

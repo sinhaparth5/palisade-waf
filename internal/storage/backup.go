@@ -1,5 +1,7 @@
 package storage
 
+import "context"
+
 // ── Backup ───────────────────────────────────────────────────────────────────
 
 // BackupTo writes a consistent, fully-vacuumed copy of the database to path.
@@ -23,5 +25,18 @@ func (db *DB) Vacuum() error {
 		return err
 	}
 	_, err := db.exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+	return err
+}
+
+// BackupFile is BackupTo for a database that isn't open as a store: it skips
+// Open's migrate, so a backup taken by a newer binary before an upgrade holds
+// the old schema, not a half-migrated one.
+func BackupFile(src, dst string) error {
+	conn, err := openSQLite(src)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_, err = conn.ExecContext(context.Background(), `VACUUM INTO ?`, dst)
 	return err
 }

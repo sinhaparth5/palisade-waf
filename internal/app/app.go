@@ -55,6 +55,8 @@ func Run(ctx context.Context, args []string, version string, assets Assets, stdi
 		return err
 	case "prune":
 		err = runPrune(rest)
+	case "backup":
+		err = runBackup(rest, stdout)
 	case "setup":
 		err = runSetup(rest, stdin, stdout)
 	case "config":

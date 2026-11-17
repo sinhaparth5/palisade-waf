@@ -12,3 +12,8 @@ Open the admin UI locally:
 Create the first admin user (password on stdin):
   kubectl -n {{ .Release.Namespace }} exec -i deploy/{{ include "palisade.fullname" . }} -- \
     /palisade setup --db /data/waf.db --admin-email you@example.com
+{{- if and .Values.persistence.enabled .Values.persistence.keepOnUninstall (not .Values.persistence.existingClaim) }}
+
+helm uninstall keeps the data volume. To delete it (and the database) for good:
+  kubectl -n {{ .Release.Namespace }} delete pvc {{ include "palisade.fullname" . }}-data
+{{- end }}
