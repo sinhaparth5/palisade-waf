@@ -25,37 +25,13 @@ import (
 // is served, any other host gets 421, and only the opted-in host's TCP
 // responses advertise Alt-Svc.
 func TestHTTP3PerServiceOptIn(t *testing.T) {
-	db, err := storage.Open(filepath.Join(t.TempDir(), "waf.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	for _, name := range []string{"h3", "h2"} {
-		if err := db.AddService(name, name+".example.com", "", "http://127.0.0.1:1", 0, 0); err != nil {
-			t.Fatal(err)
-		}
-	}
-	list, err := db.ListServices()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, s := range list {
-		if s.Name == "h3" {
-			if err := db.SetServiceHTTP3(s.ID, true); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	reg, err := services.New(db)
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := h3Registry(t)
 
 	e := echo.New()
 	e.Any("/*", func(c *echo.Context) error { return c.String(http.StatusOK, c.Request().Proto) })
 
 	addr := freeUDPAddr(t)
-	srv, err := startHTTP3(e, addr, &tls.Config{Certificates: []tls.Certificate{selfSigned(t)}}, reg)
+	srv, err := startHTTP3(e, addr, 0, &tls.Config{Certificates: []tls.Certificate{selfSigned(t)}}, reg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +74,57 @@ func TestHTTP3PerServiceOptIn(t *testing.T) {
 		if got := rec.Header().Get("Alt-Svc"); got != want {
 			t.Errorf("%s: Alt-Svc = %q, want %q", host, got, want)
 		}
+	}
+}
+
+// h3Registry holds two services, h3.example.com with HTTP/3 on and
+// h2.example.com without.
+func h3Registry(t *testing.T) *services.Registry {
+	t.Helper()
+	db, err := storage.Open(filepath.Join(t.TempDir(), "waf.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	for _, name := range []string{"h3", "h2"} {
+		if err := db.AddService(name, name+".example.com", "", "http://127.0.0.1:1", 0, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := db.ListServices()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range list {
+		if s.Name == "h3" {
+			if err := db.SetServiceHTTP3(s.ID, true); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	reg, err := services.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return reg
+}
+
+// TestHTTP3AdvertisePort: behind a load balancer the UDP port clients use
+// differs from the bound one, and Alt-Svc must name the former.
+func TestHTTP3AdvertisePort(t *testing.T) {
+	e := echo.New()
+	e.Any("/*", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
+	srv, err := startHTTP3(e, freeUDPAddr(t), 443, &tls.Config{Certificates: []tls.Certificate{selfSigned(t)}}, h3Registry(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { srv.Close() })
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "h3.example.com"
+	e.ServeHTTP(rec, req)
+	if got, want := rec.Header().Get("Alt-Svc"), `h3=":443"; ma=86400`; got != want {
+		t.Errorf("Alt-Svc = %q, want %q", got, want)
 	}
 }
 

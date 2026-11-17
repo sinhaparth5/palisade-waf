@@ -41,10 +41,10 @@ make tag VERSION=v1.0.0  # roll CHANGELOG, commit, tag, push -> release workflow
 **CLI flags** — there is no config file; every bootstrap setting is a flag (`serve` in `internal/app/serve.go`), every runtime knob lives in the DB and is edited in the admin UI.
 
 ```
---listen :8080   --listen-tls   --listen-h3 (needs --listen-tls)   --trusted-proxies ip,cidr
+--listen :8080   --listen-tls   --listen-h3 (needs --listen-tls; --h3-advertise-port for Alt-Svc behind a port mapping)   --trusted-proxies ip,cidr
 --trusted-crawlers ua=cidr[,cidr];ua2=ip   --db waf.db
 --certs ./certs   --waf-rules dir   --geo-db path (empty = bundled)   --retention 30 (0 = forever)
---prune-interval 0 (Docker passes 24h)   --tls-cert/--tls-key   --access-log path (+ -max-size-mb, -max-backups)
+--prune-interval 0 (Docker passes 24h)   --tls-cert/--tls-key (reread within a minute of a change, `certFile`)   --access-log path (+ -max-size-mb, -max-backups)
 --db-key-file path (encrypt secrets at rest)
 --admin-allow ip,cidr (who may reach /admin)   --admin-listen addr (plain-HTTP admin-only listener)
 --max-conns-per-ip 256 (concurrent TCP conns per client; 0 = off)

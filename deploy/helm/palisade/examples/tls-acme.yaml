@@ -1,0 +1,22 @@
+# Setup 2: Palisade terminates TLS itself on a LoadBalancer Service and gets
+# Let's Encrypt certificates with its built-in ACME. Point the domain's DNS
+# at the load balancer's IP first; port 80 must stay reachable for renewals.
+#
+#   kubectl -n palisade create secret generic palisade-admin --from-literal=password='at-least-12-characters'
+#   helm install waf ./deploy/helm/palisade -n palisade -f tls-acme.yaml
+admin:
+  email: you@example.com
+  existingSecret: palisade-admin
+tls:
+  acme:
+    # The admin UI's domain. Services get theirs by turning on ACME in the UI.
+    domain: waf.example.com
+  # Optional; needs a load balancer that carries UDP next to TCP.
+  http3: true
+service:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  # GKE: its default load balancer refuses UDP next to TCP; the backend
+  # service-based one carries both. Drop this line without http3.
+  annotations:
+    cloud.google.com/l4-rbs: enabled

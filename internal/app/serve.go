@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -61,6 +62,7 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	listen := fs.String("listen", ":8080", "HTTP listen address")
 	listenTLS := fs.String("listen-tls", "", "HTTPS listen address (empty = HTTP only)")
 	listenH3 := fs.String("listen-h3", "", "HTTP/3 (QUIC) UDP listen address, e.g. :443; needs --listen-tls; services opt in individually (empty = off)")
+	h3Port := fs.Int("h3-advertise-port", 0, "UDP port clients reach HTTP/3 on, sent in Alt-Svc, when a load balancer or port mapping differs from --listen-h3 (0 = the --listen-h3 port)")
 	trustedProxies := fs.String("trusted-proxies", "", "comma-separated trusted proxy IPs or CIDRs for X-Forwarded-For/X-Real-IP")
 	adminAllow := fs.String("admin-allow", "", "comma-separated client IPs or CIDRs that may reach the admin UI, API and metrics; everyone else gets a 404 (empty = any)")
 	adminListen := fs.String("admin-listen", "", "serve the admin UI only on this plain-HTTP address, e.g. 127.0.0.1:9090, and remove it from the public listener (empty = public listener)")
@@ -91,6 +93,10 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	cfg.ListenAddr = *listen
 	cfg.ListenAddrTLS = *listenTLS
 	cfg.ListenAddrH3 = *listenH3
+	if *h3Port < 0 || *h3Port > 65535 {
+		return fmt.Errorf("--h3-advertise-port %d is not a port", *h3Port)
+	}
+	cfg.H3AdvertisePort = *h3Port
 	if cfg.ListenAddrH3 != "" && cfg.ListenAddrTLS == "" {
 		return errors.New("--listen-h3 needs --listen-tls: browsers only discover HTTP/3 from an HTTPS response")
 	}
@@ -672,15 +678,15 @@ func startTLS(ctx context.Context, s *http.Server, e *echo.Echo, cfg *config.Con
 		}
 	}
 
-	// Self-signed fallback cert, used when no per-service/ACME cert matches
-	// (access by IP address, or before ACME provisioning completes).
-	var fallbackCert *tls.Certificate
+	// Fallback cert, used when no per-service/ACME cert matches (access by
+	// IP address, before ACME provisioning completes, or a cert-manager
+	// cert covering every name).
+	var fallbackCert *certFile
 	if cfg.TLS.FallbackCertFile != "" && cfg.TLS.FallbackKeyFile != "" {
-		cert, err := tls.LoadX509KeyPair(cfg.TLS.FallbackCertFile, cfg.TLS.FallbackKeyFile)
-		if err != nil {
+		var err error
+		if fallbackCert, err = loadCertFile(cfg.TLS.FallbackCertFile, cfg.TLS.FallbackKeyFile); err != nil {
 			return fail(fmt.Errorf("load fallback TLS cert: %w", err))
 		}
-		fallbackCert = &cert
 		log.Printf("tls: loaded fallback cert from %s", cfg.TLS.FallbackCertFile)
 	}
 
@@ -730,7 +736,7 @@ func startTLS(ctx context.Context, s *http.Server, e *echo.Echo, cfg *config.Con
 			return am.GetCertificate(hello)
 		}
 		if fallbackCert != nil {
-			return fallbackCert, nil
+			return fallbackCert.get(), nil
 		}
 		return nil, err
 	}
@@ -752,7 +758,7 @@ func startTLS(ctx context.Context, s *http.Server, e *echo.Echo, cfg *config.Con
 	s.TLSConfig = base
 
 	if cfg.ListenAddrH3 != "" {
-		h3, err := startHTTP3(e, cfg.ListenAddrH3, s.TLSConfig, registry)
+		h3, err := startHTTP3(e, cfg.ListenAddrH3, cfg.H3AdvertisePort, s.TLSConfig, registry)
 		if err != nil {
 			return fail(err)
 		}
@@ -780,7 +786,8 @@ func forgetConn(remote string) {
 // startHTTP3 serves the same Echo app over QUIC on addr (UDP). Only services
 // with HTTP/3 enabled are advertised (Alt-Svc on their TCP responses) or
 // accepted; everything else, the admin UI included, stays on HTTP/1.1 and HTTP/2.
-func startHTTP3(e *echo.Echo, addr string, tlsConf *tls.Config, registry *services.Registry) (*http3.Server, error) {
+// Alt-Svc names advertisePort, or the bound port when it is 0.
+func startHTTP3(e *echo.Echo, addr string, advertisePort int, tlsConf *tls.Config, registry *services.Registry) (*http3.Server, error) {
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		return nil, fmt.Errorf("--listen-h3 %q: %w", addr, err)
 	}
@@ -793,6 +800,9 @@ func startHTTP3(e *echo.Echo, addr string, tlsConf *tls.Config, registry *servic
 	listening("h3", conn.LocalAddr())
 
 	_, port, _ := net.SplitHostPort(conn.LocalAddr().String())
+	if advertisePort > 0 {
+		port = strconv.Itoa(advertisePort)
+	}
 	altSvc := fmt.Sprintf(`h3=":%s"; ma=86400`, port)
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {

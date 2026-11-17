@@ -36,10 +36,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 {{- end }}
 
+{{/* "true" when Palisade serves HTTPS itself. */}}
+{{- define "palisade.tls" -}}
+{{- with .Values.tls }}
+{{- if or .enabled .existingSecret .acme.domain .http3 }}true{{ end }}
+{{- end }}
+{{- end }}
+
 {{/* A probe from values; with TLS on, plain HTTP only redirects, so probe HTTPS. */}}
 {{- define "palisade.probe" -}}
 {{- $p := deepCopy .probe }}
-{{- if and .root.Values.tls.existingSecret $p.httpGet }}
+{{- if and (include "palisade.tls" .root) $p.httpGet }}
 {{- $_ := set $p.httpGet "port" "https" }}
 {{- $_ := set $p.httpGet "scheme" "HTTPS" }}
 {{- end }}

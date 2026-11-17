@@ -207,6 +207,7 @@ func TestServeStartupErrors(t *testing.T) {
 	cases := map[string][]string{
 		"unknown flag":       {"--bogus"},
 		"h3 without tls":     {"--listen-h3", ":0"},
+		"h3 advertise port":  {"--h3-advertise-port", "70000"},
 		"admin-allow typo":   {"--admin-allow", "10.0.0.300"},
 		"trusted-crawlers":   {"--trusted-crawlers", "nonsense"},
 		"prune-interval":     {"--prune-interval", "30s"},

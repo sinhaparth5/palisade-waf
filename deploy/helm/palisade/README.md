@@ -16,10 +16,8 @@ Nothing secret goes in `values.yaml`; the chart only takes Secret names.
 
 ```sh
 kubectl -n palisade create secret generic palisade-admin --from-literal=password='at-least-12-characters'
-kubectl -n palisade create secret tls palisade-tls --cert=tls.crt --key=tls.key   # optional
 helm install waf ./deploy/helm/palisade -n palisade \
-  --set admin.email=you@example.com --set admin.existingSecret=palisade-admin \
-  --set tls.existingSecret=palisade-tls
+  --set admin.email=you@example.com --set admin.existingSecret=palisade-admin
 ```
 
 - **DB key** (`--db-key-file`, seals TOTP secrets and webhook/email tokens):
@@ -36,10 +34,8 @@ helm install waf ./deploy/helm/palisade -n palisade \
   ```sh
   kubectl -n palisade exec -i deploy/waf-palisade -- /palisade setup --db /data/waf.db --admin-email you@example.com --reset-password
   ```
-- **TLS** (`tls.existingSecret`, a `kubernetes.io/tls` Secret): serves HTTPS
-  on `tls.containerPort` (service port `service.httpsPort`) with that
-  certificate as the fallback; per-service and ACME certificates still come
-  from the admin UI. Plain HTTP then only redirects and answers ACME.
+- **TLS certificate** (`tls.existingSecret`, a `kubernetes.io/tls` Secret):
+  see [TLS](#tls).
 
 ## Client IP
 
@@ -87,6 +83,62 @@ targets) should send it to an Ingress controller, which reads it
 Traefik entry point) and passes the address on in `X-Forwarded-For`.
 Where the load balancer supports it, `externalTrafficPolicy: Local` without
 PROXY protocol works too.
+
+## TLS
+
+Pick one of three setups. Each has a values file in `examples/`.
+
+|                          | 1. Ingress terminates | 2. Palisade, built-in ACME | 3. Palisade, cert-manager Secret |
+|--------------------------|-----------------------|----------------------------|----------------------------------|
+| Values                   | `tls-ingress.yaml`    | `tls-acme.yaml`            | `tls-cert-manager.yaml`          |
+| Service                  | ClusterIP + Ingress   | LoadBalancer               | LoadBalancer                     |
+| JA4 fingerprints         | no                    | yes                        | yes                              |
+| HTTP/3                   | no                    | yes (`tls.http3`)          | yes (`tls.http3`)                |
+| Per-service mTLS         | no                    | yes                        | yes                              |
+| ACME and uploaded certs from the admin UI | no   | yes                        | yes                              |
+
+**1. The Ingress terminates TLS.** cert-manager issues the certificate for
+the Ingress (`ingress.annotations`), and the controller sends plain HTTP to
+Palisade. Palisade never sees the TLS handshake, so it loses everything that
+comes from it: JA4 fingerprints (and the JA4 reputation built on them),
+HTTP/3, per-service client certificates (mTLS), and certificates managed in
+the admin UI. It still learns that the client used HTTPS from the
+controller's `X-Forwarded-Proto`, so session and hardened service cookies
+keep the `Secure` flag. Set `flags.trusted-proxies` as in
+[Client IP](#client-ip). The chart refuses `ingress.enabled` together with
+Palisade's own TLS: plain HTTP would only redirect, in a loop.
+
+**2. Palisade terminates TLS with its built-in ACME.** `tls.acme.domain` is
+the admin UI's domain; the `setup` init container stores it with the contact
+address on every start. Other services get certificates by turning on ACME
+in the admin UI. Let's Encrypt checks the HTTP-01 challenge on port 80 of
+the Service (the container's 8080), so keep that port reachable from the
+internet, `loadBalancerSourceRanges` included, or issuing and renewing fail.
+Certificates are cached in `/data/certs` on the volume, so a restart doesn't
+issue new ones (Let's Encrypt rate-limits that).
+
+**3. Palisade terminates TLS with a cert-manager certificate.** Point
+`tls.existingSecret` at the Certificate's Secret. Palisade serves it for
+every name that has no ACME or uploaded certificate. When cert-manager
+renews it, the kubelet updates the mounted files (within about a minute) and
+Palisade rereads them at the next check (within another minute), with no
+restart. Don't remount the Secret with `subPath` in `extraVolumeMounts`:
+those mounts never update. Palisade is the edge here, so cert-manager's
+HTTP-01 solver, which routes the challenge through an Ingress, can't answer;
+use a DNS-01 issuer.
+
+In setups 2 and 3, plain HTTP only redirects to HTTPS and answers ACME, and
+the probes switch to HTTPS. Without `tls.existingSecret`, an init container
+makes a self-signed certificate at every start for clients that send no
+server name, such as the kubelet's probes or someone browsing by IP.
+
+**HTTP/3** (`tls.http3: true`) adds a UDP port to the Service with the same
+number as the HTTPS port and advertises it to browsers in `Alt-Svc`
+(`--h3-advertise-port`). Services opt in in the admin UI. The load balancer
+has to carry UDP and TCP on one IP. On GKE that needs the backend
+service-based load balancer (`service.annotations`:
+`cloud.google.com/l4-rbs: enabled`, set when the Service is created);
+the default one refuses the Service with "mixed protocol is not supported".
 
 ## Your data
 

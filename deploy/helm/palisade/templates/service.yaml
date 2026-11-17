@@ -25,11 +25,17 @@ spec:
       port: {{ .Values.service.port }}
       targetPort: http
       protocol: TCP
-    {{- if .Values.tls.existingSecret }}
+    {{- if include "palisade.tls" . }}
     - name: https
       port: {{ .Values.service.httpsPort }}
       targetPort: https
       protocol: TCP
+    {{- if .Values.tls.http3 }}
+    - name: h3
+      port: {{ .Values.service.httpsPort }}
+      targetPort: h3
+      protocol: UDP
+    {{- end }}
     {{- end }}
   selector:
     {{- include "palisade.selectorLabels" . | nindent 4 }}

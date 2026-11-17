@@ -1,0 +1,18 @@
+# Setup 3: Palisade terminates TLS with a certificate cert-manager keeps in a
+# Secret. A renewal is picked up within about two minutes, no restart.
+# Create the Certificate first:
+#
+#   apiVersion: cert-manager.io/v1
+#   kind: Certificate
+#   metadata: {name: palisade-tls, namespace: palisade}
+#   spec:
+#     secretName: palisade-tls
+#     dnsNames: [waf.example.com, shop.example.com]
+#     issuerRef: {kind: ClusterIssuer, name: letsencrypt}
+#
+#   helm install waf ./deploy/helm/palisade -n palisade -f tls-cert-manager.yaml
+tls:
+  existingSecret: palisade-tls
+service:
+  type: LoadBalancer
+  externalTrafficPolicy: Local

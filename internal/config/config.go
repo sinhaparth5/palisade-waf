@@ -10,19 +10,20 @@ package config
 // credentials) are kept for internal wiring; their values come from defaults
 // or the DB, never from a config file.
 type Config struct {
-	Version        string // build version (main.version), shown in the admin UI
-	ListenAddr     string
-	ListenAddrTLS  string
-	ListenAddrH3   string   // UDP address for HTTP/3; empty = off. Per-service opt-in on top.
-	TrustedProxies []string // CIDRs allowed to supply X-Forwarded-For / X-Real-IP
-	Apps           []App    // kept for one-time migration compat; always empty after first boot
-	WAF            WAFConfig
-	TLS            TLSConfig
-	Geo            GeoConfig
-	DB             DBConfig
-	Admin          AdminConfig
-	RateLimit      RateLimitConfig
-	BotProtection  BotProtectionConfig
+	Version         string // build version (main.version), shown in the admin UI
+	ListenAddr      string
+	ListenAddrTLS   string
+	ListenAddrH3    string   // UDP address for HTTP/3; empty = off. Per-service opt-in on top.
+	H3AdvertisePort int      // UDP port named in Alt-Svc; 0 = the ListenAddrH3 port.
+	TrustedProxies  []string // CIDRs allowed to supply X-Forwarded-For / X-Real-IP
+	Apps            []App    // kept for one-time migration compat; always empty after first boot
+	WAF             WAFConfig
+	TLS             TLSConfig
+	Geo             GeoConfig
+	DB              DBConfig
+	Admin           AdminConfig
+	RateLimit       RateLimitConfig
+	BotProtection   BotProtectionConfig
 }
 
 type App struct {

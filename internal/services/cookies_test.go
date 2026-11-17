@@ -31,7 +31,8 @@ func TestHardenCookie(t *testing.T) {
 }
 
 // TestCookieHardeningProxy runs hardening through the registry's proxy:
-// on for one service only, Secure only over TLS, and the stack headers
+// on for one service only, Secure only over HTTPS (direct, or an Ingress
+// that terminated TLS and says so in X-Forwarded-Proto), and the stack headers
 // stripped for every service.
 func TestCookieHardeningProxy(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -60,11 +61,14 @@ func TestCookieHardeningProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	get := func(svc string, overTLS bool) http.Header {
+	get := func(svc, via string) http.Header {
 		h, _ := reg.Proxy(svc)
 		r := httptest.NewRequest(http.MethodGet, "http://"+svc+".example.com/", nil)
-		if overTLS {
+		switch via {
+		case "tls":
 			r.TLS = &tls.ConnectionState{}
+		case "ingress":
+			r.Header.Set("X-Forwarded-Proto", "https")
 		}
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, r)
@@ -72,13 +76,16 @@ func TestCookieHardeningProxy(t *testing.T) {
 	}
 
 	want := []string{"sid=abc; Path=/; Secure; HttpOnly; SameSite=Lax", "theme=dark"}
-	if got := get("shop", true).Values("Set-Cookie"); !slices.Equal(got, want) {
+	if got := get("shop", "tls").Values("Set-Cookie"); !slices.Equal(got, want) {
 		t.Errorf("TLS cookies = %q, want %q", got, want)
 	}
-	if got := get("shop", false).Values("Set-Cookie")[0]; got != "sid=abc; Path=/; HttpOnly; SameSite=Lax" {
+	if got := get("shop", "ingress").Values("Set-Cookie"); !slices.Equal(got, want) {
+		t.Errorf("cookies behind a TLS-terminating ingress = %q, want %q", got, want)
+	}
+	if got := get("shop", "").Values("Set-Cookie")[0]; got != "sid=abc; Path=/; HttpOnly; SameSite=Lax" {
 		t.Errorf("plain-HTTP cookie = %q", got)
 	}
-	plain := get("plain", true)
+	plain := get("plain", "tls")
 	if got := plain.Values("Set-Cookie")[0]; got != "sid=abc; Path=/" {
 		t.Errorf("service with hardening off changed the cookie: %q", got)
 	}

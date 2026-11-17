@@ -35,7 +35,12 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- $backup := and .Values.backup.enabled .Values.persistence.enabled }}
-      {{- if or $backup .Values.admin.email }}
+      {{- $tls := include "palisade.tls" . }}
+      {{- $selfSigned := and $tls (not .Values.tls.existingSecret) }}
+      {{- if and .Values.tls.acme.domain (not .Values.admin.email) }}
+      {{- fail "tls.acme.domain needs admin.email: the setup init container stores it" }}
+      {{- end }}
+      {{- if or $backup .Values.admin.email $selfSigned }}
       initContainers:
       {{- end }}
       {{- if $backup }}
@@ -65,6 +70,10 @@ spec:
             - --db=/data/waf.db
             - --admin-email={{ .Values.admin.email }}
             - --password-file=/etc/palisade/admin/{{ .Values.admin.passwordKey }}
+            {{- with .Values.tls.acme.domain }}
+            - --domain={{ . }}
+            - --acme-email={{ $.Values.tls.acme.email | default $.Values.admin.email }}
+            {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           volumeMounts:
@@ -73,6 +82,23 @@ spec:
             - name: admin
               mountPath: /etc/palisade/admin
               readOnly: true
+      {{- end }}
+      {{- if $selfSigned }}
+        # Fallback certificate for clients without SNI (the kubelet's probes,
+        # access by IP) and names no other certificate covers.
+        - name: tls-cert
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - gencert
+            - --cert=/etc/palisade/tls/tls.crt
+            - --key=/etc/palisade/tls/tls.key
+            - --hosts={{ include "palisade.fullname" . }},{{ include "palisade.fullname" . }}.{{ .Release.Namespace }}.svc
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/palisade/tls
       {{- end }}
       containers:
         - name: palisade
@@ -85,10 +111,14 @@ spec:
             {{- if include "palisade.dbKeySecret" . }}
             - --db-key-file=/etc/palisade/key/{{ .Values.dbKey.secretKey }}
             {{- end }}
-            {{- with .Values.tls.existingSecret }}
-            - --listen-tls=:{{ $.Values.tls.containerPort }}
+            {{- if $tls }}
+            - --listen-tls=:{{ .Values.tls.containerPort }}
             - --tls-cert=/etc/palisade/tls/tls.crt
             - --tls-key=/etc/palisade/tls/tls.key
+            {{- if .Values.tls.http3 }}
+            - --listen-h3=:{{ .Values.tls.containerPort }}
+            - --h3-advertise-port={{ .Values.service.httpsPort }}
+            {{- end }}
             {{- end }}
             {{- range $name, $value := .Values.flags }}
             {{- if or (kindIs "bool" $value) (kindIs "float64" $value) (kindIs "int64" $value) $value }}
@@ -106,10 +136,15 @@ spec:
             - name: http
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
-            {{- if .Values.tls.existingSecret }}
+            {{- if $tls }}
             - name: https
               containerPort: {{ .Values.tls.containerPort }}
               protocol: TCP
+            {{- if .Values.tls.http3 }}
+            - name: h3
+              containerPort: {{ .Values.tls.containerPort }}
+              protocol: UDP
+            {{- end }}
             {{- end }}
           startupProbe:
             {{- include "palisade.probe" (dict "root" . "probe" .Values.startupProbe) | nindent 12 }}
@@ -129,7 +164,7 @@ spec:
               mountPath: /etc/palisade/key
               readOnly: true
             {{- end }}
-            {{- if .Values.tls.existingSecret }}
+            {{- if $tls }}
             - name: tls
               mountPath: /etc/palisade/tls
               readOnly: true
@@ -157,11 +192,16 @@ spec:
             secretName: {{ required "admin.existingSecret is required with admin.email" .Values.admin.existingSecret }}
             defaultMode: 0400
         {{- end }}
-        {{- with .Values.tls.existingSecret }}
+        {{- if .Values.tls.existingSecret }}
         - name: tls
           secret:
-            secretName: {{ . }}
+            secretName: {{ .Values.tls.existingSecret }}
             defaultMode: 0400
+        {{- else if $tls }}
+        - name: tls
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}

@@ -50,12 +50,30 @@ admin:
   existingSecret: ""
   passwordKey: password
 
-# HTTPS with your own certificate (a kubernetes.io/tls Secret). Without it,
-# terminate TLS at the Ingress. Plain HTTP on containerPort then only
-# redirects to HTTPS and answers ACME challenges.
+# HTTPS served by Palisade itself (README.md, "TLS"). Leave it off to
+# terminate TLS at an Ingress instead. Setting any option below turns it on.
+# Plain HTTP on containerPort then only redirects to HTTPS and answers ACME
+# challenges.
 tls:
+  enabled: false
+  # A kubernetes.io/tls Secret (yours, or cert-manager's), served for every
+  # name no uploaded or ACME certificate covers. A renewed Secret is picked
+  # up within about two minutes, no restart. Empty: an init container makes
+  # a self-signed one at every start.
   existingSecret: ""
   containerPort: 8443
+  # Let's Encrypt for the admin UI's domain, stored by the setup init
+  # container (needs admin.email). Services turn ACME on in the admin UI.
+  # Port 80 of the Service must be reachable from the internet, or issuing
+  # and renewing fail. Certificates are kept in /data/certs on the volume.
+  acme:
+    domain: ""
+    # Contact address; defaults to admin.email.
+    email: ""
+  # HTTP/3 (QUIC) on UDP containerPort, advertised to browsers as
+  # service.httpsPort. Services opt in in the admin UI. The load balancer
+  # must carry UDP and TCP on the same IP.
+  http3: false
 
 # Appended after the rendered flags.
 extraArgs: []
@@ -81,7 +99,7 @@ service:
   # ClusterIP behind an Ingress, or LoadBalancer to expose Palisade directly.
   type: ClusterIP
   port: 80
-  # Used when tls.existingSecret is set.
+  # Used with TLS on (TCP, plus UDP for tls.http3).
   httpsPort: 443
   annotations: {}
   # Local keeps the client's source IP on a LoadBalancer/NodePort service.
@@ -90,6 +108,20 @@ service:
   loadBalancerSourceRanges: []
 
 containerPort: 8080
+
+# An Ingress sending every path of these hosts to Palisade, for TLS
+# terminated at the Ingress controller (tls above stays off). Trust the
+# controller in flags.trusted-proxies (README.md, "Client IP").
+ingress:
+  enabled: false
+  className: ""
+  # e.g. cert-manager.io/cluster-issuer: letsencrypt
+  annotations: {}
+  # Every name Palisade serves. Empty: one rule for any host.
+  hosts: []
+  # - secretName: palisade-ingress-tls
+  #   hosts: [waf.example.com]
+  tls: []
 
 # An init container copies waf.db to /data/backups/waf-<UTC time>.db every
 # time the pod starts, before the server (possibly a newer version) opens and

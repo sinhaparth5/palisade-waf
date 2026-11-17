@@ -1,0 +1,18 @@
+# Setup 1: the Ingress controller terminates TLS with a cert-manager
+# certificate; Palisade serves plain HTTP behind it. Gives up JA4, HTTP/3,
+# mTLS and Palisade's own ACME (README.md, "TLS").
+#
+#   helm install waf ./deploy/helm/palisade -n palisade -f tls-ingress.yaml
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+  hosts: [waf.example.com]
+  tls:
+    - secretName: palisade-ingress-tls
+      hosts: [waf.example.com]
+flags:
+  # The pod CIDR, so the controller's X-Forwarded-For is believed
+  # (README.md, "Client IP").
+  trusted-proxies: 10.0.0.0/14
