@@ -96,10 +96,6 @@ func migrateMetaTable(source, target *DB) (int, error) {
 	}
 	defer rows.Close()
 
-	isSecret := make(map[string]bool, len(secretMetaKeys))
-	for _, k := range secretMetaKeys {
-		isSecret[k] = true
-	}
 	removed := make(map[any]bool, len(removedMetaKeys))
 	for _, k := range removedMetaKeys {
 		removed[k] = true
@@ -114,7 +110,7 @@ func migrateMetaTable(source, target *DB) (int, error) {
 		if removed[key] {
 			continue
 		}
-		if isSecret[key] {
+		if isSecretMetaKey(key) {
 			// value may be sealed under the source's own encryption key (or
 			// plaintext if none configured) — decrypt via the source's own
 			// state first, then let the target reseal under whatever key

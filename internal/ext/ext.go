@@ -45,3 +45,12 @@ var Mounts []func(Env) Feature
 // IP or CIDR). They run on the ban's goroutine, so return quickly. Append
 // from a Mount, before traffic starts.
 var OnBan []func(ip, reason string)
+
+// OnLog are called for every request log entry, on the single log worker
+// goroutine, before the DB insert (entry.ID is 0). Queue and return: a slow
+// hook delays bans and logging. Append from a Mount, before traffic starts.
+var OnLog []func(storage.RequestLog)
+
+// OnAudit are called after an audit entry is stored. They run on the
+// request that made the change, so return quickly. Append from a Mount.
+var OnAudit []func(storage.AuditEntry)
