@@ -214,6 +214,14 @@ jobs:
 
           Multi-arch (linux/amd64, linux/arm64). Persistent state (\`waf.db\`, \`certs/\`) lives under \`/data\` — mount a volume there. Also published to Docker Hub.
 
+          ## Kubernetes (Helm)
+
+          \`\`\`bash
+          helm install waf oci://ghcr.io/${{ github.repository_owner }}/charts/palisade --version ${GITHUB_REF_NAME#v} -n palisade --create-namespace
+          \`\`\`
+
+          Or \`helm repo add palisade https://${{ github.repository_owner }}.github.io/${GITHUB_REPOSITORY#*/}\`. Chart docs: [deploy/helm/palisade](https://github.com/${{ github.repository }}/tree/${GITHUB_REF_NAME}/deploy/helm/palisade).
+
           ## Verify checksums
 
           \`\`\`bash
@@ -323,3 +331,61 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.revision=${{ github.sha }}
+
+  helm-chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    # After the image, so the chart never points at a tag that isn't pushed.
+    needs: [docker]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write # gh-pages
+      packages: write # oci://ghcr.io/<owner>/charts
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.22.1
+
+      # Chart version and appVersion both follow the tag (make tag also
+      # writes them into Chart.yaml), so helm upgrade moves both together.
+      - name: Package chart
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          helm package deploy/helm/palisade --version "$VERSION" --app-version "$VERSION" -d out
+
+      - name: Push to GHCR (OCI)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push out/palisade-*.tgz "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts"
+
+      # Classic repo for helm repo add: index.yaml and the packages on the
+      # gh-pages branch, served by GitHub Pages.
+      - name: Publish to GitHub Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if ! git clone --quiet --depth 1 --branch gh-pages "$remote" pages; then
+            git init --quiet -b gh-pages pages
+          fi
+          cp out/palisade-*.tgz pages/
+          url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          if [ -f pages/index.yaml ]; then
+            helm repo index pages --url "$url" --merge pages/index.yaml
+          else
+            helm repo index pages --url "$url"
+          fi
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit --quiet -m "chart ${GITHUB_REF_NAME}"
+          git push --quiet "$remote" HEAD:gh-pages

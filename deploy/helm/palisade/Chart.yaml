@@ -2,9 +2,15 @@ apiVersion: v2
 name: palisade
 description: Palisade WAF and reverse proxy (Coraza + OWASP CRS) with an admin UI
 type: application
-version: 0.1.0
+# Both follow the Palisade release (make tag sets them).
+version: 3.3.4
 appVersion: "3.3.4"
 home: https://github.com/sinhaparth5/palisade-waf
 sources:
   - https://github.com/sinhaparth5/palisade-waf
 keywords: [waf, reverse-proxy, coraza, owasp-crs, security]
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/links: |
+    - name: Chart README
+      url: https://github.com/sinhaparth5/palisade-waf/tree/main/deploy/helm/palisade

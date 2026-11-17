@@ -1,0 +1,65 @@
+name: Helm
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deploy/helm/**'
+      - 'ct.yaml'
+      - 'scripts/helm-upgrade-test.sh'
+      - '.github/workflows/helm.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'deploy/helm/**'
+      - 'ct.yaml'
+      - 'scripts/helm-upgrade-test.sh'
+      - '.github/workflows/helm.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  chart:
+    name: Lint, install and upgrade
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # ct compares against main
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.22.1
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@720270857a28afd41e2426521a7801db09e9b510 # v2.9.0
+
+      - name: helm lint
+        run: helm lint --strict deploy/helm/palisade
+
+      - name: ct lint
+        run: ct lint --config ct.yaml --charts deploy/helm/palisade
+
+      - name: Create kind cluster
+        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+
+      # The chart uses subcommands newer than the last release, so test it
+      # against the image built from this commit.
+      - name: Build image
+        run: |
+          docker build -t palisade:ci .
+          kind load docker-image palisade:ci --name chart-testing
+
+      - name: ct install
+        run: >-
+          ct install --config ct.yaml --charts deploy/helm/palisade
+          --helm-extra-set-args "--set=image.repository=palisade --set=image.tag=ci --set=image.pullPolicy=Never"
+
+      - name: Upgrade from the published chart
+        run: IMAGE=palisade:ci scripts/helm-upgrade-test.sh

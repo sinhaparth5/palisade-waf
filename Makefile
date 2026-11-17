@@ -137,7 +137,9 @@ tag:
 		exit 1; \
 	}
 	sh scripts/roll-changelog.sh $(VERSION)
-	git add CHANGELOG.md
+	sed -i -e 's/^version: .*/version: $(patsubst v%,%,$(VERSION))/' \
+		-e 's/^appVersion: .*/appVersion: "$(patsubst v%,%,$(VERSION))"/' deploy/helm/palisade/Chart.yaml
+	git add CHANGELOG.md deploy/helm/palisade/Chart.yaml
 	git commit -m "release: prepare $(VERSION)"
 	@echo "==> Tagging $(VERSION)"
 	git tag -a $(VERSION) -m "Release $(VERSION)"

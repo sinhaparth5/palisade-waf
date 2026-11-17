@@ -2,13 +2,36 @@
 
 Runs Palisade as one pod with its SQLite database on a PersistentVolumeClaim.
 
+## Install
+
 ```sh
-helm install waf ./deploy/helm/palisade -n palisade --create-namespace
+helm install waf oci://ghcr.io/sinhaparth5/charts/palisade -n palisade --create-namespace
+# or from the classic repository
+helm repo add palisade https://sinhaparth5.github.io/palisade-waf
+helm install waf palisade/palisade -n palisade --create-namespace
 ```
+
+The chart version is the Palisade version, so `--version 3.4.0` installs
+Palisade 3.4.0 and `helm upgrade waf <chart> --version <next>` upgrades both.
+The examples below use `./deploy/helm/palisade` from a checkout; any of the
+three works. `examples/production.yaml` is a starting point for production
+(Ingress with TLS, your own DB key, NetworkPolicy, metrics); the other
+examples cover the TLS setups.
 
 Every `palisade` serve flag is set under `flags:` in `values.yaml`
 (`--trusted-proxies` becomes `flags.trusted-proxies`). Anything else goes in
 `extraArgs`.
+
+### One replica
+
+Palisade keeps its state in one SQLite file on a `ReadWriteOnce` volume, and
+rate limits, autoban, the waiting room and the verdict cache in memory. Two
+pods can't share either, so the chart always runs exactly one, with the
+`Recreate` strategy: an upgrade stops the old pod before the new one starts,
+so requests fail until the new pod is ready (the startup probe). Scale it with CPU instead of
+replicas: with the full CRS on every request, a pod with 8 threads handled
+about 2,600 requests a second in BENCHMARKS.md.
+Running several replicas with shared config is palisade-pro.
 
 ## Secrets
 
@@ -356,13 +379,14 @@ For a copy outside the cluster:
 
 ```sh
 kubectl -n palisade exec deploy/waf-palisade -- /palisade backup --db /data/waf.db --out /data/manual.db
-kubectl -n palisade exec deploy/waf-palisade -- /palisade config export --db /data/waf.db > palisade-config.json
+kubectl -n palisade exec deploy/waf-palisade -- /palisade config export --db /data/waf.db --db-key-file /etc/palisade/key/db.key > palisade-config.json
 ```
 
 The image has no shell, so `kubectl cp` doesn't work against it. `config
 export` writes to stdout and needs no shell. It holds the configuration
-(services, rules, users, keys) but not the request logs. Add
-`--db-key-file` if you run with one, or sealed secrets can't be read.
+(services, rules, users, keys) but not the request logs, with secrets sealed
+under the DB key. The chart always runs with a key, and `config export`
+without it fails.
 
 ### Restoring a backup
 
@@ -391,3 +415,43 @@ kubectl -n palisade apply -f db-key.yaml
 kubectl -n palisade exec -i deploy/waf-palisade -- /palisade config import --db /data/waf.db --db-key-file /etc/palisade/key/db.key --replace /dev/stdin < palisade-config.json
 kubectl -n palisade rollout restart deploy/waf-palisade
 ```
+
+### Migrating from Docker or the systemd install
+
+Copy the database and, if there is one, the DB key onto the new release.
+
+```sh
+# 1. A consistent copy of the database; safe while the old server runs.
+sudo palisade backup --db /var/lib/palisade/waf.db --out waf.db                       # systemd
+docker exec palisade /palisade backup --db /data/waf.db --out /data/migrate.db \
+  && docker cp palisade:/data/migrate.db waf.db                                      # Docker
+
+# 2. The old key, so sealed secrets (TOTP, webhook and email tokens) still open.
+#    systemd always has one at /etc/palisade/db.key; Docker only with --db-key-file.
+kubectl create namespace palisade
+kubectl -n palisade create secret generic palisade-db-key --from-file=db.key=/etc/palisade/db.key
+
+# 3. Install with that key, stop the pod and copy the files onto the volume.
+helm install waf oci://ghcr.io/sinhaparth5/charts/palisade -n palisade \
+  --set dbKey.existingSecret=palisade-db-key --wait
+kubectl -n palisade scale deploy/waf-palisade --replicas 0
+kubectl -n palisade run copy --restart Never --image busybox:1.37 \
+  --overrides '{"spec":{"securityContext":{"runAsUser":65532,"runAsGroup":65532},
+    "volumes":[{"name":"d","persistentVolumeClaim":{"claimName":"waf-palisade-data"}}],
+    "containers":[{"name":"copy","image":"busybox:1.37","command":["sleep","600"],
+    "volumeMounts":[{"name":"d","mountPath":"/data"}]}]}}'
+kubectl -n palisade wait --for condition=Ready pod/copy
+kubectl -n palisade cp waf.db copy:/data/waf.db
+kubectl -n palisade cp /var/lib/palisade/certs copy:/data/certs    # systemd, if you uploaded certificates
+kubectl -n palisade exec copy -- rm -f /data/waf.db-wal /data/waf.db-shm
+kubectl -n palisade delete pod copy
+kubectl -n palisade scale deploy/waf-palisade --replicas 1
+```
+
+Without a key on the old install, skip step 2 and leave `dbKey` alone: the
+chart creates a key and seals the secrets with it on first start. Users,
+services, rules and the request log all come across. Certificates uploaded
+in the admin UI are found again under `/data/certs` when that directory is
+copied; ACME certificates are issued again if it isn't. Point DNS (or the
+load balancer) at the new Service once the admin UI shows your services, and
+set `flags.trusted-proxies` for the new setup ([Client IP](#client-ip)).

@@ -1,0 +1,5 @@
+# chart-testing (helm.yml). Releases set the chart version, so PRs don't bump it.
+chart-dirs: [deploy/helm]
+target-branch: main
+validate-maintainers: false
+check-version-increment: false

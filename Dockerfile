@@ -15,6 +15,9 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifi
 COPY --from=builder /palisade /palisade
 COPY --from=builder --chown=65532:65532 /rootfs/ /
 ENV TMPDIR=/data
+# Uploaded certificates go to certs/services/ relative to the working
+# directory, which must be on the volume like it is under systemd.
+WORKDIR /data
 VOLUME ["/data"]
 # Non-root (issue #274). :8080 needs no capability; to listen on 80/443 map
 # the ports (-p 443:8443 with --listen-tls :8443) or add

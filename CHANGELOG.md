@@ -24,6 +24,8 @@ rather than growing this file forever.
 - (#335) Prometheus ServiceMonitor and Grafana dashboard
 - (#336) Write the access log to stdout for kubectl logs and log shippers
 - (#337) Declarative config for GitOps: import a config file on install
+- (#338) Publish the Helm chart with each release and test it in CI
+- (#339) Kubernetes and Helm documentation
 
 ## [3.3.4] - 2026-11-14
 

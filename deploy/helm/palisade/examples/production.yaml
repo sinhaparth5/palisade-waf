@@ -1,0 +1,50 @@
+# A production starting point: behind ingress-nginx with TLS at the
+# Ingress, your own DB key, admin UI only through a port-forward, metrics and
+# access logs on (README.md). Create the Secrets first:
+#
+#   kubectl -n palisade create secret generic palisade-admin --from-literal=password='...'
+#   kubectl -n palisade create secret generic palisade-db-key --from-literal=db.key="$(openssl rand -hex 32)"
+#   helm install waf oci://ghcr.io/sinhaparth5/charts/palisade -n palisade -f production.yaml
+admin:
+  email: you@example.com
+  existingSecret: palisade-admin
+dbKey:
+  # Back this Secret up with the volume.
+  existingSecret: palisade-db-key
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+  hosts: [shop.example.com, api.example.com]
+  tls:
+    - secretName: palisade-ingress-tls
+      hosts: [shop.example.com, api.example.com]
+flags:
+  # The pod CIDR, so the controller's X-Forwarded-For is believed.
+  trusted-proxies: 10.0.0.0/14
+  retention: 30
+persistence:
+  # The database grows with the request log; size it for retention.
+  size: 10Gi
+  storageClass: ""
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    memory: 2Gi
+accessLog:
+  stdout: true
+networkPolicy:
+  enabled: true
+  publicFrom:
+    - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+metrics:
+  serviceMonitor:
+    enabled: true
+    existingSecret: palisade-metrics
+    labels: {release: kube-prometheus-stack}
+  prometheusRule:
+    enabled: true
+    labels: {release: kube-prometheus-stack}
