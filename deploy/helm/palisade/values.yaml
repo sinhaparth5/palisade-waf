@@ -1,0 +1,109 @@
+# Palisade keeps its state in one SQLite file plus in-memory counters, so the
+# chart runs exactly one pod. Scaling out needs palisade-pro.
+
+image:
+  repository: ghcr.io/sinhaparth5/palisade-waf
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Serve flags, rendered as --name=value (palisade --help lists them all).
+# Empty values are skipped. --db, --certs and --listen are set by the chart
+# so everything lands on the persistent volume.
+flags:
+  retention: 30
+  # No cron in the pod, so prune request logs in-process.
+  prune-interval: 24h
+  max-conns-per-ip: 256
+  trusted-proxies: ""
+  trusted-crawlers: ""
+  admin-allow: ""
+  waf-rules: ""
+  geo-db: ""
+  access-log: ""
+  db-key-file: ""
+
+# Appended after the rendered flags.
+extraArgs: []
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []
+
+persistence:
+  enabled: true
+  size: 2Gi
+  # "" uses the cluster's default StorageClass.
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  annotations: {}
+
+service:
+  # ClusterIP behind an Ingress, or LoadBalancer to expose Palisade directly.
+  type: ClusterIP
+  port: 80
+  annotations: {}
+  # Local keeps the client's source IP on a LoadBalancer/NodePort service.
+  externalTrafficPolicy: ""
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+
+containerPort: 8080
+
+podAnnotations: {}
+podLabels: {}
+
+# Matches the image: UID/GID 65532, read-only root, every write goes to /data.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+
+# Palisade drains in-flight requests for 10s on SIGTERM.
+terminationGracePeriodSeconds: 30
+
+# The first boot builds the CRS engines and creates the DB; give it time.
+startupProbe:
+  httpGet:
+    path: /_cz/readyz
+    port: http
+  periodSeconds: 5
+  failureThreshold: 60
+livenessProbe:
+  httpGet:
+    path: /_cz/healthz
+    port: http
+  periodSeconds: 20
+  timeoutSeconds: 3
+  failureThreshold: 3
+readinessProbe:
+  httpGet:
+    path: /_cz/readyz
+    port: http
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

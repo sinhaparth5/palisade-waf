@@ -1,0 +1,10 @@
+apiVersion: v2
+name: palisade
+description: Palisade WAF and reverse proxy (Coraza + OWASP CRS) with an admin UI
+type: application
+version: 0.1.0
+appVersion: "3.3.4"
+home: https://github.com/sinhaparth5/palisade-waf
+sources:
+  - https://github.com/sinhaparth5/palisade-waf
+keywords: [waf, reverse-proxy, coraza, owasp-crs, security]

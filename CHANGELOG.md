@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#328) Helm chart: single-replica deployment with a persistent /data volume
+
 ## [3.3.4] - 2026-11-14
 
 - Add `--demo` mode and a self-resetting public demo stack served over HTTPS with Caddy

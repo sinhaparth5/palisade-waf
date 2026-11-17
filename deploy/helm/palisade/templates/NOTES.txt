@@ -1,0 +1,14 @@
+Palisade {{ .Values.image.tag | default .Chart.AppVersion }} is installed as {{ include "palisade.fullname" . }}.
+{{- if not .Values.persistence.enabled }}
+
+WARNING: persistence.enabled=false. The database lives in an emptyDir and is
+lost every time the pod is recreated, including on helm upgrade.
+{{- end }}
+
+Open the admin UI locally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "palisade.fullname" . }} 8080:{{ .Values.service.port }}
+  then http://127.0.0.1:8080/admin
+
+Create the first admin user (password on stdin):
+  kubectl -n {{ .Release.Namespace }} exec -i deploy/{{ include "palisade.fullname" . }} -- \
+    /palisade setup --db /data/waf.db --admin-email you@example.com
