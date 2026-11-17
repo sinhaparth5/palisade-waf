@@ -1,0 +1,19 @@
+{{- with .Values.metrics.dashboard }}
+{{- if .enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "palisade.fullname" $ }}-dashboard
+  namespace: {{ .namespace | default $.Release.Namespace }}
+  labels:
+    {{- include "palisade.labels" $ | nindent 4 }}
+    {{- toYaml .labels | nindent 4 }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  palisade.json: |
+{{ $.Files.Get "files/grafana-dashboard.json" | indent 4 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,45 @@
+{{- with .Values.metrics.prometheusRule }}
+{{- if .enabled }}
+{{- $sel := printf "namespace=%q, job=%q" $.Release.Namespace (include "palisade.metricsService" $) }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "palisade.fullname" $ }}
+  labels:
+    {{- include "palisade.labels" $ | nindent 4 }}
+    {{- with .labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: palisade
+      rules:
+        - alert: PalisadeDown
+          expr: up{ {{- $sel -}} } == 0 or absent(up{ {{- $sel -}} })
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Palisade in {{ $.Release.Namespace }} is not being scraped
+            description: The pod is down, or Prometheus can't reach the admin port or use the API key.
+        - alert: PalisadeBlockRateHigh
+          expr: |
+            sum(rate({__name__=~"palisade_(waf|ip|geo)_blocked_total|palisade_rate_limited_total", {{ $sel }}}[10m]))
+              / sum(rate(palisade_http_requests_total{ {{- $sel -}} }[10m])) > {{ .blockRatio }}
+            and sum(rate(palisade_http_requests_total{ {{- $sel -}} }[10m])) > {{ .minRate }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Palisade is blocking {{ "{{" }} $value | humanizePercentage {{ "}}" }} of requests
+            description: An attack, or a rule or ban catching real traffic. Check the request log.
+        - alert: PalisadeBackendDown
+          expr: palisade_backend_up{ {{- $sel -}} } == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Backend {{ "{{" }} $labels.backend {{ "}}" }} of {{ "{{" }} $labels.app {{ "}}" }} is down
+            description: Palisade took it out of rotation. Check the backend and its health path.
+{{- end }}
+{{- end }}

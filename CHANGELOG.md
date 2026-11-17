@@ -21,6 +21,7 @@ rather than growing this file forever.
 - (#332) TLS options on Kubernetes: Ingress termination, built-in ACME, cert-manager
 - (#333) Separate admin Service and NetworkPolicy in the Helm chart
 - (#334) Optional Varnish sidecar in the Helm chart
+- (#335) Prometheus ServiceMonitor and Grafana dashboard
 
 ## [3.3.4] - 2026-11-14
 

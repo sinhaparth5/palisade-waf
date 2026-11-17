@@ -41,3 +41,8 @@ secrets can't be read without it. helm uninstall keeps it.
 helm uninstall keeps the data volume. To delete it (and the database) for good:
   kubectl -n {{ .Release.Namespace }} delete pvc {{ include "palisade.fullname" . }}-data
 {{- end }}
+{{- if .Values.metrics.serviceMonitor.enabled }}
+
+Prometheus scrapes /admin/api/v1/metrics with the API key in Secret
+{{ .Values.metrics.serviceMonitor.existingSecret }}.
+{{- end }}

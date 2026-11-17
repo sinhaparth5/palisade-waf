@@ -90,3 +90,8 @@ spec:
       {{- end }}
     {{- end }}
 {{- end }}
+
+{{/* The Service Prometheus scrapes: the admin one, or the public one with admin.port 0. Also the job label. */}}
+{{- define "palisade.metricsService" -}}
+{{- include "palisade.fullname" . }}{{ if .Values.admin.port }}-admin{{ end }}
+{{- end }}

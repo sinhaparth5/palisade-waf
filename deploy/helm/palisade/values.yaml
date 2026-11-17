@@ -212,7 +212,7 @@ varnish:
   # plus about 100Mi for varnishd itself.
   size: 256m
   # The image's varnish user. Root filesystem read-only; the working
-  # directory is an in-memory emptyDir.
+  # directory is an emptyDir.
   securityContext:
     runAsUser: 1000
     runAsGroup: 1000
@@ -226,6 +226,40 @@ varnish:
       memory: 320Mi
     limits:
       memory: 512Mi
+
+# Prometheus Operator and Grafana (README.md, "Metrics"). Prometheus scrapes
+# /admin/api/v1/metrics on the admin port with a read-only API key.
+metrics:
+  serviceMonitor:
+    enabled: false
+    # Secret in the release namespace holding the API key (Settings, API
+    # keys, read-only): kubectl create secret generic palisade-metrics
+    # --from-literal=token=cwaf_...
+    existingSecret: ""
+    secretKey: token
+    interval: 30s
+    scrapeTimeout: 10s
+    # Labels your Prometheus selects ServiceMonitors by, e.g.
+    # release: kube-prometheus-stack.
+    labels: {}
+  # Dashboard ConfigMap for the Grafana sidecar (grafana_dashboard: "1").
+  # The dashboard is files/grafana-dashboard.json.
+  dashboard:
+    enabled: false
+    # Where the sidecar looks; empty: the release namespace.
+    namespace: ""
+    labels:
+      grafana_dashboard: "1"
+    # e.g. grafana_folder: Palisade
+    annotations: {}
+  # Alerts: pod down, block rate spike, backend down.
+  prometheusRule:
+    enabled: false
+    labels: {}
+    # Share of requests blocked or rate limited, over 10 minutes.
+    blockRatio: 0.5
+    # Below this many requests per second the block ratio doesn't alert.
+    minRate: 1
 
 # Limits who can reach the pod. Needs a CNI that enforces NetworkPolicy
 # (GKE Dataplane V2, Calico, Cilium). kubectl port-forward is not affected.

@@ -240,6 +240,56 @@ ratio from the request log works. For Varnish's own counters:
 kubectl -n palisade exec deploy/waf-palisade -c varnish -- varnishstat -1 -f MAIN.cache_hit -f MAIN.cache_miss
 ```
 
+## Metrics
+
+With the [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack)
+(Prometheus Operator and Grafana) in the cluster, the chart can add a
+ServiceMonitor, a Grafana dashboard and alerts. Prometheus scrapes
+`/admin/api/v1/metrics` on the admin port with an API key:
+
+1. In the admin UI, Settings → API keys, create a read-only key.
+2. Store it in the release namespace:
+
+   ```sh
+   kubectl -n palisade create secret generic palisade-metrics --from-literal=token=cwaf_...
+   ```
+
+3. Turn it on (`release` is the label kube-prometheus-stack selects
+   ServiceMonitors and rules by: its own release name):
+
+   ```yaml
+   metrics:
+     serviceMonitor:
+       enabled: true
+       existingSecret: palisade-metrics
+       labels: {release: kube-prometheus-stack}
+     dashboard:
+       enabled: true
+     prometheusRule:
+       enabled: true
+       labels: {release: kube-prometheus-stack}
+   ```
+
+A replaced key in the Secret reaches Prometheus within a few minutes,
+when the operator next syncs it; no restart needed.
+
+The dashboard (`files/grafana-dashboard.json`) shows traffic, blocks by
+stage, latency per pipeline stage, the WAF verdict cache, body inspection,
+the request log queue, backend health and Varnish results. Its ConfigMap
+carries `grafana_dashboard: "1"`, which Grafana's dashboard sidecar picks
+up; if the sidecar only watches its own namespace, set
+`metrics.dashboard.namespace` to it. Without the sidecar, import the JSON
+file in Grafana (Dashboards → New → Import).
+
+The alerts: `PalisadeDown` (no successful scrape for 5 minutes, which also
+catches a wrong key), `PalisadeBlockRateHigh` (more than `blockRatio` of
+requests blocked or rate limited for 10 minutes, at over `minRate`
+requests per second) and `PalisadeBackendDown` (a backend out of rotation
+for 5 minutes).
+
+With `networkPolicy.enabled`, add Prometheus's namespace to `adminFrom`;
+with `admin.allow`, add the pod CIDR Prometheus runs in.
+
 ## Your data
 
 Everything Palisade stores lives in `/data` on the PVC `<release>-palisade-data`:
