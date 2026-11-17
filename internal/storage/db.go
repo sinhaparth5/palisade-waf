@@ -46,6 +46,7 @@ type DB struct {
 	autobanFn     func(RequestLog)
 	threatScoreFn func(RequestLog)
 	accessLogFn   func(RequestLog)
+	auditFn       func(AuditEntry)
 	secretGCM     cipher.AEAD // non-nil = secrets-at-rest encryption active (see secretenc.go)
 	bg            sync.WaitGroup
 }

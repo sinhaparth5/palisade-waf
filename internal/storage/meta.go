@@ -99,3 +99,14 @@ func (db *DB) GetExtSetting(key string) (string, error) { return db.getMeta("ext
 
 // SetExtSetting stores a setting for GetExtSetting.
 func (db *DB) SetExtSetting(key, value string) error { return db.setMeta("ext:"+key, value) }
+
+// GetExtSecret is GetExtSetting for a secret: sealed under --db-key-file at
+// rest and left out of unsealed config exports.
+func (db *DB) GetExtSecret(key string) (string, error) {
+	return db.getSecretMeta(extSecretPrefix + key)
+}
+
+// SetExtSecret stores a secret for GetExtSecret.
+func (db *DB) SetExtSecret(key, value string) error {
+	return db.setSecretMeta(extSecretPrefix+key, value)
+}

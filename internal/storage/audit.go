@@ -19,11 +19,21 @@ type AuditEntry struct {
 // retention would be too short to investigate anything.
 const AuditRetentionDays = 365
 
+// SetAuditFn registers a callback invoked after each stored audit entry
+// (with TS set), without coupling storage to its consumers.
+func (db *DB) SetAuditFn(fn func(AuditEntry)) {
+	db.auditFn = fn
+}
+
 func (db *DB) InsertAudit(e AuditEntry) error {
+	e.TS = time.Now().UTC()
 	_, err := db.exec(
 		`INSERT INTO audit_log (ts, actor, ip, action, target, summary) VALUES (?, ?, ?, ?, ?, ?)`,
-		time.Now().UTC(), e.Actor, e.IP, e.Action, e.Target, e.Summary,
+		e.TS, e.Actor, e.IP, e.Action, e.Target, e.Summary,
 	)
+	if err == nil && db.auditFn != nil {
+		db.auditFn(e)
+	}
 	return err
 }
 
