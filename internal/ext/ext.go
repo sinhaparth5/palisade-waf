@@ -54,3 +54,12 @@ var OnBan []func(ip, reason string)
 // handled connection is the hook's responsibility. Set it from a Mount,
 // before traffic starts. Outbound clients (webhooks, JWKS, HIBP) never use it.
 var Dial func(ctx context.Context, network, addr string) (conn net.Conn, handled bool, err error)
+
+// OnLog are called for every request log entry, on the single log worker
+// goroutine, before the DB insert (entry.ID is 0). Queue and return: a slow
+// hook delays bans and logging. Append from a Mount, before traffic starts.
+var OnLog []func(storage.RequestLog)
+
+// OnAudit are called after an audit entry is stored. They run on the
+// request that made the change, so return quickly. Append from a Mount.
+var OnAudit []func(storage.AuditEntry)

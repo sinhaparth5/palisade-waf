@@ -311,14 +311,29 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	// nginx-style access.log for tooling that expects one (fail2ban, log
 	// shippers). Deferred after db.Close() (registered above), so LIFO
 	// closes it *before* the DB while runLogWorker drains the queue.
+	// The same hook feeds ext.OnLog (log shipping in add-ons).
+	var accessLogPush func(storage.RequestLog)
 	if *accessLogPath != "" {
 		accessLogWriter, err := accesslog.New(*accessLogPath, *accessLogMaxSizeMB, *accessLogMaxBackups)
 		if err != nil {
 			return fmt.Errorf("access log: %w", err)
 		}
 		defer accessLogWriter.Close()
-		db.SetAccessLogFn(accessLogWriter.Push)
+		accessLogPush = accessLogWriter.Push
 	}
+	db.SetAccessLogFn(func(e storage.RequestLog) {
+		if accessLogPush != nil {
+			accessLogPush(e)
+		}
+		for _, f := range ext.OnLog {
+			f(e)
+		}
+	})
+	db.SetAuditFn(func(e storage.AuditEntry) {
+		for _, f := range ext.OnAudit {
+			f(e)
+		}
+	})
 
 	// Bot protection settings come entirely from the DB (managed via Settings page).
 	botEnabled, botThreshold, botTTL, _ := db.GetBotSettings()

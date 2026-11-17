@@ -62,3 +62,13 @@ func TestListAuditPages(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditFn(t *testing.T) {
+	db := openTestDB(t)
+	var got []AuditEntry
+	db.SetAuditFn(func(e AuditEntry) { got = append(got, e) })
+	mustNoErr(t, db.InsertAudit(AuditEntry{Actor: "admin", Action: "POST /x"}))
+	if len(got) != 1 || got[0].Action != "POST /x" || got[0].TS.IsZero() {
+		t.Fatalf("audit hook got %+v", got)
+	}
+}

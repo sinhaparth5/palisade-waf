@@ -84,7 +84,7 @@ func (db *DB) ExportConfig(w io.Writer) error {
 	// Anything not sealed is plaintext: leave it out.
 	unsealed := func(v any) bool { s, _ := v.(string); return s != "" && !strings.HasPrefix(s, secretPrefix) }
 	for _, row := range out.Tables["meta"] {
-		if k, _ := row["key"].(string); slices.Contains(secretMetaKeys, k) && unsealed(row["value"]) {
+		if k, _ := row["key"].(string); isSecretMetaKey(k) && unsealed(row["value"]) {
 			row["value"] = ""
 		}
 	}
