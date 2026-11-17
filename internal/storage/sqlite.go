@@ -9,9 +9,11 @@ import (
 )
 
 // openSQLite opens the database file at path. PRAGMAs go in the DSN, not an
-// Exec: only DSN params reach every pooled connection.
+// Exec: only DSN params reach every pooled connection. _txlock=immediate makes
+// BeginTx take the write lock up front: a deferred tx that reads first can't
+// upgrade once another connection has written (SQLITE_BUSY, no busy_timeout).
 func openSQLite(path string) (*sql.DB, error) {
-	conn, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)")
+	conn, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}
