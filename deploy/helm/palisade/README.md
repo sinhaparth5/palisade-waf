@@ -10,6 +10,37 @@ Every `palisade` serve flag is set under `flags:` in `values.yaml`
 (`--trusted-proxies` becomes `flags.trusted-proxies`). Anything else goes in
 `extraArgs`.
 
+## Secrets
+
+Nothing secret goes in `values.yaml`; the chart only takes Secret names.
+
+```sh
+kubectl -n palisade create secret generic palisade-admin --from-literal=password='at-least-12-characters'
+kubectl -n palisade create secret tls palisade-tls --cert=tls.crt --key=tls.key   # optional
+helm install waf ./deploy/helm/palisade -n palisade \
+  --set admin.email=you@example.com --set admin.existingSecret=palisade-admin \
+  --set tls.existingSecret=palisade-tls
+```
+
+- **DB key** (`--db-key-file`, seals TOTP secrets and webhook/email tokens):
+  the chart creates `<release>-palisade-db-key` on first install, copies it
+  forward on every upgrade and keeps it on uninstall. Back it up with the
+  volume; without it those secrets can't be read. To bring your own, create a
+  Secret with at least 32 bytes (`openssl rand -hex 32`) and set
+  `dbKey.existingSecret`. Do that with Argo CD or `helm template`, which
+  can't see the cluster and would render a new key each time.
+- **First admin**: the `setup` init container creates `admin.email` as owner
+  with the password from `admin.existingSecret`, only while the database has
+  no admin. Changing the Secret later does nothing. Reset a password by hand:
+
+  ```sh
+  kubectl -n palisade exec -i deploy/waf-palisade -- /palisade setup --db /data/waf.db --admin-email you@example.com --reset-password
+  ```
+- **TLS** (`tls.existingSecret`, a `kubernetes.io/tls` Secret): serves HTTPS
+  on `tls.containerPort` (service port `service.httpsPort`) with that
+  certificate as the fallback; per-service and ACME certificates still come
+  from the admin UI. Plain HTTP then only redirects and answers ACME.
+
 ## Your data
 
 Everything Palisade stores lives in `/data` on the PVC `<release>-palisade-data`:
@@ -63,9 +94,11 @@ first, so the older binary doesn't open a database migrated by the newer one.
 ### Moving to another cluster
 
 ```sh
-# old cluster
-kubectl -n palisade exec deploy/waf-palisade -- /palisade config export --db /data/waf.db > palisade-config.json
-# new cluster, after helm install
-kubectl -n palisade exec -i deploy/waf-palisade -- /palisade config import --db /data/waf.db --replace /dev/stdin < palisade-config.json
+# old cluster (secrets stay sealed under the DB key)
+kubectl -n palisade exec deploy/waf-palisade -- /palisade config export --db /data/waf.db --db-key-file /etc/palisade/key/db.key > palisade-config.json
+kubectl -n palisade get secret waf-palisade-db-key -o yaml > db-key.yaml
+# new cluster: create the key first so the chart reuses it, then helm install
+kubectl -n palisade apply -f db-key.yaml
+kubectl -n palisade exec -i deploy/waf-palisade -- /palisade config import --db /data/waf.db --db-key-file /etc/palisade/key/db.key --replace /dev/stdin < palisade-config.json
 kubectl -n palisade rollout restart deploy/waf-palisade
 ```

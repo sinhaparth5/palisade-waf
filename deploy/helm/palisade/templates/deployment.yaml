@@ -34,8 +34,11 @@ spec:
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- if and .Values.backup.enabled .Values.persistence.enabled }}
+      {{- $backup := and .Values.backup.enabled .Values.persistence.enabled }}
+      {{- if or $backup .Values.admin.email }}
       initContainers:
+      {{- end }}
+      {{- if $backup }}
         # Runs the new image before the new server starts, so the copy is of
         # the old schema. A first install has no DB yet and skips.
         - name: backup
@@ -52,6 +55,25 @@ spec:
             - name: data
               mountPath: /data
       {{- end }}
+      {{- if .Values.admin.email }}
+        # Creates the first owner; a no-op once any admin exists.
+        - name: setup
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - setup
+            - --db=/data/waf.db
+            - --admin-email={{ .Values.admin.email }}
+            - --password-file=/etc/palisade/admin/{{ .Values.admin.passwordKey }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: admin
+              mountPath: /etc/palisade/admin
+              readOnly: true
+      {{- end }}
       containers:
         - name: palisade
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -60,6 +82,14 @@ spec:
             - --db=/data/waf.db
             - --certs=/data/certs
             - --listen=:{{ .Values.containerPort }}
+            {{- if include "palisade.dbKeySecret" . }}
+            - --db-key-file=/etc/palisade/key/{{ .Values.dbKey.secretKey }}
+            {{- end }}
+            {{- with .Values.tls.existingSecret }}
+            - --listen-tls=:{{ $.Values.tls.containerPort }}
+            - --tls-cert=/etc/palisade/tls/tls.crt
+            - --tls-key=/etc/palisade/tls/tls.key
+            {{- end }}
             {{- range $name, $value := .Values.flags }}
             {{- if or (kindIs "bool" $value) (kindIs "float64" $value) (kindIs "int64" $value) $value }}
             - {{ printf "--%s=%v" $name $value | quote }}
@@ -76,12 +106,17 @@ spec:
             - name: http
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
+            {{- if .Values.tls.existingSecret }}
+            - name: https
+              containerPort: {{ .Values.tls.containerPort }}
+              protocol: TCP
+            {{- end }}
           startupProbe:
-            {{- toYaml .Values.startupProbe | nindent 12 }}
+            {{- include "palisade.probe" (dict "root" . "probe" .Values.startupProbe) | nindent 12 }}
           livenessProbe:
-            {{- toYaml .Values.livenessProbe | nindent 12 }}
+            {{- include "palisade.probe" (dict "root" . "probe" .Values.livenessProbe) | nindent 12 }}
           readinessProbe:
-            {{- toYaml .Values.readinessProbe | nindent 12 }}
+            {{- include "palisade.probe" (dict "root" . "probe" .Values.readinessProbe) | nindent 12 }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           resources:
@@ -89,6 +124,16 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            {{- if include "palisade.dbKeySecret" . }}
+            - name: db-key
+              mountPath: /etc/palisade/key
+              readOnly: true
+            {{- end }}
+            {{- if .Values.tls.existingSecret }}
+            - name: tls
+              mountPath: /etc/palisade/tls
+              readOnly: true
+            {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -100,6 +145,24 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- with include "palisade.dbKeySecret" . }}
+        - name: db-key
+          secret:
+            secretName: {{ . }}
+            defaultMode: 0400
+        {{- end }}
+        {{- if .Values.admin.email }}
+        - name: admin
+          secret:
+            secretName: {{ required "admin.existingSecret is required with admin.email" .Values.admin.existingSecret }}
+            defaultMode: 0400
+        {{- end }}
+        {{- with .Values.tls.existingSecret }}
+        - name: tls
+          secret:
+            secretName: {{ . }}
+            defaultMode: 0400
+        {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -25,7 +25,34 @@ flags:
   waf-rules: ""
   geo-db: ""
   access-log: ""
-  db-key-file: ""
+
+# Key that seals stored secrets (TOTP, webhook and email tokens) in waf.db,
+# passed as --db-key-file. Losing it makes those secrets unreadable.
+dbKey:
+  # Use your own Secret (at least 32 bytes, e.g. openssl rand -hex 32).
+  # Required with GitOps tools that can't run Helm's lookup (Argo CD).
+  existingSecret: ""
+  secretKey: db.key
+  # Without existingSecret the chart creates <release>-palisade-db-key once,
+  # reuses it on every upgrade and leaves it behind on uninstall, next to
+  # the volume it belongs to.
+  create: true
+
+# First owner account, created by an init container running palisade setup
+# when the DB has no admin yet. An existing admin is never changed; reset a
+# password with palisade setup --reset-password (see README.md).
+admin:
+  email: ""
+  # Secret holding the password (12+ characters).
+  existingSecret: ""
+  passwordKey: password
+
+# HTTPS with your own certificate (a kubernetes.io/tls Secret). Without it,
+# terminate TLS at the Ingress. Plain HTTP on containerPort then only
+# redirects to HTTPS and answers ACME challenges.
+tls:
+  existingSecret: ""
+  containerPort: 8443
 
 # Appended after the rendered flags.
 extraArgs: []
@@ -51,6 +78,8 @@ service:
   # ClusterIP behind an Ingress, or LoadBalancer to expose Palisade directly.
   type: ClusterIP
   port: 80
+  # Used when tls.existingSecret is set.
+  httpsPort: 443
   annotations: {}
   # Local keeps the client's source IP on a LoadBalancer/NodePort service.
   externalTrafficPolicy: ""

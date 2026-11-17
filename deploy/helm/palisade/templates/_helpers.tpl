@@ -26,3 +26,22 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
 app.kubernetes.io/version: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
+
+{{/* Name of the Secret holding the DB key, or empty when there is none. */}}
+{{- define "palisade.dbKeySecret" -}}
+{{- if .Values.dbKey.existingSecret }}
+{{- .Values.dbKey.existingSecret }}
+{{- else if .Values.dbKey.create }}
+{{- printf "%s-db-key" (include "palisade.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/* A probe from values; with TLS on, plain HTTP only redirects, so probe HTTPS. */}}
+{{- define "palisade.probe" -}}
+{{- $p := deepCopy .probe }}
+{{- if and .root.Values.tls.existingSecret $p.httpGet }}
+{{- $_ := set $p.httpGet "port" "https" }}
+{{- $_ := set $p.httpGet "scheme" "HTTPS" }}
+{{- end }}
+{{- toYaml $p }}
+{{- end }}

@@ -445,3 +445,30 @@ func TestFormatBytes(t *testing.T) {
 		t.Errorf("splitCSV = %q", got)
 	}
 }
+
+// TestSetupPasswordFile pins issue #330: the Helm chart's init container has
+// no shell to pipe a Secret into stdin, so it passes --password-file.
+func TestSetupPasswordFile(t *testing.T) {
+	fakeHIBP(t)
+	dir := t.TempDir()
+	path, pw := filepath.Join(dir, "waf.db"), filepath.Join(dir, "password")
+	if _, err := run([]string{"setup", "--db", path, "--admin-email", "a@example.com", "--password-file", pw}, ""); err == nil {
+		t.Error("missing password file accepted")
+	}
+	if err := os.WriteFile(pw, []byte("long-enough-password\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"admin account created", "password unchanged"} {
+		if out, err := run([]string{"setup", "--db", path, "--admin-email", "a@example.com", "--password-file", pw}, "ignored-stdin\n"); err != nil || !strings.Contains(out, want) {
+			t.Errorf("want %q: %q, %v", want, out, err)
+		}
+	}
+	db, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if u, err := db.CheckAdminLogin("a@example.com", "long-enough-password"); u == nil || err != nil {
+		t.Errorf("login = %v, %v", u, err)
+	}
+}

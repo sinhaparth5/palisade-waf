@@ -347,7 +347,8 @@ func readLine(r io.Reader) string {
 // always overwritten (safe to update during upgrades).
 // Invoked as: palisade setup --db path --list-users | --audit [--limit n], or
 // palisade setup --db path --admin-email email [--reset-password] [--reset-2fa] [--domain d] [--acme-email e]
-// Password is read from stdin (one line), except for --reset-2fa alone.
+// Password is read from stdin or --password-file (one line), except for
+// --reset-2fa alone.
 func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
 	dbPath, dbDriver := dbFlags(fs)
@@ -359,6 +360,7 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 	listUsers := fs.Bool("list-users", false, "print every admin user and exit (reads only)")
 	audit := fs.Bool("audit", false, "print the newest admin audit log rows and exit (reads only)")
 	limit := fs.Int("limit", 50, "rows --audit prints (at most 1000)")
+	passwordFile := fs.String("password-file", "", "read the password from this file instead of stdin (a mounted Kubernetes Secret)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -381,7 +383,16 @@ func runSetup(args []string, stdin io.Reader, stdout io.Writer) error {
 
 	var password string
 	if *reset || !*reset2FA {
-		fmt.Fprint(os.Stderr, "Admin password: ")
+		if *passwordFile != "" {
+			f, err := os.Open(*passwordFile) //nolint:gosec // G304: the operator's own secret file
+			if err != nil {
+				return err
+			}
+			stdin = f
+			defer f.Close()
+		} else {
+			fmt.Fprint(os.Stderr, "Admin password: ")
+		}
 		if password = readLine(stdin); password == "" {
 			return errors.New("password cannot be empty")
 		}

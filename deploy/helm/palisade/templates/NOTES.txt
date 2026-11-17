@@ -9,9 +9,19 @@ Open the admin UI locally:
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "palisade.fullname" . }} 8080:{{ .Values.service.port }}
   then http://127.0.0.1:8080/admin
 
-Create the first admin user (password on stdin):
+{{- if .Values.admin.email }}
+Log in as {{ .Values.admin.email }} with the password from Secret {{ .Values.admin.existingSecret }}.
+{{- else }}
+Create the first admin user (password on stdin), or set admin.email and
+admin.existingSecret:
   kubectl -n {{ .Release.Namespace }} exec -i deploy/{{ include "palisade.fullname" . }} -- \
     /palisade setup --db /data/waf.db --admin-email you@example.com
+{{- end }}
+{{- if and .Values.dbKey.create (not .Values.dbKey.existingSecret) }}
+
+Back up Secret {{ include "palisade.dbKeySecret" . }} with the volume: stored
+secrets can't be read without it. helm uninstall keeps it.
+{{- end }}
 {{- if and .Values.persistence.enabled .Values.persistence.keepOnUninstall (not .Values.persistence.existingClaim) }}
 
 helm uninstall keeps the data volume. To delete it (and the database) for good:

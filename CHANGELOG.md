@@ -16,6 +16,7 @@ rather than growing this file forever.
 
 - (#328) Helm chart: single-replica deployment with a persistent /data volume
 - (#329) Keep the database across Kubernetes upgrades, rollbacks and uninstalls
+- (#330) Load the DB key, first admin and TLS files from Kubernetes Secrets
 
 ## [3.3.4] - 2026-11-14
 
