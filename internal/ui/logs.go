@@ -172,6 +172,7 @@ func (h *Handler) LogDetail(c *echo.Context) error {
 		"visitor_id":       d.VisitorID,
 		"bot_score":        d.BotScore,
 		"cache_status":     d.CacheStatus,
+		"node":             d.Node,
 		"headers":          headers,
 		"has_threat_score": hasThreat,
 		"threat_score":     threat.Total,
