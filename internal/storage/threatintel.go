@@ -42,7 +42,7 @@ func (db *DB) AddCrowdSecSource(label, lapiURL, apiKey string) error {
 	if err := db.queryRow(`SELECT id FROM threat_intel_sources WHERE url = ?`, url).Scan(&id); err != nil {
 		return err
 	}
-	return db.setThreatIntelKey(id, apiKey)
+	return db.SetThreatIntelKey(id, apiKey)
 }
 
 // ThreatIntelKey returns a source's API key ("" when it has none).
@@ -62,8 +62,9 @@ func (db *DB) threatIntelKeys() (map[string]string, error) {
 	return keys, json.Unmarshal([]byte(v), &keys)
 }
 
-// setThreatIntelKey stores (or, with "", removes) a source's API key.
-func (db *DB) setThreatIntelKey(id int64, key string) error {
+// SetThreatIntelKey stores (or, with "", removes) a source's API key,
+// sealed. A plain feed sends it as a Bearer token.
+func (db *DB) SetThreatIntelKey(id int64, key string) error {
 	keys, err := db.threatIntelKeys()
 	if err != nil {
 		return err
@@ -111,7 +112,7 @@ func (db *DB) DeleteThreatIntelSource(id int64) error {
 	if _, err := db.exec(`DELETE FROM threat_intel_sources WHERE id = ?`, id); err != nil {
 		return err
 	}
-	return db.setThreatIntelKey(id, "")
+	return db.SetThreatIntelKey(id, "")
 }
 
 func (db *DB) SetThreatIntelSourceEnabled(id int64, enabled bool) error {
