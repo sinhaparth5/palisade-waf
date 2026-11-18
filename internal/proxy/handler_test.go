@@ -1465,6 +1465,57 @@ func TestResponseInspection(t *testing.T) {
 	}
 }
 
+func TestResponseCheck(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("X-Accept-Encoding", r.Header.Get("Accept-Encoding"))
+		_, _ = io.WriteString(w, "secret")
+	}))
+	defer backend.Close()
+	h, db, reg := newTestHandlerDB(t, backend)
+	logs := make(chan storage.RequestLog, 10)
+	db.SetWebhookFn(func(l storage.RequestLog) { logs <- l })
+	_ = db.SetServiceBotMode(reg.List()[0].ID, "off")
+	_ = reg.Reload(db)
+	mode := ""
+	ext.ResponseCheck = func(string) func(*http.Request, *http.Response) (string, bool) {
+		if mode == "" {
+			return nil
+		}
+		return func(_ *http.Request, resp *http.Response) (string, bool) {
+			_ = resp.Body.Close()
+			resp.Body = io.NopCloser(strings.NewReader("******"))
+			return "data_leak:" + mode, mode == "block"
+		}
+	}
+	t.Cleanup(func() { ext.ResponseCheck = nil })
+	do := func(m string) (*httptest.ResponseRecorder, storage.RequestLog) {
+		t.Helper()
+		mode = m
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rec := httptest.NewRecorder()
+		_ = h.Handle(echo.New().NewContext(req, rec))
+		select {
+		case l := <-logs:
+			return rec, l
+		case <-time.After(2 * time.Second):
+			t.Fatal("no request logged")
+		}
+		return rec, storage.RequestLog{}
+	}
+	// No check: the request is untouched.
+	if rec, l := do(""); rec.Body.String() != "secret" || rec.Header().Get("X-Accept-Encoding") != "gzip" || l.Action != "" {
+		t.Fatalf("no check: %q %q %q", rec.Body.String(), rec.Header().Get("X-Accept-Encoding"), l.Action)
+	}
+	if rec, l := do("mask"); rec.Body.String() != "******" || l.Action != "data_leak:mask" || l.Blocked {
+		t.Fatalf("mask: %q %q blocked=%v", rec.Body.String(), l.Action, l.Blocked)
+	}
+	if rec, l := do("block"); rec.Code != http.StatusBadGateway || rec.Header().Get("X-WAF-Block-Reason") != "data_leak" || l.Action != "data_leak:block" || !l.Blocked {
+		t.Fatalf("block: %d %q %q blocked=%v", rec.Code, rec.Header().Get("X-WAF-Block-Reason"), l.Action, l.Blocked)
+	}
+}
+
 func TestOnLogin(t *testing.T) {
 	var hits atomic.Int32
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
