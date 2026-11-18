@@ -25,11 +25,18 @@ not-an-ip
 
 func TestFetchIPs(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer k" {
+			http.Error(w, "1.2.3.4", http.StatusForbidden)
+			return
+		}
 		fmt.Fprint(w, feed)
 	}))
 	defer srv.Close()
 
-	ips, err := fetchIPs(srv.Client(), srv.URL)
+	if _, err := fetchIPs(srv.Client(), srv.URL, ""); err == nil {
+		t.Error("expected error for a 403")
+	}
+	ips, err := fetchIPs(srv.Client(), srv.URL, "k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,10 +45,10 @@ func TestFetchIPs(t *testing.T) {
 		t.Fatalf("fetchIPs = %v, want %v", ips, want)
 	}
 
-	if _, err := fetchIPs(srv.Client(), "://bad"); err == nil {
+	if _, err := fetchIPs(srv.Client(), "://bad", ""); err == nil {
 		t.Error("expected error for malformed URL")
 	}
-	if _, err := fetchIPs(srv.Client(), "http://127.0.0.1:1"); err == nil {
+	if _, err := fetchIPs(srv.Client(), "http://127.0.0.1:1", ""); err == nil {
 		t.Error("expected error for unreachable host")
 	}
 }
