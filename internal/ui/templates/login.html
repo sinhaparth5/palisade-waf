@@ -186,13 +186,21 @@
             </button>
 
           </form>
-          {{if .SSOName}}
+          {{if or .SSOName .ExtLoginName}}
           <div class="my-6 flex items-center gap-3 text-slate-500 text-xs" aria-hidden="true">
             <span class="h-px flex-1 bg-line"></span>or<span class="h-px flex-1 bg-line"></span>
           </div>
+          {{end}}
+          {{if .SSOName}}
           <a href="{{.AdminPath}}/login/sso"
              class="btn-ghost w-full py-3.5 text-[12px] no-underline">
             Sign in with {{.SSOName}}
+          </a>
+          {{end}}
+          {{if .ExtLoginName}}
+          <a href="{{.AdminPath}}{{.ExtLoginPath}}"
+             class="btn-ghost w-full py-3.5 text-[12px] no-underline{{if .SSOName}} mt-3{{end}}">
+            Sign in with {{.ExtLoginName}}
           </a>
           {{end}}
           {{end}}

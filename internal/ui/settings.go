@@ -58,7 +58,7 @@ func (h *Handler) SettingsPage(c *echo.Context) error {
 		"AdminEmail":             me.Email,
 		"Users":                  users,
 		"Invites":                invites,
-		"SSOOn":                  sso.Issuer != "",
+		"SSOOn":                  sso.Issuer != "" || hasExtLogin(),
 		"SSOIssuer":              sso.Issuer,
 		"SSOClientID":            sso.ClientID,
 		"SSOSecretSet":           sso.ClientSecret != "",

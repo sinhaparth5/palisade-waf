@@ -94,7 +94,7 @@ func (h *Handler) usersCardData(c *echo.Context, errMsg string) map[string]any {
 		"AdminPath": h.cfg.Admin.Path,
 		"Users":     users,
 		"Invites":   invites,
-		"SSOOn":     sso.Issuer != "",
+		"SSOOn":     sso.Issuer != "" || hasExtLogin(),
 		"MyID":      currentUID(c),
 		"UserErr":   errMsg,
 	}

@@ -154,17 +154,26 @@ func (h *Handler) SSOCallback(c *echo.Context) error {
 		return h.renderLogin(c, "Single sign-on failed. Try again.")
 	}
 
-	u, refused := h.ssoUser(cfg, cl)
+	return h.ssoLogin(c, cl, cfg.Group == "" || slices.Contains(cl.Groups, cfg.Group), "")
+}
+
+// ssoLogin lets a verified identity in, or shows the login page with the
+// reason. Shared by OIDC and ext.SSOLogin; method ("saml") goes in the audit.
+func (h *Handler) ssoLogin(c *echo.Context, cl *verifiedClaims, inGroup bool, method string) error {
+	u, refused := h.ssoUser(inGroup, cl)
 	if u == nil {
 		log.Printf("admin sso: denied %s (sub %s): %s", cl.email, cl.sub, refused)
 		return h.renderLogin(c, refused)
 	}
 	ip := h.clientIP(c.Request())
-	summary := ""
-	if len(cl.AMR) > 0 {
-		summary = "amr=" + auditValue(strings.Join(cl.AMR, ","))
+	var summary []string
+	if method != "" {
+		summary = append(summary, "via="+method)
 	}
-	if err := h.db.InsertAudit(storage.AuditEntry{Actor: u.Email, IP: ip, Action: "SSO login", Summary: summary}); err != nil {
+	if len(cl.AMR) > 0 {
+		summary = append(summary, "amr="+auditValue(strings.Join(cl.AMR, ",")))
+	}
+	if err := h.db.InsertAudit(storage.AuditEntry{Actor: u.Email, IP: ip, Action: "SSO login", Summary: strings.Join(summary, " ")}); err != nil {
 		log.Printf("audit log: %v", err)
 	}
 	log.Printf("admin login: successful login for %s from %s (sso)", u.Email, ip)
@@ -224,9 +233,8 @@ func (h *Handler) ssoVerify(ctx context.Context, c *echo.Context, cfg storage.SS
 // ssoUser decides whether the verified identity gets in. A bound identity
 // matches by iss+sub; anything else needs a live invite for a verified
 // email. A refusal returns the reason shown on the login page.
-func (h *Handler) ssoUser(cfg storage.SSOConfig, cl *verifiedClaims) (*storage.AdminUser, string) {
+func (h *Handler) ssoUser(inGroup bool, cl *verifiedClaims) (*storage.AdminUser, string) {
 	const notInGroup = "You're not in the group allowed to sign in here."
-	inGroup := cfg.Group == "" || slices.Contains(cl.Groups, cfg.Group)
 	u, err := h.db.SSOUser(cl.iss, cl.sub)
 	if err != nil {
 		return nil, "Internal error. Please try again."

@@ -549,6 +549,16 @@ func (h *Handler) Register(e *echo.Echo) {
 	// without a valid role would be open to every user, so refuse to start.
 	h.extCards = nil
 	ext.CurrentUser = currentUser
+	ext.SSOLogin = func(c *echo.Context, id *ext.SSOIdentity, refused string) error {
+		if refused != "" || id == nil {
+			return h.renderLogin(c, refused)
+		}
+		yes := true
+		return h.ssoLogin(c, &verifiedClaims{
+			ssoClaims: ssoClaims{Email: id.Email, EmailVerified: &yes},
+			iss:       id.Issuer, sub: id.Subject, email: storage.NormalizeEmail(id.Email),
+		}, id.InGroup, id.Method)
+	}
 	ext.Replay = func(r *http.Request, u *storage.AdminUser, actor string) (int, []byte) {
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, r.WithContext(context.WithValue(r.Context(), replayKey{}, &replay{user: u, actor: actor})))
