@@ -60,6 +60,20 @@ var OnAudit []func(storage.AuditEntry)
 // API key). Set by the admin UI before any Mount runs.
 var CurrentUser func(c *echo.Context) *storage.AdminUser
 
+// Hold, when set, sees every change the audit log would record (a
+// mutating admin UI or REST API request, not from a read-only API key)
+// after authentication and CSRF, before its handler. Returning true means
+// it answered the request itself and the change didn't run. action is the
+// audit action ("POST /ip-rules/:id"); a JSON body is still readable from
+// c.Request().Body. Set from a Mount.
+var Hold func(c *echo.Context, action string) bool
+
+// Replay runs a request Hold kept, through the admin routes but without
+// the session, CSRF, --admin-allow or Hold: as user for an admin UI route
+// (nil fails it), and recorded in the audit log as actor. It returns the
+// response's status and body. Set by the admin UI before any Mount runs.
+var Replay func(r *http.Request, user *storage.AdminUser, actor string) (int, []byte)
+
 // LoginVerdict is an add-on's verdict on a login submission.
 type LoginVerdict struct {
 	Action string // logged as the request's action, e.g. "ato:ip"

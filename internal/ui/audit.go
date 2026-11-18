@@ -13,6 +13,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"palisade/internal/ext"
 	"palisade/internal/storage"
 )
 
@@ -71,6 +72,9 @@ func (h *Handler) auditLog(next echo.HandlerFunc) echo.HandlerFunc {
 			}
 			r.Body = io.NopCloser(bytes.NewReader(raw))
 			_ = json.Unmarshal(raw, &jsonBody) // a malformed body fails in the handler instead
+		}
+		if ro, _ := c.Get("api_key_read_only").(bool); ext.Hold != nil && !ro && replayOf(r) == nil && ext.Hold(c, action) {
+			return nil
 		}
 
 		if err := next(c); err != nil || responseStatus(c) >= 400 || auditFailed(c) {
@@ -134,6 +138,20 @@ func auditValue(v string) string {
 		return strconv.Quote(v)
 	}
 	return v
+}
+
+// replayKey marks a request run by ext.Replay. Only in-process code can set
+// a context value, so no client can claim it.
+type replayKey struct{}
+
+type replay struct {
+	user  *storage.AdminUser
+	actor string
+}
+
+func replayOf(r *http.Request) *replay {
+	p, _ := r.Context().Value(replayKey{}).(*replay)
+	return p
 }
 
 const auditFailedKey = "audit_failed"
