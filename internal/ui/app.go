@@ -79,6 +79,7 @@ func (h *Handler) renderLoginPage(c *echo.Context, status int, data map[string]a
 		"AdminPath": h.cfg.Admin.Path, "Base": h.cfg.Admin.Path + "/login/", "Asset": h.assetVer,
 		"Stage": "", "Error": "", "Notice": "", "SSO": "", "DemoEmail": "", "DemoPass": "",
 		"Passkeys": false, "EmailCode": false, "InviteEmail": "", "Token": "",
+		"ExtLogin": "", "ExtLoginPath": "", // ext.LoginButton: another sign-in method
 	}
 	maps.Copy(page, data)
 	var buf bytes.Buffer

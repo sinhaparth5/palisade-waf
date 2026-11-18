@@ -106,3 +106,24 @@ type LoginVerdict struct {
 // 64 KiB of a form or JSON body (nil otherwise); r.Body stays readable. It
 // runs on the request path, so return quickly. Set from a Mount.
 var OnLogin func(r *http.Request, body []byte, service, ip string) *LoginVerdict
+
+// SSOIdentity is someone another sign-in protocol (SAML, say) verified.
+type SSOIdentity struct {
+	// Issuer+Subject bind the user, like OIDC's iss+sub; on first sign-in
+	// Email must match a live SSO invite.
+	Issuer, Subject, Email string
+	// InGroup false refuses the sign-in and signs a bound user out.
+	InGroup bool
+	Method  string // in the audit log, e.g. "saml"
+}
+
+// SSOLogin finishes a sign-in another protocol verified, exactly like OIDC
+// (invite-only, disabled users refused, no local 2FA). With refused != ""
+// it shows the login page with that reason instead. Set by the admin UI
+// before any Mount runs.
+var SSOLogin func(c *echo.Context, id *SSOIdentity, refused string) error
+
+// LoginButton, when set, adds "Sign in with <label>" to the login page,
+// linking to path under the admin path; label "" hides it. A label also
+// shows SSO invites under Users. Set from a Mount.
+var LoginButton func() (label, path string)

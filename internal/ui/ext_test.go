@@ -116,3 +116,38 @@ func TestExtHoldReplay(t *testing.T) {
 		t.Fatalf("audit %+v", got)
 	}
 }
+
+func TestExtSSOLogin(t *testing.T) {
+	var id *ext.SSOIdentity
+	withExt(t, ext.Feature{Open: []ext.Route{{Method: http.MethodGet, Path: "/login/ext-test",
+		Handler: func(c *echo.Context) error { return ext.SSOLogin(c, id, c.QueryParam("refuse")) }}}})
+	ext.LoginButton = func() (string, string) { return "Corp IdP", "/login/ext-test" }
+	t.Cleanup(func() { ext.LoginButton = nil })
+	env := newAdminEnv(t)
+
+	// The React sign-in page draws the button from these.
+	if body := env.doWith(http.MethodGet, "/admin/login", nil, "").Body.String(); !strings.Contains(body, `data-ext-login="Corp IdP"`) ||
+		!strings.Contains(body, `data-ext-login-path="/login/ext-test"`) {
+		t.Fatal("no login button")
+	}
+	if rec := env.doWith(http.MethodGet, "/admin/login/ext-test?refuse=Nope.", nil, ""); !strings.Contains(rec.Body.String(), "Nope.") {
+		t.Fatal("refusal not shown")
+	}
+	id = &ext.SSOIdentity{Issuer: "https://idp.test", Subject: "s1", Email: "Sam@Example.com", InGroup: true, Method: "saml"}
+	if rec := env.doWith(http.MethodGet, "/admin/login/ext-test", nil, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "been invited") {
+		t.Fatalf("uninvited: %d", rec.Code)
+	}
+	if err := env.db.CreateSSOInvite("sam@example.com", storage.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	if rec := env.doWith(http.MethodGet, "/admin/login/ext-test", nil, ""); rec.Code != http.StatusFound {
+		t.Fatalf("invited: %d %s", rec.Code, rec.Body)
+	}
+	if got, _, _ := env.db.ListAudit(1, 0); len(got) != 1 || got[0].Action != "SSO login" || got[0].Summary != "via=saml" {
+		t.Fatalf("audit %+v", got)
+	}
+	id.InGroup = false
+	if rec := env.doWith(http.MethodGet, "/admin/login/ext-test", nil, ""); !strings.Contains(rec.Body.String(), "not in the group") {
+		t.Fatal("out of group let in")
+	}
+}

@@ -296,6 +296,6 @@ var appFS = fstest.MapFS{
 	"app/dist/login/login.html": {Data: []byte(`<html><head><script type="module" src="{{.Base}}assets/l.js"></script></head>` +
 		`<body data-admin="{{.AdminPath}}" data-stage="{{.Stage}}" data-error="{{.Error}}" data-notice="{{.Notice}}" data-sso="{{.SSO}}" ` +
 		`data-demo-email="{{.DemoEmail}}" data-demo-pass="{{.DemoPass}}" data-passkeys="{{.Passkeys}}" data-email-code="{{.EmailCode}}" ` +
-		`data-invite-email="{{.InviteEmail}}" data-token="{{.Token}}"></body></html>`)},
+		`data-invite-email="{{.InviteEmail}}" data-token="{{.Token}}" data-ext-login="{{.ExtLogin}}" data-ext-login-path="{{.ExtLoginPath}}"></body></html>`)},
 	"app/dist/login/assets/l.js": {Data: []byte("login")},
 }

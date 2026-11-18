@@ -88,6 +88,7 @@ func (h *Handler) Team(c *echo.Context) error {
 			"issuer": sso.Issuer, "client_id": sso.ClientID, "secret_set": sso.ClientSecret != "",
 			"group": sso.Group, "callback_url": h.ssoCallbackURL(c),
 		},
+		"ext_login": func() string { l, _ := extLogin(); return l }(), // ext.LoginButton, which takes SSO invites too
 	})
 }
 
@@ -252,7 +253,7 @@ func (h *Handler) AddSSOInvite(c *echo.Context) error {
 	}
 	if sso, err := h.db.GetSSOConfig(); err != nil {
 		return err
-	} else if sso.Issuer == "" {
+	} else if sso.Issuer == "" && !hasExtLogin() { // an add-on login spends invites too
 		return conflict("Set up single sign-on first.")
 	}
 	if err := h.db.CreateSSOInvite(req.Email, req.Role); err != nil {
