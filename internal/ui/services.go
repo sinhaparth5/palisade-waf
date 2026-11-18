@@ -87,6 +87,15 @@ func (h *Handler) serviceViews() []ServiceView {
 	return out
 }
 
+// scopedViews is serviceViews limited to the user's scope.
+func (h *Handler) scopedViews(c *echo.Context) []ServiceView {
+	views := h.serviceViews()
+	if s := scopeOf(c); s != nil {
+		views = slices.DeleteFunc(views, func(v ServiceView) bool { _, ok := s[v.ID]; return !ok })
+	}
+	return views
+}
+
 // sanitizeHost strips any scheme (http://, https://) and trailing slashes
 // from a host value so "http://example.com/" is stored as "example.com".
 // This prevents a common paste mistake where the full URL is entered instead
@@ -424,7 +433,7 @@ func (h *Handler) ListServices(c *echo.Context) error {
 	}
 	u := currentUser(c)
 	admin := u != nil && roleRank[u.Role] >= roleRank[storage.RoleAdmin]
-	views := h.serviceViews()
+	views := h.scopedViews(c)
 	out := make([]serviceJSON, len(views))
 	for i, v := range views {
 		out[i] = serviceToJSON(v, admin)
@@ -633,9 +642,12 @@ func (h *Handler) CacheStats(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	rows := make([]cacheRowJSON, len(results))
-	for i, r := range results {
-		rows[i] = cacheRowJSON{r.App, int64(r.Hits), int64(r.Misses), int64(r.Passes), int64(r.Errors), cacheRatio(uint64(r.Hits), uint64(r.Misses))} //nolint:gosec // G115: counts are never negative
+	s := scopeOf(c)
+	rows := make([]cacheRowJSON, 0, len(results))
+	for _, r := range results {
+		if s.hasName(r.App) {
+			rows = append(rows, cacheRowJSON{r.App, int64(r.Hits), int64(r.Misses), int64(r.Passes), int64(r.Errors), cacheRatio(uint64(r.Hits), uint64(r.Misses))}) //nolint:gosec // G115: counts are never negative
+		}
 	}
 	out["services"] = rows
 	return c.JSON(http.StatusOK, out)

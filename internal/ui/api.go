@@ -707,6 +707,9 @@ func (h *Handler) APIListLogs(c *echo.Context) error {
 		StatusClass: c.QueryParam("status"),
 		Limit:       apiLogsDefaultLimit,
 	}
+	if s := scopeOf(c); s != nil { // the session group's /api/logs; API keys are never scoped
+		f.AppNames = s.names()
+	}
 	for _, p := range []struct {
 		name string
 		dst  *time.Time

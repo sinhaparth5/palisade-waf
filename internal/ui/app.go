@@ -122,6 +122,7 @@ func (h *Handler) appHTML(c *echo.Context) error {
 		"Role":      "",
 		"Email":     "",
 		"Demo":      false,
+		"Scoped":    scopeOf(c) != nil, // ext.Scope: Services, Logs and own account only
 	}
 	if u := currentUser(c); u != nil {
 		data["Role"], data["Email"], data["Demo"] = u.Role, u.Email, h.isDemo(u)

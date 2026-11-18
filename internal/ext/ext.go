@@ -83,6 +83,15 @@ var Hold func(c *echo.Context, action string) bool
 // response's status and body. Set by the admin UI before any Mount runs.
 var Replay func(r *http.Request, user *storage.AdminUser, actor string) (int, []byte)
 
+// Scope, when set, may limit a signed-in user to some services: ok=false
+// means no limit, otherwise ids are the services they may see and change.
+// A scoped user reaches only the Services and Logs pages (showing just
+// those services), their own account settings, and changes keyed to those
+// services; global settings and every other page are closed to them.
+// Owners are never limited.
+// Called on every admin request, so keep it cheap. Set from a Mount.
+var Scope func(u *storage.AdminUser) (ids []int, ok bool)
+
 // LoginVerdict is an add-on's verdict on a login submission.
 type LoginVerdict struct {
 	Action string // logged as the request's action, e.g. "ato:ip"

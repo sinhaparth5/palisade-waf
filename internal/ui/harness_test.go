@@ -285,7 +285,7 @@ func serve(env *adminEnv, req *http.Request) *httptest.ResponseRecorder {
 // appFS is a built app as Vite lays it out (web/build/palisade.ts).
 var appFS = fstest.MapFS{
 	"app/dist/index.html": {Data: []byte(`<html><head><script type="module" src="{{.Base}}assets/index-x.js"></script></head>` +
-		`<body data-admin="{{.AdminPath}}" data-csrf="{{.CSRF}}" data-role="{{.Role}}" data-email="{{.Email}}" data-demo="{{.Demo}}" data-waf="{{.WAF}}" data-nonce="{{.Nonce}}"></body></html>`)},
+		`<body data-admin="{{.AdminPath}}" data-csrf="{{.CSRF}}" data-role="{{.Role}}" data-email="{{.Email}}" data-demo="{{.Demo}}" data-scoped="{{.Scoped}}" data-waf="{{.WAF}}" data-nonce="{{.Nonce}}"></body></html>`)},
 	"app/dist/assets/index-x.js":    {Data: []byte("plain")},
 	"app/dist/assets/index-x.js.br": {Data: []byte("brotli")},
 	"app/dist/assets/index-x.js.gz": {Data: []byte("gzip")},
