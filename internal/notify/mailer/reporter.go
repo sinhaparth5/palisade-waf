@@ -245,19 +245,30 @@ func frame(kicker, body, note string) string {
 	stake := func(h int, c string) string {
 		return fmt.Sprintf(`<td valign="bottom" style="padding-right:2px"><div style="width:6px;height:%dpx;background:%s;font-size:0;line-height:0">&nbsp;</div></td>`, h, c)
 	}
+	name, band := product(), cSide
+	if Brand != nil {
+		_, band = Brand()
+	}
+	if !validColor(band) {
+		band = cSide
+	}
+	logo := "" // a renamed product drops Palisade's logo
+	if name == "Palisade" {
+		logo = `<td valign="middle" style="padding-right:12px"><table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid ` + cSideLine + `"><tr><td style="padding:6px 5px 6px 7px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
+			stake(18, cSideInk) + stake(23, cSideInk) + stake(23, cLogoAccent) + stake(18, cSideInk) +
+			`</tr></table></td></tr></table></td>`
+	}
 	return `<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">` +
 		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:` + cPaper2 + `"><tr><td align="center" style="padding:32px 12px">` +
 		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:` + cCard + `;border:1px solid ` + cEdge + `">` +
-		`<tr><td style="background:` + cSide + `;padding:18px 28px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
-		`<td valign="middle" style="padding-right:12px"><table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid ` + cSideLine + `"><tr><td style="padding:6px 5px 6px 7px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
-		stake(18, cSideInk) + stake(23, cSideInk) + stake(23, cLogoAccent) + stake(18, cSideInk) +
-		`</tr></table></td></tr></table></td>` +
-		`<td valign="middle"><p style="margin:0;font:500 18px/1.1 ` + fontMono + `;color:` + cSideInk + `;text-transform:uppercase;letter-spacing:.04em">Palisade</p>` +
+		`<tr><td style="background:` + band + `;padding:18px 28px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
+		logo +
+		`<td valign="middle"><p style="margin:0;font:500 18px/1.1 ` + fontMono + `;color:` + cSideInk + `;text-transform:uppercase;letter-spacing:.04em">` + html.EscapeString(product()) + `</p>` +
 		`<p style="margin:4px 0 0;font:500 9px ` + fontMono + `;color:` + cSideMuted + `;text-transform:uppercase;letter-spacing:.12em">` + kicker + `</p></td>` +
 		`</tr></table></td></tr>` +
 		body +
 		`<tr><td style="padding:16px 28px 22px;border-top:1px solid ` + cEdge + `;font:400 12px/1.6 ` + fontStack + `;color:` + cMuted + `">` +
-		note + ` Sent by Palisade from ` + Sender + `.</td></tr>` +
+		note + ` Sent by ` + html.EscapeString(product()) + ` from ` + Sender + `.</td></tr>` +
 		`</table></td></tr></table>`
 }
 
@@ -313,7 +324,7 @@ func composeLoginCode(code string, at time.Time) (subject, text, htm string) {
 	when := at.Format("2006-01-02 15:04 MST")
 
 	var t strings.Builder
-	t.WriteString("Palisade — admin login code\n\n")
+	t.WriteString(product() + " — admin login code\n\n")
 	fmt.Fprintf(&t, "Code:       %s\n", code)
 	fmt.Fprintf(&t, "Requested:  %s\n", when)
 	t.WriteString("\nThe code expires in 10 minutes and works once.\n")
@@ -321,7 +332,7 @@ func composeLoginCode(code string, at time.Time) (subject, text, htm string) {
 
 	body := `<tr><td style="padding:26px 28px 24px">` +
 		heading("Your login code") +
-		`<p style="margin:8px 0 18px;font:400 14px/1.5 ` + fontStack + `;color:` + cInkSoft + `">Enter it on the Palisade sign-in page to finish logging in.</p>` +
+		`<p style="margin:8px 0 18px;font:400 14px/1.5 ` + fontStack + `;color:` + cInkSoft + `">Enter it on the ` + html.EscapeString(product()) + ` sign-in page to finish logging in.</p>` +
 		`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:` + cPaper + `;border:1px dashed ` + cEdge + `"><tr><td align="center" style="padding:20px">` +
 		`<p style="margin:0;font:500 32px ` + fontMono + `;letter-spacing:.3em;color:` + cInk + `">` + html.EscapeString(code) + `</p>` +
 		`</td></tr></table></td></tr>`
@@ -332,12 +343,12 @@ func composeLoginCode(code string, at time.Time) (subject, text, htm string) {
 // composeInvite renders the invite email: who added the user, their role,
 // and the set-password link.
 func composeInvite(inviter, role, link string, expires time.Time) (subject, text, htm string) {
-	subject = "You've been added to Palisade"
+	subject = "You've been added to " + product()
 	until := expires.Format("2006-01-02 15:04 MST")
 
 	var t strings.Builder
-	t.WriteString("Palisade — you've been added\n\n")
-	fmt.Fprintf(&t, "%s added you to Palisade as %s.\n\n", inviter, role)
+	t.WriteString(product() + " — you've been added\n\n")
+	fmt.Fprintf(&t, "%s added you to %s as %s.\n\n", inviter, product(), role)
 	t.WriteString("Set your password here:\n" + link + "\n\n")
 	fmt.Fprintf(&t, "The link works once and expires %s.\n", until)
 	t.WriteString("If you weren't expecting this, ignore this email.\n")
@@ -345,7 +356,7 @@ func composeInvite(inviter, role, link string, expires time.Time) (subject, text
 	body := `<tr><td style="padding:26px 28px 24px">` +
 		heading("You've been added") +
 		`<p style="margin:8px 0 18px;font:400 14px/1.5 ` + fontStack + `;color:` + cInkSoft + `"><b style="color:` + cInk + `">` + html.EscapeString(inviter) +
-		`</b> added you to Palisade as <b style="color:` + cInk + `">` + html.EscapeString(role) + `</b>. Set a password to sign in.</p>` +
+		`</b> added you to ` + html.EscapeString(product()) + ` as <b style="color:` + cInk + `">` + html.EscapeString(role) + `</b>. Set a password to sign in.</p>` +
 		`<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:` + cInk + `;border:1px solid ` + cInk + `">` +
 		`<a href="` + html.EscapeString(link) + `" style="display:inline-block;padding:11px 20px;font:500 13px ` + fontMono + `;color:` + cPaper + `;text-decoration:none;text-transform:uppercase;letter-spacing:.04em">Set your password</a>` +
 		`</td></tr></table>` +
@@ -381,7 +392,7 @@ func composeReport(day string, rep, prev storage.DailyReport, det storage.Report
 
 	// Plain text.
 	var t strings.Builder
-	fmt.Fprintf(&t, "Palisade — daily report for %s\n\n", day)
+	fmt.Fprintf(&t, "%s — daily report for %s\n\n", product(), day)
 	for _, row := range []struct {
 		label string
 		value int
@@ -412,7 +423,7 @@ func composeReport(day string, rep, prev storage.DailyReport, det storage.Report
 			fmt.Fprintf(&t, "  %-22s %d\n", it.Label, it.Count)
 		}
 	}
-	t.WriteString("\nSent automatically by Palisade.\n")
+	t.WriteString("\nSent automatically by " + product() + ".\n")
 
 	var h strings.Builder
 
@@ -420,8 +431,8 @@ func composeReport(day string, rep, prev storage.DailyReport, det storage.Report
 	h.WriteString(`<tr><td style="padding:26px 28px 0">`)
 	h.WriteString(heading("Daily security report"))
 	h.WriteString(`<p style="margin:4px 0 14px;font:500 12px ` + fontMono + `;color:` + cMuted + `">` + day + `</p>`)
-	fmt.Fprintf(&h, `<p style="margin:0;font:400 15px/1.6 %s;color:%s">Palisade stopped <span style="background:%s;color:%s;padding:1px 5px;font-weight:700">%d of %d requests</span> (%s) from %d unique IPs, and served %d bot challenges.</p>`,
-		fontStack, cInkSoft, cHighlight, cInk, rep.Blocked, rep.Total, pct(rep.Blocked, rep.Total), rep.UniqueBlockedIPs, rep.BotChallenged)
+	fmt.Fprintf(&h, `<p style="margin:0;font:400 15px/1.6 %s;color:%s">%s stopped <span style="background:%s;color:%s;padding:1px 5px;font-weight:700">%d of %d requests</span> (%s) from %d unique IPs, and served %d bot challenges.</p>`,
+		fontStack, cInkSoft, html.EscapeString(product()), cHighlight, cInk, rep.Blocked, rep.Total, pct(rep.Blocked, rep.Total), rep.UniqueBlockedIPs, rep.BotChallenged)
 	h.WriteString(`</td></tr>`)
 
 	// Headline tiles.
@@ -540,7 +551,7 @@ func composeBanAlert(ip, reason string, at time.Time) (subject, text, htm string
 	when := at.Format("2006-01-02 15:04 MST")
 
 	var t strings.Builder
-	fmt.Fprintf(&t, "Palisade — automatic IP ban\n\n")
+	fmt.Fprintf(&t, "%s — automatic IP ban\n\n", product())
 	fmt.Fprintf(&t, "IP address:  %s\n", ip)
 	fmt.Fprintf(&t, "Reason:      %s\n", reason)
 	fmt.Fprintf(&t, "Banned at:   %s\n", when)
@@ -577,7 +588,7 @@ func composeScriptAlert(service, source, page string, at time.Time) (subject, te
 	when := at.Format("2006-01-02 15:04 MST")
 
 	var t strings.Builder
-	fmt.Fprintf(&t, "Palisade — new script source\n\n")
+	fmt.Fprintf(&t, "%s — new script source\n\n", product())
 	fmt.Fprintf(&t, "Service:     %s\n", service)
 	fmt.Fprintf(&t, "Source:      %s\n", source)
 	fmt.Fprintf(&t, "First page:  %s\n", page)

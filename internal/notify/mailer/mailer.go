@@ -11,8 +11,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"mime"
 	"net"
+	"net/mail"
 	"net/smtp"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -32,14 +35,31 @@ const (
 	// Sender is the fixed From address; its domain must stay onboarded for
 	// Email Sending on the Cloudflare account that owns the API token.
 	Sender = "alert@astrareconslabs.com"
-	// SenderName is the display name mail clients show instead of the bare
-	// address ("Palisade" in the Gmail sender column, not alert@…).
-	SenderName = "Palisade"
 )
 
+// Brand, when set, renames the product in emails (name "" keeps Palisade)
+// and colours their header band (color "#rrggbb", "" keeps Palisade's).
+// Read on every email. Set once at startup.
+var Brand func() (name, color string)
+
+// product is the name emails use, also the display name mail clients show
+// instead of the bare address.
+func product() string {
+	if Brand != nil {
+		if n, _ := Brand(); strings.TrimSpace(n) != "" {
+			return strings.TrimSpace(n)
+		}
+	}
+	return "Palisade"
+}
+
+var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+func validColor(c string) bool { return colorRe.MatchString(c) }
+
 // fromHeader is the RFC 5322 From value; the envelope MAIL FROM stays the
-// bare Sender address.
-func fromHeader() string { return SenderName + " <" + Sender + ">" }
+// bare Sender address. net/mail quotes and encodes the name.
+func fromHeader() string { return (&mail.Address{Name: product(), Address: Sender}).String() }
 
 // sendTimeout bounds the whole SMTP session (dial, auth, data, quit) so a
 // stalled server can never wedge the reporter goroutine or a UI test request.
@@ -123,7 +143,7 @@ func buildMessage(from string, to []string, subject, textBody, htmlBody string, 
 
 	writeLine("From: " + from)
 	writeLine("To: " + strings.Join(to, ", "))
-	writeLine("Subject: " + subject)
+	writeLine("Subject: " + mime.QEncoding.Encode("utf-8", subject)) // unchanged when plain ASCII
 	writeLine("Date: " + time.Now().Format(time.RFC1123Z))
 	writeLine("MIME-Version: 1.0")
 	mixed := randomBoundary()

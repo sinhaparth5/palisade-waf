@@ -204,7 +204,10 @@ export function devPalisade(target: string): Plugin {
         const html = await server.transformIndexHtml(url, src
             .replace(/<body[^>]*>/, `<body${body}>`)
             .replaceAll("{{.AdminPath}}", admin)
-            .replaceAll("{{.Asset}}", "dev"));
+            .replaceAll("{{.Asset}}", "dev")
+            .replaceAll("{{.BrandName}}", "Palisade")
+            .replaceAll("{{.BrandLogo}}", "/static/imgs/logo.svg")
+            .replace(/{{if \.BrandCSS}}.*?{{end}}/, ""));
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         res.end(html);
       });

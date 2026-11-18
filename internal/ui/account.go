@@ -129,7 +129,7 @@ func (h *Handler) StartTOTP(c *echo.Context) error {
 	if err := h.db.SetPendingTOTPSecret(currentUID(c), secret); err != nil {
 		return err
 	}
-	png, err := qrcode.Encode(totp.ProvisioningURI(secret, currentUser(c).Email, totpIssuer), qrcode.Medium, 220)
+	png, err := qrcode.Encode(totp.ProvisioningURI(secret, currentUser(c).Email, brand().Name), qrcode.Medium, 220)
 	if err != nil {
 		return err
 	}

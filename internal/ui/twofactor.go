@@ -35,8 +35,6 @@ const (
 	emailCodeResendWait = time.Minute
 	// backupCodeCount is how many one-time recovery codes enrollment hands out.
 	backupCodeCount = 10
-	// totpIssuer names this system in authenticator apps.
-	totpIssuer = "Palisade"
 )
 
 // twoFAEntry is one password-verified login waiting for its second factor.

@@ -151,3 +151,28 @@ func TestExtSSOLogin(t *testing.T) {
 		t.Fatal("out of group let in")
 	}
 }
+
+func TestExtBranding(t *testing.T) {
+	env := newAdminEnv(t)
+	if body := env.doWith(http.MethodGet, "/admin/login", nil, "").Body.String(); !strings.Contains(body, "<title>Sign in · Palisade</title>") ||
+		!strings.Contains(body, `/admin/static/imgs/logo.svg`) || strings.Contains(body, "brand.css") {
+		t.Fatal("default brand")
+	}
+	ext.Branding = func() ext.Brand {
+		return ext.Brand{Name: "Acme <Shield>", Logo: "/brand/logo?v=1", CSS: "/brand.css?v=1"}
+	}
+	t.Cleanup(func() { ext.Branding = nil })
+	body := env.doWith(http.MethodGet, "/admin/login", nil, "").Body.String()
+	for _, want := range []string{"<title>Sign in · Acme &lt;Shield&gt;</title>", `data-brand="Acme &lt;Shield&gt;"`, `data-brand-logo="/admin/brand/logo?v=1"`, `href="/admin/brand.css?v=1"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if strings.Contains(body, "Palisade") || strings.Contains(body, "logo.svg") {
+		t.Error("Palisade left on the login page")
+	}
+	if body := env.do(http.MethodGet, "/admin/settings", nil).Body.String(); !strings.Contains(body, "<title>Acme &lt;Shield&gt;</title>") ||
+		!strings.Contains(body, `data-brand="Acme &lt;Shield&gt;"`) || !strings.Contains(body, `href="/admin/brand.css?v=1"`) {
+		t.Error("dashboard not branded")
+	}
+}
