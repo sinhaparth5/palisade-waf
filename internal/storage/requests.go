@@ -675,10 +675,41 @@ func (db *DB) CountBlockedSince(t time.Time) (int, error) {
 // to run instead of starving behind back-to-back prune transactions.
 const pruneBatchSize = 2000
 
-// PruneOldRequests deletes request logs older than `days` days and returns
-// how many rows were removed.
+// metaKeyPruneFloor holds the prune floor (RFC 3339); see SetPruneFloor.
+const metaKeyPruneFloor = "requests_prune_floor"
+
+// SetPruneFloor stops PruneOldRequests from deleting request logs at or
+// after t, for an add-on that copies logs elsewhere before they go (a
+// zero t lifts it). It is stored in the database, so a separate `prune`
+// process honors it too.
+func (db *DB) SetPruneFloor(t time.Time) error {
+	v := ""
+	if !t.IsZero() {
+		v = t.UTC().Format(time.RFC3339)
+	}
+	return db.setMeta(metaKeyPruneFloor, v)
+}
+
+// PruneFloor returns the floor SetPruneFloor stored, or zero.
+func (db *DB) PruneFloor() (time.Time, error) {
+	v, err := db.getMeta(metaKeyPruneFloor)
+	if err != nil || v == "" {
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339, v)
+}
+
+// PruneOldRequests deletes request logs older than `days` days, but none at
+// or after the prune floor, and returns how many rows were removed.
 func (db *DB) PruneOldRequests(days int) (int64, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -days)
+	floor, err := db.PruneFloor()
+	if err != nil {
+		return 0, err
+	}
+	if !floor.IsZero() && floor.Before(cutoff) {
+		cutoff = floor
+	}
 	var total int64
 	for {
 		res, err := db.exec(

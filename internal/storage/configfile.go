@@ -218,7 +218,7 @@ var volatileConfig = map[string][]string{
 	"threat_intel_sources": {"last_synced_at", "last_error", "ip_count"},
 }
 
-var volatileMeta = []string{"email_report_sent_for", metaKeyNotificationsSeenAt, metaKeySessionsHashed}
+var volatileMeta = []string{"email_report_sent_for", metaKeyNotificationsSeenAt, metaKeySessionsHashed, metaKeyPruneFloor}
 
 // ConfigDigest hashes the stored configuration, so a cluster can tell
 // when it changed. Unlike ExportConfig it is stable: secrets are hashed as
