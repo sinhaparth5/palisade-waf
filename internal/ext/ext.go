@@ -4,6 +4,7 @@ package ext
 
 import (
 	"html/template"
+	"net/http"
 
 	"github.com/labstack/echo/v5"
 
@@ -58,3 +59,18 @@ var OnAudit []func(storage.AuditEntry)
 // CurrentUser returns the signed-in admin of a Route's request (nil for an
 // API key). Set by the admin UI before any Mount runs.
 var CurrentUser func(c *echo.Context) *storage.AdminUser
+
+// LoginVerdict is an add-on's verdict on a login submission.
+type LoginVerdict struct {
+	Action string // logged as the request's action, e.g. "ato:ip"
+	// Status != 0 answers the client with Body instead of the backend.
+	Status      int
+	ContentType string
+	Body        []byte
+}
+
+// OnLogin, when set, sees every submission (not GET/HEAD) to a service's
+// login paths from an untrusted client, after the WAF. body is the first
+// 64 KiB of a form or JSON body (nil otherwise); r.Body stays readable. It
+// runs on the request path, so return quickly. Set from a Mount.
+var OnLogin func(r *http.Request, body []byte, service, ip string) *LoginVerdict

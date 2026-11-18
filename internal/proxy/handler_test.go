@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"palisade/internal/config"
+	"palisade/internal/ext"
 	"palisade/internal/proxy"
 	"palisade/internal/security/adaptive"
 	"palisade/internal/security/blocklist"
@@ -1461,5 +1462,52 @@ func TestResponseInspection(t *testing.T) {
 	}
 	if healthy, _ := reg.IsHealthy(svc.Name); !healthy {
 		t.Error("blocked response marked the backend down")
+	}
+}
+
+func TestOnLogin(t *testing.T) {
+	var hits atomic.Int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if b, _ := io.ReadAll(r.Body); string(b) != "user=a&password=x" {
+			t.Errorf("backend body %q", b)
+		}
+	}))
+	defer backend.Close()
+	h, db, reg := newTestHandlerDB(t, backend)
+	svc := reg.List()[0]
+	if err := db.SetServiceBotMode(svc.ID, "off"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetServiceLoginPaths(svc.ID, []string{"/login"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Reload(db); err != nil {
+		t.Fatal(err)
+	}
+	var seen string
+	deceive := false
+	ext.OnLogin = func(r *http.Request, body []byte, _, _ string) *ext.LoginVerdict {
+		seen = string(body)
+		if deceive {
+			return &ext.LoginVerdict{Action: "ato:ip", Status: http.StatusUnauthorized, ContentType: "text/plain", Body: []byte("bad")}
+		}
+		return nil
+	}
+	t.Cleanup(func() { ext.OnLogin = nil })
+	do := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("user=a&password=x"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "203.0.113.9:1234"
+		rec := httptest.NewRecorder()
+		_ = h.Handle(echo.New().NewContext(req, rec))
+		return rec
+	}
+	if rec := do(); rec.Code != http.StatusOK || hits.Load() != 1 || seen != "user=a&password=x" {
+		t.Fatalf("pass: %d hits=%d seen=%q", rec.Code, hits.Load(), seen)
+	}
+	deceive = true
+	if rec := do(); rec.Code != http.StatusUnauthorized || rec.Body.String() != "bad" || hits.Load() != 1 || rec.Header().Get("X-WAF-Block-Reason") != "" {
+		t.Fatalf("deceive: %d %q hits=%d", rec.Code, rec.Body, hits.Load())
 	}
 }

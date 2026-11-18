@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"palisade/internal/ext"
 	"palisade/internal/notify/metrics"
 	"palisade/internal/security/adaptive"
 	"palisade/internal/security/asn"
@@ -630,6 +631,21 @@ func (h *Handler) Handle(c *echo.Context) error {
 		hit.Action = "leaked_password:log"
 		result = &hit
 	}
+	// 5.6 Login add-ons (internal/ext), e.g. account takeover defense.
+	if login && !trusted && ext.OnLogin != nil && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if v := ext.OnLogin(r, loginBody(r), appName, clientIP); v != nil {
+			if v.Status != 0 {
+				mark("login")
+				h.logBlocked(r, appName, clientIP, country, v.Status, 0, v.Action, time.Since(start), meta)
+				return c.Blob(v.Status, v.ContentType, v.Body)
+			}
+			if v.Action != "" && result.Action == "" {
+				hit := *result
+				hit.Action = v.Action
+				result = &hit
+			}
+		}
+	}
 	if policyFailed && result.Action == "" {
 		hit := *result
 		hit.Action = "policy_violation:log"
@@ -742,25 +758,30 @@ const breachBodyLimit = 64 << 10
 // is normally already in memory from the WAF. A failed lookup counts as not
 // leaked, so an HIBP outage never blocks a login.
 func (h *Handler) leakedPassword(r *http.Request, app *storage.Service) bool {
-	var body []byte
-	ct := r.Header.Get("Content-Type")
-	if r.Body != nil && r.Body != http.NoBody && (strings.Contains(ct, "form-urlencoded") || strings.Contains(ct, "json")) {
-		b, err := io.ReadAll(io.LimitReader(r.Body, breachBodyLimit))
-		r.Body = struct {
-			io.Reader
-			io.Closer
-		}{io.MultiReader(bytes.NewReader(b), r.Body), r.Body}
-		if err != nil {
-			return false
-		}
-		body = b
-	}
-	pw := breach.Password(r, body, app.BreachFields)
+	pw := breach.Password(r, loginBody(r), app.BreachFields)
 	if pw == "" {
 		return false
 	}
 	leaked, _ := h.breach.Leaked(r.Context(), pw)
 	return leaked
+}
+
+// loginBody returns the first breachBodyLimit bytes of a form or JSON body
+// (nil for anything else, or on a read error) and restores r.Body.
+func loginBody(r *http.Request) []byte {
+	ct := r.Header.Get("Content-Type")
+	if r.Body == nil || r.Body == http.NoBody || (!strings.Contains(ct, "form-urlencoded") && !strings.Contains(ct, "json")) {
+		return nil
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, breachBodyLimit))
+	r.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(b), r.Body), r.Body}
+	if err != nil {
+		return nil
+	}
+	return b
 }
 
 // openPaths are the files crawlers and AI agents read to learn about a site,
