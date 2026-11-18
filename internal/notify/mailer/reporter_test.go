@@ -1,7 +1,13 @@
 package mailer
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
 	"strings"
 	"testing"
 	"time"
@@ -324,5 +330,33 @@ func TestSendInviteRecipient(t *testing.T) {
 	r, _ = testReporter(&fakeStore{}, time.Now())
 	if err := r.SendInvite("new@example.com", "o", "admin", "l"); err == nil {
 		t.Error("sent without a token")
+	}
+}
+
+func TestBuildMessageWithAttachment(t *testing.T) {
+	raw := buildMessage("a@x.com", []string{"b@y.com"}, "S", "plain", "<p>h</p>", Attachment{Name: "r\"e\nport.pdf", ContentType: "application/pdf", Data: bytes.Repeat([]byte("%PDF"), 50)})
+	m, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, params, _ := mime.ParseMediaType(m.Header.Get("Content-Type"))
+	mr := multipart.NewReader(m.Body, params["boundary"])
+	var types []string
+	var data []byte
+	for {
+		p, err := mr.NextPart()
+		if err != nil {
+			break
+		}
+		types = append(types, p.Header.Get("Content-Type"))
+		if p.FileName() != "" {
+			if p.FileName() != "r_e_port.pdf" {
+				t.Errorf("filename %q", p.FileName())
+			}
+			data, _ = io.ReadAll(base64.NewDecoder(base64.StdEncoding, p))
+		}
+	}
+	if len(types) != 2 || !bytes.Equal(data, bytes.Repeat([]byte("%PDF"), 50)) {
+		t.Fatalf("parts %q, attachment %d bytes", types, len(data))
 	}
 }
