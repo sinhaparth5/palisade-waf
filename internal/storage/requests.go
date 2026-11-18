@@ -11,8 +11,8 @@ const insertRequestSQL = `
 			(ts, app_name, real_ip, proxy_ip, country, method, host, path, query,
 			 status, blocked, rule_id, action, user_agent, duration_ms, headers_json,
 			 request_id, proto, tls_version, tls_cipher, tls_sni, asn_num, org,
-			 ja4, visitor_id, bot_score, cache_status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			 ja4, visitor_id, bot_score, cache_status, node)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 func insertRequestArgs(r RequestLog) []any {
 	return []any{
@@ -43,6 +43,23 @@ func insertRequestArgs(r RequestLog) []any {
 		r.VisitorID,
 		r.BotScore,
 		r.CacheStatus,
+		r.Node,
+	}
+}
+
+// InsertRequests stores entries another node logged (a cluster replica's,
+// sent to its primary) without the local hooks: autoban, webhooks and the
+// access log already ran on the node that served them. The live log still
+// gets them.
+func (db *DB) InsertRequests(batch []RequestLog) {
+	db.insertRequestBatch(batch)
+	if db.broadcastFn == nil {
+		return
+	}
+	for _, e := range batch {
+		if e.ID != 0 {
+			db.broadcastFn(e)
+		}
 	}
 }
 
@@ -121,6 +138,7 @@ type LogDetail struct {
 	VisitorID   string
 	BotScore    int
 	CacheStatus string
+	Node        string
 }
 
 // GetRequestByID fetches a single request log entry including all enrichment
@@ -132,13 +150,13 @@ func (db *DB) GetRequestByID(id int) (*LogDetail, error) {
 		SELECT id, ts, app_name, real_ip, proxy_ip, country, method, host, path, query,
 		       status, blocked, rule_id, action, user_agent, duration_ms, headers_json,
 		       request_id, proto, tls_version, tls_cipher, tls_sni, asn_num, org,
-		       ja4, visitor_id, bot_score, cache_status
+		       ja4, visitor_id, bot_score, cache_status, node
 		FROM requests WHERE id = ?`, id).Scan(
 		&d.ID, &d.Timestamp, &d.AppName, &d.RealIP, &d.ProxyIP, &d.Country,
 		&d.Method, &d.Host, &d.Path, &d.Query,
 		&d.Status, &blocked, &d.RuleID, &d.Action, &d.UserAgent, &d.Duration,
 		&d.HeadersJSON, &d.RequestID, &d.Proto, &d.TLSVersion, &d.TLSCipher,
-		&d.TLSSNI, &d.ASN, &d.Org, &d.JA4, &d.VisitorID, &d.BotScore, &d.CacheStatus,
+		&d.TLSSNI, &d.ASN, &d.Org, &d.JA4, &d.VisitorID, &d.BotScore, &d.CacheStatus, &d.Node,
 	)
 	if err != nil {
 		return nil, err

@@ -31,7 +31,8 @@ func (db *DB) schemaStatements() []string {
 			ja4          TEXT NOT NULL DEFAULT '',
 			visitor_id   TEXT NOT NULL DEFAULT '',
 			bot_score    INTEGER NOT NULL DEFAULT 0,
-			cache_status TEXT NOT NULL DEFAULT ''
+			cache_status TEXT NOT NULL DEFAULT '',
+			node         TEXT NOT NULL DEFAULT ''
 		)`,
 		"CREATE INDEX IF NOT EXISTS idx_requests_ts ON requests(ts)",
 		"CREATE INDEX IF NOT EXISTS idx_requests_ip ON requests(real_ip)",
