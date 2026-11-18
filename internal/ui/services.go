@@ -84,7 +84,7 @@ func (h *Handler) serviceViews() []ServiceView {
 func (h *Handler) ServicesPage(c *echo.Context) error {
 	poolCerts, _ := h.db.ListCertificates()
 	return h.render(c, "services", map[string]any{
-		"Services":      h.serviceViews(),
+		"Services":      h.scopedViews(c),
 		"PoolCerts":     poolCerts,
 		"HTTP3Listener": h.cfg.ListenAddrH3 != "",
 	})
@@ -108,7 +108,16 @@ func (h *Handler) servicesRowsData(c *echo.Context) map[string]any {
 	if u := currentUser(c); u != nil {
 		role = u.Role
 	}
-	return map[string]any{"Services": h.serviceViews(), "Role": role}
+	return map[string]any{"Services": h.scopedViews(c), "Role": role}
+}
+
+// scopedViews is serviceViews limited to the user's scope.
+func (h *Handler) scopedViews(c *echo.Context) []ServiceView {
+	views := h.serviceViews()
+	if s := scopeOf(c); s != nil {
+		views = slices.DeleteFunc(views, func(v ServiceView) bool { _, ok := s[v.ID]; return !ok })
+	}
+	return views
 }
 
 // wizardError redirects the swap to the wizard's own error box (instead of

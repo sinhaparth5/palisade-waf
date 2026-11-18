@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"palisade/internal/storage"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -53,13 +54,18 @@ func (h *Handler) Logs(c *echo.Context) error {
 	hasFilter := filter.AppName != "" || filter.StatusClass != "" || fromStr != "" || toStr != ""
 	live := !hasFilter && page == 1 && q.Get("mode") != "history"
 
+	apps := h.registry.List()
+	if s := scopeOf(c); s != nil {
+		filter.AppNames = s.names()
+		apps = slices.DeleteFunc(apps, func(a storage.Service) bool { _, ok := s[a.ID]; return !ok })
+	}
 	rows, total, err := h.db.ListRequestsFiltered(filter)
 	if err != nil {
 		return err
 	}
 
 	return h.render(c, "logs", map[string]any{
-		"Apps":         h.registry.List(),
+		"Apps":         apps,
 		"History":      !live,
 		"Recent":       rows,
 		"Total":        total,
@@ -87,12 +93,16 @@ func (h *Handler) LogsStream(c *echo.Context) error {
 
 	ch := h.broadcaster.Subscribe()
 	defer h.broadcaster.Unsubscribe(ch)
+	s := scopeOf(c)
 
 	for {
 		select {
 		case entry, ok := <-ch:
 			if !ok {
 				return nil
+			}
+			if !s.hasName(entry.AppName) {
+				continue
 			}
 			var buf bytes.Buffer
 			if err := h.tmpls["log-row"].ExecuteTemplate(&buf, "log-row", entry); err != nil {
@@ -127,6 +137,9 @@ func (h *Handler) LogDetail(c *echo.Context) error {
 	d, err := h.db.GetRequestByID(id)
 	if err != nil {
 		return lookupError(c, err, "not found")
+	}
+	if !scopeOf(c).hasName(d.AppName) {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
 	}
 
 	// Parse headers_json into a plain map for the response.
@@ -172,6 +185,7 @@ func (h *Handler) LogDetail(c *echo.Context) error {
 		"visitor_id":       d.VisitorID,
 		"bot_score":        d.BotScore,
 		"cache_status":     d.CacheStatus,
+		"node":             d.Node,
 		"headers":          headers,
 		"has_threat_score": hasThreat,
 		"threat_score":     threat.Total,

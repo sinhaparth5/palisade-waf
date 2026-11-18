@@ -1,7 +1,13 @@
 package mailer
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
 	"strings"
 	"testing"
 	"time"
@@ -19,11 +25,11 @@ type fakeStore struct {
 }
 
 func (f *fakeStore) GetEmailConfig() (storage.EmailConfig, error) { return f.cfg, nil }
-func (f *fakeStore) GetDailyReport(from, to time.Time) (storage.DailyReport, error) {
+func (f *fakeStore) GetDailyReport(from, to time.Time, _ ...string) (storage.DailyReport, error) {
 	f.from, f.to = from, to
 	return f.report, nil
 }
-func (f *fakeStore) GetReportDetails(time.Time, time.Time, int) (storage.ReportDetails, error) {
+func (f *fakeStore) GetReportDetails(time.Time, time.Time, int, ...string) (storage.ReportDetails, error) {
 	return storage.ReportDetails{}, nil
 }
 func (f *fakeStore) GetEmailReportSentFor() (string, error) { return f.sentFor, nil }
@@ -230,9 +236,24 @@ func TestUntilNextMidnight(t *testing.T) {
 
 func TestFromHeaderCarriesDisplayName(t *testing.T) {
 	msg := string(buildMessage(fromHeader(), []string{"b@y.com"}, "Subj", "text", "<p>html</p>"))
-	want := "From: Palisade <alert@astrareconslabs.com>\r\n"
+	want := "From: \"Palisade\" <alert@astrareconslabs.com>\r\n"
 	if !strings.Contains(msg, want) {
 		t.Errorf("message missing %q — Gmail would show the bare address", want)
+	}
+}
+
+func TestBrand(t *testing.T) {
+	Brand = func() (string, string) { return "Acmé Shield", "#123456" }
+	t.Cleanup(func() { Brand = nil })
+	subject, text, htm := composeInvite("a@x", "viewer", "https://l", time.Now())
+	msg := string(buildMessage(fromHeader(), []string{"b@y.com"}, subject, text, htm))
+	for _, want := range []string{"From: =?utf-8?q?Acm=C3=A9_Shield?= <alert@", "Subject: =?utf-8?q?You've_been_added_to_Acm=C3=A9_Shield?="} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if !strings.Contains(htm, "background:#123456") || strings.Contains(htm, "Palisade") || strings.Contains(text, "Palisade") {
+		t.Error("not rebranded")
 	}
 }
 
@@ -324,5 +345,33 @@ func TestSendInviteRecipient(t *testing.T) {
 	r, _ = testReporter(&fakeStore{}, time.Now())
 	if err := r.SendInvite("new@example.com", "o", "admin", "l"); err == nil {
 		t.Error("sent without a token")
+	}
+}
+
+func TestBuildMessageWithAttachment(t *testing.T) {
+	raw := buildMessage("a@x.com", []string{"b@y.com"}, "S", "plain", "<p>h</p>", Attachment{Name: "r\"e\nport.pdf", ContentType: "application/pdf", Data: bytes.Repeat([]byte("%PDF"), 50)})
+	m, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, params, _ := mime.ParseMediaType(m.Header.Get("Content-Type"))
+	mr := multipart.NewReader(m.Body, params["boundary"])
+	var types []string
+	var data []byte
+	for {
+		p, err := mr.NextPart()
+		if err != nil {
+			break
+		}
+		types = append(types, p.Header.Get("Content-Type"))
+		if p.FileName() != "" {
+			if p.FileName() != "r_e_port.pdf" {
+				t.Errorf("filename %q", p.FileName())
+			}
+			data, _ = io.ReadAll(base64.NewDecoder(base64.StdEncoding, p))
+		}
+	}
+	if len(types) != 2 || !bytes.Equal(data, bytes.Repeat([]byte("%PDF"), 50)) {
+		t.Fatalf("parts %q, attachment %d bytes", types, len(data))
 	}
 }

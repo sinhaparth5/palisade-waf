@@ -84,7 +84,7 @@ func (db *DB) ExportConfig(w io.Writer) error {
 	// Anything not sealed is plaintext: leave it out.
 	unsealed := func(v any) bool { s, _ := v.(string); return s != "" && !strings.HasPrefix(s, secretPrefix) }
 	for _, row := range out.Tables["meta"] {
-		if k, _ := row["key"].(string); slices.Contains(secretMetaKeys, k) && unsealed(row["value"]) {
+		if k, _ := row["key"].(string); isSecretMetaKey(k) && unsealed(row["value"]) {
 			row["value"] = ""
 		}
 	}
@@ -218,7 +218,7 @@ var volatileConfig = map[string][]string{
 	"threat_intel_sources": {"last_synced_at", "last_error", "ip_count"},
 }
 
-var volatileMeta = []string{"email_report_sent_for", metaKeyNotificationsSeenAt, metaKeySessionsHashed}
+var volatileMeta = []string{"email_report_sent_for", metaKeyNotificationsSeenAt, metaKeySessionsHashed, metaKeyPruneFloor}
 
 // ConfigDigest hashes the stored configuration, so a cluster can tell
 // when it changed. Unlike ExportConfig it is stable: secrets are hashed as

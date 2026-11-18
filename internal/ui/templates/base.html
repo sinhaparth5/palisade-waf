@@ -11,8 +11,8 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Palisade · {{.Heading}}</title>
-  <link rel="icon" type="image/svg+xml" href="{{.AdminPath}}/static/imgs/logo.svg"/>
+  <title>{{(brand).Name}} · {{.Heading}}</title>
+  <link rel="icon" href="{{.AdminPath}}{{(brand).Logo}}"/>
   <!-- Saved theme (issue #134), applied before first paint, so not deferred. -->
   <script src="{{.AdminPath}}/static/js/theme.min.js?v={{.Asset}}"></script>
   <!-- Everything is served from the binary: the admin CSP allows no other
@@ -22,6 +22,7 @@
   <!-- Compiled Tailwind (make css), embedded in the binary — theme tokens and
        v3-preflight compat live in static/css/tailwind.css, not here. -->
   <link rel="stylesheet" href="{{.AdminPath}}/static/css/tailwind.min.css?v={{.Asset}}"/>
+  {{with (brand).CSS}}<link rel="stylesheet" href="{{$.AdminPath}}{{.}}"/>{{end}}
   <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/hugeicons/hgi-stroke-rounded.css?v={{.Asset}}"/>
   <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/flag-icons/css/flag-icons.min.css?v={{.Asset}}"/>
   <!-- Deferred so it never blocks first paint; deferred scripts run in
@@ -40,10 +41,10 @@
   <!-- Brand -->
   <div class="flex items-center gap-3 px-4 py-4 shrink-0 border-b border-side-line">
     <div id="brand-logo" class="relative w-10 h-10 shrink-0 cursor-pointer select-none border border-side-line p-1">
-      <img src="{{.AdminPath}}/static/imgs/logo.svg" alt="Palisade logo" class="w-full h-full block"/>
+      <img src="{{.AdminPath}}{{(brand).Logo}}" alt="{{(brand).Name}} logo" class="w-full h-full block"/>
     </div>
     <div class="min-w-0 font-mono uppercase">
-      <span class="block text-[18px] leading-tight tracking-[.04em] text-side-active truncate">Palisade</span>
+      <span class="block text-[18px] leading-tight tracking-[.04em] text-side-active truncate">{{(brand).Name}}</span>
       <span class="block text-[9px] leading-snug tracking-[.12em] text-side-muted">Web application<br/>firewall</span>
     </div>
     <button id="mobile-nav-close" type="button" aria-label="Close navigation" class="ml-auto flex h-11 w-11 items-center justify-center rounded-sm text-side-ink hover:bg-white/10 lg:hidden"><i class="hgi hgi-stroke hgi-rounded hgi-cancel-01 text-lg"></i></button>
@@ -65,14 +66,16 @@
   <!-- Nav links -->
   <p class="px-6 pt-4 pb-2 font-mono text-[10px] uppercase tracking-[.14em] text-side-muted">Navigation</p>
   <nav class="flex-1 flex flex-col gap-0.5 px-3 overflow-y-auto">
-    {{template "nav-item" (map "Page" .Page "Key" "dashboard" "Href" .AdminPath "Icon" "hgi-dashboard-square-01" "Label" "Dashboard")}}
+    {{if not .Scoped}}{{template "nav-item" (map "Page" .Page "Key" "dashboard" "Href" .AdminPath "Icon" "hgi-dashboard-square-01" "Label" "Dashboard")}}{{end}}
     {{template "nav-item" (map "Page" .Page "Key" "logs" "Href" (print .AdminPath "/logs") "Icon" "hgi-activity-01" "Label" "Live Logs")}}
     {{template "nav-item" (map "Page" .Page "Key" "services" "Href" (print .AdminPath "/services") "Icon" "hgi-settings-01" "Label" "Services")}}
+    {{if not .Scoped}}
     {{template "nav-item" (map "Page" .Page "Key" "certificates" "Href" (print .AdminPath "/certificates") "Icon" "hgi-certificate-01" "Label" "Certificates")}}
     {{template "nav-item" (map "Page" .Page "Key" "ip_rules" "Href" (print .AdminPath "/ip-rules") "Icon" "hgi-cancel-circle" "Label" "IP Rules")}}
     {{template "nav-item" (map "Page" .Page "Key" "geo_rules" "Href" (print .AdminPath "/geo-rules") "Icon" "hgi-earth" "Label" "Geo Rules")}}
     {{template "nav-item" (map "Page" .Page "Key" "waf_rules" "Href" (print .AdminPath "/waf-rules") "Icon" "hgi-security-block" "Label" "WAF Rules")}}
     {{template "nav-item" (map "Page" .Page "Key" "threat_intel" "Href" (print .AdminPath "/threat-intel") "Icon" "hgi-database-01" "Label" "Threat Intel")}}
+    {{end}}
     {{template "nav-item" (map "Page" .Page "Key" "settings" "Href" (print .AdminPath "/settings") "Icon" "hgi-user-account" "Label" "Settings")}}
   </nav>
 
@@ -81,7 +84,7 @@
     <div class="flex items-center gap-2 px-1 py-2">
       <span class="flex-1 min-w-0" title="{{.UserEmail}}">
         <span class="block text-[13px] font-medium text-side-active truncate">{{.UserEmail}}</span>
-        <span class="block font-mono text-[10px] uppercase tracking-[.1em] text-side-muted">Palisade {{.Version}}</span>
+        <span class="block font-mono text-[10px] uppercase tracking-[.1em] text-side-muted">{{(brand).Name}} {{.Version}}</span>
       </span>
       <div class="flex items-center gap-1 shrink-0">
       <!-- Theme -->
@@ -98,7 +101,7 @@
           <i class="hgi hgi-stroke hgi-rounded hgi-logout-02 text-[14px]"></i>
         </button>
       </form>
-      <div class="relative shrink-0">
+      {{if not .Scoped}}<div class="relative shrink-0">
         <button id="notif-btn" aria-label="Open notifications" class="w-11 h-11 lg:w-9 lg:h-9 rounded-sm border border-side-line flex items-center justify-center text-side-ink cursor-pointer relative hover:bg-white/10">
           <i class="hgi hgi-stroke hgi-rounded hgi-notification-03 text-[14px]"></i>
           {{if gt .AlertCount 0}}
@@ -106,7 +109,7 @@
           {{end}}
         </button>
         <div id="notif-panel" class="hidden fixed bottom-4 left-4 right-4 sm:absolute sm:bottom-12 sm:left-[calc(100%+16px)] sm:right-auto sm:w-[340px] bg-card border border-edge shadow-[0_20px_50px_rgba(0,0,0,.25)] z-[100] text-ink"></div>
-      </div>
+      </div>{{end}}
       </div>
     </div>
   </div>
@@ -123,9 +126,9 @@
     </p>
     {{if not (can .Role "admin")}}<span class="tag shrink-0" title="Your role can read every page but not change settings"><span class="h-2 w-2 rounded-full bg-slate-400"></span>Read-only</span>{{end}}
     <div class="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap justify-end py-2">
-      <button id="site-search-open" type="button" aria-label="Search" aria-keyshortcuts="Control+K Meta+K /" class="flex h-11 items-center gap-2 rounded-sm border border-edge px-3 text-slate-600 hover:bg-surface hover:text-ink sm:h-9">
+      {{if not .Scoped}}<button id="site-search-open" type="button" aria-label="Search" aria-keyshortcuts="Control+K Meta+K /" class="flex h-11 items-center gap-2 rounded-sm border border-edge px-3 text-slate-600 hover:bg-surface hover:text-ink sm:h-9">
         <i class="hgi hgi-stroke hgi-rounded hgi-search-01 text-base"></i><span class="hidden sm:inline">Search</span><kbd class="hidden font-mono text-[11px] text-slate-500 md:inline">Ctrl K</kbd>
-      </button>
+      </button>{{end}}
       {{block "actions" .}}{{end}}
     </div>
   </header>
@@ -151,7 +154,7 @@
   </footer>
 </div>
 
-{{template "site-search" .}}
+{{if not .Scoped}}{{template "site-search" .}}{{end}}
 <script src="{{.AdminPath}}/static/js/toast.min.js?v={{.Asset}}" defer></script>
 <script src="{{.AdminPath}}/static/js/notify.min.js?v={{.Asset}}" defer></script>
 <script src="{{.AdminPath}}/static/js/clipboard.min.js?v={{.Asset}}" defer></script>

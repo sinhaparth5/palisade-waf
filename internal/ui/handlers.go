@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"palisade/internal/config"
 	"palisade/internal/ext"
 	"palisade/internal/notify/metrics"
@@ -55,7 +56,23 @@ func setCSP(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+// brand is ext.Branding with Palisade's own name and logo filled in.
+func brand() ext.Brand {
+	var b ext.Brand
+	if ext.Branding != nil {
+		b = ext.Branding()
+	}
+	if b.Name == "" {
+		b.Name = "Palisade"
+	}
+	if b.Logo == "" {
+		b.Logo = "/static/imgs/logo.svg"
+	}
+	return b
+}
+
 var funcs = template.FuncMap{
+	"brand": brand,
 	// can reports whether role may use routes declared for need, by the
 	// same order requireRole enforces (issue #216): {{if can $.Role "admin"}}.
 	// A missing role (nil) has no rank, so it gets read-only markup.
@@ -241,6 +258,14 @@ const sessionCookie = "cz_session"
 // Unauthenticated requests are redirected to the login page.
 func (h *Handler) sessionAuth(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
+		if p := replayOf(c.Request()); p != nil {
+			if p.user == nil {
+				return c.String(http.StatusForbidden, "No user to replay as.")
+			}
+			c.Set(ctxUser, p.user)
+			c.Set("audit_actor", p.actor)
+			return next(c)
+		}
 		login := h.cfg.Admin.Path + "/login"
 		cookie, err := c.Cookie(sessionCookie)
 		if err != nil || cookie.Value == "" {
@@ -308,6 +333,9 @@ const sessionTouchThrottle = time.Minute
 func (h *Handler) hostGuard(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		r := c.Request()
+		if replayOf(r) != nil {
+			return next(c) // in-process, from ext.Replay
+		}
 		if r.Context().Value(adminListenerKey{}) != nil {
 			// The admin listener never proxies.
 			if !h.adminAllowed(r) {
@@ -536,6 +564,22 @@ func (h *Handler) Register(e *echo.Echo) {
 	// Add-ons from a binary built on palisade (palisade-pro). A route
 	// without a valid role would be open to every user, so refuse to start.
 	h.extCards = nil
+	ext.CurrentUser = currentUser
+	ext.SSOLogin = func(c *echo.Context, id *ext.SSOIdentity, refused string) error {
+		if refused != "" || id == nil {
+			return h.renderLogin(c, refused)
+		}
+		yes := true
+		return h.ssoLogin(c, &verifiedClaims{
+			ssoClaims: ssoClaims{Email: id.Email, EmailVerified: &yes},
+			iss:       id.Issuer, sub: id.Subject, email: storage.NormalizeEmail(id.Email),
+		}, id.InGroup, id.Method)
+	}
+	ext.Replay = func(r *http.Request, u *storage.AdminUser, actor string) (int, []byte) {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, r.WithContext(context.WithValue(r.Context(), replayKey{}, &replay{user: u, actor: actor})))
+		return rec.Code, rec.Body.Bytes()
+	}
 	for _, mount := range ext.Mounts {
 		f := mount(ext.Env{DB: h.db, AdminPath: base, Reload: h.reloadAll})
 		for _, r := range f.Open {
@@ -581,6 +625,7 @@ func (h *Handler) render(c *echo.Context, page string, data map[string]any) erro
 	if u := currentUser(c); u != nil {
 		data["UserEmail"], data["Role"] = u.Email, u.Role
 	}
+	data["Scoped"] = scopeOf(c) != nil
 	// Shell chrome: sidebar status box and bottom status bar.
 	data["Version"], data["WAFOn"] = h.cfg.Version, h.cfg.WAF.Enabled
 	// CSRF token for this session: picked up by hx-headers on <body> for all

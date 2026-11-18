@@ -87,6 +87,38 @@ func (db *DB) CreateSSOInvite(email, role string) error {
 	return err
 }
 
+// ProvisionSSOUser creates a password-less user with role who can only
+// sign in with SSO, for a provisioning protocol (SCIM): it gets an SSO
+// invite that doesn't expire, and their first SSO login binds them.
+func (db *DB) ProvisionSSOUser(email, role string) (*AdminUser, error) {
+	if !ValidRole(role) {
+		return nil, fmt.Errorf("invalid role %q", role)
+	}
+	email = NormalizeEmail(email)
+	if !ValidEmail(email) {
+		return nil, fmt.Errorf("invalid email %q", email)
+	}
+	if u, err := db.GetAdminUserByEmail(email); err != nil {
+		return nil, err
+	} else if u != nil {
+		return nil, ErrUserExists
+	}
+	id, err := db.insertReturningID(`INSERT INTO admin_users (email, password_hash, role, created_at) VALUES (?, '', ?, ?)`,
+		email, role, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	if _, err := db.exec(`DELETE FROM admin_sso_invites WHERE email = ?`, email); err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	if _, err := db.exec(`INSERT INTO admin_sso_invites (email, role, expires_at, created_at) VALUES (?, ?, ?, ?)`,
+		email, role, now.AddDate(100, 0, 0), now); err != nil {
+		return nil, err
+	}
+	return db.GetAdminUser(id)
+}
+
 // ListSSOInvites returns every pending invite, expired ones included so the
 // owner can renew them.
 func (db *DB) ListSSOInvites() ([]SSOInvite, error) {

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log"
 	"net/http"
+	"palisade/internal/ext"
 	"palisade/internal/storage"
 	"time"
 
@@ -190,16 +191,29 @@ func (h *Handler) renderLogin(c *echo.Context, errMsg string) error {
 	return h.renderLoginStatus(c, http.StatusOK, errMsg)
 }
 
+// extLogin is an add-on's extra sign-in button (ext.LoginButton).
+func extLogin() (label, path string) {
+	if ext.LoginButton == nil {
+		return "", ""
+	}
+	return ext.LoginButton()
+}
+
+func hasExtLogin() bool { l, _ := extLogin(); return l != "" }
+
 func (h *Handler) renderLoginStatus(c *echo.Context, status int, errMsg string) error {
 	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.Response().WriteHeader(status)
 	sso, _ := h.db.GetSSOConfig()
+	extName, extPath := extLogin()
 	return h.tmpls["login"].ExecuteTemplate(c.Response(), "login", map[string]any{
-		"Error":     errMsg,
-		"AdminPath": h.cfg.Admin.Path,
-		"Asset":     h.assetVer,
-		"SSOName":   ssoProviderName(sso),
-		"DemoEmail": h.cfg.Admin.DemoEmail,
-		"DemoPass":  h.cfg.Admin.DemoPassword,
+		"ExtLoginName": extName,
+		"ExtLoginPath": extPath,
+		"Error":        errMsg,
+		"AdminPath":    h.cfg.Admin.Path,
+		"Asset":        h.assetVer,
+		"SSOName":      ssoProviderName(sso),
+		"DemoEmail":    h.cfg.Admin.DemoEmail,
+		"DemoPass":     h.cfg.Admin.DemoPassword,
 	})
 }

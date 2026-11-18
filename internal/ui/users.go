@@ -54,6 +54,9 @@ func (h *Handler) requireRole(next echo.HandlerFunc) echo.HandlerFunc {
 		if u == nil || roleRank[u.Role] < roleRank[need] {
 			return c.String(http.StatusForbidden, "Your role can't do this.")
 		}
+		if done, err := h.enforceScope(c, u); done {
+			return err
+		}
 		// The shared demo account can't change its password or second
 		// factors, or sign other visitors out: only these writes are left.
 		if h.isDemo(u) && r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -91,7 +94,7 @@ func (h *Handler) usersCardData(c *echo.Context, errMsg string) map[string]any {
 		"AdminPath": h.cfg.Admin.Path,
 		"Users":     users,
 		"Invites":   invites,
-		"SSOOn":     sso.Issuer != "",
+		"SSOOn":     sso.Issuer != "" || hasExtLogin(),
 		"MyID":      currentUID(c),
 		"UserErr":   errMsg,
 	}

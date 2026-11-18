@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -11,8 +12,8 @@ const insertRequestSQL = `
 			(ts, app_name, real_ip, proxy_ip, country, method, host, path, query,
 			 status, blocked, rule_id, action, user_agent, duration_ms, headers_json,
 			 request_id, proto, tls_version, tls_cipher, tls_sni, asn_num, org,
-			 ja4, visitor_id, bot_score, cache_status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			 ja4, visitor_id, bot_score, cache_status, node)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 func insertRequestArgs(r RequestLog) []any {
 	return []any{
@@ -43,6 +44,23 @@ func insertRequestArgs(r RequestLog) []any {
 		r.VisitorID,
 		r.BotScore,
 		r.CacheStatus,
+		r.Node,
+	}
+}
+
+// InsertRequests stores entries another node logged (a cluster replica's,
+// sent to its primary) without the local hooks: autoban, webhooks and the
+// access log already ran on the node that served them. The live log still
+// gets them.
+func (db *DB) InsertRequests(batch []RequestLog) {
+	db.insertRequestBatch(batch)
+	if db.broadcastFn == nil {
+		return
+	}
+	for _, e := range batch {
+		if e.ID != 0 {
+			db.broadcastFn(e)
+		}
 	}
 }
 
@@ -121,6 +139,7 @@ type LogDetail struct {
 	VisitorID   string
 	BotScore    int
 	CacheStatus string
+	Node        string
 }
 
 // GetRequestByID fetches a single request log entry including all enrichment
@@ -132,13 +151,13 @@ func (db *DB) GetRequestByID(id int) (*LogDetail, error) {
 		SELECT id, ts, app_name, real_ip, proxy_ip, country, method, host, path, query,
 		       status, blocked, rule_id, action, user_agent, duration_ms, headers_json,
 		       request_id, proto, tls_version, tls_cipher, tls_sni, asn_num, org,
-		       ja4, visitor_id, bot_score, cache_status
+		       ja4, visitor_id, bot_score, cache_status, node
 		FROM requests WHERE id = ?`, id).Scan(
 		&d.ID, &d.Timestamp, &d.AppName, &d.RealIP, &d.ProxyIP, &d.Country,
 		&d.Method, &d.Host, &d.Path, &d.Query,
 		&d.Status, &blocked, &d.RuleID, &d.Action, &d.UserAgent, &d.Duration,
 		&d.HeadersJSON, &d.RequestID, &d.Proto, &d.TLSVersion, &d.TLSCipher,
-		&d.TLSSNI, &d.ASN, &d.Org, &d.JA4, &d.VisitorID, &d.BotScore, &d.CacheStatus,
+		&d.TLSSNI, &d.ASN, &d.Org, &d.JA4, &d.VisitorID, &d.BotScore, &d.CacheStatus, &d.Node,
 	)
 	if err != nil {
 		return nil, err
@@ -400,6 +419,7 @@ type LogFilter struct {
 	From        time.Time // ts >= From, if non-zero
 	To          time.Time // ts <= To, if non-zero
 	AppName     string    // exact match, if non-empty
+	AppNames    []string  // one of these, if non-nil (empty: none)
 	IP          string    // exact real_ip match, if non-empty
 	StatusClass string    // "" | "2xx" | "3xx" | "4xx" | "5xx" | "blocked" | "cache_error"
 	Limit       int
@@ -421,6 +441,12 @@ func (f LogFilter) where() (string, []any) {
 	if f.AppName != "" {
 		clause += " AND app_name = ?"
 		args = append(args, f.AppName)
+	}
+	if f.AppNames != nil {
+		clause += " AND app_name IN (NULL" + strings.Repeat(", ?", len(f.AppNames)) + ")"
+		for _, n := range f.AppNames {
+			args = append(args, n)
+		}
 	}
 	if f.IP != "" {
 		clause += " AND real_ip = ?"
@@ -649,10 +675,41 @@ func (db *DB) CountBlockedSince(t time.Time) (int, error) {
 // to run instead of starving behind back-to-back prune transactions.
 const pruneBatchSize = 2000
 
-// PruneOldRequests deletes request logs older than `days` days and returns
-// how many rows were removed.
+// metaKeyPruneFloor holds the prune floor (RFC 3339); see SetPruneFloor.
+const metaKeyPruneFloor = "requests_prune_floor"
+
+// SetPruneFloor stops PruneOldRequests from deleting request logs at or
+// after t, for an add-on that copies logs elsewhere before they go (a
+// zero t lifts it). It is stored in the database, so a separate `prune`
+// process honors it too.
+func (db *DB) SetPruneFloor(t time.Time) error {
+	v := ""
+	if !t.IsZero() {
+		v = t.UTC().Format(time.RFC3339)
+	}
+	return db.setMeta(metaKeyPruneFloor, v)
+}
+
+// PruneFloor returns the floor SetPruneFloor stored, or zero.
+func (db *DB) PruneFloor() (time.Time, error) {
+	v, err := db.getMeta(metaKeyPruneFloor)
+	if err != nil || v == "" {
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339, v)
+}
+
+// PruneOldRequests deletes request logs older than `days` days, but none at
+// or after the prune floor, and returns how many rows were removed.
 func (db *DB) PruneOldRequests(days int) (int64, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -days)
+	floor, err := db.PruneFloor()
+	if err != nil {
+		return 0, err
+	}
+	if !floor.IsZero() && floor.Before(cutoff) {
+		cutoff = floor
+	}
 	var total int64
 	for {
 		res, err := db.exec(

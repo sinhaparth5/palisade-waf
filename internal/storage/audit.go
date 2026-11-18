@@ -1,6 +1,9 @@
 package storage
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
 
 // AuditEntry is one admin action: a successful state-changing request to
 // the admin UI or REST API.
@@ -19,11 +22,21 @@ type AuditEntry struct {
 // retention would be too short to investigate anything.
 const AuditRetentionDays = 365
 
+// SetAuditFn registers a callback invoked after each stored audit entry
+// (with TS set), without coupling storage to its consumers.
+func (db *DB) SetAuditFn(fn func(AuditEntry)) {
+	db.auditFn = fn
+}
+
 func (db *DB) InsertAudit(e AuditEntry) error {
+	e.TS = time.Now().UTC()
 	_, err := db.exec(
 		`INSERT INTO audit_log (ts, actor, ip, action, target, summary) VALUES (?, ?, ?, ?, ?, ?)`,
-		time.Now().UTC(), e.Actor, e.IP, e.Action, e.Target, e.Summary,
+		e.TS, e.Actor, e.IP, e.Action, e.Target, e.Summary,
 	)
+	if err == nil && db.auditFn != nil {
+		db.auditFn(e)
+	}
 	return err
 }
 
@@ -39,16 +52,31 @@ func (db *DB) ListAudit(limit, offset int) ([]AuditEntry, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	out, err := scanAudit(rows)
+	return out, total, err
+}
+
+// AuditAfter returns up to limit entries with an id above id, oldest first,
+// for consumers that copy the trail elsewhere.
+func (db *DB) AuditAfter(id, limit int) ([]AuditEntry, error) {
+	rows, err := db.query(`SELECT id, ts, actor, ip, action, target, summary FROM audit_log WHERE id > ? ORDER BY id LIMIT ?`, id, limit)
+	if err != nil {
+		return nil, err
+	}
+	return scanAudit(rows)
+}
+
+func scanAudit(rows *sql.Rows) ([]AuditEntry, error) {
 	defer rows.Close()
 	var out []AuditEntry
 	for rows.Next() {
 		var e AuditEntry
 		if err := rows.Scan(&e.ID, &e.TS, &e.Actor, &e.IP, &e.Action, &e.Target, &e.Summary); err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		out = append(out, e)
 	}
-	return out, total, rows.Err()
+	return out, rows.Err()
 }
 
 // PruneAudit deletes audit rows older than days and returns how many went.

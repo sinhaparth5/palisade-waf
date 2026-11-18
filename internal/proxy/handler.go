@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"palisade/internal/ext"
 	"palisade/internal/notify/metrics"
 	"palisade/internal/security/adaptive"
 	"palisade/internal/security/asn"
@@ -630,6 +631,21 @@ func (h *Handler) Handle(c *echo.Context) error {
 		hit.Action = "leaked_password:log"
 		result = &hit
 	}
+	// 5.6 Login add-ons (internal/ext), e.g. account takeover defense.
+	if login && !trusted && ext.OnLogin != nil && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if v := ext.OnLogin(r, loginBody(r), appName, clientIP); v != nil {
+			if v.Status != 0 {
+				mark("login")
+				h.logBlocked(r, appName, clientIP, country, v.Status, 0, v.Action, time.Since(start), meta)
+				return c.Blob(v.Status, v.ContentType, v.Body)
+			}
+			if v.Action != "" && result.Action == "" {
+				hit := *result
+				hit.Action = v.Action
+				result = &hit
+			}
+		}
+	}
 	if policyFailed && result.Action == "" {
 		hit := *result
 		hit.Action = "policy_violation:log"
@@ -696,12 +712,26 @@ func (h *Handler) Handle(c *echo.Context) error {
 	// Response inspection (issue #192): CRS's outbound rules over the
 	// backend's text response, before any of it reaches the client.
 	leakRule := 0
-	if app.ResponseInspect != "" && !trusted {
+	var check func(*http.Request, *http.Response) (string, bool)
+	if ext.ResponseCheck != nil && !trusted {
+		check = ext.ResponseCheck(app.Name) //nolint:bodyclose // returns a check, not a response
+	}
+	extAction, extBlock := "", false
+	if (app.ResponseInspect != "" || check != nil) && !trusted {
 		out = services.WithResponseHook(out, func(resp *http.Response) error {
-			leakRule = engine.CheckResponse(r, clientIP, resp)
-			if leakRule != 0 && app.ResponseInspect == "block" {
-				w.Header().Set("X-WAF-Block-Reason", "response_leak")
-				return services.ErrResponseBlocked
+			if app.ResponseInspect != "" {
+				leakRule = engine.CheckResponse(r, clientIP, resp)
+				if leakRule != 0 && app.ResponseInspect == "block" {
+					w.Header().Set("X-WAF-Block-Reason", "response_leak")
+					return services.ErrResponseBlocked
+				}
+			}
+			if check != nil {
+				extAction, extBlock = check(r, resp)
+				if extBlock {
+					w.Header().Set("X-WAF-Block-Reason", strings.SplitN(extAction, ":", 2)[0])
+					return services.ErrResponseBlocked
+				}
 			}
 			return nil
 		})
@@ -717,6 +747,15 @@ func (h *Handler) Handle(c *echo.Context) error {
 		}
 		hit := *result // may be the verdict cache's shared copy
 		hit.RuleID, hit.Action = leakRule, "response_leak:log"
+		result = &hit
+	} else if extAction != "" {
+		if extBlock {
+			metrics.WAFBlockedTotal.WithLabelValues(appName, strings.SplitN(extAction, ":", 2)[0]).Inc()
+			h.logBlocked(r, appName, clientIP, country, rw.status, 0, extAction, time.Since(start), meta)
+			return nil
+		}
+		hit := *result // may be the verdict cache's shared copy
+		hit.RuleID, hit.Action = 0, extAction
 		result = &hit
 	}
 	if h.registry.Cached(app.Name) {
@@ -742,25 +781,30 @@ const breachBodyLimit = 64 << 10
 // is normally already in memory from the WAF. A failed lookup counts as not
 // leaked, so an HIBP outage never blocks a login.
 func (h *Handler) leakedPassword(r *http.Request, app *storage.Service) bool {
-	var body []byte
-	ct := r.Header.Get("Content-Type")
-	if r.Body != nil && r.Body != http.NoBody && (strings.Contains(ct, "form-urlencoded") || strings.Contains(ct, "json")) {
-		b, err := io.ReadAll(io.LimitReader(r.Body, breachBodyLimit))
-		r.Body = struct {
-			io.Reader
-			io.Closer
-		}{io.MultiReader(bytes.NewReader(b), r.Body), r.Body}
-		if err != nil {
-			return false
-		}
-		body = b
-	}
-	pw := breach.Password(r, body, app.BreachFields)
+	pw := breach.Password(r, loginBody(r), app.BreachFields)
 	if pw == "" {
 		return false
 	}
 	leaked, _ := h.breach.Leaked(r.Context(), pw)
 	return leaked
+}
+
+// loginBody returns the first breachBodyLimit bytes of a form or JSON body
+// (nil for anything else, or on a read error) and restores r.Body.
+func loginBody(r *http.Request) []byte {
+	ct := r.Header.Get("Content-Type")
+	if r.Body == nil || r.Body == http.NoBody || (!strings.Contains(ct, "form-urlencoded") && !strings.Contains(ct, "json")) {
+		return nil
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, breachBodyLimit))
+	r.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(b), r.Body), r.Body}
+	if err != nil {
+		return nil
+	}
+	return b
 }
 
 // openPaths are the files crawlers and AI agents read to learn about a site,

@@ -225,6 +225,9 @@
     setText('ld-ts', d.timestamp ? new Date(d.timestamp).toUTCString() : '');
     setText('ld-dur', d.duration_ms + 'ms' + (d.cache_status ? ' · cache ' + d.cache_status : ''));
     setText('ld-app', d.app_name);
+    setText('ld-node', d.node);
+    show('ld-node-label', !!d.node);
+    show('ld-node', !!d.node);
     setText('ld-host', d.host);
     setText('ld-ua', d.user_agent);
     setText('ld-query', d.query || '(none)');

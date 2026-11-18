@@ -19,6 +19,7 @@ func TestClosedDBErrors(t *testing.T) {
 	e2 := func(_, _ any, err error) error { return err }
 
 	calls := map[string]func() error{
+		"ProvisionSSOUser":          func() error { return e(db.ProvisionSSOUser("a@example.com", RoleViewer)) },
 		"AcceptSSOInvite":           func() error { return e(db.AcceptSSOInvite("a@example.com", "iss", "sub")) },
 		"AcceptUserInvite":          func() error { return e(db.AcceptUserInvite("tok", "pw")) },
 		"AddCSPScript":              func() error { return e(db.AddCSPScript(1, CSPScript{Origin: "inline", Page: "/", FirstSeen: now})) },
@@ -107,6 +108,8 @@ func TestClosedDBErrors(t *testing.T) {
 		"ListReplayRequests":       func() error { return e(db.ListReplayRequests(10)) },
 		"ExportRequests":           func() error { return db.ExportRequests(LogFilter{}, func(RequestLog) bool { return true }) },
 		"PruneOldRequests":         func() error { return e(db.PruneOldRequests(1)) },
+		"SetPruneFloor":            func() error { return db.SetPruneFloor(now) },
+		"PruneFloor":               func() error { return e(db.PruneFloor()) },
 		"CountBlockedSince":        func() error { return e(db.CountBlockedSince(now)) },
 		"GetDailyReport":           func() error { return e(db.GetDailyReport(now.Add(-time.Hour), now)) },
 		"GetReportDetails":         func() error { return e(db.GetReportDetails(now.Add(-time.Hour), now, 5)) },
