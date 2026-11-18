@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#324) Optional IP2Proxy database path for the hosting/VPN threat score signal
+
 ## [3.4.0] - 2026-11-17
 
 - (#328) Helm chart: single-replica deployment with a persistent /data volume

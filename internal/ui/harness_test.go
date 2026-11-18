@@ -100,7 +100,7 @@ func newAdminEnv(t *testing.T) *adminEnv {
 			return env.inviteErr
 		},
 		reloadAutoban,
-		threatscore.New(db, func(string) int { return 0 }),
+		threatscore.New(db, func(string) int { return 0 }, nil),
 		reloadAdaptive,
 		func(c *echo.Context) error { return c.String(http.StatusTeapot, "proxied") },
 	)
