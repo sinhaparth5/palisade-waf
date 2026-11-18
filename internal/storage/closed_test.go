@@ -19,6 +19,7 @@ func TestClosedDBErrors(t *testing.T) {
 	e2 := func(_, _ any, err error) error { return err }
 
 	calls := map[string]func() error{
+		"ProvisionSSOUser":          func() error { return e(db.ProvisionSSOUser("a@example.com", RoleViewer)) },
 		"AcceptSSOInvite":           func() error { return e(db.AcceptSSOInvite("a@example.com", "iss", "sub")) },
 		"AcceptUserInvite":          func() error { return e(db.AcceptUserInvite("tok", "pw")) },
 		"AddCSPScript":              func() error { return e(db.AddCSPScript(1, CSPScript{Origin: "inline", Page: "/", FirstSeen: now})) },
