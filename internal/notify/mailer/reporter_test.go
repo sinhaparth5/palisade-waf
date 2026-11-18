@@ -25,11 +25,11 @@ type fakeStore struct {
 }
 
 func (f *fakeStore) GetEmailConfig() (storage.EmailConfig, error) { return f.cfg, nil }
-func (f *fakeStore) GetDailyReport(from, to time.Time) (storage.DailyReport, error) {
+func (f *fakeStore) GetDailyReport(from, to time.Time, _ ...string) (storage.DailyReport, error) {
 	f.from, f.to = from, to
 	return f.report, nil
 }
-func (f *fakeStore) GetReportDetails(time.Time, time.Time, int) (storage.ReportDetails, error) {
+func (f *fakeStore) GetReportDetails(time.Time, time.Time, int, ...string) (storage.ReportDetails, error) {
 	return storage.ReportDetails{}, nil
 }
 func (f *fakeStore) GetEmailReportSentFor() (string, error) { return f.sentFor, nil }
