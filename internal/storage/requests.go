@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -418,6 +419,7 @@ type LogFilter struct {
 	From        time.Time // ts >= From, if non-zero
 	To          time.Time // ts <= To, if non-zero
 	AppName     string    // exact match, if non-empty
+	AppNames    []string  // one of these, if non-nil (empty: none)
 	IP          string    // exact real_ip match, if non-empty
 	StatusClass string    // "" | "2xx" | "3xx" | "4xx" | "5xx" | "blocked" | "cache_error"
 	Limit       int
@@ -439,6 +441,12 @@ func (f LogFilter) where() (string, []any) {
 	if f.AppName != "" {
 		clause += " AND app_name = ?"
 		args = append(args, f.AppName)
+	}
+	if f.AppNames != nil {
+		clause += " AND app_name IN (NULL" + strings.Repeat(", ?", len(f.AppNames)) + ")"
+		for _, n := range f.AppNames {
+			args = append(args, n)
+		}
 	}
 	if f.IP != "" {
 		clause += " AND real_ip = ?"

@@ -13,14 +13,14 @@
 
   <nav aria-label="Settings sections" class="flex flex-wrap gap-2">
     <a href="#settings-access" class="btn-ghost min-h-10 px-4 no-underline">Account &amp; access</a>
-    {{if can .Role "admin"}}
+    {{if can .Role "admin"}}{{if not .Scoped}}
     <a href="#settings-protection" class="btn-ghost min-h-10 px-4 no-underline">Protection</a>
     <a href="#settings-infrastructure" class="btn-ghost min-h-10 px-4 no-underline">Infrastructure</a>
     {{if can .Role "owner"}}
     <a href="#settings-alerts" class="btn-ghost min-h-10 px-4 no-underline">Alerts &amp; integrations</a>
     {{end}}
-    {{end}}
-    <a href="#settings-activity" class="btn-ghost min-h-10 px-4 no-underline">Activity</a>
+    {{end}}{{end}}
+    {{if not .Scoped}}<a href="#settings-activity" class="btn-ghost min-h-10 px-4 no-underline">Activity</a>{{end}}
   </nav>
 
   <!-- ── Account & access ─────────────────────────────────────────────────── -->
@@ -81,7 +81,7 @@
     {{if can .Role "owner"}}{{template "users-card" .}}{{template "sso-card" .}}{{end}}
   </section>
 
-  {{if can .Role "admin"}}
+  {{if can .Role "admin"}}{{if not .Scoped}}
 
   <!-- ── Protection ───────────────────────────────────────────────────────── -->
   <section id="settings-protection" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-protection-title">
@@ -147,9 +147,9 @@
     </div>
   </section>
   {{end}}
-  {{end}}
+  {{end}}{{end}}
 
-  {{if .ExtCards}}
+  {{if and .ExtCards (not .Scoped)}}
   <!-- ── Pro (cards from internal/ext) ────────────────────────────────────── -->
   <section id="settings-pro" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-pro-title">
     {{template "settings-section-title" (map "ID" "settings-pro-title" "Title" "Palisade Pro" "Copy" "License and Pro features.")}}
@@ -159,11 +159,13 @@
   </section>
   {{end}}
 
+  {{if not .Scoped}}
   <!-- ── Activity ─────────────────────────────────────────────────────────── -->
   <section id="settings-activity" class="scroll-mt-20 flex flex-col gap-4" aria-labelledby="settings-activity-title">
     {{template "settings-section-title" (map "ID" "settings-activity-title" "Title" "Activity" "Copy" "Every change made from this dashboard or the REST API.")}}
     {{template "audit-card" .}}
   </section>
+  {{end}}
 
 </div>
 {{end}}

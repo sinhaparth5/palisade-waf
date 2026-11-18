@@ -599,6 +599,7 @@ func (h *Handler) render(c *echo.Context, page string, data map[string]any) erro
 	if u := currentUser(c); u != nil {
 		data["UserEmail"], data["Role"] = u.Email, u.Role
 	}
+	data["Scoped"] = scopeOf(c) != nil
 	// Shell chrome: sidebar status box and bottom status bar.
 	data["Version"], data["WAFOn"] = h.cfg.Version, h.cfg.WAF.Enabled
 	// CSRF token for this session: picked up by hx-headers on <body> for all

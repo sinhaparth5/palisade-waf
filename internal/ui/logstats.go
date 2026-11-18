@@ -61,9 +61,12 @@ func (h *Handler) LogStatsSeed(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	events := make([]statEvent, len(rows))
-	for i, r := range rows {
-		events[i] = newStatEvent(r)
+	s := scopeOf(c)
+	events := make([]statEvent, 0, len(rows))
+	for _, r := range rows {
+		if s.hasName(r.AppName) {
+			events = append(events, newStatEvent(r))
+		}
 	}
 	if len(rows) == statsSeedLimit {
 		since = rows[0].Timestamp // capped: the data starts later than an hour ago
