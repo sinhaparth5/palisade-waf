@@ -281,10 +281,20 @@ func (db *DB) SetAdminUserDisabled(id int64, disabled bool) error {
 	return db.RevokeUserSessions(id)
 }
 
-// DeleteAdminUser removes a user with its sessions and passkeys.
+// DeleteAdminUser removes a user with its sessions, passkeys and any
+// pending SSO invite for their email (which would bring them back).
 func (db *DB) DeleteAdminUser(id int64) error {
 	if err := db.guardLastOwner(id); err != nil {
 		return err
+	}
+	u, err := db.GetAdminUser(id)
+	if err != nil {
+		return err
+	}
+	if u != nil {
+		if _, err := db.exec(`DELETE FROM admin_sso_invites WHERE email = ?`, u.Email); err != nil {
+			return err
+		}
 	}
 	for _, q := range []string{
 		`DELETE FROM sessions WHERE user_id = ?`,

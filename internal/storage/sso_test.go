@@ -76,3 +76,29 @@ func TestSSOInvites(t *testing.T) {
 		t.Error("identity outlived its user")
 	}
 }
+
+// TestProvisionSSOUser: a provisioned user exists at once, their invite
+// doesn't expire and binds them, and deleting them drops the invite.
+func TestProvisionSSOUser(t *testing.T) {
+	db := openTestDB(t)
+	const iss = "https://idp.example"
+	u, err := db.ProvisionSSOUser("P@x.test", RoleViewer)
+	if err != nil || u == nil || u.Email != "p@x.test" || u.Invited || u.SSO {
+		t.Fatalf("provision = %+v, %v", u, err)
+	}
+	if _, err := db.ProvisionSSOUser("p@x.test", RoleViewer); !errors.Is(err, ErrUserExists) {
+		t.Errorf("twice: err = %v", err)
+	}
+	if inv, _ := db.ListSSOInvites(); len(inv) != 1 || inv[0].ExpiresAt.Before(time.Now().AddDate(50, 0, 0)) {
+		t.Errorf("invites = %+v", inv)
+	}
+	if got, _ := db.AcceptSSOInvite("p@x.test", iss, "p"); got == nil || got.ID != u.ID || !got.SSO {
+		t.Fatalf("accept = %+v", got)
+	}
+
+	q, _ := db.ProvisionSSOUser("q@x.test", RoleAdmin)
+	mustNoErr(t, db.DeleteAdminUser(q.ID))
+	if got, _ := db.AcceptSSOInvite("q@x.test", iss, "q"); got != nil {
+		t.Error("deleted user came back through their invite")
+	}
+}
