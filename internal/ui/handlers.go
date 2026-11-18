@@ -56,7 +56,23 @@ func setCSP(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+// brand is ext.Branding with Palisade's own name and logo filled in.
+func brand() ext.Brand {
+	var b ext.Brand
+	if ext.Branding != nil {
+		b = ext.Branding()
+	}
+	if b.Name == "" {
+		b.Name = "Palisade"
+	}
+	if b.Logo == "" {
+		b.Logo = "/static/imgs/logo.svg"
+	}
+	return b
+}
+
 var funcs = template.FuncMap{
+	"brand": brand,
 	// can reports whether role may use routes declared for need, by the
 	// same order requireRole enforces (issue #216): {{if can $.Role "admin"}}.
 	// A missing role (nil) has no rank, so it gets read-only markup.

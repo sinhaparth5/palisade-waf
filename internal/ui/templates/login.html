@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Sign in · Palisade</title>
-  <link rel="icon" type="image/svg+xml" href="{{.AdminPath}}/static/imgs/logo.svg"/>
+  <title>Sign in · {{(brand).Name}}</title>
+  <link rel="icon" href="{{.AdminPath}}{{(brand).Logo}}"/>
   <!-- Saved theme (issue #134), applied before first paint, so not deferred. -->
   <script src="{{.AdminPath}}/static/js/theme.min.js?v={{.Asset}}"></script>
   <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/fonts/fonts.css?v={{.Asset}}"/>
   <!-- Compiled Tailwind (make css), shared with base.html; .page-login on
        <body> keeps this page's slate-200 default borders. -->
   <link rel="stylesheet" href="{{.AdminPath}}/static/css/tailwind.min.css?v={{.Asset}}"/>
+  {{with (brand).CSS}}<link rel="stylesheet" href="{{$.AdminPath}}{{.}}"/>{{end}}
 </head>
 <body class="page-login min-h-dvh bg-canvas" data-admin-path="{{.AdminPath}}">
 
@@ -26,8 +27,8 @@
              class="absolute inset-0 h-full w-full object-cover object-center grayscale-[.6] sepia-[.25]"/>
         <div class="absolute inset-0 bg-linear-to-t from-black/35 via-transparent to-transparent"></div>
         <span class="absolute left-5 bottom-4 flex items-center gap-2">
-          <img src="{{.AdminPath}}/static/imgs/logo.svg" alt="" class="w-6 h-6 drop-shadow-sm"/>
-          <span class="font-mono text-white text-sm uppercase tracking-[.16em] drop-shadow-sm">Palisade</span>
+          <img src="{{.AdminPath}}{{(brand).Logo}}" alt="" class="w-6 h-6 drop-shadow-sm"/>
+          <span class="font-mono text-white text-sm uppercase tracking-[.16em] drop-shadow-sm">{{(brand).Name}}</span>
         </span>
       </div>
 
@@ -36,13 +37,13 @@
 
           <!-- Brand (desktop only; mobile shows it on the art banner instead) -->
           <span class="hidden lg:flex items-center gap-2 mb-3">
-            <img src="{{.AdminPath}}/static/imgs/logo.svg" alt="" class="w-6 h-6"/>
-            <span class="font-mono text-ink text-sm uppercase tracking-[.16em]">Palisade</span>
+            <img src="{{.AdminPath}}{{(brand).Logo}}" alt="" class="w-6 h-6"/>
+            <span class="font-mono text-ink text-sm uppercase tracking-[.16em]">{{(brand).Name}}</span>
           </span>
 
           {{if .InviteStage}}
           <h1 class="font-mono text-ink text-2xl sm:text-3xl font-medium uppercase tracking-[.04em] leading-tight mb-2">Set your password</h1>
-          <p class="text-slate-500 text-sm sm:text-base mb-8">{{if .InviteEmail}}You were added to Palisade as <span class="text-ink">{{.InviteEmail}}</span>. Choose a password to finish.{{else}}Invite links work once, for 7 days.{{end}}</p>
+          <p class="text-slate-500 text-sm sm:text-base mb-8">{{if .InviteEmail}}You were added to {{(brand).Name}} as <span class="text-ink">{{.InviteEmail}}</span>. Choose a password to finish.{{else}}Invite links work once, for 7 days.{{end}}</p>
           {{else if .TOTPStage}}
           <h1 class="font-mono text-ink text-2xl sm:text-3xl font-medium uppercase tracking-[.04em] leading-tight mb-2">Two-factor authentication</h1>
           <p class="text-slate-500 text-sm sm:text-base mb-8">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>

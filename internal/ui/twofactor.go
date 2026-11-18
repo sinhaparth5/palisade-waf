@@ -38,8 +38,6 @@ const (
 	emailCodeResendWait = time.Minute
 	// backupCodeCount is how many one-time recovery codes enrollment hands out.
 	backupCodeCount = 10
-	// totpIssuer names this system in authenticator apps.
-	totpIssuer = "Palisade"
 )
 
 // twoFAEntry is one password-verified login waiting for its second factor.
@@ -357,7 +355,7 @@ func (h *Handler) StartTOTPEnrollment(c *echo.Context) error {
 }
 
 func (h *Handler) renderTOTPEnrollment(c *echo.Context, secret, errMsg string) error {
-	uri := totp.ProvisioningURI(secret, currentUser(c).Email, totpIssuer)
+	uri := totp.ProvisioningURI(secret, currentUser(c).Email, brand().Name)
 	png, err := qrcode.Encode(uri, qrcode.Medium, 220)
 	// template.URL: html/template's URL filter rejects data: URIs from plain
 	// strings (rendered as ZgotmplZ); this one is built entirely server-side

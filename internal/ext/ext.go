@@ -118,3 +118,14 @@ var SSOLogin func(c *echo.Context, id *SSOIdentity, refused string) error
 // linking to path under the admin path; label "" hides it. A label also
 // shows SSO invites under Users. Set from a Mount.
 var LoginButton func() (label, path string)
+
+// Brand renames and reskins the admin UI; a zero field keeps Palisade's.
+type Brand struct {
+	Name string // replaces "Palisade" in the UI and authenticator apps
+	Logo string // image path under the admin path; served without a session
+	CSS  string // stylesheet path under the admin path, loaded after the UI's
+}
+
+// Branding, when set, is read on every page render, so keep it cheap. Set
+// from a Mount.
+var Branding func() Brand

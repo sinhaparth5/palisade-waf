@@ -11,8 +11,8 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Palisade · {{.Heading}}</title>
-  <link rel="icon" type="image/svg+xml" href="{{.AdminPath}}/static/imgs/logo.svg"/>
+  <title>{{(brand).Name}} · {{.Heading}}</title>
+  <link rel="icon" href="{{.AdminPath}}{{(brand).Logo}}"/>
   <!-- Saved theme (issue #134), applied before first paint, so not deferred. -->
   <script src="{{.AdminPath}}/static/js/theme.min.js?v={{.Asset}}"></script>
   <!-- Everything is served from the binary: the admin CSP allows no other
@@ -22,6 +22,7 @@
   <!-- Compiled Tailwind (make css), embedded in the binary — theme tokens and
        v3-preflight compat live in static/css/tailwind.css, not here. -->
   <link rel="stylesheet" href="{{.AdminPath}}/static/css/tailwind.min.css?v={{.Asset}}"/>
+  {{with (brand).CSS}}<link rel="stylesheet" href="{{$.AdminPath}}{{.}}"/>{{end}}
   <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/hugeicons/hgi-stroke-rounded.css?v={{.Asset}}"/>
   <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/flag-icons/css/flag-icons.min.css?v={{.Asset}}"/>
   <!-- Deferred so it never blocks first paint; deferred scripts run in
@@ -40,10 +41,10 @@
   <!-- Brand -->
   <div class="flex items-center gap-3 px-4 py-4 shrink-0 border-b border-side-line">
     <div id="brand-logo" class="relative w-10 h-10 shrink-0 cursor-pointer select-none border border-side-line p-1">
-      <img src="{{.AdminPath}}/static/imgs/logo.svg" alt="Palisade logo" class="w-full h-full block"/>
+      <img src="{{.AdminPath}}{{(brand).Logo}}" alt="{{(brand).Name}} logo" class="w-full h-full block"/>
     </div>
     <div class="min-w-0 font-mono uppercase">
-      <span class="block text-[18px] leading-tight tracking-[.04em] text-side-active truncate">Palisade</span>
+      <span class="block text-[18px] leading-tight tracking-[.04em] text-side-active truncate">{{(brand).Name}}</span>
       <span class="block text-[9px] leading-snug tracking-[.12em] text-side-muted">Web application<br/>firewall</span>
     </div>
     <button id="mobile-nav-close" type="button" aria-label="Close navigation" class="ml-auto flex h-11 w-11 items-center justify-center rounded-sm text-side-ink hover:bg-white/10 lg:hidden"><i class="hgi hgi-stroke hgi-rounded hgi-cancel-01 text-lg"></i></button>
@@ -83,7 +84,7 @@
     <div class="flex items-center gap-2 px-1 py-2">
       <span class="flex-1 min-w-0" title="{{.UserEmail}}">
         <span class="block text-[13px] font-medium text-side-active truncate">{{.UserEmail}}</span>
-        <span class="block font-mono text-[10px] uppercase tracking-[.1em] text-side-muted">Palisade {{.Version}}</span>
+        <span class="block font-mono text-[10px] uppercase tracking-[.1em] text-side-muted">{{(brand).Name}} {{.Version}}</span>
       </span>
       <div class="flex items-center gap-1 shrink-0">
       <!-- Theme -->

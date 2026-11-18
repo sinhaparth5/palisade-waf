@@ -236,9 +236,24 @@ func TestUntilNextMidnight(t *testing.T) {
 
 func TestFromHeaderCarriesDisplayName(t *testing.T) {
 	msg := string(buildMessage(fromHeader(), []string{"b@y.com"}, "Subj", "text", "<p>html</p>"))
-	want := "From: Palisade <alert@astrareconslabs.com>\r\n"
+	want := "From: \"Palisade\" <alert@astrareconslabs.com>\r\n"
 	if !strings.Contains(msg, want) {
 		t.Errorf("message missing %q — Gmail would show the bare address", want)
+	}
+}
+
+func TestBrand(t *testing.T) {
+	Brand = func() (string, string) { return "Acmé Shield", "#123456" }
+	t.Cleanup(func() { Brand = nil })
+	subject, text, htm := composeInvite("a@x", "viewer", "https://l", time.Now())
+	msg := string(buildMessage(fromHeader(), []string{"b@y.com"}, subject, text, htm))
+	for _, want := range []string{"From: =?utf-8?q?Acm=C3=A9_Shield?= <alert@", "Subject: =?utf-8?q?You've_been_added_to_Acm=C3=A9_Shield?="} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if !strings.Contains(htm, "background:#123456") || strings.Contains(htm, "Palisade") || strings.Contains(text, "Palisade") {
+		t.Error("not rebranded")
 	}
 }
 
