@@ -63,3 +63,7 @@ var OnLog []func(storage.RequestLog)
 // OnAudit are called after an audit entry is stored. They run on the
 // request that made the change, so return quickly. Append from a Mount.
 var OnAudit []func(storage.AuditEntry)
+
+// CurrentUser returns the signed-in admin of a Route's request (nil for an
+// API key). Set by the admin UI before any Mount runs.
+var CurrentUser func(c *echo.Context) *storage.AdminUser

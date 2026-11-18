@@ -460,6 +460,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	// Add-ons from a binary built on palisade (palisade-pro). A route
 	// without a valid role would be open to every user, so refuse to start.
 	h.extCards = nil
+	ext.CurrentUser = currentUser
 	for _, mount := range ext.Mounts {
 		f := mount(ext.Env{DB: h.db, AdminPath: base, Reload: h.reloadAll})
 		for _, r := range f.Open {
