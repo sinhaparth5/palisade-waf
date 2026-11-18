@@ -3,6 +3,8 @@ package ui
 import (
 	"html/template"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -78,5 +80,39 @@ func TestExtOpenRouteAndReload(t *testing.T) {
 	}
 	if err := reload(); err != nil {
 		t.Errorf("reload: %v", err)
+	}
+}
+
+func TestExtHoldReplay(t *testing.T) {
+	ran := 0
+	withExt(t, ext.Feature{Routes: []ext.Route{{Method: http.MethodPost, Path: "/settings/ext-test", Role: storage.RoleAdmin,
+		Handler: func(c *echo.Context) error { ran++; return c.String(http.StatusOK, "ran "+c.FormValue("v")) }}}})
+	var held *http.Request
+	ext.Hold = func(c *echo.Context, action string) bool {
+		if action != "POST /settings/ext-test" {
+			return false
+		}
+		held = c.Request()
+		return c.String(http.StatusAccepted, "held") == nil
+	}
+	t.Cleanup(func() { ext.Hold = nil })
+	env := newAdminEnv(t)
+	if rec := env.do(http.MethodPost, "/admin/settings/ext-test", url.Values{"v": {"1"}}); rec.Code != http.StatusAccepted || ran != 0 || held == nil {
+		t.Fatalf("not held: %d %q ran=%d", rec.Code, rec.Body, ran)
+	}
+
+	u, _ := env.db.GetAdminUser(env.uid)
+	req := httptest.NewRequest(http.MethodPost, "/admin/settings/ext-test", strings.NewReader("v=2"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if code, body := ext.Replay(req, nil, "x"); code != http.StatusForbidden || ran != 0 {
+		t.Fatalf("replay without a user: %d %s", code, body)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/admin/settings/ext-test", strings.NewReader("v=2"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if code, body := ext.Replay(req, u, "a@x, approved by b@x"); code != http.StatusOK || string(body) != "ran 2" || ran != 1 {
+		t.Fatalf("replay: %d %s", code, body)
+	}
+	if got, _, _ := env.db.ListAudit(1, 0); len(got) != 1 || got[0].Actor != "a@x, approved by b@x" {
+		t.Fatalf("audit %+v", got)
 	}
 }

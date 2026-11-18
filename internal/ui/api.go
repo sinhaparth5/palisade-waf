@@ -50,6 +50,10 @@ func newAPIKey() (raw, prefix, hash string, err error) {
 // token lives in a header, not a cookie, so CSRF doesn't apply to it.
 func (h *Handler) apiKeyAuth(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
+		if p := replayOf(c.Request()); p != nil {
+			c.Set("audit_actor", p.actor)
+			return next(c)
+		}
 		ip := h.clientIP(c.Request())
 		if wait, locked := h.apiKeyLimiter.blocked(ip); locked {
 			return c.JSON(http.StatusTooManyRequests, map[string]string{

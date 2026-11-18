@@ -50,6 +50,9 @@ func (h *Handler) csrfProtect(next echo.HandlerFunc) echo.HandlerFunc {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 			return next(c)
 		}
+		if replayOf(c.Request()) != nil {
+			return next(c) // no browser involved
+		}
 
 		expected := h.csrfFromContext(c)
 		got := c.Request().Header.Get(csrfHeader)

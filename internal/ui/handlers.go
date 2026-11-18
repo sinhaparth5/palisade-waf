@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"palisade/internal/config"
 	"palisade/internal/ext"
 	"palisade/internal/notify/metrics"
@@ -154,6 +155,14 @@ func (h *Handler) signIn(c *echo.Context, query string) error {
 // Unauthenticated requests are sent to the login page (signIn).
 func (h *Handler) sessionAuth(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
+		if p := replayOf(c.Request()); p != nil {
+			if p.user == nil {
+				return c.String(http.StatusForbidden, "No user to replay as.")
+			}
+			c.Set(ctxUser, p.user)
+			c.Set("audit_actor", p.actor)
+			return next(c)
+		}
 		cookie, err := c.Cookie(sessionCookie)
 		if err != nil || cookie.Value == "" {
 			return h.signIn(c, "")
@@ -220,6 +229,9 @@ const sessionTouchThrottle = time.Minute
 func (h *Handler) hostGuard(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		r := c.Request()
+		if replayOf(r) != nil {
+			return next(c) // in-process, from ext.Replay
+		}
 		if r.Context().Value(adminListenerKey{}) != nil {
 			// The admin listener never proxies.
 			if !h.adminAllowed(r) {
@@ -461,6 +473,11 @@ func (h *Handler) Register(e *echo.Echo) {
 	// without a valid role would be open to every user, so refuse to start.
 	h.extCards = nil
 	ext.CurrentUser = currentUser
+	ext.Replay = func(r *http.Request, u *storage.AdminUser, actor string) (int, []byte) {
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, r.WithContext(context.WithValue(r.Context(), replayKey{}, &replay{user: u, actor: actor})))
+		return rec.Code, rec.Body.Bytes()
+	}
 	for _, mount := range ext.Mounts {
 		f := mount(ext.Env{DB: h.db, AdminPath: base, Reload: h.reloadAll})
 		for _, r := range f.Open {
