@@ -55,6 +55,21 @@ func ValidateOpenAPI(spec string) error {
 	return err
 }
 
+// OpenAPIDeclares compiles a spec and returns a func that reports whether
+// it declares an operation for a method and path, for comparing logged
+// traffic with a spec.
+func OpenAPIDeclares(spec string) (func(method, path string) bool, error) {
+	s, err := compileOpenAPI(spec)
+	if err != nil {
+		return nil, err
+	}
+	return func(method, path string) bool {
+		r := &http.Request{Method: method, URL: &url.URL{Path: path}, Header: http.Header{}}
+		_, declared := s.check(r, path, nil, false, false)
+		return declared
+	}, nil
+}
+
 // SetOpenAPI attaches a compiled spec to the engine. mode "enforce" blocks
 // undeclared routes (404), methods (405) and bad parameters or bodies (400);
 // "log" only marks the request. An empty spec or mode "off" clears it.
