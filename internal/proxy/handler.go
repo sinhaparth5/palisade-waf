@@ -712,12 +712,26 @@ func (h *Handler) Handle(c *echo.Context) error {
 	// Response inspection (issue #192): CRS's outbound rules over the
 	// backend's text response, before any of it reaches the client.
 	leakRule := 0
-	if app.ResponseInspect != "" && !trusted {
+	var check func(*http.Request, *http.Response) (string, bool)
+	if ext.ResponseCheck != nil && !trusted {
+		check = ext.ResponseCheck(app.Name) //nolint:bodyclose // returns a check, not a response
+	}
+	extAction, extBlock := "", false
+	if (app.ResponseInspect != "" || check != nil) && !trusted {
 		out = services.WithResponseHook(out, func(resp *http.Response) error {
-			leakRule = engine.CheckResponse(r, clientIP, resp)
-			if leakRule != 0 && app.ResponseInspect == "block" {
-				w.Header().Set("X-WAF-Block-Reason", "response_leak")
-				return services.ErrResponseBlocked
+			if app.ResponseInspect != "" {
+				leakRule = engine.CheckResponse(r, clientIP, resp)
+				if leakRule != 0 && app.ResponseInspect == "block" {
+					w.Header().Set("X-WAF-Block-Reason", "response_leak")
+					return services.ErrResponseBlocked
+				}
+			}
+			if check != nil {
+				extAction, extBlock = check(r, resp)
+				if extBlock {
+					w.Header().Set("X-WAF-Block-Reason", strings.SplitN(extAction, ":", 2)[0])
+					return services.ErrResponseBlocked
+				}
 			}
 			return nil
 		})
@@ -733,6 +747,15 @@ func (h *Handler) Handle(c *echo.Context) error {
 		}
 		hit := *result // may be the verdict cache's shared copy
 		hit.RuleID, hit.Action = leakRule, "response_leak:log"
+		result = &hit
+	} else if extAction != "" {
+		if extBlock {
+			metrics.WAFBlockedTotal.WithLabelValues(appName, strings.SplitN(extAction, ":", 2)[0]).Inc()
+			h.logBlocked(r, appName, clientIP, country, rw.status, 0, extAction, time.Since(start), meta)
+			return nil
+		}
+		hit := *result // may be the verdict cache's shared copy
+		hit.RuleID, hit.Action = 0, extAction
 		result = &hit
 	}
 	if h.registry.Cached(app.Name) {

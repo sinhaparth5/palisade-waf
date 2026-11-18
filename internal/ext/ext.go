@@ -98,6 +98,15 @@ type LoginVerdict struct {
 // runs on the request path, so return quickly. Set from a Mount.
 var OnLogin func(r *http.Request, body []byte, service, ip string) *LoginVerdict
 
+// ResponseCheck, when set, returns a check for service's backend responses,
+// or nil when it has none. The check sees each response to an untrusted
+// client before any of it is sent, after the free response inspection, and
+// may read or replace resp.Body (keeping resp's length headers right). A
+// non-empty action ("name:mode") is logged as the request's action; block
+// answers 502 instead. A service with a check asks its backend for
+// uncompressed bodies. Set from a Mount.
+var ResponseCheck func(service string) func(r *http.Request, resp *http.Response) (action string, block bool)
+
 // SSOIdentity is someone another sign-in protocol (SAML, say) verified.
 type SSOIdentity struct {
 	// Issuer+Subject bind the user, like OIDC's iss+sub; on first sign-in
