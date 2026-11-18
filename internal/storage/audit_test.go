@@ -72,3 +72,16 @@ func TestAuditFn(t *testing.T) {
 		t.Fatalf("audit hook got %+v", got)
 	}
 }
+
+func TestAuditAfter(t *testing.T) {
+	db := openTestDB(t)
+	for i := range 3 {
+		if err := db.InsertAudit(AuditEntry{Actor: "admin", Action: "POST /x", Target: fmt.Sprint(i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := db.AuditAfter(1, 1)
+	if err != nil || len(got) != 1 || got[0].ID != 2 || got[0].Target != "1" {
+		t.Fatalf("AuditAfter = %+v, %v", got, err)
+	}
+}
