@@ -16,8 +16,8 @@ import (
 // can run without a real database.
 type store interface {
 	GetEmailConfig() (storage.EmailConfig, error)
-	GetDailyReport(from, to time.Time) (storage.DailyReport, error)
-	GetReportDetails(from, to time.Time, limit int) (storage.ReportDetails, error)
+	GetDailyReport(from, to time.Time, apps ...string) (storage.DailyReport, error)
+	GetReportDetails(from, to time.Time, limit int, apps ...string) (storage.ReportDetails, error)
 	GetEmailReportSentFor() (string, error)
 	SetEmailReportSentFor(day string) error
 }
