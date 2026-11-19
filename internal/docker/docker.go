@@ -33,6 +33,10 @@ const (
 	enableFilter = `{"label":["palisade.enable=true"]}`
 )
 
+// reconnectAfter spaces out event stream reconnects. A var so tests can
+// shorten it.
+var reconnectAfter = 5 * time.Second
+
 // Watcher keeps Docker-managed services in step with running containers.
 type Watcher struct {
 	client *http.Client // no timeout: /events streams
@@ -119,7 +123,7 @@ func (w *Watcher) watchEvents(ctx context.Context, kick chan<- struct{}) {
 		}
 		log.Printf("docker discovery: event stream: %v; reconnecting", err)
 		select {
-		case <-time.After(5 * time.Second):
+		case <-time.After(reconnectAfter):
 		case <-ctx.Done():
 			return
 		}

@@ -270,9 +270,113 @@ func TestNew(t *testing.T) {
 		"/var/run/docker.sock":        false,
 		"http://socket-proxy:2375":    false,
 		"tcp://":                      false,
+		"unix://%zz":                  false,
 	} {
 		if _, err := New(raw, nil, nil); (err == nil) != ok {
 			t.Errorf("New(%q) = %v, want ok=%v", raw, err, ok)
 		}
+	}
+}
+
+// A Docker API that errors, answers junk or drops the event stream is
+// reported and retried, never fatal; Run stops when its context ends.
+func TestAPIFailures(t *testing.T) {
+	reconnectAfter = 10 * time.Millisecond
+	var mu sync.Mutex
+	listCode, listBody, eventConns := 500, "", 0
+	dir, _ := os.MkdirTemp("", "dock")
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "d.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if r.URL.Path == "/events" {
+			// First an error status, then one event and a closed stream.
+			if eventConns++; eventConns == 1 {
+				http.Error(w, "nope", http.StatusForbidden)
+				return
+			}
+			_, _ = w.Write([]byte("{}\n"))
+			return
+		}
+		w.WriteHeader(listCode)
+		_, _ = w.Write([]byte(listBody))
+	})}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { srv.Close() })
+
+	db, err := storage.Open(filepath.Join(t.TempDir(), "waf.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, _ := services.New(db)
+	w, _ := New("unix://"+sock, db, reg)
+	ctx := context.Background()
+	if err := w.Sync(ctx); err == nil || !strings.Contains(err.Error(), "500") {
+		t.Errorf("500 from Docker: %v", err)
+	}
+	mu.Lock()
+	listCode, listBody = 200, "not json"
+	mu.Unlock()
+	if err := w.Sync(ctx); err == nil || !strings.Contains(err.Error(), "containers") {
+		t.Errorf("junk from Docker: %v", err)
+	}
+
+	// Run keeps reconnecting the event stream, then stops on cancel.
+	runCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { w.Run(runCtx); close(done) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		n := eventConns
+		mu.Unlock()
+		if n >= 3 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("event stream reconnected %d times", n)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not stop on cancel")
+	}
+
+	// A failed write is returned, not skipped.
+	mu.Lock()
+	listBody = `[{"Id":"x","Names":["/a"],"State":"running","Labels":{"palisade.enable":"true","palisade.host":"a.test","palisade.port":"80"},"NetworkSettings":{"Networks":{"web":{"IPAddress":"172.20.0.2"}}}}]`
+	mu.Unlock()
+	db.Close()
+	if err := w.Sync(ctx); err == nil {
+		t.Error("Sync with a closed DB passed")
+	}
+}
+
+func TestRoutes(t *testing.T) {
+	stopped := ctr("old", "172.20.0.9", "host", "a.test", "port", "80", "name", "a")
+	stopped.State = "exited"
+	unnamed := ctr("x", "172.20.0.3", "host", "other.test", "port", "80", "name", "a")
+	unnamed.Names = nil
+	got := routes([]container{
+		ctr("a-1", "172.20.0.2", "host", "a.test", "port", "80", "name", "a"),
+		ctr("a-2", "172.20.0.2", "host", "a.test", "port", "80", "name", "a"), // same backend once
+		unnamed, // differing host: logged, the first container's labels win
+		stopped,
+	})
+	a := got["a"]
+	if len(got) != 1 || a == nil || strings.Join(a.hosts, ",") != "a.test" ||
+		strings.Join(a.backends, ",") != "http://172.20.0.2:80,http://172.20.0.3:80" {
+		t.Errorf("routes = %+v", a)
+	}
+	if containerName(unnamed) != "x-id" {
+		t.Errorf("containerName without Names = %q", containerName(unnamed))
 	}
 }
