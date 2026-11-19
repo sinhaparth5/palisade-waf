@@ -27,6 +27,7 @@ import (
 	"palisade/internal/security/bot"
 	"palisade/internal/security/breach"
 	"palisade/internal/security/challenge"
+	"palisade/internal/security/clamav"
 	"palisade/internal/security/geo"
 	ja4pkg "palisade/internal/security/ja4"
 	"palisade/internal/security/jwtauth"
@@ -70,7 +71,8 @@ type Handler struct {
 	adaptive       *adaptive.Policy
 	trustedProxies []*net.IPNet
 	breach         *breach.Checker
-	gates          gates // maintenance and waiting room state (issue #198)
+	clamd          *clamav.Scanner // nil = no --clamd, uploads never scanned
+	gates          gates           // maintenance and waiting room state (issue #198)
 }
 
 // ReloadWAF swaps in a freshly built default engine plus any per-service
@@ -205,6 +207,10 @@ func NewHandler(registry *services.Registry, engine *waf.Engine, wafByService ma
 // SetBreachChecker replaces the leaked-password checker (tests point it at a
 // fake range API). Must run before serving.
 func (h *Handler) SetBreachChecker(c *breach.Checker) { h.breach = c }
+
+// SetClamd sets the clamd that scans uploads (--clamd, issue #340). Must
+// run before serving.
+func (h *Handler) SetClamd(s *clamav.Scanner) { h.clamd = s }
 
 // canonicalPath collapses "//" and resolves dot segments, keeping a trailing
 // slash. Non-rooted paths ("*" for OPTIONS *) are left alone.
@@ -629,6 +635,33 @@ func (h *Handler) Handle(c *echo.Context) error {
 		hit := *result // may be the verdict cache's shared copy
 		hit.Action = "leaked_password:log"
 		result = &hit
+	}
+	// 5.6 Malware scan (issue #340): file parts of a multipart body the WAF
+	// already holds in full go to clamd. Fails open: an error lets the
+	// upload through, logged as malware_scan_error.
+	if app != nil && app.MalwareScan != "" && !trusted && h.clamd != nil {
+		ct := r.Header.Get("Content-Type")
+		if buf, ok := r.Body.(*waf.Buffered); ok && strings.HasPrefix(strings.ToLower(ct), "multipart/form-data") {
+			sig, err := h.clamd.ScanMultipart(r.Context(), ct, buf.Bytes())
+			action := ""
+			switch {
+			case err != nil:
+				metrics.ClamdErrors.Inc()
+				action = "malware_scan_error"
+			case sig != "" && app.MalwareScan == "block":
+				mark("malware")
+				h.logBlocked(r, appName, clientIP, country, http.StatusForbidden, 0, "malware_upload "+sig, time.Since(start), meta)
+				return deny(c, http.StatusForbidden, "malware_upload", reqID, map[string]any{"error": "upload contains malware"})
+			case sig != "":
+				action = "malware_upload:log " + sig
+			}
+			if action != "" && result.Action == "" {
+				hit := *result
+				hit.Action = action
+				result = &hit
+			}
+			mark("malware")
+		}
 	}
 	if policyFailed && result.Action == "" {
 		hit := *result

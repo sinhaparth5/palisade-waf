@@ -311,7 +311,8 @@ func TestServiceSettingHandlers(t *testing.T) {
 		{"/admin/services/uploads/" + id, []string{"multipart_mb", "257"}, 400},
 		{"/admin/services/uploads/" + id, []string{"multipart_mb", "-1"}, 400},
 		{"/admin/services/uploads/" + id, []string{"multipart_mb", "x"}, 400},
-		{"/admin/services/uploads/" + id, []string{"enabled", "1", "multipart_mb", "64"}, 200},
+		{"/admin/services/uploads/" + id, []string{"malware_scan", "quarantine"}, 400},
+		{"/admin/services/uploads/" + id, []string{"enabled", "1", "multipart_mb", "64", "malware_scan", "block"}, 200},
 		{"/admin/services/http3/" + id, []string{"enabled", "1"}, 200},
 		{"/admin/services/http3/x", nil, 400},
 		{"/admin/services/compress/" + id, []string{"enabled", "1"}, 200},
@@ -339,7 +340,7 @@ func TestServiceSettingHandlers(t *testing.T) {
 	}
 
 	// The last uploads save set the multipart limit (issue #319).
-	if got, _ := env.h.db.GetService(svc.ID); got.MultipartLimitMB != 64 || !got.AllowLargeJSUploads {
+	if got, _ := env.h.db.GetService(svc.ID); got.MultipartLimitMB != 64 || !got.AllowLargeJSUploads || got.MalwareScan != "block" {
 		t.Errorf("uploads tab saved %+v", got)
 	}
 

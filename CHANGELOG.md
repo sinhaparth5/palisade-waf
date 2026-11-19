@@ -14,6 +14,7 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#340) Scan file uploads for malware with ClamAV
 - (#342) Push autobans to CrowdSec as alerts
 - (#343) Extension hook for dialing backends
 

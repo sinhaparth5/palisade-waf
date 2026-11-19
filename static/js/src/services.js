@@ -278,6 +278,7 @@
     htmx.process(uploadsForm);
     largeJSUploadsToggle.checked = d.largeJsUploads === '1';
     document.getElementById('svc-multipart-mb').value = d.multipartMb === '0' ? '' : (d.multipartMb || '');
+    document.getElementById('svc-malware-scan').value = d.malwareScan || '';
 
     http3Form.setAttribute('hx-post', adminPath + '/services/http3/' + d.id);
     htmx.process(http3Form);

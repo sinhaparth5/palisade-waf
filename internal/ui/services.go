@@ -289,6 +289,11 @@ const multipartRangeErr = "multipart limit must be 0 (default 12.5 MiB) to 256 M
 // 0 keeps the default, the rest are capped at waf.MaxMultipartLimit.
 func validMultipartMB(mb int) bool { return mb >= 0 && mb <= waf.MaxMultipartLimit>>20 }
 
+const malwareScanErr = `malware scan must be "", "log" or "block"`
+
+// validMalwareScan checks a service's upload malware scan mode (issue #340).
+func validMalwareScan(mode string) bool { return mode == "" || mode == "log" || mode == "block" }
+
 // SetServiceLargeJSUploads opts one service into streaming JavaScript request
 // bodies. This avoids the small, deliberately conservative limit applied to
 // non-file bodies while leaving all header-phase WAF checks active.
@@ -304,10 +309,17 @@ func (h *Handler) SetServiceLargeJSUploads(c *echo.Context) error {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": multipartRangeErr})
 		}
 	}
+	scan := c.FormValue("malware_scan")
+	if !validMalwareScan(scan) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": malwareScanErr})
+	}
 	if err := h.db.SetServiceLargeJSUploads(id, enabled); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	if err := h.db.SetServiceMultipartLimit(id, mb); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if err := h.db.SetServiceMalwareScan(id, scan); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	if err := h.registry.Reload(h.db); err != nil {

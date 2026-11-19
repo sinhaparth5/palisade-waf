@@ -9,6 +9,16 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    # Malware scan of uploads (issue #340): uncomment, together with the
+    # clamav service below, then pick Log only or Block on a service's
+    # Uploads tab. Scans fail open while clamd starts (about a minute).
+    # command: ["--db", "/data/waf.db", "--certs", "/data/certs", "--prune-interval", "24h", "--clamd", "tcp://clamav:3310"]
+
+  # clamav:
+  #   image: clamav/clamav:1.4
+  #   volumes:
+  #     - clamav-db:/var/lib/clamav
 
 volumes:
   waf-data:
+  # clamav-db:

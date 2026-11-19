@@ -175,6 +175,9 @@ spec:
             - {{ printf "--%s=%v" $name $value | quote }}
             {{- end }}
             {{- end }}
+            {{- if .Values.clamav.enabled }}
+            - --clamd=unix:///run/clamd/clamd.sock
+            {{- end }}
             {{- range .Values.extraArgs }}
             - {{ . | quote }}
             {{- end }}
@@ -224,9 +227,49 @@ spec:
               mountPath: /etc/palisade/tls
               readOnly: true
             {{- end }}
+            {{- if .Values.clamav.enabled }}
+            - name: clamd-socket
+              mountPath: /run/clamd
+            {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+        {{- with .Values.clamav }}
+        {{- if .enabled }}
+        # clamd listens only on a unix socket in an emptyDir shared with
+        # Palisade, never on the pod network. Scans fail open, so clamd
+        # being down or still loading signatures never blocks uploads;
+        # the shell restarts it in place instead of letting the container
+        # exit and take the pod out of the Service's endpoints.
+        - name: clamav
+          image: "{{ .image.repository }}:{{ .image.tag }}"
+          imagePullPolicy: {{ .image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              sed -e '/^TCPSocket/d' -e '/^TCPAddr/d' -e '/^LocalSocket/d' -e '/^User /d' -e '/^LogFile /d' /etc/clamav/clamd.conf > /tmp/clamd.conf
+              printf 'LocalSocket /run/clamd/clamd.sock\nLocalSocketMode 666\nConcurrentDatabaseReload no\n' >> /tmp/clamd.conf
+              sed -e '/^NotifyClamd/d' -e '/^UpdateLogFile/d' /etc/clamav/freshclam.conf > /tmp/freshclam.conf
+              [ -f /var/lib/clamav/main.cvd ] || freshclam --foreground --stdout --config-file=/tmp/freshclam.conf
+              freshclam --daemon --foreground --stdout --config-file=/tmp/freshclam.conf --checks={{ .checks }} & f=$!
+              trap 'kill $f $p 2>/dev/null; exit 0' TERM INT
+              while :; do rm -f /run/clamd/clamd.sock; clamd --foreground --config-file=/tmp/clamd.conf & p=$!; wait $p; sleep 2; done
+          securityContext:
+            {{- toYaml .securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          volumeMounts:
+            - name: clamd-socket
+              mountPath: /run/clamd
+            - name: clamav-db
+              mountPath: /var/lib/clamav
+            - name: clamav-tmp
+              mountPath: /tmp
+            - name: clamav-log
+              mountPath: /var/log/clamav
+        {{- end }}
+        {{- end }}
         {{- with .Values.varnish }}
         {{- if .enabled }}
         # Shares the pod's loopback with Palisade, so the Varnish addresses
@@ -318,6 +361,20 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 1Mi
+        {{- end }}
+        {{- if .Values.clamav.enabled }}
+        - name: clamd-socket
+          emptyDir:
+            sizeLimit: 1Mi
+        - name: clamav-db
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: clamav-tmp
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: clamav-log
+          emptyDir:
+            sizeLimit: 64Mi
         {{- end }}
         {{- if .Values.varnish.enabled }}
         - name: varnish-vcl

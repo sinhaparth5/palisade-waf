@@ -334,6 +334,7 @@ type apiUpdateServiceRequest struct {
 	BotMode             *string  `json:"bot_mode"` // "inherit" | "always" | "off"
 	AllowLargeJSUploads *bool    `json:"allow_large_js_uploads"`
 	MultipartLimitMB    *int     `json:"multipart_limit_mb"` // 0 = default 12.5 MiB, at most 256
+	MalwareScan         *string  `json:"malware_scan"`       // "" | "log" | "block"; needs --clamd
 	HTTP3Enabled        *bool    `json:"http3_enabled"`
 	CompressEnabled     *bool    `json:"compress_enabled"`
 	RequestSchema       *string  `json:"request_schema"` // JSON Schema text; "" (with SchemaMode omitted or "off") disables validation
@@ -451,6 +452,14 @@ func (h *Handler) APIUpdateService(c *echo.Context) error {
 			return apiError(c, http.StatusBadRequest, multipartRangeErr)
 		}
 		if err := h.db.SetServiceMultipartLimit(id, *req.MultipartLimitMB); err != nil {
+			return apiError(c, http.StatusInternalServerError, err.Error())
+		}
+	}
+	if req.MalwareScan != nil {
+		if !validMalwareScan(*req.MalwareScan) {
+			return apiError(c, http.StatusBadRequest, malwareScanErr)
+		}
+		if err := h.db.SetServiceMalwareScan(id, *req.MalwareScan); err != nil {
 			return apiError(c, http.StatusInternalServerError, err.Error())
 		}
 	}

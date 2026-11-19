@@ -263,6 +263,34 @@ ratio from the request log works. For Varnish's own counters:
 kubectl -n palisade exec deploy/waf-palisade -c varnish -- varnishstat -1 -f MAIN.cache_hit -f MAIN.cache_miss
 ```
 
+## ClamAV
+
+`clamav.enabled: true` runs clamd and freshclam (the official
+`clamav/clamav` image) as a sidecar for the per-service malware scan, and
+starts Palisade with `--clamd=unix:///run/clamd/clamd.sock`. clamd listens
+only on that socket, in an emptyDir both containers mount, never on the pod
+network. Then, in the admin UI, set Malware scan on a service's Uploads tab
+to Log only or Block.
+
+The sidecar runs as the image's `clamav` user with a read-only root
+filesystem; the image's own entrypoint needs root, so the chart starts
+freshclam and clamd itself. Signatures download into an emptyDir when the
+pod starts (about a minute) and update `clamav.checks` times a day. Until
+clamd is ready, and while a crashed clamd restarts in place, uploads pass
+unscanned: every scan error is logged as `malware_scan_error` and counted
+in `palisade_clamd_errors_total`. So are files over clamd's
+`StreamMaxLength` (100M by default).
+
+clamd holds its signatures in memory, about 1.2Gi; the default limit is 2Gi.
+Database reloads happen in place rather than alongside the old copy, so the
+peak doesn't double.
+
+To scan the EICAR test file by hand:
+
+```sh
+kubectl -n palisade exec deploy/waf-palisade -c clamav -- sh -c 'printf "%s" "X5O!P%@AP[4\PZX54(P^)7CC)7}\$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!\$H+H*" > /tmp/e.com && clamdscan --config-file=/tmp/clamd.conf --stream /tmp/e.com'
+```
+
 ## Metrics
 
 With the [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack)

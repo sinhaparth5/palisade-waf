@@ -378,6 +378,13 @@
         <label for="svc-multipart-mb" class="field-label">Multipart upload limit (MiB)</label>
         <input id="svc-multipart-mb" name="multipart_mb" type="number" min="0" max="256" step="1" placeholder="0" class="field text-[13px] mb-2">
         <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Form uploads larger than this get a 413. 0 keeps the default of 12.5 MiB; the most is 256 MiB. The WAF holds each upload in memory while it checks it, so a high limit costs that much RAM per upload in flight.</p>
+        <label for="svc-malware-scan" class="field-label">Malware scan</label>
+        <select id="svc-malware-scan" name="malware_scan" class="field text-[13px] mb-2">
+          <option value="">Off</option>
+          <option value="log">Log only</option>
+          <option value="block">Block: refuse the upload with a 403</option>
+        </select>
+        <p class="text-[12px] text-slate-500 mb-4 leading-[1.5]">Sends each file in a form upload to ClamAV, after the WAF. Needs Palisade started with <code class="font-mono">--clamd</code>. Logged as <code class="font-mono">malware_upload</code> with the signature. If clamd is down, slow or the file is over its size limit, the upload goes through and is logged as <code class="font-mono">malware_scan_error</code>.</p>
         <button type="submit" class="btn-primary w-full">Save</button>
       </form>
       <div id="svc-uploads-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[10px]"></div>
@@ -960,7 +967,7 @@
       data-login-paths="{{range $i, $p := .LoginPaths}}{{if $i}}&#10;{{end}}{{$p}}{{end}}"
       data-rps="{{.RateLimitRPS}}" data-burst="{{.RateLimitBurst}}" data-rate-rules="{{.RateRules}}" data-mode="{{.BotMode}}" data-cache="{{if .CacheEnabled}}1{{else}}0{{end}}"
       data-session-cache="{{if .CacheBySession}}1{{else}}0{{end}}" data-session-cookie="{{.SessionCookieName}}"
-      data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-multipart-mb="{{.MultipartLimitMB}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
+      data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-multipart-mb="{{.MultipartLimitMB}}" data-malware-scan="{{.MalwareScan}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
       data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}" data-backend-ca="{{.BackendCA}}"
       data-schema="{{.RequestSchema}}" data-schema-mode="{{.SchemaMode}}" data-openapi-mode="{{.OpenAPIMode}}"
       data-mcp-mode="{{.MCP.Mode}}" data-mcp-path="{{.MCP.Path}}" data-mcp-origins="{{.MCP.Origins}}" data-mcp-methods="{{.MCP.Methods}}" data-mcp-tools="{{.MCP.Tools}}" data-csp="{{.CSP}}" data-csp-enforce="{{if .CSPEnforce}}1{{else}}0{{end}}" data-csp-recent="{{if .CSPRecent}}1{{else}}0{{end}}"
@@ -1036,6 +1043,7 @@
   {{template "svc-view-head" "Request checks"}}
   {{template "svc-kv" (map "K" "Large JS uploads" "V" (or (and .AllowLargeJSUploads "Allowed, bodies not inspected") "Off"))}}
   {{template "svc-kv" (map "K" "Multipart limit" "V" (or (and .MultipartLimitMB (printf "%d MiB" .MultipartLimitMB)) "Default (12.5 MiB)"))}}
+  {{template "svc-kv" (map "K" "Malware scan" "V" (or .MalwareScan "Off"))}}
   {{template "svc-kv" (map "K" "JSON Schema" "V" (or (and (ne .SchemaMode "off") .SchemaMode) "Off"))}}
   {{if .RequestSchema}}<pre class="my-2 max-h-48 overflow-auto border border-line bg-surface p-3 font-mono text-[12px] text-ink whitespace-pre-wrap">{{.RequestSchema}}</pre>{{end}}
   {{template "svc-kv" (map "K" "OpenAPI" "V" (or .OpenAPIMode "No spec"))}}

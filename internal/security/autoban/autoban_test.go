@@ -457,6 +457,29 @@ func TestLeakedPasswordScores(t *testing.T) {
 	}
 }
 
+// TestMalwareScores pins issue #340: a flagged upload is a critical hit
+// (5 points), logged or blocked, so two ban at the default threshold.
+func TestMalwareScores(t *testing.T) {
+	db := newFakeStore()
+	now := time.Date(2026, 7, 3, 9, 16, 12, 0, time.UTC)
+	b, _ := testBanner(db, now)
+	b.Record(storage.RequestLog{Timestamp: now, RealIP: "203.0.113.42", Action: "malware_upload:log Eicar", Status: 200})
+	if db.rules[":203.0.113.42"] == "block" {
+		t.Fatal("banned after one hit")
+	}
+	b.Record(storage.RequestLog{Timestamp: now, RealIP: "203.0.113.42", Action: "malware_upload Eicar", Blocked: true, Status: 403})
+	if db.rules[":203.0.113.42"] != "block" {
+		t.Fatal("not banned after two flagged uploads")
+	}
+	// A failed scan isn't evidence of anything.
+	for range 5 {
+		b.Record(storage.RequestLog{Timestamp: now, RealIP: "203.0.113.43", Action: "malware_scan_error", Status: 200})
+	}
+	if db.rules[":203.0.113.43"] == "block" {
+		t.Error("scan errors scored")
+	}
+}
+
 // TestJWTScores pins issue #279: invalid edge tokens score 1 point each,
 // logged or blocked.
 func TestJWTScores(t *testing.T) {

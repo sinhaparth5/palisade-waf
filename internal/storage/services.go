@@ -78,6 +78,9 @@ type Service struct {
 	// MultipartLimitMB is the service's multipart body limit in MiB (issue
 	// #319); 0 = the WAF default (12.5 MiB).
 	MultipartLimitMB int
+	// MalwareScan sends file uploads to clamd (issue #340): "" (off), "log"
+	// or "block".
+	MalwareScan string
 	// Gate is the maintenance mode and waiting room (issue #198), filled
 	// from service_gate by services.Registry.Reload.
 	Gate ServiceGate
@@ -298,6 +301,13 @@ func (db *DB) SetServiceLargeJSUploads(id int, enabled bool) error {
 // (issue #319); 0 restores the default. The caller checks the range.
 func (db *DB) SetServiceMultipartLimit(id, mb int) error {
 	_, err := db.exec(`UPDATE services SET multipart_limit_mb = ? WHERE id = ?`, mb, id)
+	return err
+}
+
+// SetServiceMalwareScan sets a service's upload malware scan mode (issue
+// #340). The caller checks the value.
+func (db *DB) SetServiceMalwareScan(id int, mode string) error {
+	_, err := db.exec(`UPDATE services SET malware_scan = ? WHERE id = ?`, mode, id)
 	return err
 }
 
@@ -626,12 +636,12 @@ func (db *DB) SetServiceCacheTuning(id, ttlFloor, ttlCeiling, grace, keep int, r
 
 // serviceColumns is shared by ListServices/GetService so their SELECT list
 // and Scan args can't drift out of sync as columns are added.
-const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy, breach_action, breach_fields, response_inspect, cache_rules, multipart_limit_mb`
+const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy, breach_action, breach_fields, response_inspect, cache_rules, multipart_limit_mb, malware_scan`
 
 func (db *DB) scanService(row interface{ Scan(...any) error }) (Service, error) {
 	var s Service
 	var extra, aliases, login, breachFields string
-	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy, &s.BreachAction, &breachFields, &s.ResponseInspect, &s.CacheRules, &s.MultipartLimitMB)
+	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy, &s.BreachAction, &breachFields, &s.ResponseInspect, &s.CacheRules, &s.MultipartLimitMB, &s.MalwareScan)
 	if extra != "" {
 		s.ExtraBackends = strings.Split(extra, "\n")
 	}

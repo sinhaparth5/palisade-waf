@@ -201,7 +201,9 @@ func (b *Banner) Record(e storage.RequestLog) {
 	// A backend error status on a request Palisade let through (issue #193);
 	// whether the code counts is decided under the lock from the config.
 	badStatus := !e.Blocked && !e.Exempt && e.Action == "" && e.Status >= 400 && !staticAsset(e.Path)
-	if !e.Blocked && !challenged && !honeypot && !leaked && !jwt && !badStatus {
+	// A file clamd flagged (issue #340) is critical, blocked or only logged.
+	malware := strings.HasPrefix(e.Action, "malware_upload")
+	if !e.Blocked && !challenged && !honeypot && !leaked && !jwt && !malware && !badStatus {
 		return
 	}
 	// Never score traffic that is already blocked by an IP rule or geo rule:
@@ -223,7 +225,7 @@ func (b *Banner) Record(e storage.RequestLog) {
 		ev.pts, ev.leaked = ptsLeaked, true
 	case jwt:
 		ev.pts, ev.jwt = ptsJWT, true
-	case e.RuleID > 0 && criticalRule(e.RuleID):
+	case malware, e.RuleID > 0 && criticalRule(e.RuleID):
 		ev.pts, ev.critical = ptsCritical, true
 	case e.RuleID > 0:
 		ev.pts, ev.waf = ptsWAF, true
