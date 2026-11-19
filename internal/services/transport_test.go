@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"palisade/internal/ext"
 	"palisade/internal/security/egress"
 )
 
@@ -62,5 +64,47 @@ func TestBackendTransportRefusesMetadata(t *testing.T) {
 	}
 	if !errors.Is(err, egress.ErrBlocked) {
 		t.Fatalf("err = %v, want egress.ErrBlocked", err)
+	}
+}
+
+// TestExtDial pins issue #343: a registered ext.Dial takes the backend
+// connections it handles, and anything it passes on still meets the
+// metadata check.
+func TestExtDial(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer srv.Close()
+	errHook := errors.New("tunnel down")
+	tunnel := func(ctx context.Context, network, addr string) (net.Conn, bool, error) {
+		switch addr {
+		case "tunnel.invalid:80":
+			c, err := (&net.Dialer{}).DialContext(ctx, network, srv.Listener.Addr().String())
+			return c, true, err
+		case "down.invalid:80":
+			return nil, true, errHook
+		}
+		return nil, false, nil
+	}
+	for _, tc := range []struct {
+		name    string
+		hook    func(context.Context, string, string) (net.Conn, bool, error)
+		backend string
+		fail    bool
+		is      error // when set, the failure must wrap it
+	}{
+		{"no hook", nil, srv.URL, false, nil},
+		{"no hook, unknown host", nil, "http://tunnel.invalid/", true, nil},
+		{"handled", tunnel, "http://tunnel.invalid/", false, nil},
+		{"handled error", tunnel, "http://down.invalid/", true, errHook},
+		{"passed on", tunnel, srv.URL, false, nil},
+		{"passed on, metadata", tunnel, "http://169.254.169.254/", true, egress.ErrBlocked},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ext.Dial = tc.hook
+			defer func() { ext.Dial = nil }()
+			err := Probe(tc.backend)
+			if (err != nil) != tc.fail || (tc.is != nil && !errors.Is(err, tc.is)) {
+				t.Fatalf("Probe(%s) = %v, want fail=%v (%v)", tc.backend, err, tc.fail, tc.is)
+			}
+		})
 	}
 }

@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#343) Extension hook for dialing backends
+
 ## [3.4.0] - 2026-11-17
 
 - (#328) Helm chart: single-replica deployment with a persistent /data volume
