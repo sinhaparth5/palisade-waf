@@ -22,7 +22,7 @@ func TestClosedDBErrors(t *testing.T) {
 		"AcceptSSOInvite":           func() error { return e(db.AcceptSSOInvite("a@example.com", "iss", "sub")) },
 		"AcceptUserInvite":          func() error { return e(db.AcceptUserInvite("tok", "pw")) },
 		"AddCSPScript":              func() error { return e(db.AddCSPScript(1, CSPScript{Origin: "inline", Page: "/", FirstSeen: now})) },
-		"AddCrowdSecSource":         func() error { return db.AddCrowdSecSource("cs", "http://127.0.0.1:8080", "k") },
+		"AddCrowdSecSource":         func() error { return db.AddCrowdSecSource("cs", "http://127.0.0.1:8080", "k", "", "") },
 		"AddThreatIntelSource":      func() error { return db.AddThreatIntelSource("l", "https://example.com/l.txt", 24) },
 		"AddWebAuthnCredential":     func() error { return db.AddWebAuthnCredential(1, "c", "n", []byte("{}")) },
 		"CacheResultsSince":         func() error { return e(db.CacheResultsSince(now)) },

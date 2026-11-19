@@ -40,7 +40,7 @@ func TestCheckPriority(t *testing.T) {
 	if err := db.ReplaceThreatIntelIPs(srcs[0].ID, []string{"9.9.9.9", "3.3.3.3", "172.16.0.0/12", "2001:db8::/32"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AddCrowdSecSource("cs", "http://lapi.invalid", "key"); err != nil {
+	if err := db.AddCrowdSecSource("cs", "http://lapi.invalid", "key", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	srcs, _ = db.ListThreatIntelSources()

@@ -32,8 +32,9 @@ const CrowdSecPrefix = "crowdsec+"
 func (s ThreatIntelSource) CrowdSec() bool { return strings.HasPrefix(s.URL, CrowdSecPrefix) }
 
 // AddCrowdSecSource adds a CrowdSec LAPI source and stores its bouncer key
-// sealed (threatintel_api_keys).
-func (db *DB) AddCrowdSecSource(label, lapiURL, apiKey string) error {
+// sealed (threatintel_api_keys). With a machine login and password (issue
+// #342), autobans are also pushed to the LAPI as alerts.
+func (db *DB) AddCrowdSecSource(label, lapiURL, apiKey, login, password string) error {
 	url := CrowdSecPrefix + strings.TrimRight(lapiURL, "/")
 	if err := db.AddThreatIntelSource(label, url, 1); err != nil {
 		return err
@@ -42,7 +43,25 @@ func (db *DB) AddCrowdSecSource(label, lapiURL, apiKey string) error {
 	if err := db.queryRow(`SELECT id FROM threat_intel_sources WHERE url = ?`, url).Scan(&id); err != nil {
 		return err
 	}
-	return db.setThreatIntelKey(id, apiKey)
+	if err := db.setThreatIntelKey(id, apiKey); err != nil {
+		return err
+	}
+	if login == "" || password == "" {
+		return nil
+	}
+	return db.setSecretKey(machineKey(id), login+"\n"+password)
+}
+
+// machineKey is the threatintel_api_keys entry holding a source's CrowdSec
+// machine credentials as "login\npassword".
+func machineKey(id int64) string { return strconv.FormatInt(id, 10) + "/machine" }
+
+// CrowdSecMachine returns a source's machine credentials (ok=false when it
+// has none, so nothing is pushed).
+func (db *DB) CrowdSecMachine(id int64) (login, password string, ok bool, err error) {
+	keys, err := db.threatIntelKeys()
+	login, password, ok = strings.Cut(keys[machineKey(id)], "\n")
+	return login, password, ok, err
 }
 
 // ThreatIntelKey returns a source's API key ("" when it has none).
@@ -64,14 +83,19 @@ func (db *DB) threatIntelKeys() (map[string]string, error) {
 
 // setThreatIntelKey stores (or, with "", removes) a source's API key.
 func (db *DB) setThreatIntelKey(id int64, key string) error {
+	return db.setSecretKey(strconv.FormatInt(id, 10), key)
+}
+
+// setSecretKey stores (or, with "", removes) one threatintel_api_keys entry.
+func (db *DB) setSecretKey(name, key string) error {
 	keys, err := db.threatIntelKeys()
 	if err != nil {
 		return err
 	}
 	if key == "" {
-		delete(keys, strconv.FormatInt(id, 10))
+		delete(keys, name)
 	} else {
-		keys[strconv.FormatInt(id, 10)] = key
+		keys[name] = key
 	}
 	b, err := json.Marshal(keys)
 	if err != nil {
@@ -109,6 +133,9 @@ func (db *DB) AddThreatIntelSource(label, url string, intervalHours int) error {
 
 func (db *DB) DeleteThreatIntelSource(id int64) error {
 	if _, err := db.exec(`DELETE FROM threat_intel_sources WHERE id = ?`, id); err != nil {
+		return err
+	}
+	if err := db.setSecretKey(machineKey(id), ""); err != nil {
 		return err
 	}
 	return db.setThreatIntelKey(id, "")

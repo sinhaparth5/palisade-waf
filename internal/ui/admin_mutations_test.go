@@ -198,10 +198,12 @@ func TestThreatIntelHandlers(t *testing.T) {
 
 	// CrowdSec LAPI source (issue #194): the key is required and never rendered.
 	wantCode(t, "crowdsec no key", env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080")).Code, 400, "")
-	rec := env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080/", "api_key", "s3cret-key"))
+	wantCode(t, "crowdsec login only", env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080", "api_key", "k", "machine_login", "m")).Code, 400, "")
+	rec := env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080/", "api_key", "s3cret-key",
+		"machine_login", "palisade", "machine_password", "m4chine-pw"))
 	wantCode(t, "crowdsec", rec.Code, 200, rec.Body.String())
-	if strings.Contains(rec.Body.String(), "s3cret-key") {
-		t.Error("bouncer key rendered back")
+	if strings.Contains(rec.Body.String(), "s3cret-key") || strings.Contains(rec.Body.String(), "m4chine-pw") {
+		t.Error("bouncer key or machine password rendered back")
 	}
 	srcs, _ = env.db.ListThreatIntelSources()
 	if len(srcs) != 1 || srcs[0].URL != "crowdsec+http://lapi:8080" {
@@ -209,6 +211,10 @@ func TestThreatIntelHandlers(t *testing.T) {
 	}
 	if key, _ := env.db.ThreatIntelKey(srcs[0].ID); key != "s3cret-key" {
 		t.Errorf("stored key = %q", key)
+	}
+	// Machine credentials for pushing autobans (issue #342).
+	if login, pw, ok, _ := env.db.CrowdSecMachine(srcs[0].ID); !ok || login != "palisade" || pw != "m4chine-pw" {
+		t.Errorf("machine = %q %q %v", login, pw, ok)
 	}
 }
 

@@ -24,7 +24,7 @@ func TestSecretEncryptionMigratesAndRoundTrips(t *testing.T) {
 	if err := db.SetWebhookConfig(WebhookConfig{URL: "https://x", Secret: "hook-secret", Enabled: true, Events: "blocked"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AddCrowdSecSource("cs", "http://lapi:8080", "bouncer-key"); err != nil {
+	if err := db.AddCrowdSecSource("cs", "http://lapi:8080", "bouncer-key", "m", "pw"); err != nil {
 		t.Fatal(err)
 	}
 	challenge, err := db.GetOrCreateChallengeSecret()

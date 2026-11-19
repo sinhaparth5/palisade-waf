@@ -260,6 +260,8 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 		for _, f := range ext.OnBan {
 			f(ip, reason)
 		}
+		ab, _ := db.GetAutobanConfig()
+		intelWorker.PushBan(ip, reason, time.Duration(ab.BanHours)*time.Hour)
 		if err := emailReporter.SendBanAlert(ip, reason); err != nil {
 			log.Printf("autoban: ban alert email for %s: %v", ip, err)
 		}
