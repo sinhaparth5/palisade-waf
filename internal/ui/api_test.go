@@ -193,6 +193,26 @@ func TestAPIReadOnlyKeyBlocksMutationsButAllowsReads(t *testing.T) {
 	}
 }
 
+// A Docker-managed service (issue #341) refuses routing fields with 409
+// and takes the rest, though its backend is empty while stopped.
+func TestAPIDockerManaged(t *testing.T) {
+	h, e := newTestAPIHandler(t)
+	key := createTestKey(t, h, false)
+	if _, err := h.db.SetDockerService("app", []string{"app.example.com"}, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := h.db.ListServices()
+	path := fmt.Sprintf("/admin/api/v1/services/%d", list[0].ID)
+	for _, body := range []map[string]any{{"name": "x"}, {"host": "x.test"}, {"backends": []string{"http://127.0.0.1:1"}}, {"health_path": "/hz"}} {
+		if rec := apiRequest(e, http.MethodPut, path, key, body); rec.Code != http.StatusConflict {
+			t.Errorf("%v: status=%d body=%s", body, rec.Code, rec.Body)
+		}
+	}
+	if rec := apiRequest(e, http.MethodPut, path, key, map[string]any{"bot_mode": "off"}); rec.Code != http.StatusOK {
+		t.Fatalf("bot_mode: status=%d body=%s", rec.Code, rec.Body)
+	}
+}
+
 func TestAPIServiceCRUD(t *testing.T) {
 	h, e := newTestAPIHandler(t)
 	key := createTestKey(t, h, false)

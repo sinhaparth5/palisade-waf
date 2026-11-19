@@ -416,6 +416,7 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"services", "cache_rules TEXT NOT NULL DEFAULT ''"},
 	{"services", "multipart_limit_mb INTEGER NOT NULL DEFAULT 0"},
 	{"services", "malware_scan TEXT NOT NULL DEFAULT ''"},
+	{"services", "docker_managed INTEGER NOT NULL DEFAULT 0"},
 }
 
 // removedMetaKeys are the settings of removed features: TypeSafe (#299) and

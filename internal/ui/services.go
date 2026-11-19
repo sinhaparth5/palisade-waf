@@ -135,6 +135,15 @@ func sanitizeHost(h string) string {
 	return h
 }
 
+// errDockerManaged refuses a routing edit of a service created from
+// container labels (issue #341): the next sync would undo it.
+const errDockerManaged = "Managed by Docker: change the container's palisade.* labels instead."
+
+func (h *Handler) dockerManaged(id int) bool {
+	s, err := h.db.GetService(id)
+	return err == nil && s.DockerManaged
+}
+
 // AddService creates a new backend service from the add-service wizard.
 // matchType picks which of host/prefix gets saved; the wizard only ever
 // collects one of the two from the user. The backend must pass a live
@@ -365,6 +374,9 @@ func (h *Handler) SetServiceBackends(c *echo.Context) error {
 	if err != nil || id < 1 {
 		return fail("invalid service id")
 	}
+	if h.dockerManaged(id) {
+		return fail(errDockerManaged)
+	}
 	var backends []string
 	for _, line := range strings.Split(c.FormValue("backends"), "\n") {
 		if line = strings.TrimSpace(line); line != "" {
@@ -411,6 +423,9 @@ func (h *Handler) RenameService(c *echo.Context) error {
 	if err != nil || id < 1 {
 		return fail("invalid service id")
 	}
+	if h.dockerManaged(id) {
+		return fail(errDockerManaged)
+	}
 	svc, err := h.db.GetService(id)
 	if err != nil {
 		return fail("service not found")
@@ -452,6 +467,9 @@ func (h *Handler) SetServiceHosts(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return fail("invalid service id")
+	}
+	if h.dockerManaged(id) {
+		return fail(errDockerManaged)
 	}
 	svc, err := h.db.GetService(id)
 	if err != nil {

@@ -356,69 +356,76 @@ func (h *Handler) APIUpdateService(c *echo.Context) error {
 		return apiError(c, http.StatusBadRequest, "invalid JSON body")
 	}
 
-	name, host, prefix, backend := existing.Name, existing.Host, existing.Prefix, existing.Backend
-	if req.Name != nil {
-		name = strings.TrimSpace(*req.Name)
+	routing := req.Name != nil || req.Host != nil || req.HostAliases != nil || req.CanonicalHost != nil || req.Prefix != nil ||
+		req.Backend != nil || req.Backends != nil || req.LBPolicy != nil || req.HealthPath != nil || req.HealthInterval != nil
+	if existing.DockerManaged && routing {
+		return apiError(c, http.StatusConflict, "service is managed by Docker: change the container's palisade.* labels instead")
 	}
-	if req.Host != nil {
-		host = sanitizeHost(strings.TrimSpace(*req.Host))
-	}
-	if req.Prefix != nil {
-		prefix = strings.TrimSpace(*req.Prefix)
-	}
-	if req.Backend != nil {
-		backend = strings.TrimSpace(*req.Backend)
-		if err := services.Validate(backend); err != nil {
-			return apiError(c, http.StatusBadRequest, err.Error())
+	if routing {
+		name, host, prefix, backend := existing.Name, existing.Host, existing.Prefix, existing.Backend
+		if req.Name != nil {
+			name = strings.TrimSpace(*req.Name)
 		}
-	}
-	if name == "" || backend == "" {
-		return apiError(c, http.StatusBadRequest, "name and backend cannot be empty")
-	}
-	aliases, canonical := existing.HostAliases, existing.CanonicalHost
-	if req.HostAliases != nil {
-		aliases = req.HostAliases
-	}
-	if req.CanonicalHost != nil {
-		canonical = *req.CanonicalHost
-	}
-	if host == "" {
-		aliases, canonical = nil, "" // a prefix-matched service has no names to alias
-	}
-	aliases, canonical, err = services.ValidateHosts(id, host, aliases, canonical, h.registry.List())
-	if err != nil {
-		return apiError(c, http.StatusBadRequest, err.Error())
-	}
-
-	if err := h.db.UpdateService(id, name, host, prefix, backend); err != nil {
-		return apiError(c, http.StatusInternalServerError, err.Error())
-	}
-	if err := h.db.SetServiceHosts(id, aliases, canonical); err != nil {
-		return apiError(c, http.StatusInternalServerError, err.Error())
-	}
-	if req.Backend != nil || req.Backends != nil || req.LBPolicy != nil || req.HealthPath != nil || req.HealthInterval != nil {
-		backends := append([]string{backend}, existing.ExtraBackends...)
-		policy, healthPath, interval := existing.LBPolicy, existing.HealthPath, existing.HealthInterval
-		if req.Backends != nil {
-			backends = backends[:0]
-			for _, b := range req.Backends {
-				backends = append(backends, strings.TrimSpace(b))
+		if req.Host != nil {
+			host = sanitizeHost(strings.TrimSpace(*req.Host))
+		}
+		if req.Prefix != nil {
+			prefix = strings.TrimSpace(*req.Prefix)
+		}
+		if req.Backend != nil {
+			backend = strings.TrimSpace(*req.Backend)
+			if err := services.Validate(backend); err != nil {
+				return apiError(c, http.StatusBadRequest, err.Error())
 			}
 		}
-		if req.LBPolicy != nil {
-			policy = *req.LBPolicy
+		if name == "" || backend == "" {
+			return apiError(c, http.StatusBadRequest, "name and backend cannot be empty")
 		}
-		if req.HealthPath != nil {
-			healthPath = strings.TrimSpace(*req.HealthPath)
+		aliases, canonical := existing.HostAliases, existing.CanonicalHost
+		if req.HostAliases != nil {
+			aliases = req.HostAliases
 		}
-		if req.HealthInterval != nil {
-			interval = *req.HealthInterval
+		if req.CanonicalHost != nil {
+			canonical = *req.CanonicalHost
 		}
-		if err := services.ValidateBackends(backends, healthPath, interval); err != nil {
+		if host == "" {
+			aliases, canonical = nil, "" // a prefix-matched service has no names to alias
+		}
+		aliases, canonical, err = services.ValidateHosts(id, host, aliases, canonical, h.registry.List())
+		if err != nil {
 			return apiError(c, http.StatusBadRequest, err.Error())
 		}
-		if err := h.db.SetServiceBackends(id, backends, policy, healthPath, interval); err != nil {
+
+		if err := h.db.UpdateService(id, name, host, prefix, backend); err != nil {
 			return apiError(c, http.StatusInternalServerError, err.Error())
+		}
+		if err := h.db.SetServiceHosts(id, aliases, canonical); err != nil {
+			return apiError(c, http.StatusInternalServerError, err.Error())
+		}
+		if req.Backend != nil || req.Backends != nil || req.LBPolicy != nil || req.HealthPath != nil || req.HealthInterval != nil {
+			backends := append([]string{backend}, existing.ExtraBackends...)
+			policy, healthPath, interval := existing.LBPolicy, existing.HealthPath, existing.HealthInterval
+			if req.Backends != nil {
+				backends = backends[:0]
+				for _, b := range req.Backends {
+					backends = append(backends, strings.TrimSpace(b))
+				}
+			}
+			if req.LBPolicy != nil {
+				policy = *req.LBPolicy
+			}
+			if req.HealthPath != nil {
+				healthPath = strings.TrimSpace(*req.HealthPath)
+			}
+			if req.HealthInterval != nil {
+				interval = *req.HealthInterval
+			}
+			if err := services.ValidateBackends(backends, healthPath, interval); err != nil {
+				return apiError(c, http.StatusBadRequest, err.Error())
+			}
+			if err := h.db.SetServiceBackends(id, backends, policy, healthPath, interval); err != nil {
+				return apiError(c, http.StatusInternalServerError, err.Error())
+			}
 		}
 	}
 	if req.RPS != nil || req.Burst != nil {
@@ -499,7 +506,7 @@ func (h *Handler) APIUpdateService(c *echo.Context) error {
 		return apiError(c, http.StatusInternalServerError, err.Error())
 	}
 	// Per-service WAF engines are keyed by name, so a rename rebuilds them.
-	if (req.AllowLargeJSUploads != nil || schemaChanged || name != existing.Name) && h.reloadWAF != nil {
+	if (req.AllowLargeJSUploads != nil || schemaChanged || (req.Name != nil && strings.TrimSpace(*req.Name) != existing.Name)) && h.reloadWAF != nil {
 		h.reloadWAF()
 	}
 	svc, err := h.db.GetService(id)

@@ -13,11 +13,28 @@ services:
     # clamav service below, then pick Log only or Block on a service's
     # Uploads tab. Scans fail open while clamd starts (about a minute).
     # command: ["--db", "/data/waf.db", "--certs", "/data/certs", "--prune-interval", "24h", "--clamd", "tcp://clamav:3310"]
+    # Services from container labels (issue #341): add
+    # "--docker-discovery", "tcp://docker-proxy:2375" to command and
+    # uncomment docker-proxy below. Label a container on a network it shares
+    # with this one: palisade.enable=true, palisade.host=app.example.com,
+    # palisade.port=8080 (optional: palisade.prefix, palisade.name,
+    # palisade.network). The Docker socket is root on the host, so the
+    # proxy exposes only the read-only container list and events; never
+    # mount the socket into Palisade itself.
 
   # clamav:
   #   image: clamav/clamav:1.4
   #   volumes:
   #     - clamav-db:/var/lib/clamav
+
+  # docker-proxy:
+  #   image: tecnativa/docker-socket-proxy:0.3.0
+  #   environment:
+  #     CONTAINERS: 1
+  #     EVENTS: 1
+  #     POST: 0
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
   waf-data:

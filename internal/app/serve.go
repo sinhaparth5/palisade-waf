@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"palisade/internal/config"
+	"palisade/internal/docker"
 	"palisade/internal/ext"
 	"palisade/internal/notify/accesslog"
 	"palisade/internal/notify/mailer"
@@ -67,6 +68,7 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	trustedProxies := fs.String("trusted-proxies", "", "comma-separated trusted proxy IPs or CIDRs for X-Forwarded-For/X-Real-IP")
 	adminAllow := fs.String("admin-allow", "", "comma-separated client IPs or CIDRs that may reach the admin UI, API and metrics; everyone else gets a 404 (empty = any)")
 	adminListen := fs.String("admin-listen", "", "serve the admin UI only on this plain-HTTP address, e.g. 127.0.0.1:9090, and remove it from the public listener (empty = public listener)")
+	dockerAddr := fs.String("docker-discovery", "", "create services from labels of running containers via this Docker API: unix:///var/run/docker.sock or tcp://socket-proxy:2375 (empty = off)")
 	clamdAddr := fs.String("clamd", "", "clamd that scans uploads on services with a malware scan mode: tcp://host:port or unix:///path (empty = off)")
 	maxConns := fs.Int("max-conns-per-ip", 256, "concurrent TCP connections one client IP (IPv6 /64) may hold; trusted proxies, Cloudflare, loopback and trusted IPs are exempt (0 = no cap)")
 	trustedCrawlers := fs.String("trusted-crawlers", "", "extra crawlers that skip the bot challenge, pinned by source: ua=cidr[,cidr];ua2=ip, or ua=https://host to verify Web Bot Auth signatures (empty = none)")
@@ -357,6 +359,13 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 		return err
 	}
 	h.SetClamd(clamd)
+	dockerWatcher, err := docker.New(*dockerAddr, db, registry)
+	if err != nil {
+		return err
+	}
+	if dockerWatcher != nil {
+		go dockerWatcher.Run(ctx)
+	}
 	// Stops whichever rate limiter is active at shutdown — not necessarily
 	// rl, since ReloadRateLimit (Settings page) may have hot-swapped it.
 	defer h.StopRateLimit()

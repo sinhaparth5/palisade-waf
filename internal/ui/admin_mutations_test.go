@@ -294,6 +294,38 @@ func TestRenameService(t *testing.T) {
 	}
 }
 
+// TestDockerManagedLocked pins issue #341: the name, hosts and backends of
+// a service created from container labels refuse edits in the UI and API;
+// its other settings still save, even with no container running.
+func TestDockerManagedLocked(t *testing.T) {
+	env := newAdminEnv(t)
+	if _, err := env.db.SetDockerService("app", []string{"app.example.com"}, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.h.registry.Reload(env.db); err != nil {
+		t.Fatal(err)
+	}
+	svc := env.h.registry.List()[0]
+	id := itoa(svc.ID)
+	for _, tc := range []struct{ path, errBox string }{
+		{"/admin/services/name/" + id, "#svc-name-error"},
+		{"/admin/services/hosts/" + id, "#svc-hosts-error"},
+		{"/admin/services/backends/" + id, "#svc-backends-error"},
+	} {
+		rec := env.do("POST", tc.path, form("name", "x", "aliases", "www.app.example.com", "backends", "http://127.0.0.1:9001"))
+		if rec.Header().Get("HX-Retarget") != tc.errBox || !strings.Contains(rec.Body.String(), "Managed by Docker") {
+			t.Errorf("%s: %s", tc.path, rec.Body)
+		}
+	}
+	if rec := env.do("POST", "/admin/services/bot/"+id, form("bot_mode", "off")); rec.Code != 200 {
+		t.Errorf("bot mode: %d %s", rec.Code, rec.Body)
+	}
+	got, _ := env.db.GetService(svc.ID)
+	if got.Name != "app" || got.HostAliases != nil || got.Backend != "" || got.BotMode != "off" {
+		t.Errorf("service = %+v", got)
+	}
+}
+
 func TestServiceSettingHandlers(t *testing.T) {
 	env := newAdminEnv(t)
 	svc := env.seedService("shop", "shop.example.com")

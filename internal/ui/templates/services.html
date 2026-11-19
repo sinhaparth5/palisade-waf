@@ -130,6 +130,7 @@
         <button type="submit" class="btn-primary">Rename</button>
       </div>
       <div id="svc-name-error" role="alert" aria-live="polite" class="text-[12px] text-red-600 mt-[6px]"></div>
+      <p id="svc-docker-note" class="hidden text-[12px] text-slate-500 mt-[6px] leading-[1.5]">Managed by Docker: the name, hosts and backends come from the container's <span class="font-mono">palisade.*</span> labels. Every other setting is yours to change.</p>
     </form>
 
     <!-- Tabs -->
@@ -876,8 +877,11 @@
       {{else}}
       <span class="tag shrink-0"><span class="h-2 w-2 rounded-full bg-warning"></span>prefix</span>
       {{end}}
+      {{if .DockerManaged}}
+      <span class="tag shrink-0" title="Created from container labels"><span class="h-2 w-2 rounded-full bg-info"></span>docker</span>
+      {{end}}
     </div>
-    <div class="font-mono text-[12px] text-slate-500 truncate">{{if .Host}}{{.Host}}{{range .HostAliases}}, {{.}}{{end}}{{else}}{{.Prefix}}{{end}} &rarr; {{.Backend}}{{if .ExtraBackends}} +{{len .ExtraBackends}}{{end}}</div>
+    <div class="font-mono text-[12px] text-slate-500 truncate">{{if .Host}}{{.Host}}{{range .HostAliases}}, {{.}}{{end}}{{else}}{{.Prefix}}{{end}} &rarr; {{if .Backend}}{{.Backend}}{{else}}no running container{{end}}{{if .ExtraBackends}} +{{len .ExtraBackends}}{{end}}</div>
     {{if .ExtraBackends}}
     <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1">
       {{range .Health}}
@@ -967,7 +971,7 @@
       data-login-paths="{{range $i, $p := .LoginPaths}}{{if $i}}&#10;{{end}}{{$p}}{{end}}"
       data-rps="{{.RateLimitRPS}}" data-burst="{{.RateLimitBurst}}" data-rate-rules="{{.RateRules}}" data-mode="{{.BotMode}}" data-cache="{{if .CacheEnabled}}1{{else}}0{{end}}"
       data-session-cache="{{if .CacheBySession}}1{{else}}0{{end}}" data-session-cookie="{{.SessionCookieName}}"
-      data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-multipart-mb="{{.MultipartLimitMB}}" data-malware-scan="{{.MalwareScan}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
+      data-large-js-uploads="{{if .AllowLargeJSUploads}}1{{else}}0{{end}}" data-multipart-mb="{{.MultipartLimitMB}}" data-malware-scan="{{.MalwareScan}}" data-docker="{{if .DockerManaged}}1{{end}}" data-http3="{{if .HTTP3Enabled}}1{{else}}0{{end}}" data-compress="{{if .CompressEnabled}}1{{else}}0{{end}}"
       data-backends="{{range $i, $b := .Backends}}{{if $i}}&#10;{{end}}{{$b}}{{end}}" data-lb="{{.LBPolicy}}" data-health-path="{{.HealthPath}}" data-health-interval="{{.HealthInterval}}" data-backend-ca="{{.BackendCA}}"
       data-schema="{{.RequestSchema}}" data-schema-mode="{{.SchemaMode}}" data-openapi-mode="{{.OpenAPIMode}}"
       data-mcp-mode="{{.MCP.Mode}}" data-mcp-path="{{.MCP.Path}}" data-mcp-origins="{{.MCP.Origins}}" data-mcp-methods="{{.MCP.Methods}}" data-mcp-tools="{{.MCP.Tools}}" data-csp="{{.CSP}}" data-csp-enforce="{{if .CSPEnforce}}1{{else}}0{{end}}" data-csp-recent="{{if .CSPRecent}}1{{else}}0{{end}}"
