@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#344) Let Google's own fetchers skip the bot challenge
+
 ## [3.4.1] - 2026-11-19
 
 - (#341) Create services from Docker container labels
