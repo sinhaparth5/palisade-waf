@@ -34,6 +34,9 @@ type Analysis struct {
 	// LinkPreview: an unverified link-preview fetcher (crawler.preview) on a
 	// bodiless GET/HEAD. Skips the challenge only; never trusted otherwise.
 	LinkPreview bool
+	// GoogleService: a bodiless GET/HEAD from a Google-owned, non-Cloud IP
+	// (--google-fetchers). Like LinkPreview it skips only the challenge.
+	GoogleService bool
 }
 
 // Analyze scores r for bot-like characteristics. It only reads headers
@@ -70,6 +73,11 @@ func Analyze(r *http.Request, ip string, asnNum uint) Analysis {
 			a.LinkPreview = true
 			a.Signals = append(a.Signals, "link_preview")
 		}
+	}
+
+	if (r.Method == http.MethodGet || r.Method == http.MethodHead) && r.ContentLength == 0 && googleService(ip) {
+		a.GoogleService = true
+		a.Signals = append(a.Signals, "google_service")
 	}
 
 	switch ua {

@@ -71,6 +71,7 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	dockerAddr := fs.String("docker-discovery", "", "create services from labels of running containers via this Docker API: unix:///var/run/docker.sock or tcp://socket-proxy:2375 (empty = off)")
 	clamdAddr := fs.String("clamd", "", "clamd that scans uploads on services with a malware scan mode: tcp://host:port or unix:///path (empty = off)")
 	maxConns := fs.Int("max-conns-per-ip", 256, "concurrent TCP connections one client IP (IPv6 /64) may hold; trusted proxies, Cloudflare, loopback and trusted IPs are exempt (0 = no cap)")
+	googleFetchers := fs.Bool("google-fetchers", false, "let bodiless GET/HEAD from Google's own IPs (gstatic goog.json minus cloud.json, refreshed daily) skip the bot challenge; the WAF and rate limits still apply")
 	trustedCrawlers := fs.String("trusted-crawlers", "", "extra crawlers that skip the bot challenge, pinned by source: ua=cidr[,cidr];ua2=ip, or ua=https://host to verify Web Bot Auth signatures (empty = none)")
 	dbPath, dbDriver := dbFlags(fs)
 	certsDir := fs.String("certs", "./certs", "TLS certificate cache directory")
@@ -125,6 +126,9 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	}
 	if err := bot.AddPinnedCrawlers(*trustedCrawlers); err != nil {
 		return fmt.Errorf("--trusted-crawlers: %w", err)
+	}
+	if *googleFetchers {
+		go bot.RunGoogleRanges(ctx)
 	}
 	cfg.DB.Path = *dbPath
 	cfg.TLS.CacheDir = *certsDir

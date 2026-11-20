@@ -410,7 +410,7 @@ func (h *Handler) Handle(c *echo.Context) error {
 	meta.Exempt = open || botAnalysis.IsTrustedCrawler || aiAllowed
 	// A link preview (WhatsApp) can't run the challenge JS and has no
 	// verifiable source; it is not Exempt, so autoban still scores it.
-	if ch != nil && !open && !botAnalysis.IsTrustedCrawler && !botAnalysis.LinkPreview && !aiAllowed && !challenge.Exempt(r.Method, r.URL.Path) {
+	if ch != nil && !open && !botAnalysis.IsTrustedCrawler && !botAnalysis.LinkPreview && !botAnalysis.GoogleService && !aiAllowed && !challenge.Exempt(r.Method, r.URL.Path) {
 		svcMode := "inherit"
 		if app != nil && app.BotMode != "" {
 			svcMode = app.BotMode
