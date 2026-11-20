@@ -14,14 +14,9 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.4.2] - 2026-11-20
+
 - (#344) Let Google's own fetchers skip the bot challenge
 
-## [3.4.1] - 2026-11-19
-
-- (#341) Create services from Docker container labels
-- (#340) Scan file uploads for malware with ClamAV
-- (#342) Push autobans to CrowdSec as alerts
-- (#343) Extension hook for dialing backends
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.1...main
-[3.4.1]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.0...v3.4.1
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.2...main
+[3.4.2]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.1...v3.4.2
