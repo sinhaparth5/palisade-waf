@@ -7,8 +7,33 @@ entries:
         - name: Chart README
           url: https://github.com/sinhaparth5/palisade-waf/tree/main/deploy/helm/palisade
     apiVersion: v2
+    appVersion: 3.4.2
+    created: "2026-11-20T20:43:57.535983517Z"
+    description: Palisade WAF and reverse proxy (Coraza + OWASP CRS) with an admin
+      UI
+    digest: 09b9bb13ce8b86082f2a5ef9d84ec1edfcd22102b3b251c76b2bfbad71e7a285
+    home: https://github.com/sinhaparth5/palisade-waf
+    keywords:
+    - waf
+    - reverse-proxy
+    - coraza
+    - owasp-crs
+    - security
+    name: palisade
+    sources:
+    - https://github.com/sinhaparth5/palisade-waf
+    type: application
+    urls:
+    - https://sinhaparth5.github.io/palisade-waf/palisade-3.4.2.tgz
+    version: 3.4.2
+  - annotations:
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Chart README
+          url: https://github.com/sinhaparth5/palisade-waf/tree/main/deploy/helm/palisade
+    apiVersion: v2
     appVersion: 3.4.1
-    created: "2026-11-19T14:42:54.842737343Z"
+    created: "2026-11-20T20:43:57.534701236Z"
     description: Palisade WAF and reverse proxy (Coraza + OWASP CRS) with an admin
       UI
     digest: fd3314af4682bfb932cd11c4a073ed7f1b69cf4fa24ae7abf769ba2f926b8ec2
@@ -33,7 +58,7 @@ entries:
           url: https://github.com/sinhaparth5/palisade-waf/tree/main/deploy/helm/palisade
     apiVersion: v2
     appVersion: 3.4.0
-    created: "2026-11-19T14:42:54.841477846Z"
+    created: "2026-11-20T20:43:57.533355007Z"
     description: Palisade WAF and reverse proxy (Coraza + OWASP CRS) with an admin
       UI
     digest: 16b2fa32e721415cefa2637b83e671f04743a947e58c434be17e0e77de86a227
@@ -51,4 +76,4 @@ entries:
     urls:
     - https://sinhaparth5.github.io/palisade-waf/palisade-3.4.0.tgz
     version: 3.4.0
-generated: "2026-11-19T14:42:54.839659383Z"
+generated: "2026-11-20T20:43:57.53198894Z"
