@@ -15,6 +15,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"palisade/internal/ext"
 	"palisade/internal/security/waitroom"
 	"palisade/internal/storage"
 )
@@ -132,7 +133,13 @@ func (h *Handler) gate(c *echo.Context, app *storage.Service, clientKey string, 
 	if idle <= 0 {
 		idle = defaultIdleSecs * time.Second
 	}
-	res := room.Visit(ticket, clientKey, g.MaxActive, idle, now)
+	visit := room.Visit
+	if ext.WaitRoom != nil {
+		if v := ext.WaitRoom(app.Name); v != nil {
+			visit = v
+		}
+	}
+	res := visit(ticket, clientKey, g.MaxActive, idle, now)
 	if res.Ticket != "" && res.Ticket != ticket {
 		c.SetCookie(&http.Cookie{Name: name, Value: res.Ticket + "." + h.ticketSig(app.Name, res.Ticket, clientKey), //nolint:gosec // G124: Secure only over TLS so plain-HTTP setups (loopback, --admin-listen) still work
 			Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode})
