@@ -14,11 +14,9 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.4.3] - 2026-11-21
+
 - (#345) Mobile background tabs get stuck on the bot challenge and autobanned
 
-## [3.4.2] - 2026-11-20
-
-- (#344) Let Google's own fetchers skip the bot challenge
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.2...main
-[3.4.2]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.1...v3.4.2
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.3...main
+[3.4.3]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.2...v3.4.3
