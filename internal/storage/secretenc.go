@@ -93,6 +93,20 @@ func (db *DB) sealSecret(plain string) (string, error) {
 	return secretPrefix + base64.StdEncoding.EncodeToString(sealed), nil
 }
 
+// SealSecret seals plain under the --db-key-file key, for a value that
+// leaves the DB (an add-on sending a file to another node). Without a key it
+// returns plain, so check the DB is sealed before sending anything secret.
+func (db *DB) SealSecret(plain string) (string, error) { return db.sealSecret(plain) }
+
+// OpenSecret reverses SealSecret, and unlike the DB's own reads refuses a
+// value that isn't sealed.
+func (db *DB) OpenSecret(stored string) (string, error) {
+	if !strings.HasPrefix(stored, secretPrefix) {
+		return "", errors.New("value isn't sealed")
+	}
+	return db.openSecret(stored)
+}
+
 // openSecret reverses sealSecret. Unprefixed values pass through verbatim —
 // that's what keeps plaintext deployments and pre-migration values working.
 func (db *DB) openSecret(stored string) (string, error) {

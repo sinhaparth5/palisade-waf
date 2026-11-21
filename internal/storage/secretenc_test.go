@@ -194,6 +194,15 @@ func TestOpenSecretTampered(t *testing.T) {
 	if s, _ := db.sealSecret(""); s != "" {
 		t.Errorf("sealSecret(\"\") = %q, want \"\" (unset)", s)
 	}
+	// The exported pair round-trips but refuses plaintext.
+	if s, _ := db.SealSecret("pem"); s == "pem" {
+		t.Error("SealSecret returned plaintext")
+	} else if got, err := db.OpenSecret(s); got != "pem" || err != nil {
+		t.Errorf("OpenSecret = %q, %v", got, err)
+	}
+	if _, err := db.OpenSecret("not-sealed"); err == nil {
+		t.Error("OpenSecret accepted plaintext")
+	}
 }
 
 // TestExtSecret pins add-on secrets: a plaintext one is sealed when a key
