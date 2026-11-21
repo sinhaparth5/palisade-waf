@@ -7,9 +7,11 @@ import (
 	"html/template"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v5"
 
+	"palisade/internal/security/waitroom"
 	"palisade/internal/storage"
 )
 
@@ -147,3 +149,9 @@ type Brand struct {
 // Branding, when set, is read on every page render, so keep it cheap. Set
 // from a Mount.
 var Branding func() Brand
+
+// WaitRoom, when set, returns the visit function of the waiting room for
+// service, replacing the node's own (one queue shared by several nodes), or
+// nil to keep the node's own. It runs on every request to a service with a
+// waiting room, so keep it cheap. Set from a Mount.
+var WaitRoom func(service string) func(ticket, key string, max int, idle time.Duration, now time.Time) waitroom.Result

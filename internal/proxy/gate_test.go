@@ -9,6 +9,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"palisade/internal/ext"
+	"palisade/internal/security/waitroom"
 	"palisade/internal/storage"
 )
 
@@ -142,5 +144,25 @@ func TestWaitingRoom(t *testing.T) {
 	}
 	if rec := do("/", ip(0), forged); rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("forged cookie = %d, want queued", rec.Code)
+	}
+}
+
+// TestWaitRoomHook: ext.WaitRoom replaces the node's own room when it
+// returns a visit function, and nil keeps it.
+func TestWaitRoomHook(t *testing.T) {
+	calls := 0
+	ext.WaitRoom = func(service string) func(string, string, int, time.Duration, time.Time) waitroom.Result {
+		if service != "test-svc" {
+			return nil
+		}
+		return func(_, _ string, max int, _ time.Duration, _ time.Time) waitroom.Result {
+			calls++
+			return waitroom.Result{Ticket: "t", Position: 7 * max}
+		}
+	}
+	t.Cleanup(func() { ext.WaitRoom = nil })
+	do, hits := gateEnv(t, storage.ServiceGate{WaitingRoom: true, MaxActive: 2})
+	if rec := do("/", "203.0.113.9", map[string]*http.Cookie{}); !strings.Contains(rec.Body.String(), "place in line: 14") || calls != 1 || *hits != 0 {
+		t.Fatalf("hooked room: %d calls, %d hits, %s", calls, *hits, rec.Body)
 	}
 }
