@@ -189,7 +189,10 @@ func (b *Banner) Record(e storage.RequestLog) {
 	// a scanner, not a browser. Prefix match — issue #16's adaptive
 	// enforcement can also trigger a challenge, logged as
 	// "bot_challenge:adaptive", which must score exactly the same way.
-	challenged := !e.Blocked && strings.HasPrefix(e.Action, "bot_challenge")
+	// "bot_challenge:returning" carries a pass cookie the server issued
+	// earlier (IP changed, or a tab outlived the pass), so it never scores
+	// (issue #345).
+	challenged := !e.Blocked && strings.HasPrefix(e.Action, "bot_challenge") && e.Action != "bot_challenge:returning"
 	// A honeypot hit is logged unblocked too (the backend answered 404),
 	// and nothing legitimate asks for those paths, so it bans outright.
 	honeypot := e.Action == "honeypot"

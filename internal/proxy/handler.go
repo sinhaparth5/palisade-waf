@@ -430,6 +430,11 @@ func (h *Handler) Handle(c *echo.Context) error {
 					// Action-string convention as every other decision here.
 					reason = "bot_challenge:adaptive"
 				}
+				// Solved before, from another IP or past the pass TTL: a
+				// phone tab coming back, not a scanner (issue #345).
+				if ch.HeldPass(r) {
+					reason = "bot_challenge:returning"
+				}
 				mark("challenge")
 				return h.challenge(c, ch, appName, clientIP, reason, start, meta)
 			}

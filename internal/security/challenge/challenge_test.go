@@ -56,10 +56,58 @@ func TestCookieVisitorIDTamperRejected(t *testing.T) {
 	value := c.buildCookieValue(expiry, testIP, testVisitorID)
 
 	// Swap in a different visitor ID without re-signing.
-	forged := fmt.Sprintf("%d.%s.%s", expiry, "ffffffffffffffffffffffffffffffff",
-		value[len(value)-32:])
+	parts := strings.Split(value, ".")
+	parts[1] = "ffffffffffffffffffffffffffffffff"
+	forged := strings.Join(parts, ".")
 	if _, ok := c.parseCookie(forged, testIP); ok {
 		t.Fatal("cookie with swapped visitor ID must not verify")
+	}
+	if c.HeldPass(cookieReq(forged)) {
+		t.Fatal("cookie with swapped visitor ID must not count as a held pass")
+	}
+}
+
+func cookieReq(value string) *http.Request {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.AddCookie(&http.Cookie{Name: cookieName, Value: value})
+	return r
+}
+
+// TestHeldPass pins issue #345: a cookie this server issued is recognised
+// from any IP and up to returningGrace past expiry, but never passes there.
+func TestHeldPass(t *testing.T) {
+	c := New("secret", 3600, 5)
+	other := New("other-secret", 3600, 5)
+	now := time.Now().Unix()
+	valid := c.buildCookieValue(now+3600, testIP, testVisitorID)
+	parts := strings.Split(valid, ".")
+	cases := []struct {
+		name  string
+		value string
+		held  bool
+		pass  bool // parseCookie from 198.51.100.8, never testIP
+	}{
+		{"same cookie from another ip", valid, true, false},
+		{"pass expired, inside grace", c.buildCookieValue(now-3600, testIP, testVisitorID), true, false},
+		{"past grace", c.buildCookieValue(now-returningGrace-60, testIP, testVisitorID), false, false},
+		{"other server's cookie", other.buildCookieValue(now+3600, testIP, testVisitorID), false, false},
+		{"pre-#345 three-part cookie", strings.Join(parts[:3], "."), false, false},
+		{"forged held sig", strings.Join(append(parts[:3:3], "00000000000000000000000000000000"), "."), false, false},
+		{"expiry moved", fmt.Sprint(now+999999) + valid[len(parts[0]):], false, false},
+		{"garbage", "1.x.y.z", false, false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := c.HeldPass(cookieReq(tt.value)); got != tt.held {
+				t.Errorf("HeldPass = %v, want %v", got, tt.held)
+			}
+			if _, ok := c.parseCookie(tt.value, "198.51.100.8"); ok != tt.pass {
+				t.Errorf("parseCookie from another IP = %v, want %v", ok, tt.pass)
+			}
+		})
+	}
+	if c.HeldPass(httptest.NewRequest(http.MethodGet, "/", nil)) {
+		t.Error("no cookie must not be a held pass")
 	}
 }
 
@@ -82,6 +130,16 @@ func TestCookieBoundToClient(t *testing.T) {
 		if _, ok := c.parseCookie(c.buildCookieValue(expiry, tt.issued, testVisitorID), tt.from); ok != tt.want {
 			t.Errorf("issued to %s, sent from %s: ok=%v, want %v", tt.issued, tt.from, ok, tt.want)
 		}
+	}
+
+	// Neither a three-part cookie from before issue #345 nor one whose
+	// IP-free MAC is broken passes, so one string passes per issued cookie.
+	full := c.buildCookieValue(expiry, testIP, testVisitorID)
+	if _, ok := c.parseCookie(full[:strings.LastIndex(full, ".")], testIP); ok {
+		t.Error("pre-#345 three-part cookie must not pass")
+	}
+	if _, ok := c.parseCookie(full[:len(full)-1]+"x", testIP); ok {
+		t.Error("cookie with a broken IP-free MAC must not pass")
 	}
 
 	legacy := fmt.Sprintf("%d.%s", expiry, newTestMAC(c.secret, fmt.Sprintf("cz-pass:%d", expiry)))

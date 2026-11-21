@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#345) Mobile background tabs get stuck on the bot challenge and autobanned
+
 ## [3.4.2] - 2026-11-20
 
 - (#344) Let Google's own fetchers skip the bot challenge

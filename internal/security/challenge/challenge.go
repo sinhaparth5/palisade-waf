@@ -42,6 +42,11 @@ var pageTmpl = template.Must(template.New("challenge").Parse(pageHTML))
 
 const cookieName = "cz_bot_ok"
 
+// returningGrace is how long the browser keeps the pass cookie after the pass
+// itself expires, so HeldPass can still recognise a visitor who solved the
+// challenge before (issue #345).
+const returningGrace = 7 * 24 * 60 * 60
+
 // visitorIDPattern matches FingerprintJS visitor IDs (32-char hex today;
 // allow a little slack but nothing that could break the cookie format).
 var visitorIDPattern = regexp.MustCompile(`^[0-9a-zA-Z]{8,64}$`)
@@ -123,6 +128,28 @@ func (c *Challenger) PassedChallenge(r *http.Request, clientIP string) bool {
 	}
 	_, ok := c.parseCookie(ck.Value, clientIP)
 	return ok
+}
+
+// HeldPass reports whether the request carries a pass cookie this server
+// issued, ignoring the client IP and allowing up to returningGrace past its
+// expiry: a browser that solved the challenge before and has since changed
+// IP (a phone moving between networks) or kept a tab open past the pass TTL.
+// It still has to solve a new challenge; HeldPass only keeps those
+// challenges from counting against it in autoban (issue #345).
+func (c *Challenger) HeldPass(r *http.Request) bool {
+	ck, err := r.Cookie(cookieName)
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(ck.Value, ".")
+	if len(parts) != 4 {
+		return false
+	}
+	expiry, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || parts[0] != strconv.FormatInt(expiry, 10) || time.Now().Unix() > expiry+returningGrace {
+		return false
+	}
+	return hmac.Equal([]byte(c.anyIPMAC(expiry, parts[1])), []byte(parts[3]))
 }
 
 // VisitorID returns the FingerprintJS visitor ID bound into the request's
@@ -358,20 +385,26 @@ func (c *Challenger) issueCookie(w http.ResponseWriter, r *http.Request, clientI
 		Name:     cookieName,
 		Value:    c.buildCookieValue(expiry, clientIP, visitorID),
 		Path:     "/",
-		Expires:  time.Unix(expiry, 0),
+		Expires:  time.Unix(expiry+returningGrace, 0),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secureRequest(r),
 	})
 }
 
-// buildCookieValue produces "expiry.visitorID.sig". The HMAC covers the
+// buildCookieValue produces "expiry.visitorID.sig.anysig". sig covers the
 // visitor ID and the client's ratelimit.ClientKey (IPv6 /64), so the
 // fingerprint travels tamper-evident without server-side state and the
-// cookie only works from the client that solved the challenge. visitorID
-// may be "".
+// pass only works from the client that solved the challenge. anysig leaves
+// the IP out and only feeds HeldPass, never a pass. visitorID may be "".
 func (c *Challenger) buildCookieValue(expiry int64, clientIP, visitorID string) string {
-	return fmt.Sprintf("%d.%s.%s", expiry, visitorID, c.cookieMAC(expiry, clientIP, visitorID))
+	return fmt.Sprintf("%d.%s.%s.%s", expiry, visitorID, c.cookieMAC(expiry, clientIP, visitorID), c.anyIPMAC(expiry, visitorID))
+}
+
+func (c *Challenger) anyIPMAC(expiry int64, visitorID string) string {
+	mac := hmac.New(sha256.New, []byte(c.secret))
+	fmt.Fprintf(mac, "cz-held:%d:%s", expiry, visitorID)
+	return hex.EncodeToString(mac.Sum(nil)[:16])
 }
 
 func (c *Challenger) cookieMAC(expiry int64, clientIP, visitorID string) string {
@@ -384,7 +417,13 @@ func (c *Challenger) cookieMAC(expiry int64, clientIP, visitorID string) string 
 // ID bound into it.
 func (c *Challenger) parseCookie(value, clientIP string) (visitorID string, ok bool) {
 	parts := strings.Split(value, ".")
-	if len(parts) != 3 {
+	// The IP-free MAC must be valid too, so exactly one string passes per
+	// issued cookie. Three-part cookies from before issue #345 are refused:
+	// those visitors solve one more challenge.
+	if len(parts) != 4 {
+		return "", false
+	}
+	if expiry, err := strconv.ParseInt(parts[0], 10, 64); err != nil || !hmac.Equal([]byte(c.anyIPMAC(expiry, parts[1])), []byte(parts[3])) {
 		return "", false
 	}
 	expiry, err := strconv.ParseInt(parts[0], 10, 64)
