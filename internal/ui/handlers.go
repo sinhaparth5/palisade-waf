@@ -489,7 +489,7 @@ func (h *Handler) Register(e *echo.Echo) {
 		return rec.Code, rec.Body.Bytes()
 	}
 	for _, mount := range ext.Mounts {
-		f := mount(ext.Env{DB: h.db, AdminPath: base, Reload: h.reloadAll})
+		f := mount(ext.Env{DB: h.db, AdminPath: base, Reload: h.reloadAll, Admin: AdminListener(base, e)})
 		for _, r := range f.Open {
 			admin.Add(r.Method, r.Path, r.Handler, bodyLimit)
 		}

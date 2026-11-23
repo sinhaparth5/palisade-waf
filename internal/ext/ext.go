@@ -22,6 +22,10 @@ type Env struct {
 	// Reload re-reads every runtime setting from DB, after something
 	// replaced the configuration underneath the server.
 	Reload func() error
+	// Admin serves the admin UI the way --admin-listen does (admin path
+	// only, never proxies, --admin-allow applies), for a feature that
+	// serves it on a listener of its own.
+	Admin http.Handler
 }
 
 // Route is an admin route under the admin path, behind the session, CSRF,
