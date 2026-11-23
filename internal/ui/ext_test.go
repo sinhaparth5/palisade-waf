@@ -176,3 +176,21 @@ func TestExtBranding(t *testing.T) {
 		t.Error("dashboard not branded")
 	}
 }
+
+// TestExtBackends: suggested backends ride along with the services list.
+func TestExtBackends(t *testing.T) {
+	env := newAdminEnv(t)
+	var out struct {
+		Suggested []backendSuggestion `json:"suggested_backends"`
+	}
+	env.doJSON(env.session, http.MethodGet, "/admin/api/services", nil, &out)
+	if out.Suggested == nil || len(out.Suggested) != 0 {
+		t.Errorf("without ext.Backends = %#v, want []", out.Suggested)
+	}
+	ext.Backends = func() []ext.Backend { return []ext.Backend{{URL: "http://[200::1]:8080", Label: "mesh: <homelab>"}} }
+	defer func() { ext.Backends = nil }()
+	env.doJSON(env.session, http.MethodGet, "/admin/api/services", nil, &out)
+	if len(out.Suggested) != 1 || out.Suggested[0] != (backendSuggestion{"http://[200::1]:8080", "mesh: <homelab>"}) {
+		t.Errorf("suggested = %#v", out.Suggested)
+	}
+}

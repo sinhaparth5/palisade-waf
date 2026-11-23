@@ -11,6 +11,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"os"
+	"palisade/internal/ext"
 	"palisade/internal/security/bot"
 	"palisade/internal/security/csp"
 	"palisade/internal/security/jwtauth"
@@ -85,6 +86,23 @@ func (h *Handler) serviceViews() []ServiceView {
 		out[i].CSPRecent = slices.ContainsFunc(out[i].Scripts, func(sc storage.CSPScript) bool { return sc.FirstSeen.After(weekAgo) })
 	}
 	return out
+}
+
+// extBackends is ext.Backends, never nil so the app gets a list.
+func extBackends() []backendSuggestion {
+	out := []backendSuggestion{}
+	if ext.Backends != nil {
+		for _, b := range ext.Backends() {
+			out = append(out, backendSuggestion{b.URL, b.Label})
+		}
+	}
+	return out
+}
+
+// backendSuggestion is one ext.Backends entry in GET /api/services.
+type backendSuggestion struct {
+	URL   string `json:"url"`
+	Label string `json:"label"`
 }
 
 // scopedViews is serviceViews limited to the user's scope.
@@ -445,6 +463,7 @@ func (h *Handler) ListServices(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{
 		"services": out, "certificates": pool, "acme_email": email != "",
 		"http3_listener": h.cfg.ListenAddrH3 != "", "varnish": vcfg.Enabled,
+		"suggested_backends": extBackends(), // ext.Backends: offered on the new-service and Backends forms
 	})
 }
 

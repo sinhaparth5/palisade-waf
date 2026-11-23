@@ -143,6 +143,14 @@ var SSOLogin func(c *echo.Context, id *SSOIdentity, refused string) error
 // shows SSO invites under Users. Set from a Mount.
 var LoginButton func() (label, path string)
 
+// Backend is a backend URL a feature offers on the Services page.
+type Backend struct{ URL, Label string }
+
+// Backends, when set, lists backend URLs to suggest when adding a service
+// or editing its backends. Read on every Services page render, so keep it
+// cheap. Set from a Mount.
+var Backends func() []Backend
+
 // Brand renames and reskins the admin UI; a zero field keeps Palisade's.
 type Brand struct {
 	Name string // replaces "Palisade" in the UI and authenticator apps
