@@ -139,6 +139,55 @@ describe("ip rules page", () => {
     expect(api.calls("PUT /api/ip-rules/honeypots")[0]!.json).toEqual({ honeypot_paths: "/wp-login.php\n/xmlrpc.php" });
   });
 
+  it("saves adaptive enforcement and shows errors no field carries", async () => {
+    const api = mockApi({
+      ...base,
+      "PUT /api/ip-rules/adaptive": reply(204),
+      "PUT /api/ip-rules/honeypots": reply(400, { error: "invalid", message: "bad", fields: { honeypot_paths: '"x" is not a path' } }),
+      "POST /api/ip-rules": reply(500, {}),
+    });
+    const { user } = await renderRoute("/ip-rules");
+    await user.click(await screen.findByLabelText("Adjust enforcement automatically"));
+    await user.click(screen.getAllByRole("button", { name: "Save & apply" })[1]!);
+    await vi.waitFor(() => expect(api.calls("PUT /api/ip-rules/adaptive")).toHaveLength(1));
+    expect(api.calls("PUT /api/ip-rules/adaptive")[0]!.json).toEqual({ ...settings.adaptive, enabled: true });
+
+    await user.click(screen.getAllByRole("button", { name: "Save & apply" })[2]!);
+    expect(await screen.findByText('"x" is not a path')).toBeInTheDocument();
+    expect(screen.getByLabelText("Honeypot paths")).toHaveAttribute("aria-invalid", "true");
+
+    await user.type(screen.getByLabelText("IP addresses"), "1.2.3.4");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByText("Couldn't save. Try again.")).toBeInTheDocument();
+  });
+
+  it("shows a scope error from the server", async () => {
+    mockApi({ ...base, "POST /api/ip-rules": reply(400, { error: "invalid", message: "x", fields: { app_name: "No service has that name." } }) });
+    const { user } = await renderRoute("/ip-rules");
+    await user.type(await screen.findByLabelText("IP addresses"), "1.2.3.4");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByText("No service has that name.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Scope")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("selects all on the page, unticks, and cancels a removal", async () => {
+    const api = mockApi({ ...base, "GET /api/ip-rules?page=3": { ...page, page: 3, total_pages: 3 } });
+    const { user } = await renderRoute("/ip-rules?page=3");
+    expect(await screen.findByRole("link", { name: "← Prev" })).toHaveAttribute("href", "/admin/app/ip-rules?page=2");
+    await user.click(screen.getByLabelText("Select all on this page"));
+    expect(screen.getByRole("button", { name: "Remove selected (2)" })).toBeEnabled();
+    await user.click(screen.getByLabelText("Select 10.0.0.0/8"));
+    expect(screen.getByRole("button", { name: "Remove selected (1)" })).toBeEnabled();
+    await user.click(screen.getByLabelText("Select all on this page"));
+    await user.click(screen.getByLabelText("Select all on this page"));
+    expect(screen.getByRole("button", { name: "Remove selected" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Remove 203.0.113.9" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await vi.waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(api.calls("POST /api/ip-rules/remove")).toHaveLength(0);
+  });
+
   it("is read-only for viewers", async () => {
     asRole("viewer");
     mockApi({ "GET /api/notifications": base["GET /api/notifications"], "GET /api/ip-rules?page=1": page, "GET /api/ip-rules/settings": settings });

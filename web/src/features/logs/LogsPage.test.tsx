@@ -197,4 +197,63 @@ describe("logs page", () => {
     expect(await screen.findByRole("tab", { name: "Stats" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Loading the last hour…")).toBeInTheDocument();
   });
+
+  it("docks the inspector on wide screens and opens rows from the keyboard", async () => {
+    vi.spyOn(window, "matchMedia").mockImplementation((query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }) as unknown as MediaQueryList);
+    const sparse: LogDetail = {
+      ...detail, request_id: "", query: "", country: "", asn: 0, org: "", tls_version: "", tls_cipher: "", action: "", status: 502,
+      bot_score: 3, ja4: "t13d1516h2", headers: {}, has_threat_score: false, cache_status: "HIT", proxy_ip: "",
+    };
+    const api = mockApi({
+      ...base,
+      [liveList]: { total: 1, logs: [row(7, { Blocked: true, RuleID: 942100, Status: 502 })] },
+      "GET /logs/7": sparse,
+      "POST /logs/feedback/7": () => (api.calls("POST /logs/feedback/7").length === 1 ? reply(500, {}) : { status: "ok" }),
+      "POST /logs/exception/7": { service: "shop" },
+    });
+    const { user } = await renderRoute("/logs");
+    expect(await screen.findByText("Select a request to inspect it")).toBeInTheDocument();
+    const r = (await screen.findAllByRole("button", { name: /\/p7/ }))[0]!;
+    r.focus();
+    await user.keyboard("a");
+    expect(api.calls("GET /logs/7")).toHaveLength(0);
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("No headers captured.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByText("Rule #942100 · blocked")).toBeInTheDocument();
+    expect(screen.getByText("Plaintext / terminated upstream")).toBeInTheDocument();
+    expect(screen.getByText("(none)")).toBeInTheDocument();
+    expect(screen.getByText(/cache HIT/)).toBeInTheDocument();
+    expect(screen.getByText("t13d1516h2")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Correct block" }));
+    expect(await screen.findByText("Failed to save. Try again.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Correct block" }));
+    expect(await screen.findByText("Marked correct.")).toBeInTheDocument();
+
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await user.click(screen.getByRole("button", { name: "Create exception" }));
+    expect(api.calls("POST /logs/exception/7")).toHaveLength(0);
+    confirm.mockReturnValue(true);
+    await user.click(screen.getByRole("button", { name: "Create exception" }));
+    expect(await screen.findByText("Rule disabled for shop.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Close request details" }));
+    expect(await screen.findByText("Select a request to inspect it")).toBeInTheDocument();
+  });
+
+  it("switches tabs with the arrow keys and says when the last hour can't load", async () => {
+    mockApi({ ...base, [liveList]: { total: 0, logs: [] }, "GET /logs/stats": reply(500, {}) });
+    const { user } = await renderRoute("/logs");
+    await screen.findByText("Waiting for requests…");
+    screen.getByRole("tab", { name: "Table" }).focus();
+    await user.keyboard("{Enter}{ArrowRight}");
+    expect(screen.getByRole("tab", { name: "Stats" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Stats" })).toHaveFocus();
+    expect(await screen.findByText(/Could not load the last hour/)).toBeInTheDocument();
+    act(() => stream().emit("message", JSON.stringify(event(1, { rule: undefined, cc: "", ms: 0 }))));
+    await waitFor(() => expect(within(screen.getByRole("region", { name: "Countries" })).getByText("Unknown")).toBeInTheDocument(), { timeout: 2000 });
+    await user.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("tab", { name: "Table" })).toHaveAttribute("aria-selected", "true");
+  });
 });

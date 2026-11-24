@@ -61,6 +61,31 @@ describe("geo rules page", () => {
     expect(screen.queryByRole("list", { name: "Chosen countries" })).not.toBeInTheDocument();
   });
 
+  it("unpicks countries from the list or the chips, and shows a server error", async () => {
+    const api = mockApi({ ...base, "POST /api/geo-rules": reply(400, { error: "invalid", message: "x", fields: { country_code: '"ZZ" is not a two-letter ISO country code.' } }) });
+    const { user } = await renderRoute("/geo-rules");
+    await user.click(await screen.findByRole("button", { name: /Choose countries/ }));
+    const search = screen.getByPlaceholderText("Search countries…");
+    for (const q of ["germany", "france", "germany"]) {
+      await user.clear(search);
+      await user.type(search, q);
+      await user.click(await screen.findByRole("option", { name: new RegExp(q, "i") }));
+    }
+    await user.keyboard("{Escape}");
+    const chips = screen.getByRole("list", { name: "Chosen countries" });
+    expect(within(chips).getAllByRole("button")).toHaveLength(1);
+    await user.click(within(chips).getByRole("button", { name: "Remove France" }));
+    expect(screen.queryByRole("list", { name: "Chosen countries" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /Choose countries/ }));
+    await user.type(screen.getByPlaceholderText("Search countries…"), "japan");
+    await user.click(await screen.findByRole("option", { name: /Japan/ }));
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(await screen.findByText('"ZZ" is not a two-letter ISO country code.')).toBeInTheDocument();
+    expect(api.calls("POST /api/geo-rules")[0]!.json).toMatchObject({ country_code: ["JP"] });
+  });
+
   it("drops removed rules at once and puts them back if the server refuses", async () => {
     let answer: unknown = reply(500, {});
     mockApi({ ...base, "POST /api/geo-rules/remove": () => answer });

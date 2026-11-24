@@ -1,5 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import { mockApi, pending, reply } from "@/test/api-mock";
+import { setBoot } from "@/test/boot";
 import { renderRoute } from "@/test/render";
 import type { Dashboard } from "./api";
 import { meterCells } from "./DashboardPage";
@@ -55,6 +56,31 @@ describe("dashboard page", () => {
     expect(screen.getByText(/No services yet/)).toBeInTheDocument();
     expect(screen.getByText("No changes yet")).toBeInTheDocument();
     expect(screen.getByText("No country data yet")).toBeInTheDocument();
+  });
+
+  it("shows healthy and unknown services, rule-less blocks and a switched-off WAF", async () => {
+    setBoot({ waf: false });
+    mockApi({
+      ...notifications,
+      "GET /api/dashboard": {
+        ...dash,
+        countries: [{ code: "NL", name: "Netherlands", count: 10 }, { code: "DE", name: "Germany", count: 1 }],
+        traffic: { ...dash.traffic, blocked: Array(24).fill(1) },
+        services: [
+          { name: "api", route: "api.example", tls: "", healthy: true, known: true, cache: false },
+          { name: "old", route: "old.example", tls: "custom", healthy: false, known: false, cache: false },
+        ],
+        blocked: [{ ...row, RuleID: 0, Action: "" }],
+        recent: [row],
+      },
+    });
+    await renderRoute("/");
+    expect(await screen.findByText("Healthy")).toBeInTheDocument();
+    expect(screen.getByText("Unknown")).toBeInTheDocument();
+    expect(screen.getAllByText("Off").length).toBeGreaterThan(1);
+    expect(screen.getByText("none")).toBeInTheDocument();
+    // The rule-less block in "Latest blocked", and the tag on the blocked recent row.
+    expect(screen.getAllByText("blocked", { selector: "span" }).length).toBeGreaterThan(1);
   });
 
   it("shows loading, then an error rather than empty numbers", async () => {

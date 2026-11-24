@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Card, labelMono } from "@/components/layout/Page";
+import { Card, FormRow, labelMono } from "@/components/layout/Page";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { useLogApps } from "@/features/logs/api";
 import { ApiError } from "@/lib/api";
@@ -46,9 +46,8 @@ export function ScopeAction({ error }: { error: unknown }) {
   const scopeErr = fieldError(error, "app_name");
   return (
     <>
-      <label className="min-w-0">
-        <span className={cn(labelMono, "mb-[6px] block")}>Scope</span>
-        <select name="app_name" className={field} aria-invalid={scopeErr ? true : undefined}>
+      <FormRow label="Scope" error={scopeErr}>
+        <select name="app_name" className={field}>
           <option value="">Global (all apps)</option>
           {apps?.map((a) => (
             <option key={a} value={a}>
@@ -56,8 +55,7 @@ export function ScopeAction({ error }: { error: unknown }) {
             </option>
           ))}
         </select>
-        {scopeErr && <span className="mt-1 block text-xs text-red-600">{scopeErr}</span>}
-      </label>
+      </FormRow>
       <fieldset className="min-w-0">
         <legend className={cn(labelMono, "mb-[6px]")}>Action</legend>
         <div className="flex min-h-11 items-center gap-4">

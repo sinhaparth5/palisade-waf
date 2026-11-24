@@ -314,19 +314,16 @@ function HoneypotCard({ paths }: { paths: string[] }) {
       fields={["honeypot_paths"]}
       onSubmit={() => save.mutate({ honeypot_paths: text }, { onSuccess: saved })}
     >
-      <label>
-        <span className="sr-only">Honeypot paths</span>
+      <FormRow label="Honeypot paths" error={err}>
         <textarea
           name="honeypot_paths"
           rows={6}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={"/wp-login.php\n/xmlrpc.php\n/phpmyadmin/"}
-          aria-invalid={err ? true : undefined}
           className={cn(field, "resize-y font-mono text-[12px]")}
         />
-        {err && <span className="mt-1 block text-xs text-red-600">{err}</span>}
-      </label>
+      </FormRow>
       <p className={help}>
         One path per line, case-insensitive. A path ending in <span className="font-mono">/</span> covers everything under it. Hits show up in Logs as <span className="font-mono">honeypot</span>.
       </p>

@@ -55,4 +55,18 @@ describe("tally", () => {
     expect(line[59]).toMatchObject({ n: 2, b: 1 });
     expect(t.minutes.size).toBe(1);
   });
+
+  it("forgets one-hit keys once a panel tracks too many, and skips empty ones", () => {
+    const t = new Tally();
+    t.seedFailed();
+    t.push(ev(1, { p: "/hot", blk: true, why: "", ms: 0, br: "", cc: "" }));
+    t.push(ev(2, { p: "/hot" }));
+    for (let i = 0; i < 5001; i++) t.push(ev(i + 3, { p: `/scan${i}` }));
+    expect(t.top("nf")).toEqual([]);
+    expect(t.top("br").map((r) => r.key)).toEqual(["Firefox"]);
+    expect(t.top("why").map((r) => r.key)).toEqual(["blocked"]);
+    expect(t.top("cc").map((r) => r.key)).toContain("??");
+    // The 5000th one-hit path tipped it over: only /hot (2 hits) and the next one remain.
+    expect(t.top("path").map((r) => r.key)).toEqual(["GET /hot", "GET /scan5000"]);
+  });
 });
