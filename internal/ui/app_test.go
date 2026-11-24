@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -204,5 +205,55 @@ func TestAcceptsEncoding(t *testing.T) {
 		if got := acceptsEncoding(tc.header, tc.token); got != tc.want {
 			t.Errorf("acceptsEncoding(%q, %q) = %v", tc.header, tc.token, got)
 		}
+	}
+}
+
+// The React app gets JSON from the endpoints the HTMX pages get HTML from.
+func TestAppJSONViews(t *testing.T) {
+	env := newAdminEnv(t)
+	env.seedService("shop", "shop.example.com")
+	env.seedLog(storage.RequestLog{AppName: "shop", RealIP: "198.51.100.7", Country: "NL", Method: "POST", Path: "/login", Blocked: true, RuleID: 942100, Action: "waf_blocked"})
+
+	get := func(path string, out any) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Accept", "application/json")
+		req.AddCookie(&http.Cookie{Name: sessionCookie, Value: env.session})
+		rec := httptest.NewRecorder()
+		env.e.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Vary"), "Accept") {
+			t.Fatalf("%s = %d, Vary %q", path, rec.Code, rec.Header().Get("Vary"))
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), out); err != nil {
+			t.Fatalf("%s: %v: %s", path, err, rec.Body)
+		}
+		return rec
+	}
+
+	var groups []searchGroup
+	get("/admin/search?q=shop", &groups)
+	if len(groups) == 0 || groups[0].Label != "Services" || groups[0].Hits[0] != (searchHit{"shop", "shop.example.com", "/admin/services"}) {
+		t.Errorf("search = %+v", groups)
+	}
+	if rec := get("/admin/search?q=+", &groups); len(groups) != 0 || strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Errorf("empty search = %s", rec.Body)
+	}
+	if rec := get("/admin/search?q=zzz-nothing", &groups); strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Errorf("no hits = %s, want []", rec.Body)
+	}
+
+	var notif struct {
+		Unread int `json:"unread"`
+		Blocks []struct {
+			IP, Country, Method, Path, App, Action string
+			RuleID                                 int `json:"rule_id"`
+		} `json:"blocks"`
+	}
+	get("/admin/api/notifications", &notif)
+	if notif.Unread != 1 || len(notif.Blocks) != 1 {
+		t.Fatalf("notifications = %+v", notif)
+	}
+	if b := notif.Blocks[0]; b.IP != "198.51.100.7" || b.Path != "/login" || b.App != "shop" || b.RuleID != 942100 || b.Action != "waf_blocked" {
+		t.Errorf("block = %+v", b)
 	}
 }

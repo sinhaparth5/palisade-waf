@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
@@ -32,11 +33,16 @@ var pageHeadings = map[string]string{
 
 const searchLimit = 8 // hits per group
 
-type searchHit struct{ Title, Detail, URL string }
+type searchHit struct {
+	Title  string `json:"title"`
+	Detail string `json:"detail"`
+	URL    string `json:"url"`
+}
 
 type searchGroup struct {
-	Label, Icon string
-	Hits        []searchHit
+	Label string      `json:"label"`
+	Icon  string      `json:"icon"`
+	Hits  []searchHit `json:"hits"`
 }
 
 // section is a page or one of its cards, shown to roles of at least need.
@@ -161,7 +167,11 @@ func (h *Handler) Search(c *echo.Context) error {
 	raw := strings.TrimSpace(c.QueryParam("q"))
 	q := strings.ToLower(raw)
 	data := map[string]any{"Q": raw}
+	asJSON := wantsJSON(c)
 	if q == "" {
+		if asJSON {
+			return c.JSON(http.StatusOK, []searchGroup{})
+		}
 		return h.renderPartial(c, "dashboard", "search-results", data)
 	}
 	role := ""
@@ -169,7 +179,7 @@ func (h *Handler) Search(c *echo.Context) error {
 		role = u.Role
 	}
 	admin := h.cfg.Admin.Path
-	var groups []searchGroup
+	groups := []searchGroup{}
 	group := func(label, icon string, hits []searchHit) {
 		if len(hits) > 0 {
 			groups = append(groups, searchGroup{label, icon, hits})
@@ -248,6 +258,9 @@ func (h *Handler) Search(c *echo.Context) error {
 		return searchHit{title, scope(r.ServiceName), admin + "/waf-rules"}, r.Rule + " " + r.Note + " " + r.ServiceName
 	}))
 
+	if asJSON {
+		return c.JSON(http.StatusOK, groups)
+	}
 	data["Groups"] = groups
 	return h.renderPartial(c, "dashboard", "search-results", data)
 }

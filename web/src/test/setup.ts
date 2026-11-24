@@ -5,6 +5,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { resetBoot } from "./boot";
+import { FakeEventSource } from "./events";
 
 // jsdom lacks these; Radix (popover, select, dialog) and recharts call them.
 window.matchMedia ??= (query: string) =>
@@ -24,10 +25,12 @@ globalThis.ResizeObserver ??= class {
   disconnect() {}
 };
 Element.prototype.scrollIntoView ??= function () {};
+globalThis.EventSource ??= FakeEventSource as unknown as typeof EventSource;
 Element.prototype.hasPointerCapture ??= () => false;
 Element.prototype.releasePointerCapture ??= function () {};
 
 afterEach(() => {
   cleanup();
   resetBoot();
+  FakeEventSource.all = [];
 });

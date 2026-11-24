@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { Dialog } from "radix-ui";
+import { Dialog, Popover } from "radix-ui";
+import { Command } from "cmdk";
 import { setNonce } from "get-nonce";
 import { Toaster, toast } from "sonner";
 import { boot } from "@/lib/boot";
@@ -19,6 +20,18 @@ test("no injected <style> lacks the CSP nonce", async () => {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+      <Popover.Root defaultOpen>
+        <Popover.Trigger>p</Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content>popover</Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+      <Command>
+        <Command.Input />
+        <Command.List>
+          <Command.Item>item</Command.Item>
+        </Command.List>
+      </Command>
     </>,
   );
   toast("hello");

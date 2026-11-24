@@ -157,3 +157,11 @@ func acceptsEncoding(header, token string) bool {
 	}
 	return false
 }
+
+// wantsJSON reports whether the React app is asking (lib/api.ts sends
+// Accept: application/json) on an endpoint that answers the HTMX pages with
+// HTML. Vary keeps a cache from serving one to the other.
+func wantsJSON(c *echo.Context) bool {
+	c.Response().Header().Add("Vary", "Accept")
+	return strings.Contains(c.Request().Header.Get("Accept"), "application/json")
+}

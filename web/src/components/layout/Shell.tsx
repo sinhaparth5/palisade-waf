@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { boot, can } from "@/lib/boot";
 import { cn } from "@/lib/utils";
+import { Notifications } from "./Notifications";
+import { Search } from "./Search";
 
 // The admin frame, the same as the HTMX base.html: dark sidebar, top bar with
 // clock, page content, status footer. Areas not moved to this app yet link
@@ -156,6 +158,7 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
             <Icon name="hgi-logout-02" className="text-[14px]" />
           </button>
         </form>
+        <Notifications />
       </div>
     </aside>
   );
@@ -214,6 +217,9 @@ function TopBar({ children }: { children: ReactNode }) {
           Read-only
         </span>
       )}
+      <div className="ml-auto flex items-center gap-2 py-2 sm:gap-3">
+        <Search />
+      </div>
     </header>
   );
 }

@@ -97,6 +97,13 @@ export const sharedRules: Rule[] = [
   [/sonner/g, "pltoast"], // data-sonner-*, class names, keyframes
   [/data-slot/g, "data-part", true], // shadcn's marker attribute, in src/components/ui
   [/data-react-aria-top-layer/g, "data-pl-layer"], // sonner marks toasts for react-aria
+  // Radix: data-radix-* attributes, --radix-* CSS variables (also in our
+  // Tailwind classes), radix-<id> ids, and Symbol.for("radix-ui") on window.
+  [/radix([-.])/g, "ui$1"], // also Symbol.for("radix.slottable")
+  [/__radixId/g, "__uiId"],
+  [/RADIX:/g, "UI:"],
+  [/\bisReactWarning\b/g, "isUIWarning"], // a dev-build React flag Radix reads
+  [/cmdk-/g, "cmd-"], // the command palette's DOM attributes and selectors
 ];
 
 // Text inside one file: error messages (only safe once minified, when no
@@ -111,7 +118,7 @@ export const localRules: Rule[] = [
   [/\bReact\b/g, "UI"], // remaining error text; last, after the specific rules
 ];
 
-const leak = /\w*(?:react|tanstack|vite|rolldown|radix|sonner|shadcn|__TSR|data-slot)[\w-]*/gi;
+const leak = /\w*(?:react|tanstack|vite|rolldown|radix|sonner|shadcn|cmdk|__TSR|data-slot)[\w-]*/gi;
 
 // unbrander applies rules and counts what each one matched, across calls.
 export function unbrander(rules: Rule[]) {

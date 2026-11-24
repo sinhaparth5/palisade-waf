@@ -16,7 +16,11 @@ const html = (await readFile(`${dist}index.html`, "utf8"))
 const dom = new JSDOM(html, { url: "http://localhost/admin/app/", virtualConsole: new VirtualConsole() });
 const w = dom.window as unknown as Record<string, unknown>;
 for (const k of Object.getOwnPropertyNames(w)) if (!(k in globalThis)) (globalThis as Record<string, unknown>)[k] = w[k];
-Object.assign(globalThis, { window: w, document: dom.window.document, navigator: dom.window.navigator, location: dom.window.location, history: dom.window.history });
+// jsdom has no EventSource; the notification stream just stays silent.
+const EventSource = class extends dom.window.EventTarget {
+  close() {}
+};
+Object.assign(globalThis, { EventSource, window: w, document: dom.window.document, navigator: dom.window.navigator, location: dom.window.location, history: dom.window.history });
 
 const fail = (msg: string) => {
   console.error(`smoke: ${msg}`);
@@ -32,9 +36,9 @@ for (let i = 0; i < 50 && !doc.querySelector("#palisade h1"); i++) await new Pro
 if (doc.querySelector("#palisade h1")?.textContent !== "Dashboard") fail(`app did not render: ${doc.body.innerHTML.slice(0, 300)}`);
 
 // Nothing a console, devtools or an extension can read should name a library.
-const leak = /react|tanstack|vite|radix|sonner|__TSR/i;
+const leak = /react|tanstack|vite|radix|sonner|cmdk|__TSR/i;
 const keys = [...doc.querySelectorAll("*")].flatMap((el) => [...Object.keys(el), ...el.getAttributeNames()]);
-const globals = Object.getOwnPropertyNames(w).filter((k) => leak.test(k));
+const globals = [...Object.getOwnPropertyNames(w), ...Object.getOwnPropertySymbols(w).map(String)].filter((k) => leak.test(k));
 const found = [...keys, ...globals, ...Object.keys((dom.window.history.state as object) ?? {})].filter((k) => leak.test(k));
 if (found.length) fail(`library names at runtime: ${[...new Set(found)].join(", ")}`);
 if (!keys.some((k) => k.startsWith("__plFiber"))) fail("renamed fiber key not found: did the unbrand rules change?");
