@@ -18,11 +18,9 @@ import (
 // live records. Read-only, so every role can use it.
 
 // adminPages are the base.html pages, in sidebar order.
-var adminPages = []string{"services", "certificates", "ip_rules", "geo_rules", "waf_rules", "threat_intel", "settings"}
+var adminPages = []string{"services", "certificates", "waf_rules", "threat_intel", "settings"}
 
 var pageHeadings = map[string]string{
-	"ip_rules":     "IP Rules",
-	"geo_rules":    "Geo Rules",
 	"services":     "Services",
 	"waf_rules":    "WAF Rules",
 	"threat_intel": "Threat Intel",
@@ -31,19 +29,25 @@ var pageHeadings = map[string]string{
 }
 
 // appSections are the React app's pages and their cards, listed by hand
-// until the app owns search (#357). Cards link to the page itself.
+// until the app owns search (#357). Cards link to the page itself; admin
+// cards are hidden from viewers, as the page hides them.
 var appSections = func() []section {
 	var out []section
 	for _, p := range []struct {
 		heading, url string
-		cards        []string
+		cards, admin []string
 	}{
-		{"Dashboard", "/app/", []string{"Overview", "Traffic, last 24h", "Top countries", "Services", "Latest blocked requests", "Daily log", "Recent requests", "Enforcement today", "Blocked by country", "Engine"}},
-		{"Live Logs", "/app/logs", []string{"Request inspector", "Stats"}},
+		{"Dashboard", "/app/", []string{"Overview", "Traffic, last 24h", "Top countries", "Services", "Latest blocked requests", "Daily log", "Recent requests", "Enforcement today", "Blocked by country", "Engine"}, nil},
+		{"Live Logs", "/app/logs", []string{"Request inspector", "Stats"}, nil},
+		{"IP Rules", "/app/ip-rules", []string{"Automatic banning", "Adaptive enforcement", "Honeypot paths", "Rules overview", "Active IP Rules"}, []string{"Add IP Rules"}},
+		{"Geo Rules", "/app/geo-rules", []string{"Rules overview", "GeoIP database bundled", "Active Geo Rules"}, []string{"Add Geo Rules"}},
 	} {
 		out = append(out, section{searchHit{p.heading, "Page", p.url}, storage.RoleViewer})
 		for _, c := range p.cards {
 			out = append(out, section{searchHit{c, p.heading, p.url}, storage.RoleViewer})
+		}
+		for _, c := range p.admin {
+			out = append(out, section{searchHit{c, p.heading, p.url}, storage.RoleAdmin})
 		}
 	}
 	return out
@@ -241,14 +245,14 @@ func (h *Handler) Search(c *echo.Context) error {
 		return err
 	}
 	group("IP rules", "hgi-cancel-circle", matchHits(q, ips, func(r storage.IPRule) (searchHit, string) {
-		return searchHit{r.IP, r.RuleType + " · " + scope(r.AppName), admin + "/ip-rules"}, r.IP + " " + r.Note
+		return searchHit{r.IP, r.RuleType + " · " + scope(r.AppName), admin + "/app/ip-rules"}, r.IP + " " + r.Note
 	}))
 	geo, err := h.db.ListGeoRules()
 	if err != nil {
 		return err
 	}
 	group("Geo rules", "hgi-earth", matchHits(q, geo, func(r storage.GeoRule) (searchHit, string) {
-		return searchHit{r.CountryCode, r.RuleType + " · " + scope(r.AppName), admin + "/geo-rules"}, r.CountryCode
+		return searchHit{r.CountryCode, r.RuleType + " · " + scope(r.AppName), admin + "/app/geo-rules"}, r.CountryCode
 	}))
 	certs, err := h.db.ListCertificates()
 	if err != nil {

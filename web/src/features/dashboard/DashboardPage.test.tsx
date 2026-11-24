@@ -44,7 +44,7 @@ describe("dashboard page", () => {
     for (const l of screen.getAllByRole("link", { name: "Live feed" })) expect(l).toHaveAttribute("href", "/admin/app/logs");
     const blocked = screen.getByRole("heading", { name: "Latest blocked requests" }).parentElement!;
     expect(within(blocked).getByRole("link", { name: "View all" })).toHaveAttribute("href", "/admin/app/logs?status=blocked");
-    expect(screen.getByRole("link", { name: "Geo rules" })).toHaveAttribute("href", "/admin/geo-rules");
+    expect(screen.getByRole("link", { name: "Geo rules" })).toHaveAttribute("href", "/admin/app/geo-rules");
   });
 
   it("says when there is nothing yet", async () => {

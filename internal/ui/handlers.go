@@ -420,9 +420,12 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/logs/stream", h.LogsStream)
 	g.GET("/logs/stats", h.LogStatsSeed)
 	g.GET("/logs/:id", h.LogDetail)
-	g.GET("/ip-rules", h.IPRulesPage)
-	g.GET("/ip-rules/rows", h.IPRulesRows)
-	g.GET("/geo-rules", h.GeoRulesPage)
+	// IP and Geo Rules too (issue #351).
+	g.GET("/ip-rules", h.toApp("/ip-rules"))
+	g.GET("/geo-rules", h.toApp("/geo-rules"))
+	g.GET("/api/ip-rules", h.ListIPRules)
+	g.GET("/api/ip-rules/settings", h.IPRulesSettings)
+	g.GET("/api/geo-rules", h.APIListGeoRules)
 	g.GET("/services", h.ServicesPage)
 	g.GET("/services/rows", h.ServicesRows)
 	g.GET("/services/openapi/:id", h.ServiceOpenAPI)
@@ -456,13 +459,13 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.GET("/logs/export", h.ExportLogs),
 		g.POST("/logs/feedback/:id", h.MarkLogFeedback),
 		g.POST("/logs/exception/:id", h.CreateLogException),
-		g.POST("/ip-rules", h.AddIPRule),
-		g.POST("/ip-rules/autoban", h.SaveAutobanSettings),
-		g.POST("/ip-rules/adaptive", h.SaveAdaptiveSettings),
-		g.POST("/ip-rules/honeypots", h.SaveHoneypots),
-		g.DELETE("/ip-rules/:id", h.DeleteIPRule),
-		g.POST("/geo-rules", h.AddGeoRule),
-		g.DELETE("/geo-rules/:id", h.DeleteGeoRule),
+		g.POST("/api/ip-rules", h.AddIPRules),
+		g.POST("/api/ip-rules/remove", h.RemoveIPRules),
+		g.PUT("/api/ip-rules/autoban", h.SaveAutobanSettings),
+		g.PUT("/api/ip-rules/adaptive", h.SaveAdaptiveSettings),
+		g.PUT("/api/ip-rules/honeypots", h.SaveHoneypots),
+		g.POST("/api/geo-rules", h.AddGeoRules),
+		g.POST("/api/geo-rules/remove", h.RemoveGeoRules),
 		g.POST("/services", h.AddService),
 		g.DELETE("/services/:id", h.DeleteService),
 		g.POST("/services/tls/upload", h.UploadServiceTLS),

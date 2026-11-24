@@ -43,7 +43,7 @@ func TestAdminRequiresSession(t *testing.T) {
 
 func TestAdminMutationsRequireCSRF(t *testing.T) {
 	env := newAdminEnv(t)
-	req := httptest.NewRequest("POST", "/admin/ip-rules", strings.NewReader("ip=1.2.3.4&rule_type=block"))
+	req := httptest.NewRequest("POST", "/admin/api/ip-rules", strings.NewReader("ip=1.2.3.4&rule_type=block"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: env.session})
 	rec := httptest.NewRecorder()
@@ -102,18 +102,17 @@ func TestAdminPagesRender(t *testing.T) {
 	}
 
 	pages := map[string]string{
-		"/admin/ip-rules":         "IP Rules",
-		"/admin/ip-rules?page=99": "IP Rules",
-		"/admin/geo-rules":        "Geo Rules",
-		"/admin/services":         "Services",
-		"/admin/certificates":     "Certificates",
-		"/admin/waf-rules":        "WAF Rules",
-		"/admin/threat-intel":     "Threat Intel",
-		"/admin/settings":         "Settings",
+		"/admin/services":     "Services",
+		"/admin/certificates": "Certificates",
+		"/admin/waf-rules":    "WAF Rules",
+		"/admin/threat-intel": "Threat Intel",
+		"/admin/settings":     "Settings",
 	}
-	// Dashboard and Logs moved to the React app; old links land there.
+	// Pages moved to the React app; old links land there.
 	for path, to := range map[string]string{
-		"/admin": "/admin/app/",
+		"/admin/ip-rules?page=2": "/admin/app/ip-rules?page=2",
+		"/admin/geo-rules":       "/admin/app/geo-rules",
+		"/admin":                 "/admin/app/",
 		"/admin/logs?status=blocked&mode=history": "/admin/app/logs?status=blocked&mode=history",
 	} {
 		if rec := env.do("GET", path, nil); rec.Code != http.StatusFound || rec.Header().Get("Location") != to {
@@ -130,9 +129,6 @@ func TestAdminPagesRender(t *testing.T) {
 		}
 	}
 
-	if rec := env.do("GET", "/admin/ip-rules/rows?page=1", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "1.2.3.4") {
-		t.Errorf("ip rule rows: %d", rec.Code)
-	}
 	if rec := env.do("GET", "/admin/services/rows", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "shop") {
 		t.Errorf("service rows: %d", rec.Code)
 	}

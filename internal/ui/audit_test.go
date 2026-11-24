@@ -20,28 +20,28 @@ func TestAuditLog(t *testing.T) {
 	}
 
 	// A successful change is recorded with its allowlisted fields.
-	if rec := env.do(http.MethodPost, "/admin/ip-rules", form("ip", "203.0.113.5", "rule_type", "block")); rec.Code != http.StatusOK {
+	if rec := env.doJSON(env.session, http.MethodPost, "/admin/api/ip-rules", map[string]string{"ip": "203.0.113.5", "rule_type": "block"}, nil); rec.Code != http.StatusCreated {
 		t.Fatalf("add ip rule: %d", rec.Code)
 	}
 	got := audit()
 	if len(got) != 1 {
 		t.Fatalf("want 1 entry, got %+v", got)
 	}
-	if e := got[0]; e.Actor != testAdminEmail || e.Action != "POST /ip-rules" || e.Summary != "ip=203.0.113.5 rule_type=block" || e.IP == "" {
+	if e := got[0]; e.Actor != testAdminEmail || e.Action != "POST /api/ip-rules" || e.Summary != "ip=203.0.113.5 rule_type=block" || e.IP == "" {
 		t.Fatalf("entry = %+v", e)
 	}
 
 	// Route params land in Target.
 	rules, _ := env.db.ListIPRules()
-	env.do(http.MethodDelete, "/admin/ip-rules/"+itoa(rules[0].ID), nil)
-	if e := audit()[0]; e.Action != "DELETE /ip-rules/:id" || e.Target != "id="+itoa(rules[0].ID) {
-		t.Fatalf("delete entry = %+v", e)
+	env.doJSON(env.session, http.MethodPost, "/admin/api/ip-rules/remove", map[string][]int{"ids": {rules[0].ID}}, nil)
+	if e := audit()[0]; e.Action != "POST /api/ip-rules/remove" || e.Summary != "ids=["+itoa(rules[0].ID)+"]" {
+		t.Fatalf("remove entry = %+v", e)
 	}
 
 	// Rejected requests aren't changes: a 4xx, a 200 with an inline *Err
 	// message, and skipped routes all leave the log alone.
 	before := len(audit())
-	env.do(http.MethodPost, "/admin/ip-rules", form("ip", "nope", "rule_type", "block"))
+	env.doJSON(env.session, http.MethodPost, "/admin/api/ip-rules", map[string]string{"ip": "nope", "rule_type": "block"}, nil)
 	env.do(http.MethodPost, "/admin/settings/api-keys", form("name", ""))
 	env.do(http.MethodPost, "/admin/settings/credentials", form("current_password", "wrong", "new_password", "hunter22hunter22", "confirm_password", "hunter22hunter22"))
 	env.do(http.MethodPost, "/admin/api/notifications/seen", nil)

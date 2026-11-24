@@ -142,7 +142,11 @@ function Main({ d }: { d: Dashboard }) {
             <TrafficChart traffic={d.traffic} />
           </div>
         </Section>
-        <Section title="Top countries" action={<Old href="/geo-rules">Geo rules</Old>}>
+        <Section title="Top countries" action={
+            <Link to="/geo-rules" className={more}>
+              Geo rules
+            </Link>
+          }>
           <div className={cn(card, "flex h-[280px] flex-col gap-3 overflow-y-auto p-4")}>
             {d.countries.map((c) => (
               <div key={c.code}>

@@ -33,88 +33,6 @@ func wantCode(t *testing.T, label string, got, want int, body string) {
 	}
 }
 
-func TestIPRuleHandlers(t *testing.T) {
-	env := newAdminEnv(t)
-	for _, tc := range []struct {
-		ip, typ string
-		want    int
-	}{
-		{"", "block", 400},
-		{"1.2.3.4", "maybe", 400},
-		{"not-an-ip", "block", 400},
-		{"10.0.1.5/24", "block", 200},
-		{"::ffff:1.2.3.4", "allow", 200},
-		{"2001:db8::1", "block", 200},
-	} {
-		rec := env.do("POST", "/admin/ip-rules", form("ip", tc.ip, "rule_type", tc.typ))
-		wantCode(t, "add "+tc.ip, rec.Code, tc.want, rec.Body.String())
-	}
-	rules, _ := env.db.ListIPRules()
-	got := map[string]string{}
-	for _, r := range rules {
-		got[r.IP] = r.RuleType
-	}
-	if got["10.0.1.0/24"] != "block" || got["1.2.3.4"] != "allow" || got["2001:db8::1"] != "block" {
-		t.Fatalf("stored rules not canonicalised: %v", got)
-	}
-	if blocked, _ := env.h.ipbl.Check("10.0.1.9", ""); !blocked {
-		t.Error("blocklist not reloaded after add")
-	}
-
-	rec := env.do("DELETE", "/admin/ip-rules/"+itoa(rules[0].ID)+"?page=3", nil)
-	wantCode(t, "delete", rec.Code, 200, rec.Body.String())
-	wantCode(t, "delete bad id", env.do("DELETE", "/admin/ip-rules/x", nil).Code, 400, "")
-	if rules2, _ := env.db.ListIPRules(); len(rules2) != len(rules)-1 {
-		t.Error("rule not deleted")
-	}
-}
-
-func TestAutobanAndAdaptiveSettings(t *testing.T) {
-	env := newAdminEnv(t)
-	rec := env.do("POST", "/admin/ip-rules/autoban", form("autoban_enabled", "1", "autoban_threshold", "25", "autoban_window", "60", "autoban_ban_hours", "0",
-		"autoban_bad_status", "1", "autoban_bad_codes", "404, 403", "autoban_bad_points", "2"))
-	wantCode(t, "autoban", rec.Code, 200, rec.Body.String())
-	ab, _ := env.db.GetAutobanConfig()
-	if !ab.Enabled || ab.Threshold != 25 || ab.WindowMinutes != 60 || ab.BanHours != 0 || env.count("autoban") != 1 ||
-		!ab.BadStatusEnabled || storage.FormatStatusCodes(ab.BadStatusCodes) != "404, 403" || ab.BadStatusPoints != 2 {
-		t.Errorf("autoban = %+v reloads=%d", ab, env.count("autoban"))
-	}
-	// Out-of-range values fall back to defaults instead of being stored.
-	env.do("POST", "/admin/ip-rules/autoban", form("autoban_threshold", "0", "autoban_window", "99999", "autoban_ban_hours", "-1"))
-	ab, _ = env.db.GetAutobanConfig()
-	def := storage.DefaultAutobanConfig()
-	if ab.Enabled || ab.Threshold != def.Threshold || ab.WindowMinutes != def.WindowMinutes || ab.BanHours != def.BanHours {
-		t.Errorf("autoban out-of-range = %+v", ab)
-	}
-
-	rec = env.do("POST", "/admin/ip-rules/adaptive", form(
-		"adaptive_enabled", "1", "adaptive_high_threshold", "70", "adaptive_low_threshold", "5",
-		"adaptive_high_rate_scale", "0.25", "adaptive_low_rate_scale", "2", "adaptive_force_challenge_threshold", "90"))
-	wantCode(t, "adaptive", rec.Code, 200, rec.Body.String())
-	ad, _ := env.db.GetAdaptiveEnforcementConfig()
-	if !ad.Enabled || ad.HighRiskThreshold != 70 || ad.LowRiskThreshold != 5 || ad.HighRiskRateScale != 0.25 ||
-		ad.LowRiskRateScale != 2 || ad.ForceChallengeThreshold != 90 || env.count("adaptive") != 1 {
-		t.Errorf("adaptive = %+v", ad)
-	}
-}
-
-func TestGeoRuleHandlers(t *testing.T) {
-	env := newAdminEnv(t)
-	wantCode(t, "bad code", env.do("POST", "/admin/geo-rules", form("country_code", "USA", "rule_type", "block")).Code, 400, "")
-	wantCode(t, "bad type", env.do("POST", "/admin/geo-rules", form("country_code", "US", "rule_type", "x")).Code, 400, "")
-	rec := env.do("POST", "/admin/geo-rules", form("country_code", " cn ", "rule_type", "block"))
-	wantCode(t, "add", rec.Code, 200, rec.Body.String())
-	rules, _ := env.db.ListGeoRules()
-	if len(rules) != 1 || rules[0].CountryCode != "CN" {
-		t.Fatalf("geo rules = %+v", rules)
-	}
-	wantCode(t, "delete bad", env.do("DELETE", "/admin/geo-rules/x", nil).Code, 400, "")
-	wantCode(t, "delete", env.do("DELETE", "/admin/geo-rules/"+itoa(rules[0].ID), nil).Code, 200, "")
-	if rules, _ := env.db.ListGeoRules(); len(rules) != 0 {
-		t.Error("geo rule not deleted")
-	}
-}
-
 func TestWAFRuleHandlers(t *testing.T) {
 	env := newAdminEnv(t)
 	env.seedService("shop", "shop.example.com")
@@ -880,31 +798,6 @@ func TestPasskeyLogin(t *testing.T) {
 	}
 	if rec := post("/admin/login/webauthn/finish", pending); rec.Code != http.StatusTooManyRequests {
 		t.Errorf("finish after lockout = %d", rec.Code)
-	}
-}
-
-func TestSaveHoneypots(t *testing.T) {
-	env := newAdminEnv(t)
-	rec := env.do("POST", "/admin/ip-rules/honeypots", form("honeypot_paths", "/xmlrpc.php\r\n/phpmyadmin/\n/xmlrpc.php\n"))
-	wantCode(t, "save", rec.Code, 200, rec.Body.String())
-	if got, _ := env.db.GetHoneypotPaths(); strings.Join(got, ",") != "/xmlrpc.php,/phpmyadmin/" {
-		t.Errorf("stored = %v", got)
-	}
-	if !env.h.registry.Honeypot("/phpMyAdmin/setup.php") {
-		t.Error("registry not updated without a reload")
-	}
-	// A bad entry (or "/", which would ban on every 404) keeps the old list.
-	for _, bad := range []string{"xmlrpc.php", "/"} {
-		rec = env.do("POST", "/admin/ip-rules/honeypots", form("honeypot_paths", "/a.php\n"+bad))
-		if !strings.Contains(rec.Body.String(), "is not a path") || !strings.Contains(rec.Body.String(), "/a.php") {
-			t.Errorf("%q: no inline error / input lost: %s", bad, rec.Body)
-		}
-	}
-	if got, _ := env.db.GetHoneypotPaths(); len(got) != 2 {
-		t.Errorf("rejected save changed the list: %v", got)
-	}
-	if !strings.Contains(env.do("GET", "/admin/ip-rules", nil).Body.String(), "/phpmyadmin/") {
-		t.Error("ip rules page does not show the saved list")
 	}
 }
 

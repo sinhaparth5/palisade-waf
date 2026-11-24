@@ -270,9 +270,9 @@ func TestAppJSONErrors(t *testing.T) {
 	}{
 		{"no session", "", "GET", "/admin/search?q=x", nil, 401, "unauthenticated"},
 		{"unknown session", "nope", "GET", "/admin/api/notifications", nil, 401, "unauthenticated"},
-		{"role too low", viewer, "POST", "/admin/ip-rules", map[string]string{"ip": "192.0.2.1"}, 403, "forbidden"},
+		{"role too low", viewer, "POST", "/admin/api/ip-rules", map[string]string{"ip": "192.0.2.1"}, 403, "forbidden"},
 		{"demo write", demoSession, "POST", "/admin/settings/credentials", map[string]string{}, 403, "demo"},
-		{"body over the limit", env.session, "POST", "/admin/ip-rules", map[string]string{"note": strings.Repeat("x", 1<<20)}, 413, "too_large"},
+		{"body over the limit", env.session, "POST", "/admin/api/ip-rules", map[string]string{"note": strings.Repeat("x", 1<<20)}, 413, "too_large"},
 		// Handlers shared with /api/v1 (apiError) answer the app the same way.
 		{"shared handler, missing row", env.session, "GET", "/admin/logs/999999", nil, 404, "not_found"},
 		{"shared handler, bad filter", viewer, "GET", "/admin/api/logs?limit=0", nil, 400, "invalid"},
@@ -302,7 +302,7 @@ func TestAppJSONErrors(t *testing.T) {
 		if rec := env.doWith("GET", "/admin/search?q=x", nil, ""); rec.Code != http.StatusFound {
 			t.Errorf("no session = %d, want the login redirect", rec.Code)
 		}
-		if rec := env.doWith("POST", "/admin/ip-rules", nil, viewer); rec.Code != 403 || rec.Body.String() != "Your role can't do this." {
+		if rec := env.doWith("POST", "/admin/api/ip-rules", nil, viewer); rec.Code != 403 || rec.Body.String() != "Your role can't do this." {
 			t.Errorf("viewer = %d %q", rec.Code, rec.Body)
 		}
 	})

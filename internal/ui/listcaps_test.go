@@ -17,7 +17,7 @@ func TestListCaps(t *testing.T) {
 	for i := range trustedIPsMax + 1 {
 		ips = append(ips, fmt.Sprintf("10.0.%d.%d", i/250, i%250+1))
 	}
-	if rec := env.do("POST", "/admin/ip-rules/honeypots", form("honeypot_paths", strings.Join(paths, "\n"))); !strings.Contains(rec.Body.String(), "At most") {
+	if rec := env.doJSON(env.session, "PUT", "/admin/api/ip-rules/honeypots", map[string]string{"honeypot_paths": strings.Join(paths, "\n")}, nil); !strings.Contains(rec.Body.String(), "At most") {
 		t.Errorf("honeypots over the cap: %d", rec.Code)
 	}
 	if rec := env.do("POST", "/admin/settings/trusted-ips", form("trusted_ips", strings.Join(ips, "\n"))); !strings.Contains(rec.Body.String(), "At most") {
