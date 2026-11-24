@@ -52,7 +52,7 @@ func (h *Handler) requireRole(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		u := currentUser(c)
 		if u == nil || roleRank[u.Role] < roleRank[need] {
-			return c.String(http.StatusForbidden, "Your role can't do this.")
+			return denied(c, "forbidden", "Your role can't do this.")
 		}
 		// The shared demo account can't change its password or second
 		// factors, or sign other visitors out: only these writes are left.
@@ -60,7 +60,7 @@ func (h *Handler) requireRole(next echo.HandlerFunc) echo.HandlerFunc {
 			switch strings.TrimPrefix(c.Path(), h.cfg.Admin.Path) {
 			case "/logout", "/api/notifications/seen":
 			default:
-				return c.String(http.StatusForbidden, "Disabled in the demo.")
+				return denied(c, "demo", "Disabled in the demo.")
 			}
 		}
 		return next(c)

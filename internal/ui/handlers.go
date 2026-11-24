@@ -239,39 +239,47 @@ func (h *Handler) parseTemplates() error {
 
 const sessionCookie = "cz_session"
 
+// signIn sends a request without a live session to the login page. The
+// React app gets a 401 instead: fetch would follow the redirect into HTML.
+func (h *Handler) signIn(c *echo.Context, query string) error {
+	if wantsJSON(c) {
+		return &jsonError{Status: http.StatusUnauthorized, Code: "unauthenticated", Message: "Your session has ended. Sign in again."}
+	}
+	return c.Redirect(http.StatusFound, h.cfg.Admin.Path+"/login"+query)
+}
+
 // sessionAuth is the session-cookie middleware that guards every admin route.
-// Unauthenticated requests are redirected to the login page.
+// Unauthenticated requests are sent to the login page (signIn).
 func (h *Handler) sessionAuth(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
-		login := h.cfg.Admin.Path + "/login"
 		cookie, err := c.Cookie(sessionCookie)
 		if err != nil || cookie.Value == "" {
-			return c.Redirect(http.StatusFound, login)
+			return h.signIn(c, "")
 		}
 		sess, err := h.db.GetSession(cookie.Value)
 		if err != nil || sess == nil {
-			return c.Redirect(http.StatusFound, login)
+			return h.signIn(c, "")
 		}
 		if !sess.Live() {
 			// Say which of the two happened. A revoked session means
 			// someone logged in elsewhere (or revoked this device from the
 			// Settings page); an expired one is just the 24h TTL.
 			if sess.Revoked() {
-				return c.Redirect(http.StatusFound, login+"?reason=revoked")
+				return h.signIn(c, "?reason=revoked")
 			}
-			return c.Redirect(http.StatusFound, login)
+			return h.signIn(c, "")
 		}
 		// A disabled user's sessions are revoked when they're disabled;
 		// checking here too keeps a stale row from ever authenticating.
 		u, err := h.db.GetAdminUser(sess.UserID)
 		if err != nil {
-			return c.Redirect(http.StatusFound, login)
+			return h.signIn(c, "")
 		}
 		if u == nil || u.Disabled {
 			// Drop the row too: LoginPage would otherwise see a live
 			// session and bounce straight back here.
 			h.db.DeleteSession(sess.ID) //nolint — best effort, it can't authenticate either way
-			return c.Redirect(http.StatusFound, login)
+			return h.signIn(c, "")
 		}
 		c.Set(ctxUser, u)
 		// Record last-seen off the hot path, throttled like TouchAPIKey so
@@ -392,8 +400,10 @@ func (h *Handler) Register(e *echo.Echo) {
 	static.StaticFS("/vendor", echo.MustSubFS(vendorFS, "vendor"))
 
 	g := admin.Group("")
-	// bodyLimit must run ahead of csrfProtect, which parses the form body.
-	g.Use(bodyLimit, h.sessionAuth, h.requireRole, h.csrfProtect, h.auditLog)
+	// jsonErrors wraps the rest so the React app gets its error body from
+	// every one of them; bodyLimit must run ahead of csrfProtect, which
+	// parses the form body.
+	g.Use(jsonErrors, bodyLimit, h.sessionAuth, h.requireRole, h.csrfProtect, h.auditLog)
 
 	// as declares the minimum role for routes (issue #196); requireRole
 	// enforces it. Every mutating route is listed under one of the three

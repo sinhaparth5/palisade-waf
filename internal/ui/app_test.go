@@ -216,16 +216,9 @@ func TestAppJSONViews(t *testing.T) {
 
 	get := func(path string, out any) *httptest.ResponseRecorder {
 		t.Helper()
-		req := httptest.NewRequest(http.MethodGet, path, nil)
-		req.Header.Set("Accept", "application/json")
-		req.AddCookie(&http.Cookie{Name: sessionCookie, Value: env.session})
-		rec := httptest.NewRecorder()
-		env.e.ServeHTTP(rec, req)
+		rec := env.doJSON(env.session, http.MethodGet, path, nil, out)
 		if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Vary"), "Accept") {
 			t.Fatalf("%s = %d, Vary %q", path, rec.Code, rec.Header().Get("Vary"))
-		}
-		if err := json.Unmarshal(rec.Body.Bytes(), out); err != nil {
-			t.Fatalf("%s: %v: %s", path, err, rec.Body)
 		}
 		return rec
 	}
@@ -256,4 +249,70 @@ func TestAppJSONViews(t *testing.T) {
 	if b := notif.Blocks[0]; b.IP != "198.51.100.7" || b.Path != "/login" || b.App != "shop" || b.RuleID != 942100 || b.Action != "waf_blocked" {
 		t.Errorf("block = %+v", b)
 	}
+}
+
+// The React app gets every failure as {"error", "message"} with a real
+// status (web/src/lib/api.ts), never a login redirect or an HTML/text body;
+// the HTMX pages keep theirs.
+func TestAppJSONErrors(t *testing.T) {
+	env := newDemoEnv(t)
+	demo, _ := env.db.GetAdminUserByEmail(demoEmail)
+	demoSession, err := env.db.CreateSession(demo.ID, "127.0.0.1", "test", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	viewer := env.sessionAs(storage.RoleViewer)
+	cases := []struct {
+		name, session, method, path string
+		body                        any
+		status                      int
+		code                        string
+	}{
+		{"no session", "", "GET", "/admin/search?q=x", nil, 401, "unauthenticated"},
+		{"unknown session", "nope", "GET", "/admin/api/notifications", nil, 401, "unauthenticated"},
+		{"role too low", viewer, "POST", "/admin/ip-rules", map[string]string{"ip": "192.0.2.1"}, 403, "forbidden"},
+		{"demo write", demoSession, "POST", "/admin/settings/credentials", map[string]string{}, 403, "demo"},
+		{"body over the limit", env.session, "POST", "/admin/ip-rules", map[string]string{"note": strings.Repeat("x", 1<<20)}, 413, "too_large"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got jsonError
+			rec := env.doJSON(tc.session, tc.method, tc.path, tc.body, &got)
+			if rec.Code != tc.status || got.Code != tc.code || got.Message == "" {
+				t.Errorf("= %d %+v, want %d %s", rec.Code, got, tc.status, tc.code)
+			}
+		})
+	}
+
+	t.Run("missing CSRF", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/api/notifications/seen", nil)
+		req.Header.Set("Accept", "application/json")
+		req.AddCookie(&http.Cookie{Name: sessionCookie, Value: env.session})
+		rec := serve(env, req)
+		var got jsonError
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != 403 || got.Code != "forbidden" || !strings.Contains(got.Message, "CSRF") {
+			t.Errorf("= %d %s", rec.Code, rec.Body)
+		}
+	})
+
+	t.Run("HTMX unchanged", func(t *testing.T) {
+		if rec := env.doWith("GET", "/admin/search?q=x", nil, ""); rec.Code != http.StatusFound {
+			t.Errorf("no session = %d, want the login redirect", rec.Code)
+		}
+		if rec := env.doWith("POST", "/admin/ip-rules", nil, viewer); rec.Code != 403 || rec.Body.String() != "Your role can't do this." {
+			t.Errorf("viewer = %d %q", rec.Code, rec.Body)
+		}
+	})
+
+	// A DB failure is a 500 that doesn't show the driver's error text.
+	t.Run("storage failure", func(t *testing.T) {
+		dropTables(t, env.dbPath, "name NOT IN ('sessions', 'meta') AND name NOT LIKE 'admin%'")
+		for _, p := range []string{"/admin/api/notifications", "/admin/search?q=shop"} {
+			var got jsonError
+			rec := env.doJSON(env.session, "GET", p, nil, &got)
+			if rec.Code != 500 || got.Code != "internal" || strings.Contains(rec.Body.String(), "no such table") {
+				t.Errorf("GET %s = %d %s", p, rec.Code, rec.Body)
+			}
+		}
+	})
 }

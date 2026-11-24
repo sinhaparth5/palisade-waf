@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"log"
 	"mime"
 	"net/http"
 	"path"
@@ -164,4 +165,73 @@ func acceptsEncoding(header, token string) bool {
 func wantsJSON(c *echo.Context) bool {
 	c.Response().Header().Add("Vary", "Accept")
 	return strings.Contains(c.Request().Header.Get("Accept"), "application/json")
+}
+
+// jsonError is the error body of every JSON answer to the React app
+// (web/src/lib/api.ts reads it): a stable code to branch on, a message to
+// show, and per-field messages for a form. A handler returns one; jsonErrors
+// writes it. It replaces the HTMX pages' ...Err template fields and
+// HX-Retarget with a real 4xx/5xx.
+type jsonError struct {
+	Status  int               `json:"-"`
+	Code    string            `json:"error"`
+	Message string            `json:"message"`
+	Fields  map[string]string `json:"fields,omitempty"`
+}
+
+func (e *jsonError) Error() string   { return e.Message }
+func (e *jsonError) StatusCode() int { return e.Status }
+
+// errorCodes names a status for an error that didn't come as a jsonError.
+var errorCodes = map[int]string{
+	http.StatusBadRequest:            "invalid",
+	http.StatusUnauthorized:          "unauthenticated",
+	http.StatusForbidden:             "forbidden",
+	http.StatusNotFound:              "not_found",
+	http.StatusConflict:              "conflict",
+	http.StatusRequestEntityTooLarge: "too_large",
+	http.StatusTooManyRequests:       "rate_limited",
+}
+
+// jsonErrors answers a JSON caller's failed request with a jsonError body:
+// a returned *jsonError as is, a 4xx from Echo (body limit, CSRF) with its
+// status and message, anything else (a DB failure) as a logged 500 that
+// doesn't echo the error text. HTMX callers keep Echo's default handling.
+func jsonErrors(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c *echo.Context) error {
+		err := next(c)
+		if err == nil || !wantsJSON(c) {
+			return err
+		}
+		if r, _ := echo.UnwrapResponse(c.Response()); r != nil && r.Committed {
+			return err
+		}
+		var je *jsonError
+		if !errors.As(err, &je) {
+			je = &jsonError{Status: http.StatusInternalServerError, Code: "internal", Message: "Something went wrong on the server. Try again."}
+			var sc echo.HTTPStatusCoder
+			if errors.As(err, &sc) && sc.StatusCode() > 0 && sc.StatusCode() < 500 {
+				je.Status, je.Message = sc.StatusCode(), http.StatusText(sc.StatusCode())
+				var he *echo.HTTPError
+				if errors.As(err, &he) && he.Message != "" {
+					je.Message = he.Message
+				}
+				if je.Code = errorCodes[je.Status]; je.Code == "" {
+					je.Code = "error"
+				}
+			} else {
+				log.Printf("admin %s %s: %v", c.Request().Method, c.Path(), err)
+			}
+		}
+		return c.JSON(je.Status, je)
+	}
+}
+
+// denied is a 403: a jsonError for the React app, the plain text the HTMX
+// pages show otherwise.
+func denied(c *echo.Context, code, msg string) error {
+	if wantsJSON(c) {
+		return &jsonError{Status: http.StatusForbidden, Code: code, Message: msg}
+	}
+	return c.String(http.StatusForbidden, msg)
 }

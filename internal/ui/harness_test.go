@@ -4,6 +4,7 @@ import (
 	"crypto/sha1" //nolint:gosec // HIBP's range API is keyed by SHA-1
 	"embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -162,6 +163,41 @@ func (env *adminEnv) doWith(method, path string, form url.Values, session string
 	}
 	rec := httptest.NewRecorder()
 	env.e.ServeHTTP(rec, req)
+	return rec
+}
+
+// doJSON sends a request the way the React app does (web/src/lib/api.ts):
+// Accept JSON, a JSON body when body isn't nil, session cookie and CSRF
+// header (none for session ""), and decodes the answer into out unless nil.
+func (env *adminEnv) doJSON(session, method, path string, body, out any) *httptest.ResponseRecorder {
+	env.t.Helper()
+	var r *strings.Reader
+	if body == nil {
+		r = strings.NewReader("")
+	} else {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			env.t.Fatal(err)
+		}
+		r = strings.NewReader(string(raw))
+	}
+	req := httptest.NewRequest(method, path, r)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if session != "" {
+		req.AddCookie(&http.Cookie{Name: sessionCookie, Value: session})
+		req.Header.Set("X-CSRF-Token", csrfToken(session))
+	}
+	rec := httptest.NewRecorder()
+	env.e.ServeHTTP(rec, req)
+	if out != nil {
+		if err := json.Unmarshal(rec.Body.Bytes(), out); err != nil {
+			env.t.Fatalf("%s %s = %d, not JSON: %v: %s", method, path, rec.Code, err, rec.Body)
+		}
+	}
 	return rec
 }
 
