@@ -1,5 +1,5 @@
 import { screen } from "@testing-library/react";
-import { renderWithProviders, renderRoute } from "@/test/render";
+import { renderWithProviders, renderRoute, testQueryClient } from "@/test/render";
 import { ErrorScreen } from "./Fallback";
 
 describe("fallback screens", () => {
@@ -15,4 +15,12 @@ describe("fallback screens", () => {
     expect(screen.queryByText(/var\/lib\/secret/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /back to dashboard/i })).toHaveAttribute("href", "/admin/app/");
   });
+});
+
+it("makes the Palisade screens the router defaults, for every route", async () => {
+  const { createAppRouter } = await import("@/router");
+  const { NotFound } = await import("./Fallback");
+  const r = createAppRouter(testQueryClient());
+  expect(r.options.defaultErrorComponent).toBe(ErrorScreen);
+  expect(r.options.defaultNotFoundComponent).toBe(NotFound);
 });

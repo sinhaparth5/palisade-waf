@@ -5,9 +5,10 @@ import { boot } from "@/lib/boot";
 
 function Screen({ code, title, children }: { code: string; title: string; children: React.ReactNode }) {
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-paper p-6 text-ink">
+    // Inside the shell for a bad page, alone when the shell itself failed.
+    <div className="flex justify-center px-4 py-16 text-ink">
       <section className="w-full max-w-md border border-edge bg-card p-8">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[.08em] text-muted">{code}</p>
+        <p className="font-mono text-[11px] font-medium uppercase tracking-[.08em] text-slate-500">{code}</p>
         <h1 className="mt-2 text-xl">{title}</h1>
         <div className="mt-3 text-sm text-slate-600">{children}</div>
         {/* A full load, not a client link: after a crash, start from clean state. */}
@@ -15,7 +16,7 @@ function Screen({ code, title, children }: { code: string; title: string; childr
           Back to dashboard
         </a>
       </section>
-    </main>
+    </div>
   );
 }
 

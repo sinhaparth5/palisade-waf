@@ -75,7 +75,11 @@ export function sonnerNoInlineStyle(): Plugin {
 // React's symbols in react and react-dom). Renamed before Rolldown hashes the
 // file names, in unminified code (either quote style), so a rule change gives
 // new names and the year-long immutable cache can't mix old and new files.
-export const sharedRules: [RegExp, string][] = [
+// A third element `true` marks a rule allowed to match nothing: it depends on
+// which of our own components the app uses, not on a library version.
+type Rule = [RegExp, string, optional?: boolean];
+
+export const sharedRules: Rule[] = [
   // React DevTools and extensions find React through this hook; renamed,
   // React never registers with them.
   [/__REACT_DEVTOOLS_GLOBAL_HOOK__/g, "__PL_DT__"],
@@ -91,13 +95,13 @@ export const sharedRules: [RegExp, string][] = [
   [/self\.__TSR_ROUTER__\s*=\s*this/g, "0"],
   [/__TSR_/g, "__pl_"], // history.state keys
   [/sonner/g, "pltoast"], // data-sonner-*, class names, keyframes
-  [/data-slot/g, "data-part"], // shadcn's marker attribute
+  [/data-slot/g, "data-part", true], // shadcn's marker attribute, in src/components/ui
   [/data-react-aria-top-layer/g, "data-pl-layer"], // sonner marks toasts for react-aria
 ];
 
 // Text inside one file: error messages (only safe once minified, when no
 // identifier is left named React) and helpers Vite adds after hashing.
-export const localRules: [RegExp, string][] = [
+export const localRules: Rule[] = [
   [/; visit `\+\w+\+` for the full message or use the non-minified dev environment for full errors and additional helpful warnings\./g, ""],
   [/Minified React error #/g, "Error #"],
   [/https:\/\/react\.dev\/errors\//g, ""],
@@ -110,7 +114,7 @@ export const localRules: [RegExp, string][] = [
 const leak = /\w*(?:react|tanstack|vite|rolldown|radix|sonner|shadcn|__TSR|data-slot)[\w-]*/gi;
 
 // unbrander applies rules and counts what each one matched, across calls.
-export function unbrander(rules: [RegExp, string][]) {
+export function unbrander(rules: Rule[]) {
   const hits = rules.map(() => 0);
   return {
     apply: (text: string) =>
@@ -118,7 +122,7 @@ export function unbrander(rules: [RegExp, string][]) {
         hits[i]! += s.match(re)?.length ?? 0;
         return s.replace(re, to);
       }, text),
-    dead: () => rules.filter((_, i) => hits[i] === 0).map(([re]) => re.source),
+    dead: () => rules.filter(([, , optional], i) => hits[i] === 0 && !optional).map(([re]) => re.source),
   };
 }
 

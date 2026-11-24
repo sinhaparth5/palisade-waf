@@ -11,14 +11,14 @@ import sys
 
 # Class names that aren't icons: the base classes on every <i>.
 NOT_ICONS = {"hgi-stroke", "hgi-rounded", "hgi-stroke-rounded"}
-SOURCES = ["internal/ui/templates", "static/js/src", "internal/ui"]
+SOURCES = ["internal/ui/templates", "static/js/src", "internal/ui", "web/src"]
 
 
 def used_names():
     names = set()
     for root in SOURCES:
         for p in pathlib.Path(root).rglob("*"):
-            if p.suffix in (".html", ".js", ".go") and not p.name.endswith("_test.go") and "vendor" not in p.parts:
+            if p.suffix in (".html", ".js", ".go", ".tsx") and not p.name.endswith("_test.go") and "vendor" not in p.parts:
                 names |= set(re.findall(r"hgi-[a-z0-9-]+", p.read_text(encoding="utf-8")))
     return sorted(names - NOT_ICONS)
 

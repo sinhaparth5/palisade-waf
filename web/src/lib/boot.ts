@@ -11,6 +11,7 @@ export const boot = {
   email: d.email ?? "",
   demo: d.demo === "true",
   version: d.version ?? "",
+  waf: d.waf === "true",
   nonce: d.nonce ?? "",
 };
 

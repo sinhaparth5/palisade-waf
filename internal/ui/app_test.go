@@ -14,7 +14,7 @@ import (
 // appFS is a built app as Vite lays it out (web/build/palisade.ts).
 var appFS = fstest.MapFS{
 	"app/dist/index.html": {Data: []byte(`<html><head><script type="module" src="{{.Base}}assets/index-x.js"></script></head>` +
-		`<body data-admin="{{.AdminPath}}" data-csrf="{{.CSRF}}" data-role="{{.Role}}" data-email="{{.Email}}" data-demo="{{.Demo}}" data-nonce="{{.Nonce}}"></body></html>`)},
+		`<body data-admin="{{.AdminPath}}" data-csrf="{{.CSRF}}" data-role="{{.Role}}" data-email="{{.Email}}" data-demo="{{.Demo}}" data-waf="{{.WAF}}" data-nonce="{{.Nonce}}"></body></html>`)},
 	"app/dist/assets/index-x.js":    {Data: []byte("plain")},
 	"app/dist/assets/index-x.js.br": {Data: []byte("brotli")},
 	"app/dist/assets/index-x.js.gz": {Data: []byte("gzip")},
@@ -46,6 +46,7 @@ func TestAppIndex(t *testing.T) {
 			`data-role="owner"`,
 			`data-email="` + testAdminEmail + `"`,
 			`data-demo="false"`,
+			`data-waf="true"`,
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("GET %s: missing %s in %s", p, want, body)

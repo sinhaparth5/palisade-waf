@@ -63,6 +63,6 @@ describe("renderRoute", () => {
     const { router } = await renderRoute("/");
     expect(router.state.location.pathname).toBe("/"); // relative to the base path
     expect(router.history.location.pathname).toBe("/admin/app/");
-    expect(await screen.findByRole("heading", { name: "Palisade" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
   });
 });

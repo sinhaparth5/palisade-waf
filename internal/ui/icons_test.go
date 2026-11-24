@@ -19,7 +19,7 @@ func TestIconsInSubset(t *testing.T) {
 	notIcons := map[string]bool{"hgi-stroke": true, "hgi-rounded": true, "hgi-stroke-rounded": true}
 	name := regexp.MustCompile(`hgi-[a-z0-9-]+`)
 	seen := 0
-	for _, root := range []string{"templates", "../../static/js/src", "."} {
+	for _, root := range []string{"templates", "../../static/js/src", "../../web/src", "."} {
 		err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -31,7 +31,7 @@ func TestIconsInSubset(t *testing.T) {
 				return nil
 			}
 			ext := filepath.Ext(p)
-			if (ext != ".html" && ext != ".js" && ext != ".go") || strings.HasSuffix(p, "_test.go") {
+			if (ext != ".html" && ext != ".js" && ext != ".go" && ext != ".tsx") || strings.HasSuffix(p, "_test.go") {
 				return nil
 			}
 			b, err := os.ReadFile(p)

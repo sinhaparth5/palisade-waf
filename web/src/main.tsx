@@ -1,11 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RouterProvider, createRouter } from "@tanstack/react-router";
+import { RouterProvider } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { setNonce } from "get-nonce";
 import { boot } from "@/lib/boot";
-import { routeTree } from "./routeTree.gen";
+import { createAppRouter } from "./router";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
 // request's nonce (internal/ui/app.go).
 setNonce(boot.nonce);
 
-const router = createRouter({ routeTree, basepath: `${boot.admin}/app`, context: { queryClient } });
+const router = createAppRouter(queryClient);
 
 declare module "@tanstack/react-router" {
   interface Register {

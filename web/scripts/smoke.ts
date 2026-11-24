@@ -29,7 +29,7 @@ await import(`${dist}${entry}`);
 
 const doc = dom.window.document;
 for (let i = 0; i < 50 && !doc.querySelector("#palisade h1"); i++) await new Promise((r) => setTimeout(r, 20));
-if (doc.querySelector("#palisade h1")?.textContent !== "Palisade") fail(`app did not render: ${doc.body.innerHTML.slice(0, 300)}`);
+if (doc.querySelector("#palisade h1")?.textContent !== "Dashboard") fail(`app did not render: ${doc.body.innerHTML.slice(0, 300)}`);
 
 // Nothing a console, devtools or an extension can read should name a library.
 const leak = /react|tanstack|vite|radix|sonner|__TSR/i;

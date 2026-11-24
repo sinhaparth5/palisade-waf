@@ -6,5 +6,6 @@ Object.assign(document.body.dataset, {
   email: "owner@example.com",
   demo: "false",
   version: "v0.0.0-test",
+  waf: "true",
   nonce: "test-nonce",
 });

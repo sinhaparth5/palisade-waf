@@ -3,7 +3,7 @@ import { boot, can } from "./boot";
 
 describe("boot", () => {
   it("reads what Go rendered onto <body>", () => {
-    expect(boot).toMatchObject({ admin: "/admin", csrf: "test-csrf", role: "owner", demo: false, nonce: "test-nonce" });
+    expect(boot).toMatchObject({ admin: "/admin", csrf: "test-csrf", role: "owner", demo: false, waf: true, nonce: "test-nonce" });
   });
 
   it("falls back to safe defaults when <body> has no values", async () => {
@@ -13,7 +13,7 @@ describe("boot", () => {
     try {
       const fresh = await import("./boot");
       // Least privilege: no role rendered means viewer.
-      expect(fresh.boot).toEqual({ admin: "/admin", csrf: "", role: "viewer", email: "", demo: false, version: "", nonce: "" });
+      expect(fresh.boot).toEqual({ admin: "/admin", csrf: "", role: "viewer", email: "", demo: false, version: "", waf: false, nonce: "" });
       expect(fresh.can("admin")).toBe(false);
     } finally {
       Object.assign(document.body.dataset, saved);

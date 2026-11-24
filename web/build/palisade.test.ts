@@ -18,9 +18,9 @@ describe("unbrand", () => {
   });
 
   it("reports a rule that never matched and a name nothing renamed", () => {
-    const u = unbrander([[/__vite__mapDeps/g, "x"]]);
+    const u = unbrander([[/__vite__mapDeps/g, "x"], [/data-slot/g, "y", true]]);
     u.apply("window.__TANSTACK_DEVTOOLS__=1");
-    expect(u.dead()).toEqual(["__vite__mapDeps"]);
+    expect(u.dead()).toEqual(["__vite__mapDeps"]); // the optional rule may stay unmatched
     expect(leftovers(["window.__TANSTACK_DEVTOOLS__=1", "ok"])).toEqual(["__TANSTACK_DEVTOOLS__"]);
   });
 });

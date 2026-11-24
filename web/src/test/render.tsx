@@ -2,9 +2,9 @@ import type { ReactElement, ReactNode } from "react";
 import { render, type RenderOptions } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
+import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { boot } from "@/lib/boot";
-import { routeTree } from "@/routeTree.gen";
+import { createAppRouter } from "@/router";
 
 // A fresh client per test: no cache shared between tests, no retries (an
 // error state shows at once), errors not logged to the console.
@@ -28,13 +28,7 @@ export function renderWithProviders(ui: ReactElement, options: RenderOptions & {
 // renderRoute renders the real app router at path ("/services/3"), the way a
 // browser opening {admin}/app/services/3 would. Await it: the route loads first.
 export async function renderRoute(path: string, { queryClient = testQueryClient() } = {}) {
-  const basepath = `${boot.admin}/app`;
-  const router = createRouter({
-    routeTree,
-    basepath,
-    context: { queryClient },
-    history: createMemoryHistory({ initialEntries: [basepath + path] }),
-  });
+  const router = createAppRouter(queryClient, createMemoryHistory({ initialEntries: [`${boot.admin}/app${path}`] }));
   await router.load();
   const result = render(
     <QueryClientProvider client={queryClient}>

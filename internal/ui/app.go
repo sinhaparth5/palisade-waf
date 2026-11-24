@@ -73,6 +73,7 @@ func (h *Handler) appHTML(c *echo.Context) error {
 		"Asset":     h.assetVer,
 		"CSRF":      h.csrfFromContext(c),
 		"Version":   h.cfg.Version,
+		"WAF":       h.cfg.WAF.Enabled,
 		"Nonce":     nonce,
 		"Role":      "",
 		"Email":     "",

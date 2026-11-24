@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Page, PageHeader } from "@/components/layout/Page";
 
 export const Route = createFileRoute("/")({
   component: () => (
-    <main className="p-8">
-      <h1 className="text-xl">Palisade</h1>
-      <p className="text-muted-foreground mt-2">Admin console.</p>
-    </main>
+    <Page>
+      <PageHeader title="Dashboard" />
+    </Page>
   ),
 });
