@@ -14,9 +14,8 @@ func TestPagesStorageFailure(t *testing.T) {
 	env := newAdminEnv(t)
 	dropTables(t, env.dbPath, "name NOT IN ('sessions', 'meta') AND name NOT LIKE 'admin%'")
 	for _, path := range []string{
-		"/admin/logs", "/admin/logs/stats", "/admin/logs/1", "/admin/ip-rules", "/admin/ip-rules/rows",
+		"/admin/api/dashboard", "/admin/api/logs", "/admin/logs/stats", "/admin/logs/1", "/admin/ip-rules", "/admin/ip-rules/rows",
 		"/admin/geo-rules", "/admin/services/openapi/1", "/admin/waf-rules", "/admin/settings/audit",
-		"/admin/api/traffic", "/admin/api/threats",
 	} {
 		if rec := env.do("GET", path, nil); rec.Code < http.StatusInternalServerError {
 			t.Errorf("GET %s = %d, want 5xx", path, rec.Code)

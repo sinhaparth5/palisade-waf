@@ -38,7 +38,8 @@ func TestSearch(t *testing.T) {
 		{storage.RoleViewer, "active ip", "/admin/ip-rules#find=Active%20IP%20Rules", true},
 		{storage.RoleViewer, "rate limiting", "Rate Limiting", false},
 		{storage.RoleViewer, "two-factor", "/admin/settings#find=Two-Factor%20Authentication", true},
-		{storage.RoleViewer, "dashboard", `href="/admin"`, true},
+		{storage.RoleViewer, "dashboard", `href="/admin/app/"`, true},
+		{storage.RoleViewer, "enforcement", `href="/admin/app/"`, true},
 		// Live records.
 		{storage.RoleViewer, "SHOP.example", "/admin/services", true},
 		{storage.RoleViewer, "113.9", "203.0.113.9", true},

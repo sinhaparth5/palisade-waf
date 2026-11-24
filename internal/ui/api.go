@@ -175,7 +175,21 @@ func lookupError(c *echo.Context, err error, msg string) error {
 	return apiError(c, http.StatusInternalServerError, err.Error())
 }
 
+// apiError answers an /api/v1 caller with {"error": msg}, the body the CLI
+// reads. A handler shared with the session group answers the React app with
+// the jsonError contract instead, and a 5xx without its text (jsonErrors
+// logs it).
 func apiError(c *echo.Context, status int, msg string) error {
+	if currentUser(c) != nil {
+		if status >= http.StatusInternalServerError {
+			return errors.New(msg)
+		}
+		code := errorCodes[status]
+		if code == "" {
+			code = "error"
+		}
+		return &jsonError{Status: status, Code: code, Message: msg}
+	}
 	return c.JSON(status, map[string]string{"error": msg})
 }
 

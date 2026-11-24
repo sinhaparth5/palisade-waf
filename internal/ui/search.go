@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"text/template/parse"
@@ -17,11 +18,9 @@ import (
 // live records. Read-only, so every role can use it.
 
 // adminPages are the base.html pages, in sidebar order.
-var adminPages = []string{"dashboard", "logs", "services", "certificates", "ip_rules", "geo_rules", "waf_rules", "threat_intel", "settings"}
+var adminPages = []string{"services", "certificates", "ip_rules", "geo_rules", "waf_rules", "threat_intel", "settings"}
 
 var pageHeadings = map[string]string{
-	"dashboard":    "Dashboard",
-	"logs":         "Live Logs",
 	"ip_rules":     "IP Rules",
 	"geo_rules":    "Geo Rules",
 	"services":     "Services",
@@ -30,6 +29,25 @@ var pageHeadings = map[string]string{
 	"certificates": "Certificates",
 	"settings":     "Settings",
 }
+
+// appSections are the React app's pages and their cards, listed by hand
+// until the app owns search (#357). Cards link to the page itself.
+var appSections = func() []section {
+	var out []section
+	for _, p := range []struct {
+		heading, url string
+		cards        []string
+	}{
+		{"Dashboard", "/app/", []string{"Overview", "Traffic, last 24h", "Top countries", "Services", "Latest blocked requests", "Daily log", "Recent requests", "Enforcement today", "Blocked by country", "Engine"}},
+		{"Live Logs", "/app/logs", []string{"Request inspector", "Stats"}},
+	} {
+		out = append(out, section{searchHit{p.heading, "Page", p.url}, storage.RoleViewer})
+		for _, c := range p.cards {
+			out = append(out, section{searchHit{c, p.heading, p.url}, storage.RoleViewer})
+		}
+	}
+	return out
+}()
 
 const searchLimit = 8 // hits per group
 
@@ -62,10 +80,10 @@ var (
 // following {{template}} calls and raising the required role inside
 // {{if can .Role "x"}}, so a card is offered only to roles that see it.
 func (h *Handler) searchSections() []section {
-	var out []section
+	out := slices.Clone(appSections)
 	for _, page := range adminPages {
 		t := h.tmpls[page]
-		pageURL := strings.TrimSuffix("/"+strings.ReplaceAll(page, "_", "-"), "/dashboard") // under the admin path
+		pageURL := "/" + strings.ReplaceAll(page, "_", "-") // under the admin path
 		heading := pageHeadings[page]
 		out = append(out, section{searchHit{heading, "Page", pageURL}, storage.RoleViewer})
 		seen := map[string]bool{}
@@ -172,7 +190,7 @@ func (h *Handler) Search(c *echo.Context) error {
 		if asJSON {
 			return c.JSON(http.StatusOK, []searchGroup{})
 		}
-		return h.renderPartial(c, "dashboard", "search-results", data)
+		return h.renderPartial(c, "services", "search-results", data)
 	}
 	role := ""
 	if u := currentUser(c); u != nil {
@@ -262,5 +280,5 @@ func (h *Handler) Search(c *echo.Context) error {
 		return c.JSON(http.StatusOK, groups)
 	}
 	data["Groups"] = groups
-	return h.renderPartial(c, "dashboard", "search-results", data)
+	return h.renderPartial(c, "services", "search-results", data)
 }

@@ -89,7 +89,7 @@ func TestRolePageSweep(t *testing.T) {
 	}
 	id := env.seedLog(storage.RequestLog{AppName: svc.Name, RealIP: "203.0.113.9", Status: 403, Blocked: true, Action: "waf_blocked", Method: "GET", Path: "/x"})
 	pages := []string{
-		"/admin", "/admin/logs", "/admin/ip-rules", "/admin/ip-rules/rows", "/admin/geo-rules",
+		"/admin/ip-rules", "/admin/ip-rules/rows", "/admin/geo-rules",
 		"/admin/services", "/admin/services/rows", "/admin/certificates", "/admin/waf-rules",
 		"/admin/threat-intel", "/admin/settings", "/admin/settings/audit",
 		"/admin/api/notifications", fmt.Sprintf("/admin/logs/%d", id),

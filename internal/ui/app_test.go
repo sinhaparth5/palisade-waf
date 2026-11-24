@@ -273,6 +273,9 @@ func TestAppJSONErrors(t *testing.T) {
 		{"role too low", viewer, "POST", "/admin/ip-rules", map[string]string{"ip": "192.0.2.1"}, 403, "forbidden"},
 		{"demo write", demoSession, "POST", "/admin/settings/credentials", map[string]string{}, 403, "demo"},
 		{"body over the limit", env.session, "POST", "/admin/ip-rules", map[string]string{"note": strings.Repeat("x", 1<<20)}, 413, "too_large"},
+		// Handlers shared with /api/v1 (apiError) answer the app the same way.
+		{"shared handler, missing row", env.session, "GET", "/admin/logs/999999", nil, 404, "not_found"},
+		{"shared handler, bad filter", viewer, "GET", "/admin/api/logs?limit=0", nil, 400, "invalid"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -307,7 +310,7 @@ func TestAppJSONErrors(t *testing.T) {
 	// A DB failure is a 500 that doesn't show the driver's error text.
 	t.Run("storage failure", func(t *testing.T) {
 		dropTables(t, env.dbPath, "name NOT IN ('sessions', 'meta') AND name NOT LIKE 'admin%'")
-		for _, p := range []string{"/admin/api/notifications", "/admin/search?q=shop"} {
+		for _, p := range []string{"/admin/api/notifications", "/admin/search?q=shop", "/admin/api/dashboard", "/admin/api/logs"} {
 			var got jsonError
 			rec := env.doJSON(env.session, "GET", p, nil, &got)
 			if rec.Code != 500 || got.Code != "internal" || strings.Contains(rec.Body.String(), "no such table") {

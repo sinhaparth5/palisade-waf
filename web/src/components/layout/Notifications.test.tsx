@@ -17,7 +17,7 @@ describe("notifications", () => {
     expect(await screen.findByText("198.51.100.7")).toBeInTheDocument();
     expect(screen.getByText(/shop · .* · rule #942100/)).toBeInTheDocument();
     expect(screen.getAllByText(/rule #/)).toHaveLength(1); // rule 0: none shown
-    expect(screen.getByRole("link", { name: /view all blocked/i })).toHaveAttribute("href", "/admin/logs?status=blocked&mode=history");
+    expect(screen.getByRole("link", { name: /view all blocked/i })).toHaveAttribute("href", "/admin/app/logs?status=blocked");
   });
 
   it("marks all as read with a POST", async () => {

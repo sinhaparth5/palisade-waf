@@ -33,7 +33,7 @@ import (
 //go:embed templates
 var templateFS embed.FS
 
-// vendorFS holds the third-party admin assets (htmx, Chart.js, fonts, icons,
+// vendorFS holds the third-party admin assets (htmx, fonts, icons,
 // flags), served from the binary so the admin CSP can be 'self' only and the
 // UI works air-gapped (issue #195). See THIRD_PARTY_NOTICES.md.
 //
@@ -210,7 +210,6 @@ func (h *Handler) parseTemplates() error {
 	for _, page := range adminPages {
 		t, err := template.New("").Funcs(funcs).ParseFS(templateFS,
 			"templates/components/*.html",
-			"templates/log_row.html",
 			"templates/base.html",
 			"templates/"+page+".html",
 		)
@@ -219,13 +218,6 @@ func (h *Handler) parseTemplates() error {
 		}
 		h.tmpls[page] = t
 	}
-	// log-row partial used by the SSE stream handler
-	t, err := template.New("log-row").Funcs(funcs).ParseFS(templateFS, "templates/log_row.html")
-	if err != nil {
-		return fmt.Errorf("parse log-row: %w", err)
-	}
-	h.tmpls["log-row"] = t
-
 	// notifications partial used by the bell dropdown
 	notif, err := template.New("notifications-panel").Funcs(funcs).ParseFS(templateFS, "templates/notifications.html")
 	if err != nil {
@@ -416,12 +408,15 @@ func (h *Handler) Register(e *echo.Echo) {
 	}
 
 	g.GET("/metrics", echo.WrapHandler(metrics.Handler()))
-	g.GET("", h.Dashboard)
+	// Dashboard and Logs live in the React app (issue #350); the old URLs
+	// (bookmarks, HTMX nav, notification links) land there.
+	g.GET("", h.toApp("/"))
+	g.GET("/logs", h.toApp("/logs"))
+	g.GET("/api/dashboard", h.Dashboard)
+	g.GET("/api/logs", h.APIListLogs)
+	g.GET("/api/logs/apps", h.LogApps)
 	g.GET("/api/notifications", h.NotificationsPanel)
 	g.GET("/api/notifications/stream", h.NotificationsStream)
-	g.GET("/api/traffic", h.TrafficSeries)
-	g.GET("/api/threats", h.ThreatsSeries)
-	g.GET("/logs", h.Logs)
 	g.GET("/logs/stream", h.LogsStream)
 	g.GET("/logs/stats", h.LogStatsSeed)
 	g.GET("/logs/:id", h.LogDetail)

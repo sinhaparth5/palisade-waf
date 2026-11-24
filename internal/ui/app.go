@@ -235,3 +235,15 @@ func denied(c *echo.Context, code, msg string) error {
 	}
 	return c.String(http.StatusForbidden, msg)
 }
+
+// toApp redirects an HTMX page that moved to the React app to its new
+// address, query kept, so bookmarks and links into it still work.
+func (h *Handler) toApp(path string) echo.HandlerFunc {
+	return func(c *echo.Context) error {
+		u := h.cfg.Admin.Path + "/app" + path
+		if q := c.Request().URL.RawQuery; q != "" {
+			u += "?" + q
+		}
+		return c.Redirect(http.StatusFound, u)
+	}
+}

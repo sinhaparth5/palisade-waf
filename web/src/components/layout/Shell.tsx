@@ -10,7 +10,7 @@ import { Search } from "./Search";
 // to their HTMX page; set `app` on an item once its route lives here.
 export const nav = [
   { path: "/", icon: "hgi-dashboard-square-01", label: "Dashboard", app: true },
-  { path: "/logs", icon: "hgi-activity-01", label: "Live Logs" },
+  { path: "/logs", icon: "hgi-activity-01", label: "Live Logs", app: true },
   { path: "/services", icon: "hgi-settings-01", label: "Services" },
   { path: "/certificates", icon: "hgi-certificate-01", label: "Certificates" },
   { path: "/ip-rules", icon: "hgi-cancel-circle", label: "IP Rules" },

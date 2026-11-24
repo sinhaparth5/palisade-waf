@@ -60,7 +60,7 @@ func TestRouteRoles(t *testing.T) {
 		t.Errorf("viewer log export = %d, want 403", rec.Code)
 	}
 	// Viewers still read everything else and manage their own account.
-	for _, p := range []string{"/admin", "/admin/logs", "/admin/services", "/admin/settings"} {
+	for _, p := range []string{"/admin/api/dashboard", "/admin/api/logs", "/admin/services", "/admin/settings"} {
 		if rec := env.doWith("GET", p, nil, viewer); rec.Code != http.StatusOK {
 			t.Errorf("viewer GET %s = %d, want 200", p, rec.Code)
 		}
@@ -120,7 +120,7 @@ func TestUsersCard(t *testing.T) {
 	// Disabling signs the user out at once.
 	devSession, _ := env.db.CreateSession(dev.ID, "10.0.0.5", "ua", "")
 	env.do("POST", devURL, form("action", "disable"))
-	if rec := env.doWith("GET", "/admin", nil, devSession); rec.Code != http.StatusFound {
+	if rec := env.doWith("GET", "/admin/settings", nil, devSession); rec.Code != http.StatusFound {
 		t.Errorf("disabled user's session still works: %d", rec.Code)
 	}
 	env.do("POST", devURL, form("action", "enable"))
@@ -180,7 +180,7 @@ func TestTwoUsersLoggedIn(t *testing.T) {
 		t.Fatal("login did not issue a session")
 	}
 	for _, s := range []string{a, b} {
-		if rec := env.doWith("GET", "/admin", nil, s); rec.Code != http.StatusOK {
+		if rec := env.doWith("GET", "/admin/settings", nil, s); rec.Code != http.StatusOK {
 			t.Errorf("session %s… = %d, want both users signed in", s[:8], rec.Code)
 		}
 	}
