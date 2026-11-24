@@ -14,6 +14,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"palisade/internal/config"
@@ -265,6 +266,15 @@ func TestCheckWritable(t *testing.T) {
 	}
 	if _, err := run([]string{"--db", filepath.Join(dir, "waf.db")}, ""); err == nil {
 		t.Error("serve started on a read-only data dir")
+	}
+}
+
+// A build whose index.html isn't a valid template stops startup.
+func TestServeBadAppBuild(t *testing.T) {
+	bad := fstest.MapFS{"app/dist/index.html": {Data: []byte("{{")}}
+	err := serve(context.Background(), []string{"--db", filepath.Join(t.TempDir(), "waf.db"), "--listen", "127.0.0.1:0"}, "test", Assets{App: bad})
+	if err == nil || !strings.Contains(err.Error(), "parse app index.html") {
+		t.Errorf("bad app build: %v", err)
 	}
 }
 

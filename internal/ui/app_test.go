@@ -19,6 +19,7 @@ var appFS = fstest.MapFS{
 	"app/dist/assets/index-x.js.br": {Data: []byte("brotli")},
 	"app/dist/assets/index-x.js.gz": {Data: []byte("gzip")},
 	"app/dist/assets/tiny.js":       {Data: []byte("tiny")},
+	"app/dist/assets/blob.zzz":      {Data: []byte("blob")},
 	"app/dist/licenses.md":          {Data: []byte("# Licenses")},
 }
 
@@ -109,6 +110,7 @@ func TestAppAsset(t *testing.T) {
 		{"no compressed copy", "/admin/app/assets/tiny.js", "br, gzip", 200, "tiny", ""},
 		{"licenses", "/admin/app/licenses.md", "", 200, "# Licenses", ""},
 		{"missing asset is 404, not the page", "/admin/app/assets/nope.js", "", 404, "", ""},
+		{"unknown type", "/admin/app/assets/blob.zzz", "", 200, "blob", ""},
 		{"compressed copy not addressable", "/admin/app/assets/index-x.js.br", "", 404, "", ""},
 		{"no escape to the template", "/admin/app/assets/../index.html", "", 404, "", ""},
 	}
@@ -126,7 +128,11 @@ func TestAppAsset(t *testing.T) {
 			if rec.Body.String() != tc.body || rec.Header().Get("Content-Encoding") != tc.encoding {
 				t.Errorf("body %q encoding %q", rec.Body.String(), rec.Header().Get("Content-Encoding"))
 			}
-			if strings.HasPrefix(tc.path, "/admin/app/assets/") {
+			if strings.HasSuffix(tc.path, ".zzz") {
+				if ct := rec.Header().Get("Content-Type"); ct != "application/octet-stream" {
+					t.Errorf("Content-Type %q", ct)
+				}
+			} else if strings.HasPrefix(tc.path, "/admin/app/assets/") {
 				if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/javascript") {
 					t.Errorf("Content-Type %q", ct)
 				}
@@ -148,6 +154,33 @@ func TestAppNotBuilt(t *testing.T) {
 	}
 	if rec := env.do(http.MethodGet, "/admin/app", nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("unbuilt app = %d", rec.Code)
+	}
+}
+
+func TestSetAppErrors(t *testing.T) {
+	env := newAdminEnv(t)
+	cases := map[string]fstest.MapFS{
+		"index.html unreadable": {"app/dist/index.html/x": {}},
+		"bad template":          {"app/dist/index.html": {Data: []byte("{{")}},
+	}
+	for name, fsys := range cases {
+		if err := env.h.SetApp(fsys); err == nil {
+			t.Errorf("%s: no error", name)
+		}
+	}
+	if err := env.h.SetApp(nil); err != nil {
+		t.Errorf("nil FS: %v", err)
+	}
+}
+
+// A template that fails while rendering is a 500, not a half-written page.
+func TestAppRenderError(t *testing.T) {
+	env := newAdminEnv(t)
+	if err := env.h.SetApp(fstest.MapFS{"app/dist/index.html": {Data: []byte("{{index .AdminPath 99}}")}}); err != nil {
+		t.Fatal(err)
+	}
+	if rec := env.do(http.MethodGet, "/admin/app", nil); rec.Code != http.StatusInternalServerError {
+		t.Fatalf("render error = %d", rec.Code)
 	}
 }
 

@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import { goTemplate, precompress, sonnerNoInlineStyle, devPalisade } from "./build/palisade.ts";
+import { goTemplate, precompress, sonnerNoInlineStyle, unbrand, devPalisade } from "./build/palisade.ts";
 
 // Built for the Go server (internal/ui/app.go), which renders dist/index.html
 // as an html/template and serves dist/assets/*. See build/palisade.ts.
@@ -12,10 +12,13 @@ export default defineConfig(({ command }) => ({
   // wherever the admin path puts them. Dev: under the default admin path.
   base: command === "build" ? "./" : "/admin/app/",
   plugins: [
-    tanstackRouter({ target: "react", autoCodeSplitting: true }),
+    // Not under Vitest: routeTree.gen.ts is committed, and the plugin's code
+    // splitting and HMR code add branches to route files no test can reach.
+    !process.env.VITEST && tanstackRouter({ target: "react", autoCodeSplitting: true }),
     react(),
     tailwindcss(),
     sonnerNoInlineStyle(),
+    unbrand(),
     goTemplate(),
     precompress(),
     devPalisade(process.env.PALISADE_URL ?? "http://127.0.0.1:8080"),
@@ -29,6 +32,10 @@ export default defineConfig(({ command }) => ({
     license: { fileName: "licenses.md" },
     rolldownOptions: {
       output: {
+        // Hash-only names: a file name shouldn't announce the libraries inside.
+        entryFileNames: "assets/[hash].js",
+        chunkFileNames: "assets/[hash].js",
+        assetFileNames: "assets/[hash][extname]",
         // Libraries change less often than our code, so a release only
         // re-downloads what changed. Heavy page-only libraries (recharts,
         // tanstack table) stay in the lazy route chunks that import them.
@@ -46,7 +53,7 @@ export default defineConfig(({ command }) => ({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "build/**/*.test.ts"],
     // Every test starts clean: mocks reset, vi.stubGlobal (fetch, location) undone.
     restoreMocks: true,
     unstubGlobals: true,

@@ -31,7 +31,7 @@ web:
 
 # What CI runs on web/: types, unit tests with coverage, and a production build.
 web-check:
-	cd web && bun install --frozen-lockfile && bun run typecheck && bun run test:coverage && bun run build
+	cd web && bun install --frozen-lockfile && bun run typecheck && bun run test:coverage && bun run build && bun run smoke
 
 # Recompile the admin UI stylesheet (static/css/tailwind.css ->
 # static/css/dist/tailwind.min.css) with the standalone Tailwind CLI — a

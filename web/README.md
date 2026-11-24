@@ -11,6 +11,7 @@ bun run test           # all tests once
 bun run test:watch     # re-run on save
 bun run test:coverage  # with coverage (what CI runs, via make web-check)
 bun run typecheck
+bun run smoke          # after a build: the real dist/ renders, no library names left
 bun run new:test <component|query|page> src/features/<area>/<Name>.tsx [route]
 ```
 
@@ -18,7 +19,7 @@ bun run new:test <component|query|page> src/features/<area>/<Name>.tsx [route]
 
 ```
 web/
-├── build/              Vite plugins that fit the build to the Go server
+├── build/              Vite plugins that fit the build to the Go server (incl. unbrand)
 ├── scripts/            dev scripts (new-test.ts)
 ├── test-templates/     starting points for new tests (bun run new:test)
 └── src/
@@ -88,6 +89,15 @@ not by class or test id, so tests also check accessibility. No snapshot tests.
 
 `src/test/csp.test.tsx` fails when a component injects a `<style>` without the
 CSP nonce. Add new components that inject styles (overlays, toasts) to it.
+
+## No library names in the build
+
+The built app doesn't name what it's made of. Files are hash-only, the mount
+is `#palisade`, and `unbrand` in `build/palisade.ts` renames what React,
+TanStack, sonner and shadcn leave in the output, React DevTools' hook
+included. The build fails when a rule stops matching or a library name is
+left, so after adding or upgrading a dependency, add the rule it asks for
+and run `bun run smoke`.
 
 ## Dev server
 

@@ -3,7 +3,6 @@ package ui
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"html/template"
@@ -30,10 +29,10 @@ func appCSP(nonce string) string {
 // SetApp loads the built app from fsys (static.App: app/dist/...). Without a
 // build (only static/app/.gitkeep), the app routes answer 404.
 func (h *Handler) SetApp(fsys fs.FS) error {
-	dist, err := fs.Sub(fsys, "app/dist")
-	if err != nil {
-		return fmt.Errorf("sub static/app/dist: %w", err)
+	if fsys == nil {
+		return nil
 	}
+	dist, _ := fs.Sub(fsys, "app/dist") // only fails on an invalid path
 	src, err := fs.ReadFile(dist, "index.html")
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -67,11 +66,7 @@ func (h *Handler) AppPage(c *echo.Context) error {
 }
 
 func (h *Handler) appHTML(c *echo.Context) error {
-	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return err
-	}
-	nonce := base64.RawURLEncoding.EncodeToString(b[:]) // CSP allows -_ in nonces; no HTML escaping needed
+	nonce := rand.Text() // 128+ bits, base32: nothing for HTML or the CSP to escape
 	data := map[string]any{
 		"AdminPath": h.cfg.Admin.Path,
 		"Base":      h.cfg.Admin.Path + "/app/",

@@ -32,7 +32,10 @@ export function precompress(): Plugin {
     configResolved: (c) => void (outDir = c.build.outDir),
     async closeBundle() {
       const dir = join(outDir, "assets");
-      for (const name of await readdir(dir)) {
+      // closeBundle runs after a failed build too; let that error through.
+      const names = await readdir(dir).catch(() => null);
+      if (!names) return;
+      for (const name of names) {
         if (!/\.(js|css|svg|json|md)$/.test(name)) continue;
         const file = join(dir, name);
         if ((await stat(file)).size < 1024) continue;
@@ -56,6 +59,98 @@ export function sonnerNoInlineStyle(): Plugin {
       const out = code.replace(/__insertCSS\("(?:[^"\\]|\\.)*"\);?/, "");
       if (out === code) this.error("sonner no longer calls __insertCSS: recheck its inline <style> against the admin CSP");
       return out;
+    },
+  };
+}
+
+// unbrand renames the names libraries leave in the built JS and CSS (globals
+// that devtools and fingerprinting extensions look for, DOM property keys,
+// history state keys, attributes, error links), so the app reads as Palisade
+// end to end. A rule that stops matching fails the build, and so does any
+// library name left in the output afterwards: a new dependency or version
+// gets a rule here before it ships. `bun run smoke` checks the renamed build
+// still renders.
+
+// Names several files must agree on (a JS attribute and its CSS selector,
+// React's symbols in react and react-dom). Renamed before Rolldown hashes the
+// file names, in unminified code (either quote style), so a rule change gives
+// new names and the year-long immutable cache can't mix old and new files.
+export const sharedRules: [RegExp, string][] = [
+  // React DevTools and extensions find React through this hook; renamed,
+  // React never registers with them.
+  [/__REACT_DEVTOOLS_GLOBAL_HOOK__/g, "__PL_DT__"],
+  // Property keys React puts on DOM nodes, events and components:
+  // __reactFiber$, _reactRootContainer, _reactInternals, $$reactFormReplay, ...
+  [/(\b_{1,2}|\$\$)react(?=[A-Z])/g, "$1pl"],
+  [/\breactFragments\b/g, "plFragments"],
+  [/\bis(Pure)?ReactComponent\b/g, "is$1PlComponent"],
+  [/Symbol\.for\((["'`])react\./g, "Symbol.for($1pl."],
+  [/(["'`])react-dom\1/g, "$1pl-dom$1"], // renderer name, only reported to devtools
+  [/(["'`])react-transition\1/g, "$1pl-transition$1"], // navigation API info tag
+  // The router puts itself on window; nothing reads it back.
+  [/self\.__TSR_ROUTER__\s*=\s*this/g, "0"],
+  [/__TSR_/g, "__pl_"], // history.state keys
+  [/sonner/g, "pltoast"], // data-sonner-*, class names, keyframes
+  [/data-slot/g, "data-part"], // shadcn's marker attribute
+  [/data-react-aria-top-layer/g, "data-pl-layer"], // sonner marks toasts for react-aria
+];
+
+// Text inside one file: error messages (only safe once minified, when no
+// identifier is left named React) and helpers Vite adds after hashing.
+export const localRules: [RegExp, string][] = [
+  [/; visit `\+\w+\+` for the full message or use the non-minified dev environment for full errors and additional helpful warnings\./g, ""],
+  [/Minified React error #/g, "Error #"],
+  [/https:\/\/react\.dev\/errors\//g, ""],
+  [/tanstack_router_reload/g, "pl_reload"],
+  [/vite:preloadError/g, "pl:preloadError"],
+  [/__vite__mapDeps/g, "__pl_deps"],
+  [/\bReact\b/g, "UI"], // remaining error text; last, after the specific rules
+];
+
+const leak = /\w*(?:react|tanstack|vite|rolldown|radix|sonner|shadcn|__TSR|data-slot)[\w-]*/gi;
+
+// unbrander applies rules and counts what each one matched, across calls.
+export function unbrander(rules: [RegExp, string][]) {
+  const hits = rules.map(() => 0);
+  return {
+    apply: (text: string) =>
+      rules.reduce((s, [re, to], i) => {
+        hits[i]! += s.match(re)?.length ?? 0;
+        return s.replace(re, to);
+      }, text),
+    dead: () => rules.filter((_, i) => hits[i] === 0).map(([re]) => re.source),
+  };
+}
+
+export const leftovers = (texts: string[]) => [...new Set(texts.flatMap((s) => s.match(leak) ?? []))];
+
+export function unbrand(): Plugin {
+  let shared = unbrander(sharedRules);
+  let local = unbrander(localRules);
+  return {
+    name: "palisade:unbrand",
+    apply: "build",
+    buildStart() {
+      shared = unbrander(sharedRules);
+      local = unbrander(localRules);
+    },
+    transform(code, id) {
+      if (/\.css(\?|$)/.test(id)) return shared.apply(code);
+    },
+    renderChunk: { order: "post", handler: (code) => shared.apply(code) },
+    generateBundle: {
+      order: "post",
+      handler(_, bundle) {
+        const texts: string[] = [];
+        for (const f of Object.values(bundle)) {
+          if (f.type === "chunk") texts.push((f.code = local.apply(f.code)));
+          else if (f.fileName.endsWith(".css")) texts.push((f.source = local.apply(String(f.source))));
+        }
+        const dead = [...shared.dead(), ...local.dead()];
+        if (dead.length) this.error(`unbrand rules no longer match (library changed?): ${dead.join(", ")}`);
+        const left = leftovers(texts);
+        if (left.length) this.error(`library names left in the build, add an unbrand rule: ${left.join(", ")}`);
+      },
     },
   };
 }
