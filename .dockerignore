@@ -8,3 +8,5 @@ dist
 waf.db*
 certs
 coraza-waf-mod
+web/node_modules
+static/app/dist

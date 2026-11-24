@@ -1,9 +1,22 @@
+# React admin app (web/). The output is the same on every arch, so it builds
+# once on the build platform instead of under QEMU.
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.5-alpine AS web
+WORKDIR /src/web
+COPY web/package.json web/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY web/ ./
+# The theme and fonts are shared with the HTMX UI.
+COPY static/css/ledger.css /src/static/css/ledger.css
+COPY internal/ui/vendor/fonts /src/internal/ui/vendor/fonts
+RUN bun run build
+
 FROM golang:1.27-alpine AS builder
 RUN apk add --no-cache ca-certificates
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+COPY --from=web /src/static/app/dist ./static/app/dist
 ARG VERSION=dev
 RUN CGO_ENABLED=0 go generate ./... && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /palisade .

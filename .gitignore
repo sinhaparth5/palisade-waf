@@ -16,3 +16,4 @@ bench.txt
 .vscode/
 .idea/
 .claude
+/static/app/dist/

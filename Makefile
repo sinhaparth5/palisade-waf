@@ -13,13 +13,25 @@ LDFLAGS  := -s -w -X main.version=$(VERSION)
 # input, so a clean local `make lint` and CI never disagree on results.
 LINT_VERSION := v2.14.0
 
-.PHONY: build generate css icons run test bench fuzz lint hooks clean dist checksums tag
+.PHONY: build web web-check generate css icons run test bench fuzz lint hooks clean dist checksums tag
 
-build: hooks generate
+build: hooks generate web
 	go build -ldflags "-X main.version=$(VERSION)" -o $(BINARY) .
 
 generate:
 	go generate ./...
+
+# React admin app (web/, issue #348) -> static/app/dist, embedded by package
+# static. Bun is a build-time tool only; the binary carries just the output.
+# --frozen-lockfile fails instead of rewriting bun.lock, so builds use exactly
+# the reviewed dependency versions. Bun never runs dependency install scripts
+# unless a package is listed in trustedDependencies (none are).
+web:
+	cd web && bun install --frozen-lockfile && bun run build
+
+# What CI runs on web/: types, unit tests, and a production build.
+web-check:
+	cd web && bun install --frozen-lockfile && bun run typecheck && bun run test && bun run build
 
 # Recompile the admin UI stylesheet (static/css/tailwind.css ->
 # static/css/dist/tailwind.min.css) with the standalone Tailwind CLI — a
@@ -104,13 +116,14 @@ hooks:
 clean:
 	rm -f $(BINARY)
 	rm -f static/js/dist/*.min.js
+	rm -rf static/app/dist
 	rm -rf $(DIST)
 
 # Cross-compiled, stripped release binaries (no CGO, so this works without
 # any target toolchain installed). -s -w drop debug symbols/DWARF — smaller
 # download, and end users never need to attach a debugger to this binary.
 # -trimpath keeps build-machine paths out of the binary (reproducible builds).
-dist: generate
+dist: generate web
 	mkdir -p $(DIST)
 	CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-linux-amd64 .
 	CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags="$(LDFLAGS)" -o $(DIST)/$(ASSET)-linux-arm64 .
