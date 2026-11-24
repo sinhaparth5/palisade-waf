@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { Toaster } from "sonner";
+import { setNonce } from "get-nonce";
+import { boot } from "@/lib/boot";
 import { routeTree } from "./routeTree.gen";
 import "./index.css";
 
@@ -10,9 +12,11 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },
 });
 
-// The Go server sets <base href="{admin}/app/">; routes live under it.
-const basepath = new URL(document.baseURI).pathname.replace(/\/$/, "");
-const router = createRouter({ routeTree, basepath, context: { queryClient } });
+// Radix's scroll lock adds a <style>; the admin CSP only admits it with this
+// request's nonce (internal/ui/app.go).
+setNonce(boot.nonce);
+
+const router = createRouter({ routeTree, basepath: `${boot.admin}/app`, context: { queryClient } });
 
 declare module "@tanstack/react-router" {
   interface Register {

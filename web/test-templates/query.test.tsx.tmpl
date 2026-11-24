@@ -1,0 +1,61 @@
+// __Name__: a component that reads or writes through the admin API
+// (useQuery / useMutation). Every request it makes must be in mockApi.
+import { screen, waitFor } from "@testing-library/react";
+import { mockApi, pending, reply } from "@/test/api-mock";
+import { renderWithProviders } from "@/test/render";
+import { __Name__ } from "./__Name__";
+
+const rows = [{ id: 1, name: "example" }];
+
+describe("__Name__", () => {
+  it("shows a loading state", () => {
+    mockApi({ "GET /api/v1/todo": pending });
+    renderWithProviders(<__Name__ />);
+    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+  });
+
+  it("shows the data", async () => {
+    mockApi({ "GET /api/v1/todo": rows });
+    renderWithProviders(<__Name__ />);
+    expect(await screen.findByText("example")).toBeInTheDocument();
+  });
+
+  it("shows an empty state", async () => {
+    mockApi({ "GET /api/v1/todo": [] });
+    renderWithProviders(<__Name__ />);
+    expect(await screen.findByText(/no .* yet/i)).toBeInTheDocument();
+  });
+
+  // A failed read must show an error, never an empty list (same rule as the
+  // Go UI's DB-failure tests).
+  it("shows an error when the read fails", async () => {
+    mockApi({ "GET /api/v1/todo": reply(500, { error: "db", message: "database unavailable" }) });
+    renderWithProviders(<__Name__ />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/database unavailable/i);
+  });
+
+  it("sends the write and refreshes", async () => {
+    const api = mockApi({
+      "GET /api/v1/todo": rows,
+      "POST /api/v1/todo": (req) => reply(201, { id: 2, ...(req.json as object) }),
+    });
+    const { user } = renderWithProviders(<__Name__ />);
+    await user.type(await screen.findByLabelText(/name/i), "second");
+    await user.click(screen.getByRole("button", { name: /add/i }));
+    await waitFor(() => expect(api.calls("POST /api/v1/todo")).toHaveLength(1));
+    expect(api.calls("POST /api/v1/todo")[0]!.json).toEqual({ name: "second" });
+    // The list is fetched again after the write.
+    await waitFor(() => expect(api.calls("GET /api/v1/todo")).toHaveLength(2));
+  });
+
+  it("shows field errors from the server", async () => {
+    mockApi({
+      "GET /api/v1/todo": rows,
+      "POST /api/v1/todo": reply(400, { error: "invalid", message: "Check the form", fields: { name: "already exists" } }),
+    });
+    const { user } = renderWithProviders(<__Name__ />);
+    await user.type(await screen.findByLabelText(/name/i), "example");
+    await user.click(screen.getByRole("button", { name: /add/i }));
+    expect(await screen.findByText("already exists")).toBeInTheDocument();
+  });
+});

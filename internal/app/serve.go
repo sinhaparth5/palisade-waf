@@ -398,6 +398,9 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	if err != nil {
 		return fmt.Errorf("ui init: %w", err)
 	}
+	if err := uiHandler.SetApp(assets.App); err != nil {
+		return fmt.Errorf("ui init: %w", err)
+	}
 	uiHandler.Register(e)
 	uiHandler.RegisterAPI(e)
 

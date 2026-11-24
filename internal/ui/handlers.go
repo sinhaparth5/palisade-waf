@@ -136,6 +136,8 @@ type Handler struct {
 	staticCSS       fs.FS
 	assetVer        string // cache-busting stamp for the embedded CSS/JS URLs
 	staticImgs      fs.FS
+	appIndex        *template.Template // React admin index.html (app.go); nil when not built
+	appFS           fs.FS
 	reloadBot       func(*challenge.Challenger)
 	buildChallenger func(enabled bool, threshold, ttl int) *challenge.Challenger
 	reloadRateLimit func()
@@ -426,6 +428,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/settings", h.SettingsPage)
 	g.GET("/settings/audit", h.AuditRows)
 	g.GET("/search", h.Search)
+	g.GET("/app", h.AppPage)
+	g.GET("/app/*", h.AppPage)
 
 	// Every role: the user's own session, credentials and second factors.
 	as(storage.RoleViewer,

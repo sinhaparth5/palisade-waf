@@ -29,9 +29,9 @@ generate:
 web:
 	cd web && bun install --frozen-lockfile && bun run build
 
-# What CI runs on web/: types, unit tests, and a production build.
+# What CI runs on web/: types, unit tests with coverage, and a production build.
 web-check:
-	cd web && bun install --frozen-lockfile && bun run typecheck && bun run test && bun run build
+	cd web && bun install --frozen-lockfile && bun run typecheck && bun run test:coverage && bun run build
 
 # Recompile the admin UI stylesheet (static/css/tailwind.css ->
 # static/css/dist/tailwind.min.css) with the standalone Tailwind CLI — a

@@ -1,0 +1,33 @@
+// __Name__: a presentational component (props in, markup and callbacks out).
+// No API calls; if it fetches, use the query template instead.
+import { screen } from "@testing-library/react";
+import { asRole } from "@/test/boot";
+import { renderWithProviders } from "@/test/render";
+import { __Name__ } from "./__Name__";
+
+describe("__Name__", () => {
+  it("renders its content", () => {
+    renderWithProviders(<__Name__ /* props */ />);
+    // Query by role and accessible name, like a user or screen reader would.
+    expect(screen.getByRole("heading", { name: /todo/i })).toBeInTheDocument();
+  });
+
+  it("calls back when the user acts", async () => {
+    const onSave = vi.fn();
+    const { user } = renderWithProviders(<__Name__ onSave={onSave} />);
+    await user.click(screen.getByRole("button", { name: /save/i }));
+    expect(onSave).toHaveBeenCalledOnce();
+  });
+
+  // Role-gated controls: the server enforces roles; this checks the UI hides
+  // what the role can't use (the old TestRolePageSweep, per component).
+  it.each([
+    ["owner", true],
+    ["admin", true],
+    ["viewer", false],
+  ] as const)("shows write controls to %s: %s", (role, visible) => {
+    asRole(role);
+    renderWithProviders(<__Name__ />);
+    expect(screen.queryByRole("button", { name: /save/i }) !== null).toBe(visible);
+  });
+});

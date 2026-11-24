@@ -1,7 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "../../static/css/ledger.css";
-@import "../../internal/ui/vendor/fonts/fonts.css";
+/* Fonts come from the HTMX UI's vendor copy (index.html links it). */
+/* sonner's styles as a file: its own inline <style> is stripped (build/palisade.ts). */
+@import "sonner/dist/styles.css";
 
 @custom-variant dark (&:is([data-theme="dark"] *));
 

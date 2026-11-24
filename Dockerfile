@@ -5,9 +5,8 @@ WORKDIR /src/web
 COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY web/ ./
-# The theme and fonts are shared with the HTMX UI.
+# The theme tokens are shared with the HTMX UI.
 COPY static/css/ledger.css /src/static/css/ledger.css
-COPY internal/ui/vendor/fonts /src/internal/ui/vendor/fonts
 RUN bun run build
 
 FROM golang:1.27-alpine AS builder

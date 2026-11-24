@@ -36,7 +36,7 @@ import (
 
 // Assets are the //go:embed trees from package static, passed in so tests
 // can use empty ones.
-type Assets struct{ JS, CSS, Imgs embed.FS }
+type Assets struct{ JS, CSS, Imgs, App embed.FS }
 
 // hibpURL is the leaked-password range API setup checks against (empty =
 // the real one); tests point it at a fake.
