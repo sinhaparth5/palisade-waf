@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-11-25
+
 - (#324) Optional IP2Proxy database path for the hosting/VPN threat score signal
 - (#348) Scaffold React admin app with Vite, TypeScript and TanStack
 - (#349) Session JSON API for the React admin UI
@@ -29,9 +31,5 @@ rather than growing this file forever.
 - (#361) Add dissolve-style art to the React dashboard
 - (#362) chore(structure): standardize test directory layout by scope across Go backend and React frontend
 
-## [3.4.3] - 2026-11-21
-
-- (#345) Mobile background tabs get stuck on the bot challenge and autobanned
-
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.3...main
-[3.4.3]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.2...v3.4.3
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.5.0...main
+[3.5.0]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.3...v3.5.0
