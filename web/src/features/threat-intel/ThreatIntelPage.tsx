@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ArtHero } from "@/components/Art";
+import { ArtHero, type Stat } from "@/components/Art";
 import { Card, FormRow, Page, PageHeader, labelMono } from "@/components/layout/Page";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { FormError, btn, field, fieldError, help, primary, tag } from "@/features/rules/shared";
@@ -18,11 +18,10 @@ export function ThreatIntelPage() {
   return (
     <Page>
       <PageHeader title="Threat Intel" />
-      <ArtHero art="beacon" eyebrow="Global defense signal" title="Curated intelligence, enforced locally.">
+      <ArtHero art="beacon" eyebrow="Global defense signal" title="Curated intelligence, enforced locally." stats={data && summary(data)}>
         <p className="max-w-[56ch] text-[14px] leading-relaxed text-slate-600">
           Pull trusted IP and CIDR feeds on a schedule and block what they list. Your own allow rules always win.
         </p>
-        {data && <Summary d={data} />}
       </ArtHero>
       {can("admin") && <AddFeed presets={data?.presets ?? []} added={data?.sources.map((s) => s.url) ?? []} />}
       <Card cat="Security" title="Threat Intel Feeds" action={data && <span className={cn(tag, "text-slate-600")}>{plural(data.sources.length, "feed")}</span>}>
@@ -40,23 +39,14 @@ export function ThreatIntelPage() {
   );
 }
 
-function Summary({ d }: { d: IntelPage }) {
+function summary(d: IntelPage): Stat[] {
   const active = d.sources.filter((s) => s.enabled);
   const failing = d.sources.filter((s) => s.last_error).length;
-  return (
-    <p className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[12px] uppercase tracking-[.06em] text-ink">
-      <span>
-        {active.length} of {plural(d.sources.length, "source")} active
-      </span>
-      <span>{plural(active.reduce((n, s) => n + s.ips + s.ranges, 0), "entry", "entries")} blocking</span>
-      {failing > 0 && (
-        <span className="flex items-center gap-2 text-red-600">
-          <span className="h-2 w-2 rounded-full bg-danger" />
-          {failing} failing to sync
-        </span>
-      )}
-    </p>
-  );
+  return [
+    { label: "Sources active", value: `${active.length} of ${d.sources.length}` },
+    { label: "Entries blocking", value: active.reduce((n, s) => n + s.ips + s.ranges, 0).toLocaleString() },
+    { label: "Failing to sync", value: failing, tone: failing > 0 ? "danger" : undefined },
+  ];
 }
 
 function SourceList({ sources }: { sources: Source[] }) {

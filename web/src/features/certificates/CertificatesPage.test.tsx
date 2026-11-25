@@ -32,8 +32,8 @@ describe("certificates page", () => {
     expect(screen.getByText("Not assigned to a service")).toBeInTheDocument();
     expect(screen.getByText("Expired")).toBeInTheDocument();
     expect(screen.getByText("2 certs")).toBeInTheDocument();
-    expect(screen.getByText("1 needs attention")).toBeInTheDocument();
-    expect(screen.getByText("3 of 4 host services on TLS")).toBeInTheDocument();
+    expect(screen.getByText("Need attention").nextSibling).toHaveTextContent("1");
+    expect(screen.getByText("3 of 4")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Every TLS identity in one place." })).toBeInTheDocument();
   });
 

@@ -5,7 +5,7 @@ import gate from "@/assets/art/gate.webp";
 import gateSm from "@/assets/art/gate-sm.webp";
 import gateDark from "@/assets/art/gate-dark.webp";
 import gateDarkSm from "@/assets/art/gate-dark-sm.webp";
-import { ArtImage } from "@/components/ArtImage";
+import { ArtImage, drafting } from "@/components/ArtImage";
 
 // The public sign-in page (web/login.html, its own build): password, the 2FA
 // step and an invite's set-password step. Forms post to Go as before, and Go
@@ -42,7 +42,7 @@ export function readLogin(d: DOMStringMap = document.body.dataset): LoginState {
   };
 }
 
-const field = "w-full rounded-xs border border-edge bg-card px-4 py-3.5 text-[14px] text-ink outline-hidden focus:ring-3 focus:ring-ring";
+const field = "w-full rounded-xs border border-edge bg-card px-4 py-3.5 text-[14px] text-ink";
 const label = "mb-2 block font-mono text-[11px] font-medium uppercase tracking-[.08em] text-slate-500";
 const primary =
   "mt-6 flex min-h-11 w-full cursor-pointer items-center justify-center rounded-xs border border-ink bg-ink py-3.5 font-mono text-[13px] font-medium uppercase tracking-[.04em] text-canvas hover:bg-ink/90 active:scale-[.97]";
@@ -61,22 +61,18 @@ export function LoginPage({ state = readLogin() }: { state?: LoginState }) {
   const s = state;
   const [title, intro] = heads[s.stage];
   return (
-    <div className="min-h-dvh w-full bg-canvas text-ink lg:flex lg:items-stretch lg:gap-8 lg:p-8">
-      <div className="flex flex-1 flex-col lg:overflow-hidden lg:border lg:border-edge lg:bg-card">
-        <div className="relative h-52 w-full shrink-0 overflow-hidden border-b border-edge bg-card sm:h-64 lg:hidden">
-          <Art className="right-4 left-auto w-auto py-3" />
-          <span className="absolute bottom-4 left-5 flex items-center gap-2">
-            <img src={`${s.admin}/static/imgs/logo.svg`} alt="" className="h-6 w-6" />
-            <span className="font-mono text-sm uppercase tracking-[.16em] text-ink">Palisade</span>
-          </span>
+    <div className="min-h-dvh w-full bg-canvas text-ink lg:flex lg:items-stretch lg:gap-6 lg:p-6">
+      <div className="flex flex-1 flex-col lg:border lg:border-edge lg:bg-card">
+        <MobileSheet admin={s.admin} />
+
+        <div className="hidden items-center justify-between border-b border-edge px-8 py-3 lg:flex">
+          <Brand admin={s.admin} />
+          <span className={meta}>Secure sign-in</span>
         </div>
 
         <div className="flex flex-1 items-center justify-center px-6 py-10 sm:px-10 lg:px-16">
           <div className="w-full max-w-[400px]">
-            <span className="mb-3 hidden items-center gap-2 lg:flex">
-              <img src={`${s.admin}/static/imgs/logo.svg`} alt="" className="h-6 w-6" />
-              <span className="font-mono text-sm uppercase tracking-[.16em] text-ink">Palisade</span>
-            </span>
+            <p className={cn(meta, "mb-3")}>{s.stage === "totp" ? "Step 2 of 2" : s.stage === "invite" ? "Invitation" : "Admin console"}</p>
             <h1 className="mb-2 font-mono text-2xl leading-tight font-medium uppercase tracking-[.04em] text-ink sm:text-3xl">{title}</h1>
             <p className="mb-8 text-sm text-slate-500 sm:text-base">
               {s.stage === "invite" ? (
@@ -106,14 +102,28 @@ export function LoginPage({ state = readLogin() }: { state?: LoginState }) {
             {s.stage === "invite" ? <Invite s={s} /> : s.stage === "totp" ? <TOTP s={s} /> : <Password s={s} />}
           </div>
         </div>
+
+        {!s.demoEmail && (
+          <p className="border-t border-edge px-6 py-3 text-center text-xs text-slate-500 lg:px-8 lg:text-left">
+            One live session per account: signing in here signs out your other devices.
+          </p>
+        )}
       </div>
 
-      <div className="relative hidden overflow-hidden border border-edge bg-card lg:block lg:w-[42%] xl:w-[45%]">
-        <Art className="w-full p-10 xl:p-14" />
-      </div>
+      <Sheet />
     </div>
   );
 }
+
+const meta = "font-mono text-[11px] font-medium uppercase tracking-[.08em] text-slate-500";
+
+const Brand = ({ admin }: { admin: string }) => (
+  <span className="flex items-center gap-2">
+    <img src={`${admin}/static/imgs/logo.svg`} alt="" className="h-6 w-6" />
+    <span className="font-mono text-sm uppercase tracking-[.16em] text-ink">Palisade</span>
+  </span>
+);
+
 
 // The gatehouse from scripts/art (render.py gate, dissolve.py --size 1100
 // --headroom 0.18), the same treatment as the app's page heroes.
@@ -121,13 +131,82 @@ const gateArt = {
   light: { full: gate, sm: gateSm, w: 1081, h: 1272 },
   dark: { full: gateDark, sm: gateDarkSm, w: 1093, h: 1272 },
 };
-const Art = ({ className }: { className?: string }) => (
-  <ArtImage
-    art={gateArt}
-    sizes="(min-width: 1024px) 40vw, 200px"
-    priority
-    className={cn("absolute inset-0 h-full object-contain object-center", className)}
-  />
+
+// The stages every request passes, in the order proxy.Handle runs them.
+const stages = [
+  ["IP & geo rules", "blocklists, feeds"],
+  ["Bot challenge", "proof of work, JA4"],
+  ["Rate limits", "global, service, path"],
+  ["Waiting room", "maintenance, queue"],
+  ["Coraza WAF", "OWASP CRS, vpatches"],
+  ["Backend", "load-balanced, mTLS"],
+] as const;
+
+// Sheet is the desktop panel: a drawing sheet with a title block, the
+// pipeline as a numbered key, the gatehouse drawn over the grid and a spec
+// strip. Decoration around the form, so it is hidden from assistive tech.
+function Sheet() {
+  return (
+    <aside aria-hidden className="relative hidden flex-col overflow-hidden border border-edge bg-card lg:flex lg:w-[48%] xl:w-[50%]">
+      <div className={drafting} />
+      <div className={cn(meta, "relative flex justify-between border-b border-edge bg-card px-6 py-3")}>
+        <span>Perimeter / Access</span>
+        <span>Sheet 01</span>
+      </div>
+
+      <div className="relative flex-1">
+        <ArtImage
+          art={gateArt}
+          sizes="(min-width: 1280px) 42vw, 46vw"
+          priority
+          className="absolute right-0 bottom-0 h-[82%] w-auto max-w-[78%] object-contain object-right-bottom"
+        />
+        <div className="relative flex h-full flex-col justify-between p-8 xl:p-10">
+          <div>
+            <p className={meta}>Edge firewall · reverse proxy</p>
+            <p className="mt-3 max-w-[12ch] text-[40px] leading-[1.02] font-medium tracking-[-.02em] text-ink xl:text-[52px]">
+              Nothing passes the gate unchecked.
+            </p>
+          </div>
+          <ol className="w-[300px] border border-edge bg-card">
+            <li className={cn(meta, "border-b border-edge px-3 py-2 text-ink")}>Request path</li>
+            {stages.map(([name, note], i) => (
+              <li key={name} className="flex items-baseline gap-3 border-b border-rule px-3 py-2 last:border-b-0">
+                <span className="font-mono text-[11px] text-danger tabular-nums">{String(i + 1).padStart(2, "0")}</span>
+                <span className="text-[13px] whitespace-nowrap text-ink">{name}</span>
+                <span className="ml-auto text-right text-[11px] text-slate-500">{note}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+
+      <dl className="relative grid grid-cols-3 divide-x divide-edge border-t border-edge bg-card">
+        {[
+          ["Engine", "Coraza v3 + CRS"],
+          ["Store", "Single binary, SQLite"],
+          ["Sign-in", "2FA, passkeys, SSO"],
+        ].map(([k, v]) => (
+          <div key={k} className="px-6 py-3">
+            <dt className={meta}>{k}</dt>
+            <dd className="mt-1 text-[13px] text-ink">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </aside>
+  );
+}
+
+// Below lg the sheet shrinks to a banner over the form: grid, gate, brand.
+const MobileSheet = ({ admin }: { admin: string }) => (
+  <div aria-hidden className="relative h-52 w-full shrink-0 overflow-hidden border-b border-edge bg-card sm:h-64 lg:hidden">
+    <div className={drafting} />
+    <ArtImage art={gateArt} sizes="240px" className="absolute top-3 right-4 h-[calc(100%-1.5rem)] w-auto object-contain" />
+    <span className={cn(meta, "absolute top-4 left-5")}>Perimeter / Access</span>
+    <span className="absolute bottom-4 left-5">
+      <Brand admin={admin} />
+    </span>
+  </div>
 );
 
 const Back = ({ admin }: { admin: string }) => (

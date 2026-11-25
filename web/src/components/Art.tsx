@@ -23,7 +23,8 @@ import consoleArt from "@/assets/art/console.webp";
 import consoleSm from "@/assets/art/console-sm.webp";
 import consoleDark from "@/assets/art/console-dark.webp";
 import consoleDarkSm from "@/assets/art/console-dark-sm.webp";
-import { ArtImage, type ArtPair } from "@/components/ArtImage";
+import { ArtImage, drafting, type ArtPair } from "@/components/ArtImage";
+import { cn } from "@/lib/utils";
 import { labelMono } from "@/components/layout/Page";
 
 // Decorative scenes drawn by scripts/art (render.py, then dissolve.py
@@ -43,20 +44,40 @@ export function Art({ name, className }: { name: keyof typeof scenes; className?
   return <ArtImage art={scenes[name]} sizes="(min-width: 640px) 240px, 200px" className={className} />;
 }
 
-// ArtHero opens a page: eyebrow, title and a line of copy on the left, the
-// whole scene on the right, sized to the card's height so neither its rising
-// dashes nor its streaks are cut off. Hidden on phones.
-export function ArtHero({ art, eyebrow, title, children }: { art: keyof typeof scenes; eyebrow: string; title: string; children: ReactNode }) {
+export type Stat = { label: string; value: ReactNode; tone?: "danger" | "warning" };
+
+const statCols = { 1: "sm:grid-cols-1", 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-4", 5: "sm:grid-cols-5" } as const;
+
+// ArtHero opens a page: eyebrow, title and copy on the left, the scene on
+// the right over a drafting grid, and an optional strip of key figures along
+// the bottom. The scene is hidden on phones.
+export function ArtHero({ art, eyebrow, title, stats, children }: { art: keyof typeof scenes; eyebrow: string; title: string; stats?: Stat[]; children: ReactNode }) {
   return (
-    <section className="relative overflow-hidden border border-edge bg-card sm:min-h-[240px]">
-      <div className="relative z-10 flex flex-col gap-3 p-6 sm:pr-[270px] lg:pr-[300px]">
-        <p className={labelMono}>{eyebrow}</p>
-        <h2 className="text-[24px] leading-tight text-ink sm:text-[30px]">{title}</h2>
-        {children}
+    <section className="relative overflow-hidden border border-edge bg-card">
+      <div className={cn(drafting, "[mask-image:linear-gradient(to_right,transparent_30%,black_75%)]")} />
+      <div className="relative sm:min-h-[220px]">
+        <div className="relative z-10 flex flex-col gap-3 p-6 sm:pr-[300px] lg:pr-[340px]">
+          <p className={labelMono}>{eyebrow}</p>
+          <h2 className="text-[24px] leading-tight text-ink sm:text-[30px]">{title}</h2>
+          {children}
+        </div>
+        <div className="absolute inset-y-0 right-0 hidden w-[280px] sm:block lg:right-6 lg:w-[320px]">
+          <Art name={art} className="absolute right-0 bottom-0 h-[calc(100%-0.75rem)] w-auto max-w-full object-contain object-right-bottom" />
+        </div>
       </div>
-      <div className="absolute inset-y-3 right-4 hidden sm:block lg:right-8">
-        <Art name={art} className="h-full w-auto max-w-[240px] object-contain object-bottom" />
-      </div>
+      {stats && stats.length > 0 && (
+        <dl className={cn("relative z-10 grid grid-cols-2 gap-px border-t border-edge bg-edge", statCols[Math.min(stats.length, 5) as keyof typeof statCols])}>
+          {stats.map((s) => (
+            <div key={s.label} className="bg-card px-6 py-3">
+              <dt className={labelMono}>{s.label}</dt>
+              <dd className={cn("mt-1 flex items-center gap-2 font-mono text-[18px] tabular-nums", s.tone === "danger" ? "text-red-600" : s.tone === "warning" ? "text-amber-700" : "text-ink")}>
+                {s.tone && <span aria-hidden className={cn("h-2 w-2 rounded-full", s.tone === "danger" ? "bg-danger" : "bg-warning")} />}
+                {s.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </section>
   );
 }

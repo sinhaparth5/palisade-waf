@@ -50,3 +50,13 @@
   body { @apply bg-background text-foreground font-sans antialiased; min-width: 320px; }
   h1, h2 { font-family: var(--font-mono); font-weight: 500; text-transform: uppercase; letter-spacing: .02em; }
 }
+
+/* Text fields focus in the theme's ink: the border darkens and a soft ink
+   ring appears. Without this, Chrome's default focus outline draws a white
+   ring on the dark theme. Unlayered so it beats per-field border utilities;
+   an invalid field keeps its red border. */
+:is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), textarea, select):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--fn-ink) 16%, transparent);
+  &:not([aria-invalid="true"]) { border-color: var(--fn-ink); }
+}

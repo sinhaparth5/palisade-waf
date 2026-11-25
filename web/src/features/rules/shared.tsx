@@ -222,24 +222,29 @@ export function SettingsCard({
   const admin = can("admin");
   return (
     <Card title={title}>
+      {/* A full-height column, so in a row of stretched cards every Save
+          button sits on the same line at the bottom. */}
+      <div className="flex h-full flex-col">
       <p className={cn(help, "mb-4")}>{intro}</p>
       <form
+        className="flex flex-1 flex-col"
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit(new FormData(e.currentTarget));
         }}
       >
-        <fieldset disabled={!admin} className="flex flex-col gap-4">
+        <fieldset disabled={!admin} className="flex flex-1 flex-col gap-4">
           {children}
           <FormError error={error} fields={fields} />
           {admin && (
-            <button type="submit" disabled={pending} className={primary}>
+            <button type="submit" disabled={pending} className={cn(primary, "mt-auto")}>
               <i aria-hidden className="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-sm" />
               Save &amp; apply
             </button>
           )}
         </fieldset>
       </form>
+      </div>
     </Card>
   );
 }

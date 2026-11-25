@@ -17,7 +17,7 @@ export function GeoRulesPage() {
     <Page>
       <PageHeader title="Geo Rules" />
       {can("admin") && <AddGeoRules />}
-      <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {data && <Overview block={block} allow={data.length - block} what="countries" />}
         <div className="border border-amber-300 bg-amber-50 px-5 py-4">
           <p className="mb-1 flex items-center gap-2 text-[13px] font-semibold text-amber-800">

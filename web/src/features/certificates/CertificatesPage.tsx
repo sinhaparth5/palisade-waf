@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ArtHero } from "@/components/Art";
+import { ArtHero, type Stat } from "@/components/Art";
 import { Card, FormRow, Page, PageHeader, labelMono } from "@/components/layout/Page";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { FormError, btn, field, fieldError, help, primary, tag } from "@/features/rules/shared";
@@ -18,14 +18,13 @@ export function CertificatesPage() {
   return (
     <Page>
       <PageHeader title="Certificates" />
-      <ArtHero art="vault" eyebrow="TLS inventory" title="Every TLS identity in one place.">
+      <ArtHero art="vault" eyebrow="TLS inventory" title="Every TLS identity in one place." stats={data && summary(data)}>
         <p className="max-w-[56ch] text-[14px] leading-relaxed text-slate-600">
           Store certificate and key pairs once, check what they cover and when they run out, then assign them to the services that match.
         </p>
-        {data && <Summary d={data} />}
       </ArtHero>
       {can("admin") && <AddCertificate />}
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Card cat="TLS" title="Saved Certificates" action={data && <span className={cn(tag, "text-slate-600")}>{data.certs.length === 1 ? "1 cert" : `${data.certs.length} certs`}</span>}>
           {isError ? <LoadError /> : !data ? <Loading /> : <CertList certs={data.certs} />}
         </Card>
@@ -44,20 +43,13 @@ const LoadError = () => (
   </p>
 );
 
-function Summary({ d }: { d: CertsPage }) {
+function summary(d: CertsPage): Stat[] {
   const soon = d.certs.filter((c) => expiry(c.expires_at).dot !== "bg-success").length;
-  return (
-    <p className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[12px] uppercase tracking-[.06em] text-ink">
-      <span>{d.certs.length} in the pool</span>
-      <span>{d.services.filter((s) => s.mode !== "none").length} of {d.services.length} host services on TLS</span>
-      {soon > 0 && (
-        <span className="flex items-center gap-2 text-amber-700">
-          <span className="h-2 w-2 rounded-full bg-warning" />
-          {soon} {soon === 1 ? "needs" : "need"} attention
-        </span>
-      )}
-    </p>
-  );
+  return [
+    { label: "Certificates", value: d.certs.length },
+    { label: "Host services on TLS", value: `${d.services.filter((s) => s.mode !== "none").length} of ${d.services.length}` },
+    { label: "Need attention", value: soon, tone: soon > 0 ? "warning" : undefined },
+  ];
 }
 
 function Expiry({ at }: { at?: string }) {

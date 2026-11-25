@@ -49,7 +49,7 @@ describe("services page", () => {
     expect(await list.findByRole("img", { name: /Unreachable/ })).toBeInTheDocument();
     for (const t of ["docker", "10/s", "Auto TLS (Let's Encrypt)", "HTTP/3", "mTLS: required", "http://b:1"]) expect(list.getByText(t)).toBeInTheDocument();
     expect(list.getByText(/\/api → http:\/\/10.0.0.5:3000/)).toBeInTheDocument();
-    expect(screen.getByText("1 unreachable")).toBeInTheDocument();
+    expect(screen.getByText("Unreachable").nextSibling).toHaveTextContent("1");
   });
 
   it("adds a service step by step and shows why the server refused it", async () => {

@@ -200,8 +200,7 @@ describe("logs page", () => {
     expect(screen.getByText("Loading the last hour…")).toBeInTheDocument();
   });
 
-  it("docks the inspector on wide screens and opens rows from the keyboard", async () => {
-    vi.spyOn(window, "matchMedia").mockImplementation((query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }) as unknown as MediaQueryList);
+  it("slides the inspector over the table and opens rows from the keyboard", async () => {
     const sparse: LogDetail = {
       ...detail, request_id: "", query: "", country: "", asn: 0, org: "", tls_version: "", tls_cipher: "", action: "", status: 502,
       bot_score: 3, ja4: "t13d1516h2", headers: {}, has_threat_score: false, cache_status: "HIT", proxy_ip: "", proxy_type: "",
@@ -214,14 +213,15 @@ describe("logs page", () => {
       "POST /logs/exception/7": { service: "shop" },
     });
     const { user } = await renderRoute("/logs");
-    expect(await screen.findByText("Select a request to inspect it")).toBeInTheDocument();
     const r = (await screen.findAllByRole("button", { name: /\/p7/ }))[0]!;
+    expect(screen.queryByRole("dialog")).toBeNull();
     r.focus();
     await user.keyboard("a");
     expect(api.calls("GET /logs/7")).toHaveLength(0);
     await user.keyboard("{Enter}");
     expect(await screen.findByText("No headers captured.")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Request inspector" })).toBeInTheDocument();
+    expect(r).toBeInTheDocument(); // the table stays mounted under the panel
     expect(screen.getByText("Rule #942100 · blocked")).toBeInTheDocument();
     expect(screen.getByText("Plaintext / terminated upstream")).toBeInTheDocument();
     expect(screen.getByText("(none)")).toBeInTheDocument();
@@ -241,7 +241,7 @@ describe("logs page", () => {
     expect(await screen.findByText("Rule disabled for shop.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Close request details" }));
-    expect(await screen.findByText("Select a request to inspect it")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   it("switches tabs with the arrow keys and says when the last hour can't load", async () => {

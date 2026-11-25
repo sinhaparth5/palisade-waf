@@ -98,9 +98,10 @@ function AccountSection() {
     <Loaded q={q} what="your account">
       {(a) => (
         <>
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <CredentialsCard email={a.email} />
-            <div className="flex min-w-0 flex-col gap-6">
+            {/* The last card grows so this column ends level with Account. */}
+            <div className="flex min-w-0 flex-col gap-6 [&>*:last-child]:flex-1">
               <TwoFactorCard on={a.totp} />
               <PasskeysCard a={a} />
             </div>
@@ -119,7 +120,7 @@ function TeamSection() {
       {(t) => (
         <>
           <UsersCard t={t} />
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <SSOCard key={`${t.sso.issuer}|${t.sso.client_id}|${t.sso.group}`} t={t} />
             <APIKeysCard t={t} />
           </div>
@@ -142,7 +143,7 @@ function ProtectionSections() {
       <Section id="protection" title="Protection" copy="Global bot and rate-limit defaults, and IPs that are never blocked.">
         {body((p) => (
           <>
-            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <BotCard key={JSON.stringify(p.bot)} v={p.bot} />
               <RateLimitCard key={JSON.stringify(p.rate_limit)} v={p.rate_limit} />
             </div>
@@ -165,7 +166,7 @@ function AlertsSection() {
   return (
     <Loaded q={q} what="the alert settings">
       {(a) => (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <WebhookCard key={JSON.stringify(a.webhook)} v={a.webhook} />
           <EmailCard key={JSON.stringify(a.email)} v={a.email} />
         </div>

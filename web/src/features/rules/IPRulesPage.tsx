@@ -18,7 +18,7 @@ export function IPRulesPage({ page }: { page: number }) {
     <Page>
       <PageHeader title="IP Rules" />
       {can("admin") && <AddIPRules />}
-      <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         {settings.isError ? (
           <p role="alert" className="border border-edge bg-card p-6 text-red-600 md:col-span-2">
             Couldn't load the banning settings. Reload to try again.

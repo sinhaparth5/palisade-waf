@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ArtHero } from "@/components/Art";
+import { ArtHero, type Stat } from "@/components/Art";
 import { Card, FormRow, Page, PageHeader, labelMono } from "@/components/layout/Page";
 import { FormError, btn, field, help, primary, tag } from "@/features/rules/shared";
 import { fmtTime, plural } from "@/lib/format";
@@ -20,11 +20,10 @@ export function ServicesPage() {
   return (
     <Page>
       <PageHeader title="Services" />
-      <ArtHero art="rack" eyebrow="Protected routing" title="Every route, its backends and the checks in front.">
+      <ArtHero art="rack" eyebrow="Protected routing" title="Every route, its backends and the checks in front." stats={q.data && summary(q.data)}>
         <p className="max-w-[56ch] text-[14px] leading-relaxed text-slate-600">
           Match requests by host or path, send them to one or more backends, then tune health checks, TLS, caching, bot protection and limits per service.
         </p>
-        {q.data && <Summary d={q.data} />}
       </ArtHero>
       {can("admin") && <AddService onAdded={(name) => toast.success(`Added ${name}. Its settings are under Edit.`)} />}
       <Card cat="Routing" title="Configured Services" action={q.data && <span className={cn(tag, "text-slate-600")}>{plural(q.data.services.length, "service")}</span>}>
@@ -44,23 +43,14 @@ export function ServicesPage() {
   );
 }
 
-function Summary({ d }: { d: Data }) {
+function summary(d: Data): Stat[] {
+  const hosts = d.services.filter((s) => s.host);
   const down = d.services.filter((s) => s.known && !s.healthy).length;
-  const tls = d.services.filter((s) => s.host && s.tls.mode).length;
-  return (
-    <p className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[12px] uppercase tracking-[.06em] text-ink">
-      <span>{plural(d.services.length, "service")}</span>
-      <span>
-        {tls} of {d.services.filter((s) => s.host).length} host services on TLS
-      </span>
-      {down > 0 && (
-        <span className="flex items-center gap-2 text-red-600">
-          <span className="h-2 w-2 rounded-full bg-danger" />
-          {down} unreachable
-        </span>
-      )}
-    </p>
-  );
+  return [
+    { label: "Services", value: d.services.length },
+    { label: "Host services on TLS", value: `${hosts.filter((s) => s.tls.mode).length} of ${hosts.length}` },
+    { label: "Unreachable", value: down, tone: down > 0 ? "danger" : undefined },
+  ];
 }
 
 export const healthDot = (known: boolean, healthy: boolean) => (!known ? "bg-slate-300" : healthy ? "bg-success" : "bg-danger");

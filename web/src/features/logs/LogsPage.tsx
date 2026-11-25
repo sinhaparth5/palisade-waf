@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Page, PageHeader, labelMono } from "@/components/layout/Page";
 import { Flag } from "@/components/Flag";
@@ -35,17 +35,6 @@ const btn =
   "flex min-h-11 cursor-pointer items-center gap-[6px] rounded-sm border border-edge bg-transparent px-4 py-2 font-mono text-[12px] uppercase tracking-[.04em] text-ink no-underline hover:bg-surface";
 const field = "min-h-11 w-full rounded-sm border border-edge bg-card px-3 py-2 text-[13px] text-ink";
 
-const wideQuery = "(min-width: 80rem)";
-const useWide = () =>
-  useSyncExternalStore(
-    (cb) => {
-      const m = window.matchMedia(wideQuery);
-      m.addEventListener("change", cb);
-      return () => m.removeEventListener("change", cb);
-    },
-    () => window.matchMedia(wideQuery).matches,
-  );
-
 type View = "table" | "stats";
 const savedView = (): View => {
   try {
@@ -59,7 +48,9 @@ export function LogsPage({ search }: { search: LogSearch }) {
   const live = isLive(search);
   const { data, isError, isPending } = useLogs(search, live);
   const [selected, setSelected] = useState<number | null>(null);
-  const wide = useWide();
+  // The last request shown, kept while the panel slides out after a close.
+  const [shown, setShown] = useState<number | null>(null);
+  if (selected !== null && selected !== shown) setShown(selected);
 
   // Live feed state.
   const [paused, setPaused] = useState(false);
@@ -179,12 +170,6 @@ export function LogsPage({ search }: { search: LogSearch }) {
     </div>
   );
 
-  const heading = (
-    <h2 id="inspector-heading" className="text-[15px] text-ink normal-case">
-      Request inspector
-    </h2>
-  );
-
   return (
     <Page>
       <PageHeader
@@ -211,8 +196,7 @@ export function LogsPage({ search }: { search: LogSearch }) {
           </>
         }
       />
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="min-w-0">
+      <div className="min-w-0">
           <Filters search={search} history={!live} />
 
           <div className="mb-4 flex flex-wrap items-center gap-3 sm:gap-4">
@@ -274,24 +258,20 @@ export function LogsPage({ search }: { search: LogSearch }) {
               )}
             </nav>
           )}
-        </div>
-
-        {wide ? (
-          <aside aria-labelledby="inspector-heading" className="sticky top-14 h-[calc(100dvh-3.5rem)] border border-edge bg-canvas">
-            <Inspector id={selected} onClose={() => setSelected(null)} heading={heading} />
-          </aside>
-        ) : (
-          <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
-            <DialogContent
-              showCloseButton={false}
-              className="top-0 right-0 left-auto h-dvh w-full max-w-[420px] translate-x-0 translate-y-0 gap-0 rounded-none border-0 border-l border-edge bg-canvas p-0 sm:max-w-[420px]"
-            >
-              <DialogDescription className="sr-only">Full details of one request</DialogDescription>
-              <Inspector id={selected} onClose={() => setSelected(null)} heading={<DialogTitle className="text-[15px] text-ink">Request inspector</DialogTitle>} />
-            </DialogContent>
-          </Dialog>
-        )}
       </div>
+      {/* The inspector slides over the right half of the table instead of
+          docking beside it, so the table keeps its full width. Non-modal: rows
+          stay clickable to switch requests; Escape or Close dismisses it. */}
+      <Dialog modal={false} open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
+        <DialogContent
+          showCloseButton={false}
+          onInteractOutside={(e) => e.preventDefault()}
+          className="top-14 right-0 bottom-0 left-auto z-40 h-auto w-full max-w-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 border-l border-edge bg-canvas p-0 shadow-[-24px_0_48px_-28px_rgb(0_0_0/0.35)] data-[state=closed]:slide-out-to-right data-[state=closed]:zoom-out-100 data-[state=open]:slide-in-from-right data-[state=open]:zoom-in-100 sm:w-[min(560px,100vw)] sm:max-w-none xl:w-[min(44vw,700px)]"
+        >
+          <DialogDescription className="sr-only">Full details of one request</DialogDescription>
+          <Inspector id={shown} onClose={() => setSelected(null)} heading={<DialogTitle className="text-[15px] text-ink">Request inspector</DialogTitle>} />
+        </DialogContent>
+      </Dialog>
     </Page>
   );
 }

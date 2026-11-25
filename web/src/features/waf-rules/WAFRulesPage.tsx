@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArtHero } from "@/components/Art";
+import { ArtHero, type Stat } from "@/components/Art";
 import { Card, FormRow, Page, PageHeader, labelMono } from "@/components/layout/Page";
 import { useConfirm } from "@/components/Confirm";
 import { FormError, btn, field, fieldError, help, primary, tag } from "@/features/rules/shared";
@@ -45,11 +45,10 @@ export function WAFRulesPage() {
   return (
     <Page>
       <PageHeader title="WAF Rules" />
-      <ArtHero art="sieve" eyebrow="Rule tuning" title="Tune CRS enforcement without losing visibility.">
+      <ArtHero art="sieve" eyebrow="Rule tuning" title="Tune CRS enforcement without losing visibility." stats={data && summary(data)}>
         <p className="max-w-[56ch] text-[14px] leading-relaxed text-slate-600">
           Suppress false positives globally or per service, review the rules that fire most, and add your own. Every change reloads the WAF straight away, no restart needed.
         </p>
-        {data && <Summary d={data} />}
       </ArtHero>
       {can("admin") && data && (
         <>
@@ -64,7 +63,7 @@ export function WAFRulesPage() {
           <VPatches d={d} />
         ))}
       </Card>
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card cat="Feedback" title="Suggested Exceptions" action={count(data?.suggestions.length, "suggestion")}>
           {body((d) => (
             <Suggestions d={d} />
@@ -96,23 +95,13 @@ export function WAFRulesPage() {
   );
 }
 
-function Summary({ d }: { d: WAFPage }) {
-  const patchesOn = d.vpatches.filter((p) => !p.global_off).length;
-  return (
-    <p className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[12px] uppercase tracking-[.06em] text-ink">
-      {!d.waf_enabled && (
-        <span className="flex items-center gap-2 text-red-600">
-          <span className="h-2 w-2 rounded-full bg-danger" />
-          WAF disabled
-        </span>
-      )}
-      <span>
-        {patchesOn} of {plural(d.vpatches.length, "patch", "patches")} on
-      </span>
-      <span>{plural(d.exceptions.length, "exception")}</span>
-      <span>{d.custom.filter((r) => r.enabled).length} custom on</span>
-    </p>
-  );
+function summary(d: WAFPage): Stat[] {
+  return [
+    { label: "WAF", value: d.waf_enabled ? "On" : "Disabled", tone: d.waf_enabled ? undefined : "danger" },
+    { label: "Virtual patches on", value: `${d.vpatches.filter((p) => !p.global_off).length} of ${d.vpatches.length}` },
+    { label: "Exceptions", value: d.exceptions.length },
+    { label: "Custom rules on", value: d.custom.filter((r) => r.enabled).length },
+  ];
 }
 
 function Failed({ error, what = "save" }: { error: unknown; what?: string }) {

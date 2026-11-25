@@ -33,6 +33,16 @@ const Img = ({ f, sizes, className, priority }: { f: ArtFile; sizes: string; cla
     loading={priority ? undefined : "lazy"}
     fetchPriority={priority ? "high" : undefined}
     draggable={false}
-    className={cn("pointer-events-none h-auto select-none transition-opacity duration-700 ease-out starting:opacity-0 motion-reduce:transition-none", className)}
+    className={cn(
+      "pointer-events-none h-auto select-none",
+      // Lazy art fades in; the priority image is the page's main one and shows at once.
+      !priority && "transition-opacity duration-700 ease-out starting:opacity-0 motion-reduce:transition-none",
+      className,
+    )}
   />
 );
+
+// A faint ruled grid, like drafting paper, from the theme's hairline colour.
+// Absolute: put it first inside a relative, overflow-hidden box.
+export const drafting =
+  "pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--color-rule)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-rule)_1px,transparent_1px)] bg-size-[32px_32px] opacity-60";

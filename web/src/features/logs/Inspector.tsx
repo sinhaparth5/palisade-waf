@@ -196,13 +196,13 @@ function Detail({ d }: { d: LogDetail }) {
 }
 
 function Fields({ className, children }: { className?: string; children: ReactNode }) {
-  return <dl className={cn("grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 px-4 py-3 text-[13px]", className)}>{children}</dl>;
+  return <dl className={cn("grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-3 text-[13px]", className)}>{children}</dl>;
 }
 
 function Field({ name, mono, title, children }: { name: string; mono?: boolean; title?: string; children: ReactNode }) {
   return (
     <>
-      <dt className={cn(dt, "self-center")} title={title}>
+      <dt className={cn(dt, "pt-[3px]")} title={title}>
         {name}
       </dt>
       <dd className={cn("break-all", mono && "font-mono text-[12px]")}>{children || "—"}</dd>

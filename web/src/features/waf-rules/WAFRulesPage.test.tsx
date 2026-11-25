@@ -38,8 +38,8 @@ describe("WAF rules page", () => {
     await renderRoute("/waf-rules");
     expect(await screen.findByRole("link", { name: "CVE-2026-0001" })).toHaveAttribute("href", "https://nvd.example/1");
     expect(screen.getByRole("heading", { name: "Tune CRS enforcement without losing visibility." })).toBeInTheDocument();
-    expect(screen.getByText("WAF disabled")).toBeInTheDocument();
-    expect(screen.getByText("1 of 2 patches on")).toBeInTheDocument();
+    expect(screen.getByText("WAF", { selector: "dt" }).nextSibling).toHaveTextContent("Disabled");
+    expect(screen.getByText("1 of 2")).toBeInTheDocument();
     expect(screen.getByText("1,234")).toBeInTheDocument();
     expect(screen.getByText("Off: shop")).toBeInTheDocument();
     expect(screen.getByText("Off everywhere")).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe("WAF rules page", () => {
     expect(screen.getByText("No custom rules yet")).toBeInTheDocument();
     expect(screen.getByText("No WAF blocks recorded yet")).toBeInTheDocument();
     expect(screen.getByText(/No suggestions yet/)).toBeInTheDocument();
-    expect(screen.queryByText("WAF disabled")).toBeNull();
+    expect(screen.getByText("WAF", { selector: "dt" }).nextSibling).toHaveTextContent("On");
     r2.unmount();
 
     mockApi({ ...base, "GET /api/waf-rules": reply(500, {}) });

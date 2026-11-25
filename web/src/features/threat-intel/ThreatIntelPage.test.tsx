@@ -26,9 +26,9 @@ describe("threat intel page", () => {
     await renderRoute("/threat-intel");
     expect(await screen.findByText("Pushes autobans")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Curated intelligence, enforced locally." })).toBeInTheDocument();
-    expect(screen.getByText("2 of 3 sources active")).toBeInTheDocument();
-    expect(screen.getByText("1,243 entries blocking")).toBeInTheDocument();
-    expect(screen.getByText("1 failing to sync")).toBeInTheDocument();
+    expect(screen.getByText("2 of 3")).toBeInTheDocument();
+    expect(screen.getByText("1,243")).toBeInTheDocument();
+    expect(screen.getByText("Failing to sync").nextSibling).toHaveTextContent("1");
     expect(screen.getByText("3 feeds")).toBeInTheDocument();
     expect(screen.getByText("1,200 IPs")).toBeInTheDocument();
     expect(screen.getByText("3 ranges")).toBeInTheDocument();
