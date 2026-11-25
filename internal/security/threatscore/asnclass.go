@@ -42,7 +42,10 @@ var hostingKeywords = []string{
 }
 
 // classify reports whether asn or org looks like a datacenter/hosting/VPN
-// origin rather than a residential or business ISP connection.
+// origin rather than a residential or business ISP connection. It stays in
+// place when an IP2Proxy file is configured (proxy.go): the two are ORed,
+// so a LITE file's public proxies still count when this list misses them
+// and this list still counts when the file has no row.
 func classify(asn uint, org string) bool {
 	if hostingASNs[asn] {
 		return true

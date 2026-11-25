@@ -842,7 +842,7 @@ func TestAdaptiveEnforcementTightensRateLimitForHighRiskIP(t *testing.T) {
 	rl := ratelimit.New(config.RateLimitConfig{Enabled: true, RequestsPerSecond: 100, Burst: 10})
 	defer rl.Stop()
 
-	scorer := threatscore.New(db, func(string) int { return 100 }) // autoban part clamps to 40
+	scorer := threatscore.New(db, func(string) int { return 100 }, nil) // autoban part clamps to 40
 	defer scorer.Stop()
 	// Seed the cache directly (Record normally runs async off the log
 	// worker) so CurrentScore reflects a high score before any request.
@@ -916,7 +916,7 @@ func TestAdaptiveEnforcementForcesChallengeForHighRiskIP(t *testing.T) {
 	rl := ratelimit.New(config.RateLimitConfig{Enabled: false})
 	defer rl.Stop()
 
-	scorer := threatscore.New(db, func(string) int { return 100 })
+	scorer := threatscore.New(db, func(string) int { return 100 }, nil)
 	defer scorer.Stop()
 	scorer.Record(storage.RequestLog{RealIP: "203.0.113.60", BotScore: 100}) // 40 + 20 = 60
 	scorer.Record(storage.RequestLog{RealIP: "203.0.113.61", BotScore: 0})   // 0 — normal

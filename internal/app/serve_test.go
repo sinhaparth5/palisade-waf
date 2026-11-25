@@ -246,6 +246,29 @@ func TestServeStartupErrors(t *testing.T) {
 	}
 }
 
+func TestProxyDBFlagRejectsMissingOrInvalid(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "waf.db")
+	missing := filepath.Join(dir, "no-such.bin")
+	err := serve(context.Background(), []string{
+		"--db", db, "--certs", dir, "--listen", "127.0.0.1:0", "--proxy-db", missing,
+	}, "test", Assets{})
+	if err == nil || !strings.Contains(err.Error(), "--proxy-db") || !strings.Contains(err.Error(), missing) {
+		t.Fatalf("missing BIN: %v", err)
+	}
+
+	bad := filepath.Join(dir, "not-a.bin")
+	if err := os.WriteFile(bad, []byte("this is not an IP2Proxy BIN"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err = serve(context.Background(), []string{
+		"--db", db, "--certs", dir, "--listen", "127.0.0.1:0", "--proxy-db", bad,
+	}, "test", Assets{})
+	if err == nil || !strings.Contains(err.Error(), "--proxy-db") || !strings.Contains(err.Error(), bad) {
+		t.Fatalf("invalid BIN: %v", err)
+	}
+}
+
 func TestCheckWritable(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("root writes anywhere")

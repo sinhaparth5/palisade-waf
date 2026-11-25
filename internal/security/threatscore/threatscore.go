@@ -12,7 +12,8 @@
 // Like autoban.Banner and webhook.Pusher, Scorer.Record is registered as a
 // log-worker fan-out hook via storage.DB.SetThreatScoreFn — it runs on the
 // single log-worker goroutine, so it must stay fast: an in-memory read of
-// autoban's history plus a couple of indexed SQLite writes, no network I/O.
+// autoban's history, a local IP2Proxy lookup when one is configured, plus a
+// couple of indexed SQLite writes. No network I/O.
 //
 // Record also caches the score it just computed in memory, read back
 // synchronously via CurrentScore — used by threat-score-driven adaptive
@@ -28,7 +29,7 @@
 //
 //	autoban's current point total for the IP   up to 40
 //	bot.Analyze score already on the log entry up to 20
-//	ASN/org looks like hosting/VPN (asnclass.go) flat 15
+//	ASN/org looks like hosting/VPN, or an IP2Proxy hit (issue #324) flat 15
 //	country has an admin-configured geo block rule flat 10
 //	JA4 fingerprint's lifetime blocked-hit count up to 15
 package threatscore
@@ -40,6 +41,8 @@ import (
 
 	"palisade/internal/security/ratelimit"
 	"palisade/internal/storage"
+
+	"github.com/ip2location/ip2proxy-go/v4"
 )
 
 const (
@@ -82,6 +85,15 @@ type Scorer struct {
 	stop chan struct{}
 	once sync.Once
 
+	// proxy is the optional IP2Proxy BIN. Nil means the ASN heuristic is
+	// the only hosting signal. proxyPX1 is that file's package: PX1 has no
+	// proxy-type column (see proxyScores).
+	proxy     *ip2proxy.DB
+	proxyPX1  bool
+	proxyFail sync.Once
+	proxyMu   sync.Mutex
+	proxySeen map[string]bool // proxyHit's answers, at most proxyCacheMax
+
 	now func() time.Time // injectable for tests
 }
 
@@ -89,7 +101,9 @@ type Scorer struct {
 // typically (*autoban.Banner).Score — injected rather than imported
 // directly so this package doesn't need to know how autoban stores its
 // history, only that it can report a current point total for an IP.
-func New(db *storage.DB, autobanScore func(ip string) int) *Scorer {
+// proxy is an IP2Proxy BIN from OpenProxyDB; nil leaves the ASN/keyword
+// heuristic as the only hosting signal.
+func New(db *storage.DB, autobanScore func(ip string) int, proxy *ip2proxy.DB) *Scorer {
 	s := &Scorer{
 		db:            db,
 		autobanScore:  autobanScore,
@@ -99,6 +113,7 @@ func New(db *storage.DB, autobanScore func(ip string) int) *Scorer {
 		stop:          make(chan struct{}),
 		now:           time.Now,
 	}
+	s.setProxy(proxy)
 	go s.janitor()
 	return s
 }
@@ -175,8 +190,11 @@ func (s *Scorer) Record(e storage.RequestLog) {
 	autobanPart := clamp(s.autobanScore(e.RealIP), 0, maxAutobanScore)
 	botPart := clamp(e.BotScore, 0, maxBotScore)
 
+	// Flat 15, not a sum: a cloud ASN the heuristic already knows and a
+	// BIN row for the same address are one signal. The heuristic is first
+	// so a hit there skips the file read.
 	asnPart := 0
-	if classify(e.ASN, e.Org) {
+	if classify(e.ASN, e.Org) || s.proxyHit(e.RealIP) {
 		asnPart = asnScore
 	}
 

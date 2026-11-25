@@ -45,6 +45,7 @@ import (
 	"palisade/internal/storage"
 	"palisade/internal/ui"
 
+	"github.com/ip2location/ip2proxy-go/v4"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/quic-go/quic-go"
@@ -77,6 +78,7 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	certsDir := fs.String("certs", "./certs", "TLS certificate cache directory")
 	wafRules := fs.String("waf-rules", "", "extra WAF rules directory (empty = OWASP CRS only)")
 	geoDBPath := fs.String("geo-db", "", "GeoIP2 database path (empty = bundled)")
+	proxyDBPath := fs.String("proxy-db", "", "IP2Proxy BIN for the hosting/VPN threat signal (empty = ASN heuristic only; read at startup, so restart after replacing it). The file must sit under /var/lib/palisade with the systemd unit, or under /data in Docker")
 	retention := fs.Int("retention", 30, "request log retention in days (0 = keep forever)")
 	pruneInterval := fs.Duration("prune-interval", 0, "prune request logs older than --retention in-process at this interval, e.g. 24h (0 = off; for deployments with no external scheduler, like Docker)")
 	tlsCert := fs.String("tls-cert", "", "PEM certificate file for HTTPS fallback (self-signed)")
@@ -146,6 +148,18 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	}
 	if err := checkWritable(filepath.Dir(cfg.DB.Path)); err != nil {
 		return err
+	}
+	// Opened before the store so this defer runs after db.Close: Record
+	// still consults the BIN while the log worker drains.
+	var proxyDB *ip2proxy.DB
+	if *proxyDBPath != "" {
+		var openErr error
+		proxyDB, openErr = threatscore.OpenProxyDB(*proxyDBPath)
+		if openErr != nil {
+			return fmt.Errorf("--proxy-db: %w", openErr)
+		}
+		defer proxyDB.Close()
+		log.Printf("threatscore: loaded IP2Proxy DB from %s (PX%s)", *proxyDBPath, proxyDB.PackageVersion())
 	}
 	if _, err := os.Stat(cfg.TLS.CacheDir); err == nil {
 		if err := checkWritable(cfg.TLS.CacheDir); err != nil {
@@ -280,8 +294,9 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 
 	// Unified per-IP threat score: a composite read model (issue #12)
 	// combining autoban's history, bot score, ASN/hosting classification,
-	// geo risk, and JA4 repeat-offender history.
-	scorer := threatscore.New(db, banner.Score)
+	// geo risk, and JA4 repeat-offender history. proxyDB, when --proxy-db
+	// is set, is ORed into that hosting signal (issue #324).
+	scorer := threatscore.New(db, banner.Score, proxyDB)
 	defer scorer.Stop()
 	if rules, err := db.ListGeoRules(); err != nil {
 		log.Printf("threatscore: initial geo rules load: %v", err)

@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#324) Optional IP2Proxy database path for the hosting/VPN threat score signal
+
 ## [3.4.3] - 2026-11-21
 
 - (#345) Mobile background tabs get stuck on the bot challenge and autobanned
