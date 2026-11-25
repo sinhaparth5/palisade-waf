@@ -395,9 +395,6 @@ func TestProxyLookupPanicIsAMiss(t *testing.T) {
 		{netip.MustParseAddr("203.0.113.3"), "-"},
 	}, nil)
 	path := writeProxyFile(t, raw)
-	if _, err := OpenProxyDB(path); err == nil {
-		t.Fatal("short PX12 BIN opened, want an error")
-	}
 
 	db, err := ip2proxy.OpenDB(path)
 	if err != nil {

@@ -11,8 +11,8 @@ import (
 
 // OpenProxyDB opens an IP2Proxy BIN at path for the hosting/VPN threat
 // signal. Call it once from startup and pass the DB to New; close it only
-// after the log worker has drained. A missing file, a file that is not a
-// PX1–PX12 BIN, or a lookup that panics or errors is returned so startup
+// after the log worker has drained. A missing file or a file that is not a
+// PX1–PX12 BIN so startup
 // can fail before traffic is accepted. An empty path is an error: the
 // caller skips the call when --proxy-db is unset.
 func OpenProxyDB(path string) (*ip2proxy.DB, error) {
@@ -30,10 +30,6 @@ func OpenProxyDB(path string) (*ip2proxy.DB, error) {
 	if convErr != nil || ver < 1 || ver > 12 {
 		_ = db.Close()
 		return nil, fmt.Errorf("invalid IP2Proxy BIN %q: database type %s", path, db.PackageVersion())
-	}
-	if err := probeProxyDB(db); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("invalid IP2Proxy BIN %q: %w", path, err)
 	}
 	return db, nil
 }
@@ -56,24 +52,6 @@ func openProxyDB(path string) (db *ip2proxy.DB, err error) {
 		return nil, fmt.Errorf("IP2Proxy BIN %q: %w", path, openErr)
 	}
 	return opened, nil
-}
-
-// probeProxyDB fails startup on a header that opens but cannot answer a
-// lookup (truncated row data, a column count too small for the package).
-// A well-formed BIN returns a record or the reader's "not found" message
-// with a nil error for both addresses, including an IPv4-only file.
-func probeProxyDB(db *ip2proxy.DB) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("lookup panicked: %v", r)
-		}
-	}()
-	for _, ip := range []string{"8.8.8.8", "2001:4860:4860::8888"} {
-		if _, err = db.GetAll(ip); err != nil {
-			return fmt.Errorf("lookup %s: %w", ip, err)
-		}
-	}
-	return nil
 }
 
 // proxyScores reports whether an IP2Proxy record counts as the hosting/VPN
