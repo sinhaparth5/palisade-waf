@@ -78,7 +78,7 @@ func TestRolePageSweep(t *testing.T) {
 	_ = env.db.DisableWAFRule(942100, "noisy")
 	_ = env.db.DisableWAFRuleForService(svc.Name, 920420, "uploads")
 	_ = env.db.AddThreatIntelSource("Feed", "https://example.com/list.txt", 24)
-	env.do("POST", "/admin/waf-rules/custom", form("rules", `SecRule ARGS "@contains x" "id:1000001,phase:2,deny"`))
+	env.doJSON(env.session, "POST", "/admin/api/waf-rules/custom", customRuleRequest{Rule: `SecRule ARGS "@contains x" "id:1000001,phase:2,deny"`}, nil)
 	certPEM, keyPEM := testCertPEM(t, "shop.example.com")
 	env.doJSON(env.session, "POST", "/admin/api/certificates", certAddRequest{Name: "c", CertPEM: certPEM, KeyPEM: keyPEM}, nil)
 	if n, _ := env.db.ListWAFCustomRules(); len(n) == 0 {
@@ -89,7 +89,7 @@ func TestRolePageSweep(t *testing.T) {
 	}
 	id := env.seedLog(storage.RequestLog{AppName: svc.Name, RealIP: "203.0.113.9", Status: 403, Blocked: true, Action: "waf_blocked", Method: "GET", Path: "/x"})
 	pages := []string{
-		"/admin/services", "/admin/services/rows", "/admin/waf-rules",
+		"/admin/services", "/admin/services/rows",
 		"/admin/settings", "/admin/settings/audit",
 		"/admin/api/notifications", fmt.Sprintf("/admin/logs/%d", id),
 	}

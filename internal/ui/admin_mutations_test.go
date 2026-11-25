@@ -19,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"palisade/internal/security/waf"
 	"palisade/internal/storage"
 )
 
@@ -30,59 +29,6 @@ func wantCode(t *testing.T, label string, got, want int, body string) {
 	t.Helper()
 	if got != want {
 		t.Errorf("%s: status %d want %d: %s", label, got, want, body)
-	}
-}
-
-func TestWAFRuleHandlers(t *testing.T) {
-	env := newAdminEnv(t)
-	env.seedService("shop", "shop.example.com")
-	wantCode(t, "bad id", env.do("POST", "/admin/waf-rules/disable", form("rule_id", "abc")).Code, 400, "")
-	wantCode(t, "zero id", env.do("POST", "/admin/waf-rules/disable", form("rule_id", "0")).Code, 400, "")
-	wantCode(t, "global", env.do("POST", "/admin/waf-rules/disable", form("rule_id", "942100", "reason", "fp")).Code, 200, "")
-	wantCode(t, "service", env.do("POST", "/admin/waf-rules/disable", form("rule_id", "920420", "service", "shop")).Code, 200, "")
-	if env.count("waf") != 2 {
-		t.Errorf("waf reloads = %d", env.count("waf"))
-	}
-	dis, _ := env.db.ListDisabledWAFRules()
-	exc, _ := env.db.ListWAFServiceExceptions()
-	if len(dis) != 1 || len(exc) != 1 {
-		t.Fatalf("disabled=%v exceptions=%v", dis, exc)
-	}
-	wantCode(t, "enable", env.do("DELETE", "/admin/waf-rules/"+itoa(dis[0].ID), nil).Code, 200, "")
-	wantCode(t, "enable bad", env.do("DELETE", "/admin/waf-rules/x", nil).Code, 400, "")
-	wantCode(t, "enable svc", env.do("DELETE", "/admin/waf-rules/service/"+itoa(exc[0].ID), nil).Code, 200, "")
-	wantCode(t, "enable svc bad", env.do("DELETE", "/admin/waf-rules/service/x", nil).Code, 400, "")
-	dis, _ = env.db.ListDisabledWAFRules()
-	exc, _ = env.db.ListWAFServiceExceptions()
-	if len(dis)+len(exc) != 0 {
-		t.Error("rules not re-enabled")
-	}
-
-	wantCode(t, "feedback cfg", env.do("POST", "/admin/waf-rules/feedback-config", form("feedback_threshold", "7", "feedback_window", "30")).Code, 200, "")
-	if fc, _ := env.db.GetWAFRuleFeedbackConfig(); fc.Threshold != 7 || fc.WindowDays != 30 {
-		t.Errorf("feedback cfg = %+v", fc)
-	}
-}
-
-func TestWAFDryRunHandler(t *testing.T) {
-	env := newAdminEnv(t)
-	env.seedLog(storage.RequestLog{AppName: "a", Method: "GET", Host: "a.test", Path: "/hello", Query: "x=1", Status: 200})
-
-	for _, tc := range []struct{ rules, want string }{
-		{"", "Paste at least one rule"},
-		{"this is not a directive", "don&#39;t compile"},
-		{`SecRule ARGS:x "@streq 1" "id:9000001,phase:2,deny,status:403"`, "hello"},
-	} {
-		rec := env.do("POST", "/admin/waf-rules/dry-run", form("rules", tc.rules, "limit", "-1"))
-		if rec.Code != 200 || !strings.Contains(rec.Body.String(), tc.want) {
-			t.Errorf("dry run %q: %d %s", tc.rules, rec.Code, rec.Body)
-		}
-	}
-
-	env.h.cfg.WAF.Enabled = false
-	rec := env.do("POST", "/admin/waf-rules/dry-run", form("rules", "x"))
-	if !strings.Contains(rec.Body.String(), "WAF is disabled") {
-		t.Errorf("disabled WAF: %s", rec.Body)
 	}
 }
 
@@ -1016,36 +962,6 @@ func TestSetServiceMTLS(t *testing.T) {
 	env.do("DELETE", "/admin/services/"+itoa(svc.ID), nil)
 	if got, _ = env.db.ListServiceMTLS(); len(got) != 0 {
 		t.Errorf("policy outlived its service: %+v", got)
-	}
-}
-
-func TestVirtualPatchesCard(t *testing.T) {
-	env := newAdminEnv(t)
-	env.seedService("shop", "shop.example.com")
-	p := waf.VPatches()[0]
-	env.seedLog(storage.RequestLog{Timestamp: time.Now(), RealIP: "203.0.113.5", Blocked: true, RuleID: p.RuleID, Status: 403})
-	env.seedLog(storage.RequestLog{Timestamp: time.Now(), RealIP: "203.0.113.6", Blocked: true, RuleID: p.RuleID, Status: 403})
-
-	rec := env.do("GET", "/admin/waf-rules", nil)
-	wantCode(t, "page", rec.Code, 200, "")
-	body := rec.Body.String()
-	for _, vp := range waf.VPatches() {
-		if !strings.Contains(body, vp.CVE) {
-			t.Errorf("%s not listed", vp.CVE)
-		}
-	}
-	if !strings.Contains(body, `<td class="px-4 py-3 text-right font-semibold text-slate-700">2</td>`) {
-		t.Error("hit count for the patch not shown")
-	}
-
-	// Turning a patch off for one service is a rule exception for its id.
-	rec = env.do("POST", "/admin/waf-rules/disable", form("rule_id", itoa(p.RuleID), "service", "shop", "reason", "Virtual patch "+p.CVE+" turned off"))
-	wantCode(t, "turn off", rec.Code, 200, rec.Body.String())
-	if !strings.Contains(rec.Body.String(), "off: shop") {
-		t.Error("per-service off not shown")
-	}
-	if ids, _ := env.db.GetWAFRuleIDsForService("shop"); len(ids) != 1 || ids[0] != p.RuleID {
-		t.Errorf("exception rows = %v", ids)
 	}
 }
 

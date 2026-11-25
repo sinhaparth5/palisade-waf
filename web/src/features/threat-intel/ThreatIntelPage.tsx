@@ -6,8 +6,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } f
 import { FormError, btn, field, fieldError, help, primary, tag } from "@/features/rules/shared";
 import { ApiError } from "@/lib/api";
 import { can } from "@/lib/boot";
+import { plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { plural, since, useAddCrowdSec, useAddFeed, useDeleteSource, useIntel, useSetEnabled, useSync, type IntelPage, type Preset, type Source } from "./api";
+import { since, useAddCrowdSec, useAddFeed, useDeleteSource, useIntel, useSetEnabled, useSync, type IntelPage, type Preset, type Source } from "./api";
 
 // Threat Intel (issue #353): IP/CIDR feeds and CrowdSec LAPIs whose entries
 // block below the operator's own IP rules.

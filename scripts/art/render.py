@@ -3,7 +3,7 @@
 
     uv run --with numpy --with pillow scripts/art/render.py <out-dir>
 
-Writes <out-dir>/palisade.png, rack.png, vault.png and beacon.png, the inputs for
+Writes <out-dir>/palisade.png, rack.png, vault.png, beacon.png and sieve.png, the inputs for
 dissolve.py. Drawn here rather than downloaded so the art is ours to ship and
 every shape is a plain grey the gradient map can recolour.
 """
@@ -229,6 +229,43 @@ def beacon(out):
     sc.render(out)
 
 
+def sieve(out):
+    """WAF rules: a gate of rule bars that stops most packets, with two bars
+    lifted out where a rule is switched off, and a console of sliders for
+    tuning."""
+    sc = Scene(1800, 2000, 30, (900, 1000))
+    sc.box(-1, -1, -1, 17, 15, 1, -10, layer=-1)  # ground slab
+
+    # Gate: two posts and a beam, rule bars stacked between them.
+    sc.box(6, 1, 0, 0.8, 0.8, 12.6, -20)
+    sc.box(6, 9.4, 0, 0.8, 0.8, 12.6, -20)
+    sc.box(6, 1, 12.6, 0.8, 9.2, 0.8, -10, layer=1)
+    off = {3, 7}  # rules switched off: gaps in the gate
+    for k in range(11):
+        if k not in off:
+            sc.box(6.15, 1.8, 0.8 + k * 1.1, 0.5, 7.6, 0.45, 15 if k % 2 else 5)
+
+    # Packets: arriving from the near side, stopped ones piled at the gate,
+    # two slipping through the gaps to the far side.
+    for x, y, z in [(12.5, 3.0, 8.0), (11.0, 6.4, 10.5), (14.0, 0.5, 5.0)]:
+        sc.box(x, y, z, 1.0, 1.0, 1.0, 25)
+    for x, y, z in [(7.2, 2.4, 0), (7.2, 3.6, 0), (7.3, 3.0, 1.0), (8.4, 2.9, 0), (7.2, 7.4, 0)]:
+        sc.box(x, y, z, 1.0, 1.0, 1.0, 5)
+    sc.box(6.0, 4.6, 4.2, 0.9, 0.9, 0.9, 25, layer=1)  # in the lower gap
+    sc.box(1.0, 11.0, 6.5, 0.9, 0.9, 0.9, 25)  # through the upper one
+
+    # Console: sliders on a desk, one per rule group.
+    def sliders(x, y, z, w, d, h):
+        Z = z + h
+        for k in range(4):
+            xx = x + 0.7 + k * 0.9
+            sc.line((xx, y + 0.5, Z), (xx, y + d - 0.5, Z), LINE + 10, 2)
+    sc.box(11.0, 9.0, 0, 4.2, 3.6, 2.2, 0, sliders)
+    for k, t in enumerate([0.3, 0.6, 0.45, 0.75]):
+        sc.box(11.5 + k * 0.9, 9.4 + t * 2.2, 2.2, 0.4, 0.5, 0.35, 20, layer=1)
+    sc.render(out)
+
+
 if __name__ == '__main__':
     out = Path(sys.argv[1] if len(sys.argv) > 1 else '.')
     out.mkdir(parents=True, exist_ok=True)
@@ -236,3 +273,4 @@ if __name__ == '__main__':
     rack(out / 'rack.png')
     vault(out / 'vault.png')
     beacon(out / 'beacon.png')
+    sieve(out / 'sieve.png')

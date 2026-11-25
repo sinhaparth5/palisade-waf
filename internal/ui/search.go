@@ -18,12 +18,11 @@ import (
 // live records. Read-only, so every role can use it.
 
 // adminPages are the base.html pages, in sidebar order.
-var adminPages = []string{"services", "waf_rules", "settings"}
+var adminPages = []string{"services", "settings"}
 
 var pageHeadings = map[string]string{
-	"services":  "Services",
-	"waf_rules": "WAF Rules",
-	"settings":  "Settings",
+	"services": "Services",
+	"settings": "Settings",
 }
 
 // appSections are the React app's pages and their cards, listed by hand
@@ -40,6 +39,7 @@ var appSections = func() []section {
 		{"IP Rules", "/app/ip-rules", []string{"Automatic banning", "Adaptive enforcement", "Honeypot paths", "Rules overview", "Active IP Rules"}, []string{"Add IP Rules"}},
 		{"Geo Rules", "/app/geo-rules", []string{"Rules overview", "GeoIP database bundled", "Active Geo Rules"}, []string{"Add Geo Rules"}},
 		{"Certificates", "/app/certificates", []string{"Saved Certificates", "Service TLS"}, []string{"Add Certificate"}},
+		{"WAF Rules", "/app/waf-rules", []string{"Virtual Patches", "Suggested Exceptions", "Top Firing Rules", "Custom Rules", "Rule Exceptions"}, []string{"Disable Rule", "Write Custom Rule"}},
 		{"Threat Intel", "/app/threat-intel", []string{"Threat Intel Feeds"}, []string{"Add Feed", "CrowdSec LAPI"}},
 	} {
 		out = append(out, section{searchHit{p.heading, "Page", p.url}, storage.RoleViewer})
@@ -277,7 +277,7 @@ func (h *Handler) Search(c *echo.Context) error {
 		if title == "" {
 			title, _, _ = strings.Cut(r.Rule, "\n")
 		}
-		return searchHit{title, scope(r.ServiceName), admin + "/waf-rules"}, r.Rule + " " + r.Note + " " + r.ServiceName
+		return searchHit{title, scope(r.ServiceName), admin + "/app/waf-rules"}, r.Rule + " " + r.Note + " " + r.ServiceName
 	}))
 
 	if asJSON {

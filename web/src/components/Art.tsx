@@ -5,6 +5,8 @@ import palisade from "@/assets/art/palisade.webp";
 import palisadeSm from "@/assets/art/palisade-sm.webp";
 import rack from "@/assets/art/rack.webp";
 import rackSm from "@/assets/art/rack-sm.webp";
+import sieve from "@/assets/art/sieve.webp";
+import sieveSm from "@/assets/art/sieve-sm.webp";
 import vault from "@/assets/art/vault.webp";
 import vaultSm from "@/assets/art/vault-sm.webp";
 import { labelMono } from "@/components/layout/Page";
@@ -17,6 +19,7 @@ const scenes = {
   rack: { full: rack, sm: rackSm, w: 687, h: 1068 },
   vault: { full: vault, sm: vaultSm, w: 753, h: 1010 },
   beacon: { full: beacon, sm: beaconSm, w: 632, h: 1060 },
+  sieve: { full: sieve, sm: sieveSm, w: 747, h: 1003 },
 };
 
 // Art is decoration only: empty alt and hidden from assistive tech. Width and

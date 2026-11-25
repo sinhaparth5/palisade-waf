@@ -432,7 +432,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/services/cache-stats", h.ServicesCacheStats)
 	g.GET("/certificates", h.toApp("/certificates"))
 	g.GET("/api/certificates", h.ListCertificates)
-	g.GET("/waf-rules", h.WAFRulesPage)
+	g.GET("/waf-rules", h.toApp("/waf-rules"))
+	g.GET("/api/waf-rules", h.ListWAFRules)
 	g.GET("/threat-intel", h.toApp("/threat-intel"))
 	g.GET("/api/threat-intel", h.ListThreatIntel)
 	g.GET("/settings", h.SettingsPage)
@@ -506,14 +507,15 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/settings/bot", h.SaveBotSettings),
 		g.POST("/settings/ratelimit", h.SaveRateLimitConfig),
 		g.POST("/settings/trusted-ips", h.SaveTrustedIPs),
-		g.POST("/waf-rules/disable", h.DisableWAFRule),
-		g.POST("/waf-rules/dry-run", h.WAFDryRun),
-		g.POST("/waf-rules/custom", h.SaveCustomRule),
-		g.POST("/waf-rules/custom/:id/toggle", h.ToggleCustomRule),
-		g.DELETE("/waf-rules/custom/:id", h.DeleteCustomRule),
-		g.DELETE("/waf-rules/:id", h.EnableWAFRule),
-		g.DELETE("/waf-rules/service/:id", h.EnableWAFRuleForService),
-		g.POST("/waf-rules/feedback-config", h.SaveWAFFeedbackConfig),
+		g.POST("/api/waf-rules/exceptions", h.AddWAFException),
+		g.DELETE("/api/waf-rules/exceptions/global/:id", h.DeleteWAFException),
+		g.DELETE("/api/waf-rules/exceptions/services/:id", h.DeleteWAFException),
+		g.PUT("/api/waf-rules/feedback", h.SetWAFFeedback),
+		g.POST("/api/waf-rules/dry-run", h.WAFDryRun),
+		g.POST("/api/waf-rules/custom", h.AddCustomRule),
+		g.PUT("/api/waf-rules/custom/:id", h.UpdateCustomRule),
+		g.PUT("/api/waf-rules/custom/:id/enabled", h.SetCustomRuleEnabled),
+		g.DELETE("/api/waf-rules/custom/:id", h.DeleteCustomRule),
 		g.POST("/api/threat-intel", h.AddThreatIntelSource),
 		g.POST("/api/threat-intel/crowdsec", h.AddCrowdSecSource),
 		g.PUT("/api/threat-intel/:id", h.SetThreatIntelSource),

@@ -76,5 +76,3 @@ export function since(at: string, now = Date.now()) {
   if (h < 48) return `Synced ${h} h ago`;
   return `Synced ${Math.floor(h / 24)} days ago`;
 }
-
-export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-GB")} ${n === 1 ? one : many}`;

@@ -15,7 +15,7 @@ export const nav = [
   { path: "/certificates", icon: "hgi-certificate-01", label: "Certificates", app: true },
   { path: "/ip-rules", icon: "hgi-cancel-circle", label: "IP Rules", app: true },
   { path: "/geo-rules", icon: "hgi-earth", label: "Geo Rules", app: true },
-  { path: "/waf-rules", icon: "hgi-security-block", label: "WAF Rules" },
+  { path: "/waf-rules", icon: "hgi-security-block", label: "WAF Rules", app: true },
   { path: "/threat-intel", icon: "hgi-database-01", label: "Threat Intel", app: true },
   { path: "/settings", icon: "hgi-user-account", label: "Settings" },
 ];

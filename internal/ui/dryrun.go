@@ -2,9 +2,9 @@ package ui
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -88,26 +88,46 @@ func dryRunDiff(base, cand *waf.Engine, logs []storage.RequestLog) ([]dryRunHit,
 	return hits, nil
 }
 
-// WAFDryRun handles POST /admin/waf-rules/dry-run.
+type dryRunVerdict struct {
+	Blocked bool `json:"blocked"`
+	RuleID  int  `json:"rule_id"`
+}
+
+type dryRunHitJSON struct {
+	ID     int           `json:"id"`
+	App    string        `json:"app"`
+	Method string        `json:"method"`
+	Host   string        `json:"host"`
+	Target string        `json:"target"`
+	Before dryRunVerdict `json:"before"`
+	After  dryRunVerdict `json:"after"`
+}
+
+// WAFDryRun handles POST /api/waf-rules/dry-run {"rule", "limit"?}: the
+// number of requests replayed and each one whose verdict would change.
 func (h *Handler) WAFDryRun(c *echo.Context) error {
-	render := func(data map[string]any) error {
-		return h.renderPartial(c, "waf_rules", "waf-dryrun-result", data)
+	var req struct {
+		Rule  string `json:"rule"`
+		Limit int    `json:"limit"`
 	}
-	candidate := strings.TrimSpace(c.FormValue("rules"))
+	if err := c.Bind(&req); err != nil {
+		return badBody("Send rule and limit as JSON.")
+	}
+	candidate := strings.TrimSpace(req.Rule)
 	if candidate == "" {
-		return render(map[string]any{"Error": "Paste at least one rule to test."})
+		return fieldError("rule", "Paste at least one rule to test.")
 	}
 	if !h.cfg.WAF.Enabled {
-		return render(map[string]any{"Error": "The WAF is disabled, so there is nothing to compare against."})
+		return &jsonError{Status: http.StatusConflict, Code: "conflict", Message: "The WAF is disabled, so there is nothing to compare against."}
 	}
-	limit, err := strconv.Atoi(c.FormValue("limit"))
-	if err != nil || limit < 1 {
+	limit := req.Limit
+	if limit < 1 {
 		limit = dryRunDefaultLimit
 	}
 	limit = min(limit, dryRunMaxLimit)
 
 	if !dryRunMu.TryLock() {
-		return render(map[string]any{"Error": "Another dry run is in progress — try again in a moment."})
+		return &jsonError{Status: http.StatusTooManyRequests, Code: "busy", Message: "Another dry run is in progress. Try again in a moment."}
 	}
 	defer dryRunMu.Unlock()
 
@@ -117,11 +137,11 @@ func (h *Handler) WAFDryRun(c *echo.Context) error {
 	}
 	base, err := waf.New(h.cfg.WAF, ids)
 	if err != nil {
-		return render(map[string]any{"Error": "Building the current engine failed: " + err.Error()})
+		return fmt.Errorf("dry run: building the current engine: %w", err)
 	}
 	cand, err := waf.NewWithDirectives(h.cfg.WAF, ids, candidate)
 	if err != nil {
-		return render(map[string]any{"Error": "Candidate rules don't compile: " + err.Error()})
+		return fieldError("rule", "The rule doesn't compile: "+err.Error())
 	}
 	logs, err := h.db.ListReplayRequests(limit)
 	if err != nil {
@@ -129,7 +149,11 @@ func (h *Handler) WAFDryRun(c *echo.Context) error {
 	}
 	hits, err := dryRunDiff(base, cand, logs)
 	if err != nil {
-		return render(map[string]any{"Error": "Replay failed: " + err.Error()})
+		return fmt.Errorf("dry run: replay: %w", err)
 	}
-	return render(map[string]any{"Replayed": len(logs), "Hits": hits})
+	out := make([]dryRunHitJSON, len(hits))
+	for i, x := range hits {
+		out[i] = dryRunHitJSON{x.ID, x.AppName, x.Method, x.Host, x.Target, dryRunVerdict{x.Before.Blocked, x.Before.RuleID}, dryRunVerdict{x.After.Blocked, x.After.RuleID}}
+	}
+	return c.JSON(http.StatusOK, map[string]any{"replayed": len(logs), "hits": out})
 }

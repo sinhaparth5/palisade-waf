@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"html"
 	"net/http"
 	"slices"
 	"strconv"
@@ -65,62 +64,82 @@ func (h *Handler) checkCustomRule(r *storage.WAFCustomRule) error {
 	return nil
 }
 
-func (h *Handler) renderWAFContent(c *echo.Context) error {
-	data, err := h.wafRulesContentData()
-	if err != nil {
-		return err
-	}
-	return h.renderPartial(c, "waf_rules", "waf-content", data)
+type customRuleRequest struct {
+	Rule    string `json:"rule"`
+	Service string `json:"service"`
+	Note    string `json:"note"`
 }
 
-// SaveCustomRule handles POST /admin/waf-rules/custom: adds a rule, or
-// updates one when the form carries its id.
-func (h *Handler) SaveCustomRule(c *echo.Context) error {
-	r := storage.WAFCustomRule{Rule: c.FormValue("rules"), ServiceName: c.FormValue("service"), Note: c.FormValue("note"), Enabled: true}
-	if v := c.FormValue("id"); v != "" {
-		id, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return c.String(http.StatusBadRequest, "invalid id")
-		}
-		r.ID = id
+// saveCustomRule backs POST /api/waf-rules/custom (id 0, answers 201) and
+// PUT /api/waf-rules/custom/:id (204). A rule that doesn't compile or
+// reuses an id is a field error on rule.
+func (h *Handler) saveCustomRule(c *echo.Context, id int64) error {
+	var req customRuleRequest
+	if err := c.Bind(&req); err != nil {
+		return badBody("Send rule, service and note as JSON.")
 	}
-	if err := h.checkCustomRule(&r); err != nil {
-		c.Response().Header().Set("HX-Retarget", "#custom-rule-error")
-		c.Response().Header().Set("HX-Reswap", "innerHTML")
-		return c.String(http.StatusOK, html.EscapeString(err.Error()))
+	r := storage.WAFCustomRule{ID: id, Rule: req.Rule, ServiceName: strings.TrimSpace(req.Service), Note: req.Note, Enabled: true}
+	if r.ServiceName != "" && !h.serviceExists(r.ServiceName) {
+		return fieldError("service", "That service no longer exists.")
 	}
-	if err := h.db.SaveWAFCustomRule(r); err != nil {
+	if err := h.checkCustomRule(&r); errors.Is(err, errCustomRuleStorage) {
 		return err
+	} else if err != nil {
+		msg := err.Error()
+		return fieldError("rule", strings.ToUpper(msg[:1])+msg[1:])
 	}
-	h.reloadWAF()
-	c.Response().Header().Set("HX-Trigger", "custom-rule-saved")
-	return h.renderWAFContent(c)
-}
-
-// ToggleCustomRule handles POST /admin/waf-rules/custom/:id/toggle.
-func (h *Handler) ToggleCustomRule(c *echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "invalid id")
-	}
-	if err := h.db.SetWAFCustomRuleEnabled(id, c.FormValue("enabled") == "1"); err != nil {
+	if err := h.db.SaveWAFCustomRule(r); errors.Is(err, sql.ErrNoRows) {
+		return &jsonError{Status: http.StatusNotFound, Code: "not_found", Message: "That custom rule no longer exists."}
+	} else if err != nil {
 		return err
 	}
 	h.reloadWAF()
-	return h.renderWAFContent(c)
+	if id == 0 {
+		return c.NoContent(http.StatusCreated)
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
-// DeleteCustomRule handles DELETE /admin/waf-rules/custom/:id.
+func (h *Handler) AddCustomRule(c *echo.Context) error { return h.saveCustomRule(c, 0) }
+
+func (h *Handler) UpdateCustomRule(c *echo.Context) error {
+	id, err := pathID(c, "custom rule")
+	if err != nil {
+		return err
+	}
+	return h.saveCustomRule(c, id)
+}
+
+// SetCustomRuleEnabled turns a custom rule on or off: PUT {"enabled"}.
+func (h *Handler) SetCustomRuleEnabled(c *echo.Context) error {
+	id, err := pathID(c, "custom rule")
+	if err != nil {
+		return err
+	}
+	var req struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err := c.Bind(&req); err != nil || req.Enabled == nil {
+		return badBody(`Send {"enabled": true|false}.`)
+	}
+	if err := h.db.SetWAFCustomRuleEnabled(id, *req.Enabled); err != nil {
+		return err
+	}
+	h.reloadWAF()
+	return c.NoContent(http.StatusNoContent)
+}
+
+// DeleteCustomRule handles DELETE /api/waf-rules/custom/:id.
 func (h *Handler) DeleteCustomRule(c *echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := pathID(c, "custom rule")
 	if err != nil {
-		return c.String(http.StatusBadRequest, "invalid id")
+		return err
 	}
 	if err := h.db.DeleteWAFCustomRule(id); err != nil {
 		return err
 	}
 	h.reloadWAF()
-	return h.renderWAFContent(c)
+	return c.NoContent(http.StatusNoContent)
 }
 
 // ── REST API ─────────────────────────────────────────────────────────────────

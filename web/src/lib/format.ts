@@ -9,6 +9,9 @@ export function fmtTime(t: string | number) {
   return `${pad(d.getDate())} ${d.toLocaleString("en", { month: "short" })} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+// plural: "1 rule", "1,200 rules".
+export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-GB")} ${n === 1 ? one : many}`;
+
 export const statusDot = (status: number) =>
   status >= 500 ? "bg-danger" : status >= 400 ? "bg-warning" : status >= 300 ? "bg-info" : "bg-success";
 
