@@ -78,7 +78,7 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	certsDir := fs.String("certs", "./certs", "TLS certificate cache directory")
 	wafRules := fs.String("waf-rules", "", "extra WAF rules directory (empty = OWASP CRS only)")
 	geoDBPath := fs.String("geo-db", "", "GeoIP2 database path (empty = bundled)")
-	proxyDBPath := fs.String("proxy-db", "", "IP2Proxy BIN for the hosting/VPN threat signal (empty = ASN heuristic only). The file must sit under /var/lib/palisade with the systemd unit, or under /data in Docker")
+	proxyDBPath := fs.String("proxy-db", "", "IP2Proxy BIN for the hosting/VPN threat signal (empty = ASN heuristic only; read at startup, so restart after replacing it). The file must sit under /var/lib/palisade with the systemd unit, or under /data in Docker")
 	retention := fs.Int("retention", 30, "request log retention in days (0 = keep forever)")
 	pruneInterval := fs.Duration("prune-interval", 0, "prune request logs older than --retention in-process at this interval, e.g. 24h (0 = off; for deployments with no external scheduler, like Docker)")
 	tlsCert := fs.String("tls-cert", "", "PEM certificate file for HTTPS fallback (self-signed)")

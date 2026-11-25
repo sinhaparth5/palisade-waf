@@ -11,8 +11,8 @@ import (
 
 // OpenProxyDB opens an IP2Proxy BIN at path for the hosting/VPN threat
 // signal. Call it once from startup and pass the DB to New; close it only
-// after the log worker has drained. A missing file or a file that is not a
-// PX1–PX12 BIN so startup
+// after the log worker has drained. A missing file, a file that is not a
+// PX1–PX12 BIN, or a lookup that panics or errors is returned so startup
 // can fail before traffic is accepted. An empty path is an error: the
 // caller skips the call when --proxy-db is unset.
 func OpenProxyDB(path string) (*ip2proxy.DB, error) {
@@ -30,6 +30,10 @@ func OpenProxyDB(path string) (*ip2proxy.DB, error) {
 	if convErr != nil || ver < 1 || ver > 12 {
 		_ = db.Close()
 		return nil, fmt.Errorf("invalid IP2Proxy BIN %q: database type %s", path, db.PackageVersion())
+	}
+	if err := probeProxyDB(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("invalid IP2Proxy BIN %q: %w", path, err)
 	}
 	return db, nil
 }
@@ -52,6 +56,26 @@ func openProxyDB(path string) (db *ip2proxy.DB, err error) {
 		return nil, fmt.Errorf("IP2Proxy BIN %q: %w", path, openErr)
 	}
 	return opened, nil
+}
+
+// probeProxyDB fails startup on a header that opens but cannot answer a
+// lookup (truncated row data, a column count too small for the package).
+// A well-formed BIN returns a record or the reader's "not found" message
+// with a nil error for every address, including an IPv4-only file. The
+// highest address of each family walks the search to the last row of its
+// table, so a file cut short inside the rows fails here, not on traffic.
+func probeProxyDB(db *ip2proxy.DB) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("lookup panicked: %v", r)
+		}
+	}()
+	for _, ip := range []string{"8.8.8.8", "255.255.255.255", "2001:4860:4860::8888", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"} {
+		if _, err = db.GetAll(ip); err != nil {
+			return fmt.Errorf("lookup %s: %w", ip, err)
+		}
+	}
+	return nil
 }
 
 // proxyScores reports whether an IP2Proxy record counts as the hosting/VPN
@@ -80,10 +104,35 @@ func proxyScores(rec ip2proxy.IP2ProxyRecord, px1 bool) bool {
 // goroutine, and a corrupt row panics inside the reader (a short row
 // sliced at a column offset); that panic is a miss, logged once, so one
 // bad address cannot kill the worker.
-func (s *Scorer) proxyHit(ip string) (hit bool) {
+func (s *Scorer) proxyHit(ip string) bool {
 	if s.proxy == nil || ip == "" {
 		return false
 	}
+	// The file never changes while it is open, so an address's answer
+	// doesn't either. A lookup is ~20 file reads; most requests come from
+	// an address seen moments ago.
+	s.proxyMu.Lock()
+	hit, ok := s.proxySeen[ip]
+	s.proxyMu.Unlock()
+	if ok {
+		return hit
+	}
+	hit = s.lookupProxy(ip)
+	s.proxyMu.Lock()
+	// ponytail: dropped whole when full; an LRU only if a busy server
+	// keeps refilling it.
+	if len(s.proxySeen) >= proxyCacheMax {
+		clear(s.proxySeen)
+	}
+	s.proxySeen[ip] = hit
+	s.proxyMu.Unlock()
+	return hit
+}
+
+// proxyCacheMax bounds proxyHit's per-address answers.
+const proxyCacheMax = 65536
+
+func (s *Scorer) lookupProxy(ip string) (hit bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			s.noteProxyFailure(fmt.Sprintf("panicked: %v", r))
@@ -106,5 +155,6 @@ func (s *Scorer) noteProxyFailure(detail string) {
 
 func (s *Scorer) setProxy(db *ip2proxy.DB) {
 	s.proxy = db
+	s.proxySeen = map[string]bool{}
 	s.proxyPX1 = db != nil && db.PackageVersion() == "1"
 }

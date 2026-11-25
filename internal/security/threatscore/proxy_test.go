@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -395,6 +396,9 @@ func TestProxyLookupPanicIsAMiss(t *testing.T) {
 		{netip.MustParseAddr("203.0.113.3"), "-"},
 	}, nil)
 	path := writeProxyFile(t, raw)
+	if _, err := OpenProxyDB(path); err == nil {
+		t.Fatal("short PX12 BIN opened, want an error")
+	}
 
 	db, err := ip2proxy.OpenDB(path)
 	if err != nil {
@@ -471,6 +475,9 @@ func TestOpenProxyDBRejectsBadFiles(t *testing.T) {
 		{"zero header", write("zero.bin", zeros), "database type"},
 		{"type 99", write("type99.bin", weird), "invalid IP2Proxy BIN"},
 		{"truncated", write("trunc.bin", truncated), "invalid IP2Proxy BIN"},
+		// Cut off inside the last IPv6 rows, header intact: only a lookup
+		// that walks to the end of the table reads past the cut.
+		{"cut short", write("cut.bin", cutShort()), "invalid IP2Proxy BIN"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -482,5 +489,46 @@ func TestOpenProxyDBRejectsBadFiles(t *testing.T) {
 	}
 	if _, err := OpenProxyDB(""); err == nil {
 		t.Fatal("empty path opened")
+	}
+}
+
+// cutShort is a PX2 BIN whose IPv6 rows run past 2001:4860::, the way a
+// real file's do, with its last row and the trailing address cut off.
+func cutShort() []byte {
+	v4 := []binRange{{netip.MustParseAddr("0.0.0.0"), "-"}, {netip.MustParseAddr("203.0.113.1"), "-"}}
+	v6 := []binRange{
+		{netip.MustParseAddr("::"), "-"},
+		{netip.MustParseAddr("2001:db8::1"), "PUB"},
+		{netip.MustParseAddr("2400::"), "-"},
+		{netip.MustParseAddr("2600::"), "-"},
+		{netip.MustParseAddr("2a00::"), "-"},
+	}
+	raw := buildProxyBIN(2, 3, v4, v6)
+	v6End := 64 + len(v4)*12 + 4 + len(v6)*28 + 16
+	return raw[:v6End-28-16]
+}
+
+// An address is looked up once: the answer comes from memory after that,
+// even with the file gone, and a full cache starts over.
+func TestProxyHitCachesPerAddress(t *testing.T) {
+	db, err := OpenProxyDB(writeProxyFile(t, px2Sample()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := testScorer(newFakeStore(), nil)
+	s.setProxy(db)
+	if !s.proxyHit("203.0.113.1") || s.proxyHit("203.0.113.7") {
+		t.Fatal("VPN should score and SES should not")
+	}
+	_ = db.Close()
+	if !s.proxyHit("203.0.113.1") || s.proxyHit("203.0.113.7") {
+		t.Fatal("cached answers changed")
+	}
+	for i := range proxyCacheMax {
+		s.proxySeen[strconv.Itoa(i)] = false
+	}
+	s.proxyHit("203.0.113.2") // a miss on a full cache: lookup fails on the closed file
+	if len(s.proxySeen) != 1 {
+		t.Fatalf("cache size after overflow = %d, want 1", len(s.proxySeen))
 	}
 }

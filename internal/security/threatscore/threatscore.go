@@ -91,6 +91,8 @@ type Scorer struct {
 	proxy     *ip2proxy.DB
 	proxyPX1  bool
 	proxyFail sync.Once
+	proxyMu   sync.Mutex
+	proxySeen map[string]bool // proxyHit's answers, at most proxyCacheMax
 
 	now func() time.Time // injectable for tests
 }
