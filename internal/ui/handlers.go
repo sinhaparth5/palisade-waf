@@ -438,6 +438,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/api/threat-intel", h.ListThreatIntel)
 	g.GET("/settings", h.SettingsPage)
 	g.GET("/settings/audit", h.AuditRows)
+	g.GET("/api/settings/account", h.Account)
 	g.GET("/search", h.Search)
 	g.GET("/app", h.AppPage)
 	g.GET("/app/*", h.AppPage)
@@ -455,6 +456,15 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.DELETE("/settings/passkeys/:id", h.DeletePasskey),
 		g.DELETE("/settings/devices/:token", h.RevokeDevice),
 		g.POST("/settings/devices/revoke-others", h.RevokeOtherDevices),
+		g.PUT("/api/settings/credentials", h.SetCredentials),
+		g.POST("/api/settings/2fa/start", h.StartTOTP),
+		g.POST("/api/settings/2fa/confirm", h.ConfirmTOTP),
+		g.POST("/api/settings/2fa/disable", h.DisableTOTPJSON),
+		g.POST("/api/settings/passkeys/begin", h.BeginPasskey),
+		g.POST("/api/settings/passkeys/finish", h.FinishPasskey),
+		g.DELETE("/api/settings/passkeys/:id", h.RemovePasskey),
+		g.DELETE("/api/settings/devices/:id", h.SignOutDevice),
+		g.POST("/api/settings/devices/sign-out-others", h.SignOutOthers),
 	)
 
 	as(storage.RoleAdmin,

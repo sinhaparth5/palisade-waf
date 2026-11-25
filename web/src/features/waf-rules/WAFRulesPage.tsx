@@ -2,7 +2,7 @@ import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } fr
 import { toast } from "sonner";
 import { ArtHero } from "@/components/Art";
 import { Card, FormRow, Page, PageHeader, labelMono } from "@/components/layout/Page";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
+import { useConfirm } from "@/components/Confirm";
 import { FormError, btn, field, fieldError, help, primary, tag } from "@/features/rules/shared";
 import { ApiError } from "@/lib/api";
 import { can } from "@/lib/boot";
@@ -113,37 +113,6 @@ function Summary({ d }: { d: WAFPage }) {
       <span>{d.custom.filter((r) => r.enabled).length} custom on</span>
     </p>
   );
-}
-
-// Confirm asks before a change that reloads the WAF.
-type Ask = { title: string; body: string; label: string; run: () => void };
-
-function useConfirm() {
-  const [ask, setAsk] = useState<Ask | null>(null);
-  const dialog = (
-    <Dialog open={ask !== null} onOpenChange={(open) => !open && setAsk(null)}>
-      <DialogContent className="rounded-none border-edge bg-canvas sm:max-w-md">
-        <DialogTitle className="text-[16px] text-ink">{ask?.title}</DialogTitle>
-        <DialogDescription className="text-[13px] text-slate-600">{ask?.body}</DialogDescription>
-        <DialogFooter>
-          <button type="button" onClick={() => setAsk(null)} className={btn}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              ask!.run();
-              setAsk(null);
-            }}
-            className={cn(btn, "border-red-600 bg-red-600 text-white hover:bg-red-700")}
-          >
-            {ask?.label}
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-  return [dialog, setAsk] as const;
 }
 
 function Failed({ error, what = "save" }: { error: unknown; what?: string }) {

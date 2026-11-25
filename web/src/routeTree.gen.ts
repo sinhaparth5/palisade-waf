@@ -14,6 +14,7 @@ import { Route as CertificatesRouteImport } from './routes/certificates'
 import { Route as GeoRulesRouteImport } from './routes/geo-rules'
 import { Route as IpRulesRouteImport } from './routes/ip-rules'
 import { Route as LogsRouteImport } from './routes/logs'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ThreatIntelRouteImport } from './routes/threat-intel'
 import { Route as WafRulesRouteImport } from './routes/waf-rules'
 
@@ -42,6 +43,11 @@ const LogsRoute = LogsRouteImport.update({
   path: '/logs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ThreatIntelRoute = ThreatIntelRouteImport.update({
   id: '/threat-intel',
   path: '/threat-intel',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/geo-rules': typeof GeoRulesRoute
   '/ip-rules': typeof IpRulesRoute
   '/logs': typeof LogsRoute
+  '/settings': typeof SettingsRoute
   '/threat-intel': typeof ThreatIntelRoute
   '/waf-rules': typeof WafRulesRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/geo-rules': typeof GeoRulesRoute
   '/ip-rules': typeof IpRulesRoute
   '/logs': typeof LogsRoute
+  '/settings': typeof SettingsRoute
   '/threat-intel': typeof ThreatIntelRoute
   '/waf-rules': typeof WafRulesRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/geo-rules': typeof GeoRulesRoute
   '/ip-rules': typeof IpRulesRoute
   '/logs': typeof LogsRoute
+  '/settings': typeof SettingsRoute
   '/threat-intel': typeof ThreatIntelRoute
   '/waf-rules': typeof WafRulesRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/geo-rules'
     | '/ip-rules'
     | '/logs'
+    | '/settings'
     | '/threat-intel'
     | '/waf-rules'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/geo-rules'
     | '/ip-rules'
     | '/logs'
+    | '/settings'
     | '/threat-intel'
     | '/waf-rules'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/geo-rules'
     | '/ip-rules'
     | '/logs'
+    | '/settings'
     | '/threat-intel'
     | '/waf-rules'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   GeoRulesRoute: typeof GeoRulesRoute
   IpRulesRoute: typeof IpRulesRoute
   LogsRoute: typeof LogsRoute
+  SettingsRoute: typeof SettingsRoute
   ThreatIntelRoute: typeof ThreatIntelRoute
   WafRulesRoute: typeof WafRulesRoute
 }
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LogsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/threat-intel': {
       id: '/threat-intel'
       path: '/threat-intel'
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   GeoRulesRoute: GeoRulesRoute,
   IpRulesRoute: IpRulesRoute,
   LogsRoute: LogsRoute,
+  SettingsRoute: SettingsRoute,
   ThreatIntelRoute: ThreatIntelRoute,
   WafRulesRoute: WafRulesRoute,
 }
