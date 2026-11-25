@@ -420,30 +420,13 @@ func TestCertificateAndTLSHandlers(t *testing.T) {
 	certPEM, keyPEM := testCertPEM(t, "shop.example.com")
 	otherCert, otherKey := testCertPEM(t, "other.example.com")
 
-	// Pool certificates.
-	for _, tc := range []struct {
-		f    []string
-		want string
-	}{
-		{[]string{"cert_pem", certPEM, "key_pem", keyPEM}, "name is required"},
-		{[]string{"name", "x"}, "paste both"},
-		{[]string{"name", "x", "cert_pem", "junk", "key_pem", "junk"}, "invalid certificate"},
-		{[]string{"name", "x", "cert_pem", certPEM, "key_pem", otherKey}, "invalid cert/key pair"},
-	} {
-		rec := env.do("POST", "/admin/certificates", form(tc.f...))
-		if rec.Header().Get("HX-Retarget") != "#cert-error" || !strings.Contains(rec.Body.String(), tc.want) {
-			t.Errorf("add cert %v: %s", tc.want, rec.Body)
+	// Pool certificates (the API itself is covered in certificates_test.go).
+	for _, r := range []certAddRequest{{"cert.pem", certPEM, keyPEM}, {"cert.pem", otherCert, otherKey}} {
+		if rec := env.doJSON(env.session, "POST", "/admin/api/certificates", r, nil); rec.Code != http.StatusCreated {
+			t.Fatalf("add cert: %d %s", rec.Code, rec.Body)
 		}
 	}
-	wantCode(t, "add cert", env.do("POST", "/admin/certificates", form("name", "cert.pem", "cert_pem", certPEM, "key_pem", keyPEM)).Code, 200, "")
-	wantCode(t, "add other", env.do("POST", "/admin/certificates", form("name", "cert.pem", "cert_pem", otherCert, "key_pem", otherKey)).Code, 200, "")
 	certs, _ := env.db.ListCertificates()
-	if len(certs) != 2 || certs[1].Name != "other.example.com" {
-		t.Fatalf("certs = %+v (duplicate name should fall back to the domain)", certs)
-	}
-	if _, err := os.Stat(certs[0].KeyPath); err != nil {
-		t.Errorf("pool key not written: %v", err)
-	}
 
 	// Assign from the pool.
 	for _, tc := range []struct {
@@ -531,11 +514,6 @@ func TestCertificateAndTLSHandlers(t *testing.T) {
 		t.Errorf("tls mode after clear = %q", got.TLSMode)
 	}
 
-	wantCode(t, "delete cert bad", env.do("DELETE", "/admin/certificates/x", nil).Code, 400, "")
-	wantCode(t, "delete cert", env.do("DELETE", "/admin/certificates/"+itoa(certs[0].ID), nil).Code, 200, "")
-	if _, err := os.Stat(filepath.Dir(certs[0].CertPath)); !os.IsNotExist(err) {
-		t.Error("pool cert dir not removed")
-	}
 }
 
 func TestSettingsCards(t *testing.T) {

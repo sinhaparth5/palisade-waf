@@ -18,13 +18,12 @@ import (
 // live records. Read-only, so every role can use it.
 
 // adminPages are the base.html pages, in sidebar order.
-var adminPages = []string{"services", "certificates", "waf_rules", "threat_intel", "settings"}
+var adminPages = []string{"services", "waf_rules", "threat_intel", "settings"}
 
 var pageHeadings = map[string]string{
 	"services":     "Services",
 	"waf_rules":    "WAF Rules",
 	"threat_intel": "Threat Intel",
-	"certificates": "Certificates",
 	"settings":     "Settings",
 }
 
@@ -41,6 +40,7 @@ var appSections = func() []section {
 		{"Live Logs", "/app/logs", []string{"Request inspector", "Stats"}, nil},
 		{"IP Rules", "/app/ip-rules", []string{"Automatic banning", "Adaptive enforcement", "Honeypot paths", "Rules overview", "Active IP Rules"}, []string{"Add IP Rules"}},
 		{"Geo Rules", "/app/geo-rules", []string{"Rules overview", "GeoIP database bundled", "Active Geo Rules"}, []string{"Add Geo Rules"}},
+		{"Certificates", "/app/certificates", []string{"Saved Certificates", "Service TLS"}, []string{"Add Certificate"}},
 	} {
 		out = append(out, section{searchHit{p.heading, "Page", p.url}, storage.RoleViewer})
 		for _, c := range p.cards {
@@ -259,7 +259,7 @@ func (h *Handler) Search(c *echo.Context) error {
 		return err
 	}
 	group("Certificates", "hgi-certificate-01", matchHits(q, certs, func(r storage.CertRecord) (searchHit, string) {
-		return searchHit{r.Name, r.Domains, admin + "/certificates"}, r.Name + " " + r.Domains
+		return searchHit{r.Name, r.Domains, admin + "/app/certificates"}, r.Name + " " + r.Domains
 	}))
 	feeds, err := h.db.ListThreatIntelSources()
 	if err != nil {

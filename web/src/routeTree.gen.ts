@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CertificatesRouteImport } from './routes/certificates'
 import { Route as GeoRulesRouteImport } from './routes/geo-rules'
 import { Route as IpRulesRouteImport } from './routes/ip-rules'
 import { Route as LogsRouteImport } from './routes/logs'
@@ -17,6 +18,11 @@ import { Route as LogsRouteImport } from './routes/logs'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CertificatesRoute = CertificatesRouteImport.update({
+  id: '/certificates',
+  path: '/certificates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GeoRulesRoute = GeoRulesRouteImport.update({
@@ -37,12 +43,14 @@ const LogsRoute = LogsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/certificates': typeof CertificatesRoute
   '/geo-rules': typeof GeoRulesRoute
   '/ip-rules': typeof IpRulesRoute
   '/logs': typeof LogsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/certificates': typeof CertificatesRoute
   '/geo-rules': typeof GeoRulesRoute
   '/ip-rules': typeof IpRulesRoute
   '/logs': typeof LogsRoute
@@ -50,20 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/certificates': typeof CertificatesRoute
   '/geo-rules': typeof GeoRulesRoute
   '/ip-rules': typeof IpRulesRoute
   '/logs': typeof LogsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/geo-rules' | '/ip-rules' | '/logs'
+  fullPaths: '/' | '/certificates' | '/geo-rules' | '/ip-rules' | '/logs'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/geo-rules' | '/ip-rules' | '/logs'
-  id: '__root__' | '/' | '/geo-rules' | '/ip-rules' | '/logs'
+  to: '/' | '/certificates' | '/geo-rules' | '/ip-rules' | '/logs'
+  id: '__root__' | '/' | '/certificates' | '/geo-rules' | '/ip-rules' | '/logs'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CertificatesRoute: typeof CertificatesRoute
   GeoRulesRoute: typeof GeoRulesRoute
   IpRulesRoute: typeof IpRulesRoute
   LogsRoute: typeof LogsRoute
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/certificates': {
+      id: '/certificates'
+      path: '/certificates'
+      fullPath: '/certificates'
+      preLoaderRoute: typeof CertificatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/geo-rules': {
@@ -104,6 +121,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CertificatesRoute: CertificatesRoute,
   GeoRulesRoute: GeoRulesRoute,
   IpRulesRoute: IpRulesRoute,
   LogsRoute: LogsRoute,

@@ -3,7 +3,7 @@
 
     uv run --with numpy --with pillow scripts/art/render.py <out-dir>
 
-Writes <out-dir>/palisade.png and <out-dir>/rack.png, the inputs for
+Writes <out-dir>/palisade.png, rack.png and vault.png, the inputs for
 dissolve.py. Drawn here rather than downloaded so the art is ours to ship and
 every shape is a plain grey the gradient map can recolour.
 """
@@ -148,8 +148,41 @@ def rack(out):
     sc.render(out)
 
 
+def vault(out):
+    sc = Scene(1800, 1800, 34, (900, 800))
+    sc.box(-2, -2, -1, 18, 16, 1, -10, layer=-1)  # floor plate
+
+    # A padlock: body with a keyhole, a U shackle of three bars.
+    def keyhole(x, y, z, w, d, h):
+        X, cy, cz = x + w, y + d / 2, z + h * 0.55
+        sc.poly([(X, cy - 0.5, cz), (X, cy + 0.5, cz), (X, cy + 0.5, cz + 1.0), (X, cy - 0.5, cz + 1.0)], LINE)
+        sc.poly([(X, cy - 0.2, cz - 1.6), (X, cy + 0.2, cz - 1.6), (X, cy + 0.2, cz), (X, cy - 0.2, cz)], LINE)
+        for k in range(3):  # plate rivets
+            sc.line((X, y + 0.6, z + 0.8 + k * 2.4), (X, y + 0.75, z + 0.8 + k * 2.4), 240, 3)
+    sc.box(1.6, 2.0, 7.5, 1.0, 1.0, 5.0, 10)  # shackle, back leg
+    sc.box(1.6, 2.0, 12.5, 1.0, 6.2, 1.0, 20)  # shackle, top bar
+    sc.box(0, 0, 0, 4.2, 10.2, 7.5, 0, keyhole)  # body
+    sc.box(1.6, 7.2, 7.5, 1.0, 1.0, 5.0, 10, layer=1)  # shackle, front leg
+
+    # Certificates standing in a rack: thin cards with text lines and a seal.
+    def card(x, y, z, w, d, h):
+        X = x + w
+        for k in range(4):
+            zz = z + h - 1.2 - k * 0.9
+            sc.line((X, y + 0.6, zz), (X, y + d - (0.6 if k % 2 else 1.8), zz), LINE + 20, 2)
+        sc.poly([(X, y + d - 1.8, z + 0.6), (X, y + d - 0.6, z + 0.6), (X, y + d - 0.6, z + 1.8), (X, y + d - 1.8, z + 1.8)], LINE)
+    for k in range(3):
+        sc.box(8 + k * 1.6, 1 + k * 0.4, 0, 0.35, 5.2, 7.2 - k * 0.8, 20, card)
+    sc.box(7.4, 0.4, 0, 5.4, 6.6, 0.6, -20, layer=-1)  # card stand
+    sc.box(10, 9, 0, 3.4, 1.4, 0.5, 0)  # a key lying flat: bow
+    sc.box(10.8, 10.4, 0, 0.6, 3.2, 0.4, 0)  # blade
+    sc.box(11.4, 12.4, 0, 0.6, 0.4, 0.4, 0)  # bit
+    sc.render(out)
+
+
 if __name__ == '__main__':
     out = Path(sys.argv[1] if len(sys.argv) > 1 else '.')
     out.mkdir(parents=True, exist_ok=True)
     palisade(out / 'palisade.png')
     rack(out / 'rack.png')
+    vault(out / 'vault.png')

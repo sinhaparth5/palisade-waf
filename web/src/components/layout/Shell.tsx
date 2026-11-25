@@ -12,7 +12,7 @@ export const nav = [
   { path: "/", icon: "hgi-dashboard-square-01", label: "Dashboard", app: true },
   { path: "/logs", icon: "hgi-activity-01", label: "Live Logs", app: true },
   { path: "/services", icon: "hgi-settings-01", label: "Services" },
-  { path: "/certificates", icon: "hgi-certificate-01", label: "Certificates" },
+  { path: "/certificates", icon: "hgi-certificate-01", label: "Certificates", app: true },
   { path: "/ip-rules", icon: "hgi-cancel-circle", label: "IP Rules", app: true },
   { path: "/geo-rules", icon: "hgi-earth", label: "Geo Rules", app: true },
   { path: "/waf-rules", icon: "hgi-security-block", label: "WAF Rules" },

@@ -430,7 +430,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/services/rows", h.ServicesRows)
 	g.GET("/services/openapi/:id", h.ServiceOpenAPI)
 	g.GET("/services/cache-stats", h.ServicesCacheStats)
-	g.GET("/certificates", h.CertificatesPage)
+	g.GET("/certificates", h.toApp("/certificates"))
+	g.GET("/api/certificates", h.ListCertificates)
 	g.GET("/waf-rules", h.WAFRulesPage)
 	g.GET("/threat-intel", h.ThreatIntelPage)
 	g.GET("/settings", h.SettingsPage)
@@ -472,8 +473,8 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/services/tls/auto", h.EnableServiceAutoTLS),
 		g.POST("/services/tls/pool", h.AssignPoolCert),
 		g.POST("/services/tls/clear", h.ClearServiceTLS),
-		g.POST("/certificates", h.AddCertificate),
-		g.DELETE("/certificates/:id", h.DeleteCertificate),
+		g.POST("/api/certificates", h.AddCertificate),
+		g.DELETE("/api/certificates/:id", h.DeleteCertificate),
 		g.POST("/services/ratelimit", h.SetServiceRateLimit),
 		g.POST("/services/bot/:id", h.SetServiceBotMode),
 		g.POST("/services/uploads/:id", h.SetServiceLargeJSUploads),

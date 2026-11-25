@@ -103,7 +103,6 @@ func TestAdminPagesRender(t *testing.T) {
 
 	pages := map[string]string{
 		"/admin/services":     "Services",
-		"/admin/certificates": "Certificates",
 		"/admin/waf-rules":    "WAF Rules",
 		"/admin/threat-intel": "Threat Intel",
 		"/admin/settings":     "Settings",
@@ -112,6 +111,7 @@ func TestAdminPagesRender(t *testing.T) {
 	for path, to := range map[string]string{
 		"/admin/ip-rules?page=2": "/admin/app/ip-rules?page=2",
 		"/admin/geo-rules":       "/admin/app/geo-rules",
+		"/admin/certificates":    "/admin/app/certificates",
 		"/admin":                 "/admin/app/",
 		"/admin/logs?status=blocked&mode=history": "/admin/app/logs?status=blocked&mode=history",
 	} {
