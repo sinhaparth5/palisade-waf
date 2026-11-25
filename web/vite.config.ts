@@ -7,7 +7,9 @@ import { goTemplate, precompress, sonnerNoInlineStyle, unbrand, devPalisade } fr
 
 // Built for the Go server (internal/ui/app.go), which renders dist/index.html
 // as an html/template and serves dist/assets/*. See build/palisade.ts.
-export default defineConfig(({ command }) => ({
+// `--mode login` builds the public sign-in page (login.html) on its own into
+// dist/login, so nothing of the app is served before a session exists.
+export default defineConfig(({ command, mode }) => ({
   // Build: relative, so CSS fonts and lazy chunks resolve next to their file
   // wherever the admin path puts them. Dev: under the default admin path.
   base: command === "build" ? "./" : "/admin/",
@@ -18,19 +20,21 @@ export default defineConfig(({ command }) => ({
     react(),
     tailwindcss(),
     sonnerNoInlineStyle(),
-    unbrand(),
+    unbrand({ partial: mode === "login" }),
     goTemplate(),
     precompress(),
     devPalisade(process.env.PALISADE_URL ?? "http://127.0.0.1:8080"),
   ],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   build: {
-    outDir: "../static/app/dist",
+    outDir: mode === "login" ? "../static/app/dist/login" : "../static/app/dist",
     emptyOutDir: true,
     sourcemap: false,
-    // Third-party licence notices, next to THIRD_PARTY_NOTICES.md for the Go side.
-    license: { fileName: "licenses.md" },
+    // Third-party licence notices, next to THIRD_PARTY_NOTICES.md for the Go side
+    // (the login bundle's libraries are a subset of the app's).
+    license: mode !== "login" && { fileName: "licenses.md" },
     rolldownOptions: {
+      input: fileURLToPath(new URL(mode === "login" ? "./login.html" : "./index.html", import.meta.url)),
       output: {
         // Hash-only names: a file name shouldn't announce the libraries inside.
         entryFileNames: "assets/[hash].js",

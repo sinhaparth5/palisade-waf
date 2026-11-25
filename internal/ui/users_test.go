@@ -135,7 +135,7 @@ func TestUserInvite(t *testing.T) {
 	}
 
 	public := func(method, p string, f url.Values) *httptest.ResponseRecorder { return env.doWith(method, p, f, "") }
-	if rec := public("GET", path, nil); rec.Code != 200 || !strings.Contains(rec.Body.String(), "Set your password") || rec.Header().Get("Referrer-Policy") != "no-referrer" {
+	if rec := public("GET", path, nil); rec.Code != 200 || !strings.Contains(rec.Body.String(), `data-stage="invite"`) || rec.Header().Get("Referrer-Policy") != "no-referrer" {
 		t.Fatalf("invite page = %d %q", rec.Code, rec.Header().Get("Referrer-Policy"))
 	}
 	if rec := public("POST", path, form("password", "brand-new-pass", "confirm_password", "other-pass")); !strings.Contains(rec.Body.String(), "do not match") {

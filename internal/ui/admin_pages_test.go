@@ -56,7 +56,7 @@ func TestAdminMutationsRequireCSRF(t *testing.T) {
 func TestLoginPageAndLogout(t *testing.T) {
 	env := newAdminEnv(t)
 
-	if rec := env.doWith("GET", "/admin/login", nil, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<form") {
+	if rec := env.doWith("GET", "/admin/login", nil, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `data-stage=""`) {
 		t.Fatalf("login page: %d", rec.Code)
 	}
 	// Already logged in: straight to the dashboard.

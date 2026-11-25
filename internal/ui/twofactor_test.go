@@ -55,6 +55,9 @@ func newTestLoginHandler(t *testing.T) (*Handler, *echo.Echo, *storage.DB) {
 	if err := h.parseTemplates(); err != nil {
 		t.Fatal(err)
 	}
+	if err := h.SetApp(appFS); err != nil {
+		t.Fatal(err)
+	}
 	e := echo.New()
 	h.Register(e)
 	return h, e, db
@@ -105,7 +108,7 @@ func passwordStep(t *testing.T, e *echo.Echo) *http.Cookie {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("password step = %d, want 200 (TOTP stage)", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "Two-factor authentication") {
+	if !strings.Contains(rec.Body.String(), `data-stage="totp"`) {
 		t.Fatal("password step did not render the TOTP stage")
 	}
 	if cookieByName(rec, sessionCookie) != nil {

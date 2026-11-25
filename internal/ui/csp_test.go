@@ -13,9 +13,11 @@ import (
 func TestAdminCSP(t *testing.T) {
 	env := newAdminEnv(t)
 	external := regexp.MustCompile(`<(script|link|img|iframe)[^>]+(src|href)="(https?:)?//`)
-	for _, path := range []string{"/admin/settings", "/admin/services", "/admin/certificates", "/admin/nope"} {
+	// App pages add a per-response style nonce (appCSP); the rest is adminCSP.
+	nonce := regexp.MustCompile(` 'nonce-[A-Z2-7]+'`)
+	for _, path := range []string{"/admin/login", "/admin/settings", "/admin/services", "/admin/certificates", "/admin/nope"} {
 		rec := env.do("GET", path, nil)
-		if got := rec.Header().Get("Content-Security-Policy"); got != adminCSP {
+		if got := nonce.ReplaceAllString(rec.Header().Get("Content-Security-Policy"), ""); got != adminCSP {
 			t.Errorf("%s: CSP = %q, want adminCSP", path, got)
 		}
 		if m := external.FindString(rec.Body.String()); m != "" {

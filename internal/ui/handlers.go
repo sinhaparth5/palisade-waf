@@ -137,6 +137,8 @@ type Handler struct {
 	staticImgs      fs.FS
 	appIndex        *template.Template // React admin index.html (app.go); nil when not built
 	appFS           fs.FS
+	loginIndex      *template.Template // the public sign-in page (web/login.html)
+	loginFS         fs.FS              // its own build: no app code before sign-in
 	reloadBot       func(*challenge.Challenger)
 	buildChallenger func(enabled bool, threshold, ttl int) *challenge.Challenger
 	reloadRateLimit func()
@@ -198,14 +200,7 @@ func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist,
 }
 
 func (h *Handler) parseTemplates() error {
-	// Standalone login page, doesn't use base.html.
-	login, err := template.New("login").Funcs(funcs).ParseFS(templateFS, "templates/login.html")
-	if err != nil {
-		return fmt.Errorf("parse template login: %w", err)
-	}
-
-	h.tmpls = make(map[string]*template.Template, 3)
-	h.tmpls["login"] = login
+	h.tmpls = make(map[string]*template.Template, 2)
 	// settings is the add-on cards page (ext.Card), the last base.html page.
 	settings, err := template.New("").Funcs(funcs).ParseFS(templateFS, "templates/components/*.html", "templates/base.html", "templates/settings.html")
 	if err != nil {
@@ -375,6 +370,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	admin.GET("/login/sso/callback", h.SSOCallback)
 	// Set-password page from an invite email (issue #229).
 	admin.GET("/invite/:token", h.InvitePage)
+	// The sign-in page's own bundle, public; the app's stays behind a session.
+	admin.GET("/login/assets/*", h.LoginAsset)
 	admin.POST("/invite/:token", h.InvitePost, bodyLimit)
 	// Static assets are public so the login page can load spirals/JS before auth.
 	static := admin.Group("/static", staticGzip, h.staticCache)

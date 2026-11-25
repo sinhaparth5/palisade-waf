@@ -40,7 +40,7 @@ func startServe(t *testing.T, args []string, want ...string) started {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errc := make(chan error, 1)
-	go func() { errc <- serve(ctx, args, "test", Assets{}) }()
+	go func() { errc <- serve(ctx, args, "test", Assets{App: builtApp}) }()
 	s := started{addr: map[string]string{}, stop: func() error {
 		cancel()
 		select {
@@ -267,6 +267,12 @@ func TestCheckWritable(t *testing.T) {
 	if _, err := run([]string{"--db", filepath.Join(dir, "waf.db")}, ""); err == nil {
 		t.Error("serve started on a read-only data dir")
 	}
+}
+
+// builtApp is the smallest web build: the app page and the sign-in page.
+var builtApp = fstest.MapFS{
+	"app/dist/index.html":       {Data: []byte("<html></html>")},
+	"app/dist/login/login.html": {Data: []byte("<html></html>")},
 }
 
 // A build whose index.html isn't a valid template stops startup.

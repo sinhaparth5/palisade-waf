@@ -100,11 +100,11 @@ func TestDemoWritesBlocked(t *testing.T) {
 func TestDemoLoginBanner(t *testing.T) {
 	env := newDemoEnv(t)
 	body := env.doWith(http.MethodGet, "/admin/login", nil, "").Body.String()
-	if !strings.Contains(body, "Live demo") || !strings.Contains(body, `value="`+demoPass+`"`) {
+	if !strings.Contains(body, `data-demo-email="`+demoEmail+`"`) || !strings.Contains(body, `data-demo-pass="`+demoPass+`"`) {
 		t.Error("login page missing the demo banner or prefilled password")
 	}
 	env.h.cfg.Admin.DemoEmail = ""
-	if body := env.doWith(http.MethodGet, "/admin/login", nil, "").Body.String(); strings.Contains(body, "Live demo") {
+	if body := env.doWith(http.MethodGet, "/admin/login", nil, "").Body.String(); !strings.Contains(body, `data-demo-email=""`) {
 		t.Error("demo banner shown with --demo off")
 	}
 }

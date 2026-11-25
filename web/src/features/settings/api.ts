@@ -1,3 +1,4 @@
+import { fromB64, toB64 } from "@/lib/b64";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
@@ -28,8 +29,6 @@ export const useSignOutOthers = () => useWrite("account", () => api<null>("/api/
 
 // Registering a passkey runs the browser's WebAuthn ceremony between the
 // begin and finish requests. The server speaks base64url for every buffer.
-const fromB64 = (s: string) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
-const toB64 = (b: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
 type CreationJSON = { publicKey: Omit<PublicKeyCredentialCreationOptions, "challenge" | "user" | "excludeCredentials"> & {
   challenge: string;

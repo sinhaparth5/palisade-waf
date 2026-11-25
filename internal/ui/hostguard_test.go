@@ -53,6 +53,9 @@ func TestHostGuardBlocksAdminOnServiceDomain(t *testing.T) {
 	if err := h.parseTemplates(); err != nil {
 		t.Fatal(err)
 	}
+	if err := h.SetApp(appFS); err != nil {
+		t.Fatal(err)
+	}
 	e := echo.New()
 	h.Register(e)
 

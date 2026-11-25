@@ -12,25 +12,8 @@ import (
 	"palisade/internal/storage"
 )
 
-// appFS is a built app as Vite lays it out (web/build/palisade.ts).
-var appFS = fstest.MapFS{
-	"app/dist/index.html": {Data: []byte(`<html><head><script type="module" src="{{.Base}}assets/index-x.js"></script></head>` +
-		`<body data-admin="{{.AdminPath}}" data-csrf="{{.CSRF}}" data-role="{{.Role}}" data-email="{{.Email}}" data-demo="{{.Demo}}" data-waf="{{.WAF}}" data-nonce="{{.Nonce}}"></body></html>`)},
-	"app/dist/assets/index-x.js":    {Data: []byte("plain")},
-	"app/dist/assets/index-x.js.br": {Data: []byte("brotli")},
-	"app/dist/assets/index-x.js.gz": {Data: []byte("gzip")},
-	"app/dist/assets/tiny.js":       {Data: []byte("tiny")},
-	"app/dist/assets/blob.zzz":      {Data: []byte("blob")},
-	"app/dist/licenses.md":          {Data: []byte("# Licenses")},
-}
-
-func appEnv(t *testing.T) *adminEnv {
-	env := newAdminEnv(t)
-	if err := env.h.SetApp(appFS); err != nil {
-		t.Fatal(err)
-	}
-	return env
-}
+// newAdminEnv loads appFS; the name is kept for the app tests.
+func appEnv(t *testing.T) *adminEnv { return newAdminEnv(t) }
 
 func TestAppIndex(t *testing.T) {
 	env := appEnv(t)
@@ -164,6 +147,8 @@ func TestSetAppErrors(t *testing.T) {
 	cases := map[string]fstest.MapFS{
 		"index.html unreadable": {"app/dist/index.html/x": {}},
 		"bad template":          {"app/dist/index.html": {Data: []byte("{{")}},
+		"no login page":         {"app/dist/index.html": {}},
+		"bad login template":    {"app/dist/index.html": {}, "app/dist/login/login.html": {Data: []byte("{{")}},
 	}
 	for name, fsys := range cases {
 		if err := env.h.SetApp(fsys); err == nil {
@@ -178,7 +163,7 @@ func TestSetAppErrors(t *testing.T) {
 // A template that fails while rendering is a 500, not a half-written page.
 func TestAppRenderError(t *testing.T) {
 	env := newAdminEnv(t)
-	if err := env.h.SetApp(fstest.MapFS{"app/dist/index.html": {Data: []byte("{{index .AdminPath 99}}")}}); err != nil {
+	if err := env.h.SetApp(fstest.MapFS{"app/dist/index.html": {Data: []byte("{{index .AdminPath 99}}")}, "app/dist/login/login.html": {}}); err != nil {
 		t.Fatal(err)
 	}
 	if rec := env.do(http.MethodGet, "/admin", nil); rec.Code != http.StatusInternalServerError {
@@ -318,4 +303,36 @@ func TestAppJSONErrors(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The sign-in page's bundle is public (the app's is not, TestAppNeedsSession),
+// and its template is never served raw.
+func TestLoginBundle(t *testing.T) {
+	env := newAdminEnv(t)
+	anon := func(p string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		env.e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		return rec
+	}
+	if rec := anon("/admin/login"); rec.Code != 200 || !strings.Contains(rec.Body.String(), `src="/admin/login/assets/l.js"`) ||
+		rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("login page = %d %q %s", rec.Code, rec.Header().Get("Cache-Control"), rec.Body)
+	}
+	if rec := anon("/admin/login/assets/l.js"); rec.Code != 200 || rec.Body.String() != "login" {
+		t.Errorf("login asset = %d %q", rec.Code, rec.Body)
+	}
+	for _, p := range []string{"/admin/login/assets/../login.html", "/admin/login/assets/nope.js", "/admin/login/assets/../../index.html"} {
+		if rec := anon(p); rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", p, rec.Code)
+		}
+	}
+	if err := env.h.SetApp(fstest.MapFS{"app/.gitkeep": {}}); err != nil {
+		t.Fatal(err)
+	}
+	if rec := anon("/admin/login"); rec.Code != http.StatusNotFound {
+		t.Errorf("unbuilt login = %d", rec.Code)
+	}
+	if rec := anon("/admin/login/assets/l.js"); rec.Code != http.StatusNotFound {
+		t.Errorf("unbuilt login asset = %d", rec.Code)
+	}
 }

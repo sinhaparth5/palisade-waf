@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log"
+	"maps"
 	"mime"
 	"net/http"
 	"path"
@@ -34,6 +35,7 @@ func (h *Handler) SetApp(fsys fs.FS) error {
 		return nil
 	}
 	dist, _ := fs.Sub(fsys, "app/dist") // only fails on an invalid path
+	h.appIndex, h.appFS, h.loginIndex, h.loginFS = nil, nil, nil, nil
 	src, err := fs.ReadFile(dist, "index.html")
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -45,8 +47,46 @@ func (h *Handler) SetApp(fsys fs.FS) error {
 	if err != nil {
 		return fmt.Errorf("parse app index.html: %w", err)
 	}
-	h.appIndex, h.appFS = t, dist
+	login, _ := fs.Sub(dist, "login")
+	src, err = fs.ReadFile(login, "login.html")
+	if err != nil {
+		return fmt.Errorf("read app login.html: %w", err)
+	}
+	lt, err := template.New("login").Parse(string(src))
+	if err != nil {
+		return fmt.Errorf("parse app login.html: %w", err)
+	}
+	h.appIndex, h.appFS, h.loginIndex, h.loginFS = t, dist, lt, login
 	return nil
+}
+
+// LoginAsset serves the sign-in page's bundle (web, `vite build --mode
+// login`): a separate build, so an anonymous visitor never gets the app's JS.
+func (h *Handler) LoginAsset(c *echo.Context) error {
+	if h.loginFS == nil {
+		return echo.ErrNotFound
+	}
+	return serveBuilt(c, h.loginFS, "assets/"+c.Param("*"))
+}
+
+// renderLoginPage renders the sign-in page with data (stage, messages, ...),
+// which the page reads from <body data-*> (web/src/features/login).
+func (h *Handler) renderLoginPage(c *echo.Context, status int, data map[string]any) error {
+	if h.loginIndex == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "admin app not built (make web)")
+	}
+	page := map[string]any{
+		"AdminPath": h.cfg.Admin.Path, "Base": h.cfg.Admin.Path + "/login/", "Asset": h.assetVer,
+		"Stage": "", "Error": "", "Notice": "", "SSO": "", "DemoEmail": "", "DemoPass": "",
+		"Passkeys": false, "EmailCode": false, "InviteEmail": "", "Token": "",
+	}
+	maps.Copy(page, data)
+	var buf bytes.Buffer
+	if err := h.loginIndex.Execute(&buf, page); err != nil {
+		return err
+	}
+	c.Response().Header().Set("Cache-Control", "no-store")
+	return c.HTMLBlob(status, buf.Bytes())
 }
 
 // AppPage serves every admin GET no other route takes: hashed files from
@@ -102,13 +142,17 @@ func (h *Handler) appHTML(c *echo.Context) error {
 // request. Names carry a content hash, so the browser keeps them a year;
 // private, since they're only served to a signed-in session.
 func (h *Handler) appAsset(c *echo.Context, rel string) error {
+	return serveBuilt(c, h.appFS, rel)
+}
+
+func serveBuilt(c *echo.Context, fsys fs.FS, rel string) error {
 	// Clean first: assets/../index.html must not reach the raw template.
 	name := path.Clean(rel)
 	if !strings.HasPrefix(name, "assets/") && name != "licenses.md" ||
 		strings.HasSuffix(name, ".br") || strings.HasSuffix(name, ".gz") {
 		return echo.ErrNotFound
 	}
-	body, err := fs.ReadFile(h.appFS, name)
+	body, err := fs.ReadFile(fsys, name)
 	if err != nil {
 		return echo.ErrNotFound
 	}
@@ -119,7 +163,7 @@ func (h *Handler) appAsset(c *echo.Context, rel string) error {
 		if !acceptsEncoding(ae, enc.token) {
 			continue
 		}
-		if z, err := fs.ReadFile(h.appFS, name+enc.ext); err == nil {
+		if z, err := fs.ReadFile(fsys, name+enc.ext); err == nil {
 			body = z
 			hd.Set("Content-Encoding", enc.token)
 			break

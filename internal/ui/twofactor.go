@@ -310,16 +310,12 @@ func (h *Handler) emailRecoveryAvailable() bool {
 
 func (h *Handler) renderLoginTOTP(c *echo.Context, uid int64, status int, errMsg, notice string) error {
 	passkeysEnabled, _ := h.passkeys.Enabled(uid)
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	c.Response().WriteHeader(status)
-	return h.tmpls["login"].ExecuteTemplate(c.Response(), "login", map[string]any{
-		"TOTPStage":         true,
-		"Error":             errMsg,
-		"Notice":            notice,
-		"EmailAvailable":    h.emailRecoveryAvailable(),
-		"PasskeysAvailable": passkeysEnabled && passkey.IsSecureContext(c.Request()),
-		"AdminPath":         h.cfg.Admin.Path,
-		"Asset":             h.assetVer,
+	return h.renderLoginPage(c, status, map[string]any{
+		"Stage":     "totp",
+		"Error":     errMsg,
+		"Notice":    notice,
+		"EmailCode": h.emailRecoveryAvailable(),
+		"Passkeys":  passkeysEnabled && passkey.IsSecureContext(c.Request()),
 	})
 }
 

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -120,6 +121,9 @@ func newAdminEnv(t *testing.T) *adminEnv {
 	}))
 	t.Cleanup(hibp.Close)
 	h.pwBreach = breach.New(hibp.URL + "/")
+	if err := h.SetApp(appFS); err != nil {
+		t.Fatal(err)
+	}
 	env.e = echo.New()
 	h.Register(env.e)
 	h.RegisterAPI(env.e)
@@ -272,4 +276,22 @@ func serve(env *adminEnv, req *http.Request) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	env.e.ServeHTTP(rec, req)
 	return rec
+}
+
+// appFS is a built app as Vite lays it out (web/build/palisade.ts).
+var appFS = fstest.MapFS{
+	"app/dist/index.html": {Data: []byte(`<html><head><script type="module" src="{{.Base}}assets/index-x.js"></script></head>` +
+		`<body data-admin="{{.AdminPath}}" data-csrf="{{.CSRF}}" data-role="{{.Role}}" data-email="{{.Email}}" data-demo="{{.Demo}}" data-waf="{{.WAF}}" data-nonce="{{.Nonce}}"></body></html>`)},
+	"app/dist/assets/index-x.js":    {Data: []byte("plain")},
+	"app/dist/assets/index-x.js.br": {Data: []byte("brotli")},
+	"app/dist/assets/index-x.js.gz": {Data: []byte("gzip")},
+	"app/dist/assets/tiny.js":       {Data: []byte("tiny")},
+	"app/dist/assets/blob.zzz":      {Data: []byte("blob")},
+	"app/dist/licenses.md":          {Data: []byte("# Licenses")},
+	// The sign-in page's own build (web/login.html): every field it reads.
+	"app/dist/login/login.html": {Data: []byte(`<html><head><script type="module" src="{{.Base}}assets/l.js"></script></head>` +
+		`<body data-admin="{{.AdminPath}}" data-stage="{{.Stage}}" data-error="{{.Error}}" data-notice="{{.Notice}}" data-sso="{{.SSO}}" ` +
+		`data-demo-email="{{.DemoEmail}}" data-demo-pass="{{.DemoPass}}" data-passkeys="{{.Passkeys}}" data-email-code="{{.EmailCode}}" ` +
+		`data-invite-email="{{.InviteEmail}}" data-token="{{.Token}}"></body></html>`)},
+	"app/dist/login/assets/l.js": {Data: []byte("login")},
 }

@@ -136,7 +136,9 @@ export function unbrander(rules: Rule[]) {
 
 export const leftovers = (texts: string[]) => [...new Set(texts.flatMap((s) => s.match(leak) ?? []))];
 
-export function unbrand(): Plugin {
+// partial: a build that bundles only some libraries (the login page), so a
+// rule that matches nothing isn't a sign of a library change.
+export function unbrand({ partial = false } = {}): Plugin {
   let shared = unbrander(sharedRules);
   let local = unbrander(localRules);
   return {
@@ -159,7 +161,7 @@ export function unbrand(): Plugin {
           else if (f.fileName.endsWith(".css")) texts.push((f.source = local.apply(String(f.source))));
         }
         const dead = [...shared.dead(), ...local.dead()];
-        if (dead.length) this.error(`unbrand rules no longer match (library changed?): ${dead.join(", ")}`);
+        if (dead.length && !partial) this.error(`unbrand rules no longer match (library changed?): ${dead.join(", ")}`);
         const left = leftovers(texts);
         if (left.length) this.error(`library names left in the build, add an unbrand rule: ${left.join(", ")}`);
       },

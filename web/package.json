@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && tsc -b",
-    "smoke": "bun scripts/smoke.ts",
+    "build": "vite build && vite build --mode login && tsc -b",
+    "smoke": "bun scripts/smoke.ts && bun scripts/smoke.ts login",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -125,7 +125,7 @@ func (h *Handler) renderInvite(c *echo.Context, errMsg string) error {
 	}
 	// The token is in the URL; keep it out of Referer headers.
 	c.Response().Header().Set("Referrer-Policy", "no-referrer")
-	data := map[string]any{"AdminPath": h.cfg.Admin.Path, "Asset": h.assetVer, "InviteStage": true, "Error": errMsg}
+	data := map[string]any{"Stage": "invite", "Error": errMsg}
 	status := http.StatusOK
 	u, err := h.db.UserInvite(c.Param("token"))
 	if err != nil {
@@ -138,7 +138,5 @@ func (h *Handler) renderInvite(c *echo.Context, errMsg string) error {
 		data["InviteEmail"] = u.Email
 		data["Token"] = c.Param("token")
 	}
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	c.Response().WriteHeader(status)
-	return h.tmpls["login"].ExecuteTemplate(c.Response(), "login", data)
+	return h.renderLoginPage(c, status, data)
 }
