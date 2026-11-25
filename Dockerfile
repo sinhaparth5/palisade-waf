@@ -1,12 +1,23 @@
+# React admin app (web/). The output is the same on every arch, so it builds
+# once on the build platform instead of under QEMU.
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.5-alpine AS web
+WORKDIR /src/web
+COPY web/package.json web/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY web/ ./
+# The theme tokens are shared with the Pro page (static/css).
+COPY static/css/ledger.css /src/static/css/ledger.css
+RUN bun run build
+
 FROM golang:1.27-alpine AS builder
 RUN apk add --no-cache ca-certificates
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+COPY --from=web /src/static/app/dist ./static/app/dist
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go generate ./... && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /palisade .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /palisade .
 # scratch has no shell to mkdir/chown with, so /data is made here.
 RUN mkdir -p /rootfs/data
 

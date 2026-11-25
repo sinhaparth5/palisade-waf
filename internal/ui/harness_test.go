@@ -4,6 +4,7 @@ import (
 	"crypto/sha1" //nolint:gosec // HIBP's range API is keyed by SHA-1
 	"embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -119,6 +121,9 @@ func newAdminEnv(t *testing.T) *adminEnv {
 	}))
 	t.Cleanup(hibp.Close)
 	h.pwBreach = breach.New(hibp.URL + "/")
+	if err := h.SetApp(appFS); err != nil {
+		t.Fatal(err)
+	}
 	env.e = echo.New()
 	h.Register(env.e)
 	h.RegisterAPI(env.e)
@@ -162,6 +167,45 @@ func (env *adminEnv) doWith(method, path string, form url.Values, session string
 	}
 	rec := httptest.NewRecorder()
 	env.e.ServeHTTP(rec, req)
+	return rec
+}
+
+// doJSON sends a request the way the React app does (web/src/lib/api.ts):
+// Accept JSON, a JSON body when body isn't nil, session cookie and CSRF
+// header (none for session ""), and decodes the answer into out unless nil.
+// A []byte body is sent as it is.
+func (env *adminEnv) doJSON(session, method, path string, body, out any) *httptest.ResponseRecorder {
+	env.t.Helper()
+	var r *strings.Reader
+	switch b := body.(type) {
+	case nil:
+		r = strings.NewReader("")
+	case []byte:
+		r = strings.NewReader(string(b))
+	default:
+		raw, err := json.Marshal(body)
+		if err != nil {
+			env.t.Fatal(err)
+		}
+		r = strings.NewReader(string(raw))
+	}
+	req := httptest.NewRequest(method, path, r)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if session != "" {
+		req.AddCookie(&http.Cookie{Name: sessionCookie, Value: session})
+		req.Header.Set("X-CSRF-Token", csrfToken(session))
+	}
+	rec := httptest.NewRecorder()
+	env.e.ServeHTTP(rec, req)
+	if out != nil {
+		if err := json.Unmarshal(rec.Body.Bytes(), out); err != nil {
+			env.t.Fatalf("%s %s = %d, not JSON: %v: %s", method, path, rec.Code, err, rec.Body)
+		}
+	}
 	return rec
 }
 
@@ -236,4 +280,22 @@ func serve(env *adminEnv, req *http.Request) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	env.e.ServeHTTP(rec, req)
 	return rec
+}
+
+// appFS is a built app as Vite lays it out (web/build/palisade.ts).
+var appFS = fstest.MapFS{
+	"app/dist/index.html": {Data: []byte(`<html><head><script type="module" src="{{.Base}}assets/index-x.js"></script></head>` +
+		`<body data-admin="{{.AdminPath}}" data-csrf="{{.CSRF}}" data-role="{{.Role}}" data-email="{{.Email}}" data-demo="{{.Demo}}" data-waf="{{.WAF}}" data-nonce="{{.Nonce}}"></body></html>`)},
+	"app/dist/assets/index-x.js":    {Data: []byte("plain")},
+	"app/dist/assets/index-x.js.br": {Data: []byte("brotli")},
+	"app/dist/assets/index-x.js.gz": {Data: []byte("gzip")},
+	"app/dist/assets/tiny.js":       {Data: []byte("tiny")},
+	"app/dist/assets/blob.zzz":      {Data: []byte("blob")},
+	"app/dist/licenses.md":          {Data: []byte("# Licenses")},
+	// The sign-in page's own build (web/login.html): every field it reads.
+	"app/dist/login/login.html": {Data: []byte(`<html><head><script type="module" src="{{.Base}}assets/l.js"></script></head>` +
+		`<body data-admin="{{.AdminPath}}" data-stage="{{.Stage}}" data-error="{{.Error}}" data-notice="{{.Notice}}" data-sso="{{.SSO}}" ` +
+		`data-demo-email="{{.DemoEmail}}" data-demo-pass="{{.DemoPass}}" data-passkeys="{{.Passkeys}}" data-email-code="{{.EmailCode}}" ` +
+		`data-invite-email="{{.InviteEmail}}" data-token="{{.Token}}"></body></html>`)},
+	"app/dist/login/assets/l.js": {Data: []byte("login")},
 }

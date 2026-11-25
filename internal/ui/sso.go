@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -262,97 +261,24 @@ func (h *Handler) ssoUser(cfg storage.SSOConfig, cl *verifiedClaims) (*storage.A
 
 // ── Settings: SSO card and invites (owner only) ──────────────────────────────
 
-func (h *Handler) ssoCardData(c *echo.Context, cfg storage.SSOConfig, saveErr string) map[string]any {
-	return map[string]any{
-		"AdminPath":      h.cfg.Admin.Path,
-		"SSOIssuer":      cfg.Issuer,
-		"SSOClientID":    cfg.ClientID,
-		"SSOSecretSet":   cfg.ClientSecret != "",
-		"SSOGroup":       cfg.Group,
-		"SSOCallbackURL": h.ssoCallbackURL(c),
-		"SSOSaveErr":     saveErr,
-		"SSOSaved":       c.Request().Method == http.MethodPost && saveErr == "",
-	}
-}
-
-// SaveSSOSettings stores the SSO config after checking discovery works. An
-// empty issuer turns SSO off; existing SSO users then can't sign in until
-// it is back.
-func (h *Handler) SaveSSOSettings(c *echo.Context) error {
-	stored, _ := h.db.GetSSOConfig()
-	cfg := storage.SSOConfig{
-		Issuer:       strings.TrimRight(strings.TrimSpace(c.FormValue("issuer")), "/"),
-		ClientID:     strings.TrimSpace(c.FormValue("client_id")),
-		ClientSecret: strings.TrimSpace(c.FormValue("client_secret")),
-		Group:        strings.TrimSpace(c.FormValue("group")),
-	}
-	if cfg.ClientSecret == "" {
-		cfg.ClientSecret = stored.ClientSecret
-	}
-	saveErr := ""
-	if cfg.Issuer == "" {
-		cfg = storage.SSOConfig{}
-	} else if err := checkIssuer(cfg); err != nil {
-		saveErr = err.Error()
-	} else {
-		ctx, cancel := ssoContext()
-		defer cancel()
-		// go-oidc rejects a discovery document whose issuer differs from
-		// the one entered, which catches a typo now rather than at login.
-		if _, err := oidc.NewProvider(ctx, cfg.Issuer); err != nil {
-			saveErr = "discovery failed: " + err.Error()
-		}
-	}
-	if saveErr == "" {
-		if err := h.db.SetSSOConfig(cfg); err != nil {
-			saveErr = err.Error()
-		}
-	}
-	return h.renderPartial(c, "settings", "sso-card", h.ssoCardData(c, cfg, saveErr))
-}
-
 // checkIssuer requires HTTPS (plain HTTP only to loopback, for a local
 // IdP), since anyone on the path to a plain-HTTP issuer could swap in their
 // own signing keys.
 func checkIssuer(cfg storage.SSOConfig) error {
 	u, err := url.Parse(cfg.Issuer)
 	if err != nil || u.Host == "" {
-		return errors.New("enter the issuer URL, e.g. https://auth.example.com")
+		return fieldError("issuer", "Enter the issuer URL, e.g. https://auth.example.com.")
 	}
 	ip := net.ParseIP(u.Hostname())
 	loopback := u.Hostname() == "localhost" || ip != nil && ip.IsLoopback()
 	if u.Scheme != "https" && (u.Scheme != "http" || !loopback) {
-		return errors.New("the issuer URL must use https")
+		return fieldError("issuer", "The issuer URL must use https.")
 	}
-	if cfg.ClientID == "" || cfg.ClientSecret == "" {
-		return errors.New("client ID and client secret are required")
+	if cfg.ClientID == "" {
+		return fieldError("client_id", "Enter the client ID.")
+	}
+	if cfg.ClientSecret == "" {
+		return fieldError("client_secret", "Enter the client secret.")
 	}
 	return nil
-}
-
-// CreateSSOInvite invites an email to sign in with SSO under a role.
-func (h *Handler) CreateSSOInvite(c *echo.Context) error {
-	email := storage.NormalizeEmail(c.FormValue("email"))
-	if !storage.ValidEmail(email) {
-		return h.renderUsersCard(c, errors.New("enter a valid email"))
-	}
-	return h.renderUsersCard(c, h.db.CreateSSOInvite(email, c.FormValue("role")))
-}
-
-// RenewSSOInvite restarts an invite's 7 days.
-func (h *Handler) RenewSSOInvite(c *echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "invalid id")
-	}
-	return h.renderUsersCard(c, h.db.RenewSSOInvite(id))
-}
-
-// RevokeSSOInvite deletes a pending invite.
-func (h *Handler) RevokeSSOInvite(c *echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "invalid id")
-	}
-	return h.renderUsersCard(c, h.db.DeleteSSOInvite(id))
 }

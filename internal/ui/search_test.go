@@ -19,7 +19,7 @@ func TestSearch(t *testing.T) {
 		if sessions[role] == "" {
 			sessions[role] = env.sessionAs(role)
 		}
-		rec := env.doWith("GET", "/admin/search?q="+url.QueryEscape(q), nil, sessions[role])
+		rec := env.doJSON(sessions[role], "GET", "/admin/search?q="+url.QueryEscape(q), nil, nil)
 		if rec.Code != 200 {
 			t.Fatalf("%s search %q = %d", role, q, rec.Code)
 		}
@@ -30,21 +30,26 @@ func TestSearch(t *testing.T) {
 		role, q, want string
 		found         bool
 	}{
-		// Cards follow the role gates, including ones reached via {{template}}.
-		{storage.RoleOwner, "api keys", "/admin/settings#find=API%20Keys", true},
-		{storage.RoleAdmin, "api keys", "#find=API%20Keys", false},
-		{storage.RoleAdmin, "add ip", "/admin/ip-rules#find=Add%20IP%20Rule", true},
+		// Cards follow the role gates.
+		{storage.RoleOwner, "api keys", `"title":"API Keys"`, true},
+		{storage.RoleAdmin, "api keys", `"title":"API Keys"`, false},
+		{storage.RoleAdmin, "add ip", "Add IP Rules", true},
 		{storage.RoleViewer, "add ip", "Add IP Rule", false},
-		{storage.RoleViewer, "active ip", "/admin/ip-rules#find=Active%20IP%20Rules", true},
-		{storage.RoleViewer, "rate limiting", "Rate Limiting", false},
-		{storage.RoleViewer, "two-factor", "/admin/settings#find=Two-Factor%20Authentication", true},
-		{storage.RoleViewer, "dashboard", `href="/admin"`, true},
+		{storage.RoleViewer, "active ip", `"url":"/admin/ip-rules"`, true},
+		{storage.RoleViewer, "113.9", `"url":"/admin/ip-rules"`, true},
+		{storage.RoleViewer, "rate limiting", `"url":"/admin/settings"`, true},
+		{storage.RoleViewer, "two-factor", `"title":"Two-Factor Authentication"`, true},
+		{storage.RoleViewer, "dashboard", `"url":"/admin/"`, true},
+		{storage.RoleViewer, "enforcement", `"url":"/admin/"`, true},
+		{storage.RoleViewer, "configured serv", `"url":"/admin/services"`, true},
+		{storage.RoleAdmin, "add service", `"title":"Add Service"`, true},
+		{storage.RoleViewer, "add service", `"title":"Add Service"`, false},
 		// Live records.
-		{storage.RoleViewer, "SHOP.example", "/admin/services", true},
+		{storage.RoleViewer, "SHOP.example", `"url":"/admin/services"`, true},
 		{storage.RoleViewer, "113.9", "203.0.113.9", true},
 		{storage.RoleViewer, "tor", "Tor exits", true},
-		{storage.RoleViewer, "zzz-nothing", "No results for", true},
-		{storage.RoleViewer, "  ", "No results", false},
+		{storage.RoleViewer, "zzz-nothing", "[]", true},
+		{storage.RoleViewer, "  ", "[]", true},
 	}
 	for _, c := range cases {
 		if got := strings.Contains(search(c.role, c.q), c.want); got != c.found {
@@ -57,8 +62,8 @@ func TestSearch(t *testing.T) {
 // IPs (Settings) before Automatic banning (on IP Rules, earlier in the sidebar).
 func TestSearchRanksTitles(t *testing.T) {
 	env := newAdminEnv(t)
-	body := env.do("GET", "/admin/search?q=ip", nil).Body.String()
-	a, b := strings.Index(body, ">Trusted IPs<"), strings.Index(body, ">Automatic banning<")
+	body := env.doJSON(env.session, "GET", "/admin/search?q=ip", nil, nil).Body.String()
+	a, b := strings.Index(body, `"title":"Trusted IPs"`), strings.Index(body, `"title":"Automatic banning"`)
 	if a < 0 || b < 0 || a > b {
 		t.Errorf("want Trusted IPs before Automatic banning; at %d and %d", a, b)
 	}

@@ -12,7 +12,7 @@ import (
 
 // The Logs page Stats view is a GoAccess-style live summary. The browser does
 // the counting: it loads the last hour once from LogStatsSeed, then adds each
-// "stat" event that LogsStream sends next to the table row, so the stats move
+// event LogsStream sends, the same one the live table shows, so the stats move
 // as fast as the table does and keep counting while the Table tab is open.
 const (
 	statsSeedWindow = time.Hour
@@ -32,6 +32,7 @@ type statEvent struct {
 	Status  int    `json:"s"`
 	Blocked bool   `json:"blk"`
 	Reason  string `json:"why,omitempty"` // action, plus the rule ID when a rule fired
+	Rule    int    `json:"rule,omitempty"`
 	Ms      int64  `json:"ms"`
 	Browser string `json:"br"`
 	OS      string `json:"os"`
@@ -48,7 +49,7 @@ func newStatEvent(e storage.RequestLog) statEvent {
 	}
 	return statEvent{
 		ID: e.ID, T: e.Timestamp.UnixMilli(), App: e.AppName, IP: e.RealIP, Country: e.Country,
-		Method: e.Method, Path: e.Path, Status: e.Status, Blocked: e.Blocked, Reason: reason,
+		Method: e.Method, Path: e.Path, Status: e.Status, Blocked: e.Blocked, Reason: reason, Rule: e.RuleID,
 		Ms: e.Duration, Browser: browser, OS: os,
 	}
 }

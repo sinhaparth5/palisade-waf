@@ -45,8 +45,8 @@ func TestExtFeature(t *testing.T) {
 		if rec := env.doWith(http.MethodPost, "/admin/settings/ext-test", nil, tok); rec.Code != tc.post {
 			t.Errorf("%s: POST = %d, want %d", tc.role, rec.Code, tc.post)
 		}
-		body := env.doWith(http.MethodGet, "/admin/settings", nil, tok).Body.String()
-		if strings.Contains(body, "ext-test-card") != tc.hasCard || strings.Contains(body, `id="settings-pro"`) != tc.hasCard {
+		body := env.doWith(http.MethodGet, "/admin/settings/pro", nil, tok).Body.String()
+		if strings.Contains(body, "ext-test-card") != tc.hasCard {
 			t.Errorf("%s: card shown = %v", tc.role, !tc.hasCard)
 		}
 	}

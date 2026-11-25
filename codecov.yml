@@ -7,13 +7,6 @@ coverage:
       default:
         target: 90%
 
-# assets.go is only //go:embed declarations; tools/ is the build-time JS
-# minifier, never shipped. main.go is counted: its logic lives in
-# internal/app (issue #287).
-ignore:
-  - "assets.go"
-  - "tools/**"
-
 # Components slice the single upload by package group, so the PR comment
 # shows coverage per subsystem. Their statuses are informational: they report
 # per-component movement without blocking a merge (the project/patch statuses

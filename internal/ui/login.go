@@ -191,14 +191,10 @@ func (h *Handler) renderLogin(c *echo.Context, errMsg string) error {
 }
 
 func (h *Handler) renderLoginStatus(c *echo.Context, status int, errMsg string) error {
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	c.Response().WriteHeader(status)
 	sso, _ := h.db.GetSSOConfig()
-	return h.tmpls["login"].ExecuteTemplate(c.Response(), "login", map[string]any{
+	return h.renderLoginPage(c, status, map[string]any{
 		"Error":     errMsg,
-		"AdminPath": h.cfg.Admin.Path,
-		"Asset":     h.assetVer,
-		"SSOName":   ssoProviderName(sso),
+		"SSO":       ssoProviderName(sso),
 		"DemoEmail": h.cfg.Admin.DemoEmail,
 		"DemoPass":  h.cfg.Admin.DemoPassword,
 	})

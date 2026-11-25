@@ -43,7 +43,7 @@ func TestAdminRequiresSession(t *testing.T) {
 
 func TestAdminMutationsRequireCSRF(t *testing.T) {
 	env := newAdminEnv(t)
-	req := httptest.NewRequest("POST", "/admin/ip-rules", strings.NewReader("ip=1.2.3.4&rule_type=block"))
+	req := httptest.NewRequest("POST", "/admin/api/ip-rules", strings.NewReader("ip=1.2.3.4&rule_type=block"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: env.session})
 	rec := httptest.NewRecorder()
@@ -56,7 +56,7 @@ func TestAdminMutationsRequireCSRF(t *testing.T) {
 func TestLoginPageAndLogout(t *testing.T) {
 	env := newAdminEnv(t)
 
-	if rec := env.doWith("GET", "/admin/login", nil, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<form") {
+	if rec := env.doWith("GET", "/admin/login", nil, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `data-stage=""`) {
 		t.Fatalf("login page: %d", rec.Code)
 	}
 	// Already logged in: straight to the dashboard.
@@ -102,18 +102,24 @@ func TestAdminPagesRender(t *testing.T) {
 	}
 
 	pages := map[string]string{
-		"/admin":                   "Dashboard",
-		"/admin/logs":              "Live Logs",
-		"/admin/logs?mode=history": "Live Logs",
-		"/admin/logs?app=shop&status=4xx&from=2020-01-01T00:00&to=2099-01-01T00:00&page=0": "Live Logs",
-		"/admin/ip-rules":         "IP Rules",
-		"/admin/ip-rules?page=99": "IP Rules",
-		"/admin/geo-rules":        "Geo Rules",
-		"/admin/services":         "Services",
-		"/admin/certificates":     "Certificates",
-		"/admin/waf-rules":        "WAF Rules",
-		"/admin/threat-intel":     "Threat Intel",
-		"/admin/settings":         "Settings",
+		"/admin/settings/pro": "Palisade Pro",
+	}
+	// The app's address before #357; bookmarks land on the same page.
+	for path, to := range map[string]string{
+		"/admin/app":                         "/admin/",
+		"/admin/app/":                        "/admin/",
+		"/admin/app/ip-rules?page=2":         "/admin/ip-rules?page=2",
+		"/admin/app/logs?status=blocked&x=1": "/admin/logs?status=blocked&x=1",
+	} {
+		if rec := env.do("GET", path, nil); rec.Code != http.StatusFound || rec.Header().Get("Location") != to {
+			t.Errorf("GET %s = %d %q, want a redirect to %s", path, rec.Code, rec.Header().Get("Location"), to)
+		}
+	}
+	// Unknown API and static paths stay 404s, never the app's page.
+	for _, path := range []string{"/admin/api/nope", "/admin/static/nope.js"} {
+		if rec := env.do("GET", path, nil); rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", path, rec.Code)
+		}
 	}
 	for path, heading := range pages {
 		rec := env.do("GET", path, nil)
@@ -124,22 +130,6 @@ func TestAdminPagesRender(t *testing.T) {
 			t.Errorf("GET %s missing no-store", path)
 		}
 	}
-
-	if rec := env.do("GET", "/admin/ip-rules/rows?page=1", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "1.2.3.4") {
-		t.Errorf("ip rule rows: %d", rec.Code)
-	}
-	if rec := env.do("GET", "/admin/services/rows", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "shop") {
-		t.Errorf("service rows: %d", rec.Code)
-	}
-	if rec := env.do("GET", "/admin/services/cache-stats", nil); rec.Code != http.StatusOK {
-		t.Errorf("cache stats: %d", rec.Code)
-	}
-	// With Varnish enabled the card also reads varnishstat (absent here,
-	// so it renders the error) and the per-service request-log ratios.
-	_ = env.db.SetVarnishConfig(storage.VarnishConfig{Enabled: true, Addr: storage.DefaultVarnishAddr})
-	if rec := env.do("GET", "/admin/services/cache-stats", nil); rec.Code != http.StatusOK {
-		t.Errorf("cache stats (enabled): %d", rec.Code)
-	}
 }
 
 func TestDashboardAPIs(t *testing.T) {
@@ -147,42 +137,62 @@ func TestDashboardAPIs(t *testing.T) {
 	env.seedLog(storage.RequestLog{AppName: "a", RealIP: "1.1.1.1", Country: "CN", Status: 403, Blocked: true, Action: "deny", Method: "GET", Path: "/"})
 	env.seedLog(storage.RequestLog{AppName: "a", RealIP: "2.2.2.2", Country: "US", Status: 200, Method: "GET", Path: "/"})
 
-	var traffic struct {
-		Labels  []string `json:"labels"`
-		Allowed []int    `json:"allowed"`
-		Blocked []int    `json:"blocked"`
+	var dash struct {
+		RequestsToday int `json:"requests_today"`
+		BlockRate     int `json:"block_rate"`
+		Traffic       struct {
+			Labels  []string `json:"labels"`
+			Allowed []int    `json:"allowed"`
+			Blocked []int    `json:"blocked"`
+		} `json:"traffic"`
+		Threats   []dashboardCount     `json:"threats"`
+		Countries []dashboardCount     `json:"countries"`
+		Recent    []storage.LogRow     `json:"recent"`
+		Blocked   []storage.LogRow     `json:"blocked"`
+		Changes   []storage.AuditEntry `json:"changes"`
+		Glance    []glanceCard         `json:"glance"`
+		Enforce   []enforcementRow     `json:"enforcement"`
 	}
-	rec := env.do("GET", "/admin/api/traffic", nil)
-	if err := json.Unmarshal(rec.Body.Bytes(), &traffic); err != nil || len(traffic.Labels) != 24 {
-		t.Fatalf("traffic: %v %s", err, rec.Body)
+	env.doJSON(env.session, "GET", "/admin/api/dashboard", nil, &dash)
+	traffic := dash.Traffic
+	if len(traffic.Labels) != 24 || traffic.Allowed[23]+traffic.Blocked[23] != 2 || traffic.Blocked[23] != 1 {
+		t.Errorf("traffic = %+v", traffic)
 	}
-	if traffic.Allowed[23]+traffic.Blocked[23] != 2 || traffic.Blocked[23] != 1 {
-		t.Errorf("current hour = allowed %d blocked %d", traffic.Allowed[23], traffic.Blocked[23])
+	if dash.RequestsToday != 2 || dash.BlockRate != 50 || len(dash.Recent) != 2 || len(dash.Blocked) != 1 ||
+		len(dash.Glance) != 4 || len(dash.Enforce) != 5 || dash.Changes == nil {
+		t.Errorf("dashboard = %+v", dash)
+	}
+	if len(dash.Threats) != 1 || dash.Threats[0].Code != "CN" || len(dash.Countries) != 2 || dash.Countries[0].Name == "" {
+		t.Errorf("threats %+v countries %+v", dash.Threats, dash.Countries)
 	}
 
-	var threats struct {
-		Labels []string `json:"labels"`
-		Counts []int    `json:"counts"`
+	var logs struct {
+		Total int              `json:"total"`
+		Logs  []storage.LogRow `json:"logs"`
 	}
-	rec = env.do("GET", "/admin/api/threats", nil)
-	if err := json.Unmarshal(rec.Body.Bytes(), &threats); err != nil || len(threats.Labels) != 1 || threats.Labels[0] != "CN" {
-		t.Fatalf("threats: %v %s", err, rec.Body)
+	env.doJSON(env.session, "GET", "/admin/api/logs?status=blocked", nil, &logs)
+	if logs.Total != 1 || logs.Logs[0].RealIP != "1.1.1.1" {
+		t.Errorf("blocked logs = %+v", logs)
+	}
+	var bad jsonError
+	if rec := env.doJSON(env.session, "GET", "/admin/api/logs?from=yesterday", nil, &bad); rec.Code != http.StatusBadRequest || bad.Code != "invalid" {
+		t.Errorf("bad filter = %d %+v", rec.Code, bad)
 	}
 
 	if rec := env.do("GET", "/admin/api/notifications", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "1.1.1.1") {
 		t.Errorf("notifications panel: %d", rec.Code)
 	}
-	if n := env.h.unreadAlertCount(); n != 1 {
+	if n, _ := env.h.unreadAlertCount(); n != 1 {
 		t.Errorf("unread before seen = %d", n)
 	}
 	if rec := env.do("POST", "/admin/api/notifications/seen", nil); rec.Code != http.StatusNoContent {
 		t.Errorf("mark seen: %d", rec.Code)
 	}
-	if n := env.h.unreadAlertCount(); n != 0 {
+	if n, _ := env.h.unreadAlertCount(); n != 0 {
 		t.Errorf("unread after seen = %d", n)
 	}
 
-	rec = env.do("GET", "/admin/logs/stats", nil)
+	rec := env.do("GET", "/admin/logs/stats", nil)
 	var seed struct {
 		Events []statEvent `json:"events"`
 	}
@@ -292,7 +302,7 @@ func TestSSEStreams(t *testing.T) {
 	clean := storage.RequestLog{ID: 8, AppName: "a", RealIP: "1.2.3.5", Method: "GET", Path: "/ok", Status: 200, Timestamp: time.Now()}
 
 	body := readSSE(t, env, "/admin/logs/stream", clean, blocked)
-	if !strings.Contains(body, "data: ") || !strings.Contains(body, "event: stat") || !strings.Contains(body, "/evil") {
+	if !strings.Contains(body, `"p":"/evil","s":403,"blk":true,"why":"deny"`) || !strings.Contains(body, `"p":"/ok"`) {
 		t.Errorf("logs stream body: %q", body)
 	}
 

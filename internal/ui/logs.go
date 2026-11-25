@@ -1,14 +1,12 @@
 package ui
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"palisade/internal/storage"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -16,77 +14,21 @@ import (
 
 // ── Live Logs ──────────────────────────────────────────────────────────────────
 
-const logsPageSize = 50
-
-// Logs serves the logs page. The row data always comes from the database
-// (so it survives restarts, unlike the in-memory broadcast ring buffer).
-// In "live" mode (no filters, page 1) the page also keeps an SSE connection
-// open so brand-new requests get prepended in real time. Any filter, or
-// paging past page 1, freezes the view into a static "history" page.
-func (h *Handler) Logs(c *echo.Context) error {
-	q := c.QueryParams()
-
-	filter := storage.LogFilter{
-		AppName:     q.Get("app"),
-		StatusClass: q.Get("status"),
-	}
-	fromStr := q.Get("from")
-	toStr := q.Get("to")
-	if fromStr != "" {
-		if t, err := time.Parse("2006-01-02T15:04", fromStr); err == nil {
-			filter.From = t
-		}
-	}
-	if toStr != "" {
-		if t, err := time.Parse("2006-01-02T15:04", toStr); err == nil {
-			filter.To = t
-		}
-	}
-
-	page, _ := strconv.Atoi(q.Get("page"))
-	if page < 1 {
-		page = 1
-	}
-	filter.Limit = logsPageSize
-	filter.Offset = (page - 1) * logsPageSize
-
-	hasFilter := filter.AppName != "" || filter.StatusClass != "" || fromStr != "" || toStr != ""
-	live := !hasFilter && page == 1 && q.Get("mode") != "history"
-
-	rows, total, err := h.db.ListRequestsFiltered(filter)
-	if err != nil {
-		return err
-	}
-
-	return h.render(c, "logs", map[string]any{
-		"Apps":         h.registry.List(),
-		"History":      !live,
-		"Recent":       rows,
-		"Total":        total,
-		"CurPage":      page,
-		"TotalPages":   max(1, (total+logsPageSize-1)/logsPageSize),
-		"FilterApp":    filter.AppName,
-		"FilterStatus": filter.StatusClass,
-		"FilterFrom":   fromStr,
-		"FilterTo":     toStr,
-	})
-}
-
-// LogsStream is an SSE endpoint that pushes pre-rendered HTML log rows, each
-// followed by a JSON "stat" event for the Stats view.
+// LogsStream sends each new request to the React Logs page as a JSON
+// server-sent event (statEvent): the live table and the Stats view both read
+// it. A comment line every apiStreamPing keeps idle proxies from closing it.
 func (h *Handler) LogsStream(c *echo.Context) error {
 	w := c.Response()
+	rc := http.NewResponseController(w)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no") // disable nginx buffering
-	w.WriteHeader(http.StatusOK)
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
-
 	ch := h.broadcaster.Subscribe()
 	defer h.broadcaster.Unsubscribe(ch)
+	w.WriteHeader(http.StatusOK)
+	_ = rc.Flush()
+	ping := time.NewTicker(apiStreamPing)
+	defer ping.Stop()
 
 	for {
 		select {
@@ -94,26 +36,26 @@ func (h *Handler) LogsStream(c *echo.Context) error {
 			if !ok {
 				return nil
 			}
-			var buf bytes.Buffer
-			if err := h.tmpls["log-row"].ExecuteTemplate(&buf, "log-row", entry); err != nil {
-				continue
+			if b, err := json.Marshal(newStatEvent(entry)); err == nil {
+				fmt.Fprintf(w, "data: %s\n\n", b)
 			}
-			// SSE format: each line prefixed with "data:", blank line to end event
-			for _, line := range strings.Split(buf.String(), "\n") {
-				fmt.Fprintf(w, "data: %s\n", line)
-			}
-			fmt.Fprint(w, "\n")
-			// The Stats view counts these; same connection, so it never lags the table.
-			if stat, err := json.Marshal(newStatEvent(entry)); err == nil {
-				fmt.Fprintf(w, "event: stat\ndata: %s\n\n", stat)
-			}
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
+		case <-ping.C:
+			fmt.Fprint(w, ": ping\n\n")
 		case <-c.Request().Context().Done():
 			return nil
 		}
+		_ = rc.Flush()
 	}
+}
+
+// LogApps lists the service names for the Logs page's app filter. Names
+// only: the full service list carries settings a viewer doesn't get.
+func (h *Handler) LogApps(c *echo.Context) error {
+	names := []string{}
+	for _, s := range h.registry.List() {
+		names = append(names, s.Name)
+	}
+	return c.JSON(http.StatusOK, names)
 }
 
 // LogDetail returns the full detail of one request log entry as JSON,
@@ -122,7 +64,7 @@ func (h *Handler) LogsStream(c *echo.Context) error {
 func (h *Handler) LogDetail(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return apiError(c, http.StatusBadRequest, "invalid id")
 	}
 	d, err := h.db.GetRequestByID(id)
 	if err != nil {
@@ -190,18 +132,18 @@ func (h *Handler) LogDetail(c *echo.Context) error {
 func (h *Handler) MarkLogFeedback(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return apiError(c, http.StatusBadRequest, "invalid id")
 	}
 	d, err := h.db.GetRequestByID(id)
 	if err != nil {
 		return lookupError(c, err, "not found")
 	}
 	if !d.Blocked || d.RuleID == 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "log entry has no WAF rule to mark"})
+		return apiError(c, http.StatusBadRequest, "This request has no WAF rule to mark.")
 	}
 	falsePositive := c.FormValue("false_positive") == "1"
 	if err := h.db.MarkWAFRuleFeedback(d.AppName, d.RuleID, falsePositive); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return apiError(c, http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -213,21 +155,21 @@ func (h *Handler) MarkLogFeedback(c *echo.Context) error {
 func (h *Handler) CreateLogException(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return apiError(c, http.StatusBadRequest, "invalid id")
 	}
 	d, err := h.db.GetRequestByID(id)
 	if err != nil {
 		return lookupError(c, err, "not found")
 	}
 	if !d.Blocked || d.RuleID == 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "log entry has no WAF rule"})
+		return apiError(c, http.StatusBadRequest, "This request has no WAF rule to make an exception for.")
 	}
 	if _, ok := h.registry.Proxy(d.AppName); !ok {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "service " + d.AppName + " no longer exists"})
+		return apiError(c, http.StatusBadRequest, "Service "+d.AppName+" no longer exists.")
 	}
 	reason := fmt.Sprintf("From log #%d: %s %s", d.ID, d.Method, d.Path)
 	if err := h.db.DisableWAFRuleForService(d.AppName, d.RuleID, reason); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return apiError(c, http.StatusInternalServerError, err.Error())
 	}
 	h.reloadWAF()
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok", "service": d.AppName})

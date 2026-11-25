@@ -37,7 +37,7 @@ func TestAdminBodyLimit(t *testing.T) {
 	}
 
 	big.Seek(0, 0) //nolint:errcheck
-	req = httptest.NewRequest(http.MethodPost, "/admin/ip-rules", big)
+	req = httptest.NewRequest(http.MethodPost, "/admin/api/ip-rules", big)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)

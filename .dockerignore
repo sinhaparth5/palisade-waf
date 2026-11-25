@@ -1,10 +1,29 @@
 .git
 .githooks
 .cache
+.claude
+.vscode
+.idea
 dist
 *.db
 *.db-wal
 *.db-shm
 waf.db*
 certs
+GeoLite2-Country_*
+# Local binaries: the image builds its own.
 coraza-waf-mod
+palisade
+# Not part of the server build: the C++ client has its own workflow.
+cli
+design
+coverage.out
+junit.xml
+bench.txt
+# web/ outputs: the web stage installs and builds its own.
+web/node_modules
+web/coverage
+web/test-results
+web/playwright-report
+web/*.tsbuildinfo
+static/app/dist

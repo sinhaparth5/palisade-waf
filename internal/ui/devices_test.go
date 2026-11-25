@@ -1,10 +1,8 @@
 package ui
 
 import (
-	"bytes"
 	"strings"
 	"testing"
-	"time"
 )
 
 // TestBrowserOS pins the ordering traps: every Chromium browser also says
@@ -27,72 +25,6 @@ func TestBrowserOS(t *testing.T) {
 			t.Errorf("browserOS(%.40q) = %q, want %q", c.ua, got, c.want)
 		}
 	}
-}
-
-// TestRenderDevicesCard guards the branching in the card: only a live,
-// non-current device may be offered a revoke button.
-func TestRenderDevicesCard(t *testing.T) {
-	h := &Handler{}
-	if err := h.parseTemplates(); err != nil {
-		t.Fatal(err)
-	}
-	data := map[string]any{
-		"AdminPath": "/admin",
-		"Devices": []deviceRow{
-			{Token: "aaa", Device: "Chrome on Windows", IP: "1.2.3.4", Location: "Germany", Flag: "DE",
-				LastSeen: time.Now(), Current: true, Live: true},
-			{Token: "bbb", Device: "Safari on iPhone", IP: "5.6.7.8", Location: "Unknown",
-				LastSeen: time.Now(), Live: true},
-			{Token: "ccc", Device: "Firefox on Linux", IP: "9.9.9.9", Location: "France", Flag: "FR",
-				LastSeen: time.Now()},
-		},
-	}
-	for _, name := range []string{"devices-card", "devices-rows"} {
-		var buf bytes.Buffer
-		if err := h.tmpls["settings"].ExecuteTemplate(&buf, name, data); err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-		if buf.Len() == 0 {
-			t.Fatalf("%s rendered empty", name)
-		}
-	}
-	var buf bytes.Buffer
-	if err := h.tmpls["settings"].ExecuteTemplate(&buf, "devices-rows", data); err != nil {
-		t.Fatal(err)
-	}
-	out := buf.String()
-	for _, want := range []string{"This device", "Signed out", "fi-de"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("rendered rows missing %q", want)
-		}
-	}
-	if strings.Contains(out, "/admin/settings/devices/aaa") {
-		t.Error("current device was offered a button; it should have none")
-	}
-	// A live other device is offered "Log out"; a signed-out one is offered
-	// "Remove" (drop it from the history). Both hit the same route.
-	live := rowActionFor(out, "bbb")
-	if !strings.Contains(live, "Log out") {
-		t.Errorf("live device button = %q, want a Log out action", live)
-	}
-	dead := rowActionFor(out, "ccc")
-	if !strings.Contains(dead, "Remove") || strings.Contains(dead, "Log out") {
-		t.Errorf("signed-out device button = %q, want a Remove action", dead)
-	}
-}
-
-// rowActionFor returns the button markup following the given device's URL,
-// so the two row variants can be told apart by their label.
-func rowActionFor(html, token string) string {
-	i := strings.Index(html, "/admin/settings/devices/"+token)
-	if i < 0 {
-		return ""
-	}
-	rest := html[i:]
-	if j := strings.Index(rest, "</button>"); j >= 0 {
-		return rest[:j]
-	}
-	return rest
 }
 
 // TestCurrentFirst pins the current device to the top even when another

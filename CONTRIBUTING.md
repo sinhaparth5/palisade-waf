@@ -1,7 +1,7 @@
 # Contributing to Palisade
 
 Thanks for your interest in improving Palisade — a single-binary Go WAF +
-reverse proxy with an embedded HTMX/Tailwind admin dashboard. This guide covers
+reverse proxy with an embedded React admin dashboard. This guide covers
 how to build, test, and submit changes.
 
 By contributing, you agree that your contributions are licensed under the
@@ -11,10 +11,11 @@ project's [Apache License 2.0](LICENSE), and to abide by the project's
 ## Prerequisites
 
 - **Go 1.27+** (the module targets `go 1.27`).
-- That's it. Every dependency is pure Go — the SQLite driver is
-  `modernc.org/sqlite` (no CGO), and there is **no Node/npm toolchain**. The
-  admin UI's JS is minified by a small pure-Go tool in `tools/minify`, run via
-  `go:generate`, and `make css` downloads the standalone Tailwind CLI into
+- **[Bun](https://bun.sh)** (version: `BUN_VERSION` in `.github/workflows/ci.yml`)
+  to build the React admin app in `web/`. It's build-time only: the built
+  files are embedded in the binary, which needs no Node or Bun to run.
+- Every Go dependency is pure Go — the SQLite driver is `modernc.org/sqlite`
+  (no CGO) — and `make css` downloads the standalone Tailwind CLI into
   `.cache/`.
 
 ## Getting started
@@ -22,7 +23,7 @@ project's [Apache License 2.0](LICENSE), and to abide by the project's
 ```bash
 git clone https://github.com/sinhaparth5/palisade-waf.git
 cd palisade-waf
-make build      # go generate (minifies JS) + go build -> ./palisade
+make build      # make web (React app -> static/app/dist) + go build -> ./palisade
 make test       # go test ./...
 make lint       # golangci-lint run ./... (config: .golangci.yml)
 ```
@@ -46,22 +47,35 @@ Run a single package's tests while iterating:
 go test ./internal/proxy/ -run TestName -v
 ```
 
-Tests live alongside the code they cover — `internal/proxy/`,
-`internal/security/ratelimit/`,
-`internal/security/ja4/`, `internal/storage/`, `internal/notify/mailer/`,
-`internal/security/autoban/`, `internal/security/challenge/`,
-`internal/services/`, `internal/ui/`. Every implementation package lives
-under `internal/`, grouped by concern (`internal/security/` for
+Tests are organised by scope, not file type:
+
+- **Go unit tests** sit next to the code as `*_test.go` in the same package,
+  so they reach unexported names. Fixture files go in that package's
+  `testdata/` (e.g. `internal/storage/testdata/`), fuzz crashers in
+  `testdata/fuzz/`. Tests that wire several packages together (servers on
+  port 0, subcommands) live in `internal/app`.
+- **Frontend unit and component tests** sit next to their file in `web/src`
+  (`ServiceForm.tsx` -> `ServiceForm.test.tsx`); a test that spans several
+  components goes at the top of `web/src` (`csp.test.tsx`). `web/src/test/`
+  holds only shared setup and helpers.
+- **Browser end-to-end tests** live in `web/e2e/` (Playwright, `make e2e`).
+
+No `__tests__/` folders and no mirrored test trees. Every implementation
+package lives under `internal/`, grouped by concern (`internal/security/` for
 signal/mitigation packages, `internal/notify/` for outbound reporting) — see
 [`CLAUDE.md`](CLAUDE.md)'s "Layout" section.
 
 ## Build rules that will bite you
 
-- **After editing any `static/js/src/*.js`, never run bare `go build`.** The
-  minifier only runs through `go:generate`, which fires via `make build` /
-  `make dist` — not `go build`. If you must use `go build` directly, run
-  `go generate ./...` first, otherwise the embedded `*.min.js` served by the
-  binary will be stale.
+- **After editing anything under `web/`, run `make web` (or `make build`)
+  before `go build`.** The binary embeds `static/app/dist`, which only the web
+  build writes; without one the admin pages answer 404.
+- `make web-check` is what CI runs on `web/` (types, unit tests, build, smoke).
+  `make e2e` runs the role sweep in a real browser: as a viewer and an admin
+  it presses every control on every page and fails on any 403 (Playwright,
+  `web/e2e`; first run `cd web && bunx playwright install chromium`). Run it
+  when you add a page or a write control. Frontend layout and test helpers:
+  [`web/README.md`](web/README.md).
 - Don't start the server as part of routine work. Verify behaviour with
   `go test` (throwaway tests are fine — delete them once they pass) rather than
   running `make run` / `go run .`.
@@ -78,14 +92,13 @@ signal/mitigation packages, `internal/notify/` for outbound reporting) — see
 - **Frontend:** styling is Tailwind v4 with a CSS-first config in
   `static/css/tailwind.css`, compiled to the committed
   `static/css/dist/tailwind.min.css`. **Run `make css` and commit the output
-  whenever you add a class** under `internal/ui/` or `static/js/src/`,
-  otherwise it won't exist. Use v4 names (`rounded-sm`, `shadow-xs`,
+  whenever you add a class** under `internal/ui/` (the Pro page),
+  otherwise it won't exist. The React app in `web/` compiles its own
+  Tailwind at build time. Use v4 names (`rounded-sm`, `shadow-xs`,
   `outline-hidden`, `bg-linear-to-*`) and `class="..."` utilities
   (including arbitrary-value syntax like `w-[34px]`); do **not** add
   `style="..."` attributes or `<style>` blocks for anything Tailwind can
   express, and toggle visibility with `classList`, not `element.style.*`.
-- **Templates:** Go `html/template` content outside a `{{define}}` block is never
-  rendered — keep modal/partial markup inside the right block.
 - **Config direction:** there is no config file. Bootstrap settings (listen
   addresses, TLS binding, WAF rules dir, DB path, retention) are CLI flags —
   see `palisade --help` (defined in `serve`, `internal/app/serve.go`). All
@@ -149,8 +162,7 @@ This project is hosted on **GitHub**; changes are proposed as **pull requests**.
 
 1. Branch off `main` (e.g. `git checkout -b 42-fix-threat-intel-delete`).
 2. Make focused commits with short, imperative or descriptive summaries — match
-   the existing history (e.g. `ci: run go generate before go test to produce
-   embedded JS assets`). Mention the affected area when useful.
+   the existing history (e.g. `feat(web): move the sign-in page to react`). Mention the affected area when useful.
 3. Run `make test`, `gofmt` and `make lint` before pushing.
 4. Open a pull request that includes:
    - a brief description of the change and its motivation;

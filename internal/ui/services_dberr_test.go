@@ -5,69 +5,54 @@ import (
 	"testing"
 )
 
-// serviceFormRoutes are the per-service settings forms with a valid
-// submission each, so a failure can only come from the id or the DB.
-var serviceFormRoutes = []struct {
-	path string
-	form []string
+// serviceTabRoutes are the service dialog's writes with a valid body each,
+// so a failure can only come from the id or the DB.
+var serviceTabRoutes = []struct {
+	method, path string
+	body         any
 }{
-	{"/admin/services/bot/", []string{"bot_mode", "off"}},
-	{"/admin/services/uploads/", []string{"enabled", "1"}},
-	{"/admin/services/http3/", []string{"enabled", "1"}},
-	{"/admin/services/mtls/", []string{"mtls_mode", "off"}},
-	{"/admin/services/login/", []string{"login_paths", "/login"}},
-	{"/admin/services/ai/", []string{"ai_policy", "inherit"}},
-	{"/admin/services/breach/", []string{"breach_action", "log", "breach_fields", "password"}},
-	{"/admin/services/responses/", []string{"response_inspect", "log"}},
-	{"/admin/services/gate/", []string{}},
-	{"/admin/services/compress/", []string{"enabled", "1"}},
-	{"/admin/services/backends/", []string{"backends", "http://127.0.0.1:9", "lb_policy", "round_robin"}},
-	{"/admin/services/hosts/", []string{"host_aliases", "", "canonical_host", ""}},
-	{"/admin/services/schema/", []string{"schema_mode", "off"}},
-	{"/admin/services/openapi/", []string{"openapi_mode", "off"}},
-	{"/admin/services/mcp/", []string{"mcp_mode", "off"}},
-	{"/admin/services/jwt/", []string{"jwt_mode", "off"}},
-	{"/admin/services/csp/", []string{"csp_mode", "off"}},
-	{"/admin/services/cookies/", []string{"cookie_mode", "on"}},
-	{"/admin/services/policy/", []string{"policy_mode", "off"}},
-	{"/admin/services/cache/", []string{"enabled", "1"}},
-	{"/admin/services/cache-session/", []string{"enabled", "1", "cookie_name", "sid"}},
-	{"/admin/services/cache-tuning/", []string{}},
+	{http.MethodPut, "/name", map[string]string{"name": "renamed"}},
+	{http.MethodPut, "/hosts", svcHosts{}},
+	{http.MethodPut, "/backends", map[string]any{"urls": []string{"http://127.0.0.1:9"}, "lb_policy": "round_robin"}},
+	{http.MethodPut, "/rate-limit", svcRateLimit{RPS: 1}},
+	{http.MethodPut, "/bot", svcBot{Mode: "off"}},
+	{http.MethodPut, "/gate", map[string]any{}},
+	{http.MethodPut, "/uploads", svcUploads{LargeJS: true}},
+	{http.MethodPut, "/schema", svcSchema{Mode: "off"}},
+	{http.MethodPut, "/openapi", svcOpenAPI{Mode: "off"}},
+	{http.MethodPut, "/mcp", svcMCP{Mode: "off"}},
+	{http.MethodPut, "/jwt", svcJWT{Mode: "off"}},
+	{http.MethodPut, "/csp", svcCSP{Mode: "off"}},
+	{http.MethodPut, "/cookies", svcCookies{Enabled: true}},
+	{http.MethodPut, "/policy", svcPolicy{Mode: "off"}},
+	{http.MethodPut, "/responses", map[string]string{"mode": "log"}},
+	{http.MethodPut, "/cache", map[string]any{"enabled": true, "compress": true}},
+	{http.MethodPut, "/tls", map[string]string{"mode": "none"}},
+	{http.MethodPut, "/http3", map[string]bool{"enabled": true}},
+	{http.MethodPut, "/mtls", map[string]string{"mode": "off"}},
 }
 
-// failed reports whether a form response signals failure the way the audit
-// log reads it: a non-2xx status or an HX-Retarget to the form's error slot.
-func failed(code int, h http.Header) bool {
-	return code >= 300 || h.Get("HX-Retarget") != ""
-}
-
-// TestServiceFormsFail: a bad id, or a DB that can't read or write the
+// TestServiceTabsFail: a bad id, or a DB that can't read or write the
 // service tables, is never answered as a successful save.
-func TestServiceFormsFail(t *testing.T) {
+func TestServiceTabsFail(t *testing.T) {
 	env := newAdminEnv(t)
-	if err := env.db.AddService("svc", "svc.example.com", "", env.backend.URL, 0, 0); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.h.registry.Reload(env.db); err != nil {
-		t.Fatal(err)
-	}
-	for _, r := range serviceFormRoutes {
-		if rec := env.do("POST", r.path+"x", form(r.form...)); !failed(rec.Code, rec.Header()) {
-			t.Errorf("POST %sx = %d with no error signal", r.path, rec.Code)
+	svc := env.seedService("svc", "svc.example.com")
+	base := "/admin/api/services/"
+	for _, r := range serviceTabRoutes {
+		if rec := env.doJSON(env.session, r.method, base+"x"+r.path, r.body, nil); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s x%s = %d, want 400", r.method, r.path, rec.Code)
 		}
 	}
-
-	// Control: each submission is valid, so the failures below are the DB's.
-	for _, r := range serviceFormRoutes {
-		if rec := env.do("POST", r.path+"1", form(r.form...)); failed(rec.Code, rec.Header()) {
-			t.Errorf("POST %s1 = %d, control save failed: %.200s", r.path, rec.Code, rec.Body)
+	// Control: each body is valid, so the failures below are the DB's.
+	for _, r := range serviceTabRoutes {
+		if rec := env.doJSON(env.session, r.method, base+itoa(svc.ID)+r.path, r.body, nil); rec.Code != http.StatusNoContent {
+			t.Errorf("%s %s = %d, control save failed: %.200s", r.method, r.path, rec.Code, rec.Body)
 		}
 	}
-
 	dropTables(t, env.dbPath, "(name = 'services' OR name LIKE 'service\\_%' ESCAPE '\\')")
-	for _, r := range serviceFormRoutes {
-		if rec := env.do("POST", r.path+"1", form(r.form...)); !failed(rec.Code, rec.Header()) {
-			t.Errorf("POST %s1 with the tables gone = %d with no error signal: %.200s", r.path, rec.Code, rec.Body)
+	for _, r := range serviceTabRoutes {
+		if rec := env.doJSON(env.session, r.method, base+itoa(svc.ID)+r.path, r.body, nil); rec.Code < 500 {
+			t.Errorf("%s %s with the tables gone = %d, want 5xx: %.200s", r.method, r.path, rec.Code, rec.Body)
 		}
 	}
 }

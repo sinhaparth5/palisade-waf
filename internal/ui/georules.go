@@ -1,74 +1,70 @@
 package ui
 
 import (
+	"fmt"
 	"net/http"
-	"strconv"
+	"slices"
 	"strings"
 
 	"github.com/labstack/echo/v5"
 )
 
 // ── Geo Rules ─────────────────────────────────────────────────────────────────
+// The page lives in the React app (issue #351). It lists rules with
+// APIListGeoRules, shared with /api/v1.
 
-func (h *Handler) GeoRulesPage(c *echo.Context) error {
-	rules, err := h.db.ListGeoRules()
-	if err != nil {
+// AddGeoRules adds one rule per country in country_code, all or none.
+func (h *Handler) AddGeoRules(c *echo.Context) error {
+	var req struct {
+		ruleAddRequest
+		Codes []string `json:"country_code"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return fieldError("country_code", "Send a JSON body.")
+	}
+	if err := h.checkRuleAdd(req.ruleAddRequest); err != nil {
 		return err
 	}
-	blockCount, allowCount := 0, 0
-	for _, r := range rules {
-		if r.RuleType == "block" {
-			blockCount++
-		} else {
-			allowCount++
+	var codes []string
+	for _, code := range req.Codes {
+		code = strings.ToUpper(strings.TrimSpace(code))
+		if len(code) != 2 || strings.Trim(code, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") != "" {
+			return fieldError("country_code", fmt.Sprintf("%q is not a two-letter ISO country code.", code))
+		}
+		if !slices.Contains(codes, code) {
+			codes = append(codes, code)
 		}
 	}
-	blockPct, allowPct := 0, 0
-	if total := len(rules); total > 0 {
-		blockPct = blockCount * 100 / total
-		allowPct = allowCount * 100 / total
+	switch {
+	case len(codes) == 0:
+		return fieldError("country_code", "Pick at least one country.")
+	case len(codes) > bulkMax:
+		return fieldError("country_code", fmt.Sprintf("At most %d countries at once.", bulkMax))
 	}
-	return h.render(c, "geo_rules", map[string]any{
-		"Rules":      rules,
-		"Apps":       h.registry.List(),
-		"BlockCount": blockCount,
-		"AllowCount": allowCount,
-		"BlockPct":   blockPct,
-		"AllowPct":   allowPct,
-	})
-}
-
-func (h *Handler) AddGeoRule(c *echo.Context) error {
-	appName := c.FormValue("app_name")
-	code := strings.ToUpper(strings.TrimSpace(c.FormValue("country_code")))
-	ruleType := c.FormValue("rule_type")
-
-	if len(code) != 2 || (ruleType != "block" && ruleType != "allow") {
-		return c.String(http.StatusBadRequest, "invalid input")
+	for _, code := range codes {
+		if err := h.db.AddGeoRule(req.AppName, code, req.RuleType); err != nil {
+			return err
+		}
 	}
-	if err := h.db.AddGeoRule(appName, code, ruleType); err != nil {
+	if err := h.reloadGeo(); err != nil {
 		return err
 	}
-	if err := h.geoBl.Reload(h.db); err != nil {
-		return err
-	}
-	rules, _ := h.db.ListGeoRules()
-	h.scorer.ReloadGeoRules(rules)
-	return h.renderPartial(c, "geo_rules", "geo-rules-rows", map[string]any{"Rules": rules})
+	return c.JSON(http.StatusCreated, map[string]int{"added": len(codes)})
 }
 
-func (h *Handler) DeleteGeoRule(c *echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+// RemoveGeoRules deletes the rules with the given ids.
+func (h *Handler) RemoveGeoRules(c *echo.Context) error {
+	ids, err := removeIDs(c)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "invalid id")
-	}
-	if err := h.db.RemoveGeoRule(id); err != nil {
 		return err
 	}
-	if err := h.geoBl.Reload(h.db); err != nil {
+	for _, id := range ids {
+		if err := h.db.RemoveGeoRule(id); err != nil {
+			return err
+		}
+	}
+	if err := h.reloadGeo(); err != nil {
 		return err
 	}
-	rules, _ := h.db.ListGeoRules()
-	h.scorer.ReloadGeoRules(rules)
-	return h.renderPartial(c, "geo_rules", "geo-rules-rows", map[string]any{"Rules": rules})
+	return c.NoContent(http.StatusNoContent)
 }

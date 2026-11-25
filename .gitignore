@@ -1,9 +1,7 @@
 /coraza-waf-mod
 /palisade
-/minify
 /dist/
 /certs/
-/static/js/dist/*.min.js
 waf.db
 waf.db-shm
 waf.db-wal
@@ -16,3 +14,4 @@ bench.txt
 .vscode/
 .idea/
 .claude
+/static/app/dist/

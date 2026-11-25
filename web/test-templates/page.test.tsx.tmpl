@@ -1,0 +1,29 @@
+// __Name__ page: the real router at a URL, as a browser opening
+// {admin}/app__path__ would. For what the page wires together (loads,
+// navigation, URL search params); test component details in their own files.
+import { screen } from "@testing-library/react";
+import { mockApi } from "@/test/api-mock";
+import { asRole } from "@/test/boot";
+import { renderRoute } from "@/test/render";
+
+describe("__Name__ page", () => {
+  it("renders at __path__", async () => {
+    mockApi({ "GET /api/v1/todo": [] });
+    await renderRoute("__path__");
+    expect(await screen.findByRole("heading", { level: 1, name: /todo/i })).toBeInTheDocument();
+  });
+
+  it("keeps filters in the URL", async () => {
+    mockApi({ "GET /api/v1/todo": [] });
+    const { router } = await renderRoute("__path__?q=example");
+    expect(router.state.location.search).toMatchObject({ q: "example" });
+  });
+
+  it("is read-only for a viewer", async () => {
+    asRole("viewer");
+    mockApi({ "GET /api/v1/todo": [] });
+    await renderRoute("__path__");
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryByRole("button", { name: /add|save|delete/i })).toBeNull();
+  });
+});

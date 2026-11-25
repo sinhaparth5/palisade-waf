@@ -1,0 +1,52 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../../static/css/ledger.css";
+/* Fonts come from the Go side's vendor copy (index.html links it). */
+/* sonner's styles as a file: its own inline <style> is stripped (build/palisade.ts). */
+@import "sonner/dist/styles.css";
+
+@custom-variant dark (&:is([data-theme="dark"] *));
+
+/* shadcn/ui tokens, mapped onto the ledger palette so every component
+   re-themes with the --fn-* variables (light and dark). */
+@theme inline {
+  --color-background: var(--fn-paper);
+  --color-foreground: var(--fn-ink);
+  --color-card: var(--fn-card);
+  --color-card-foreground: var(--fn-ink);
+  --color-popover: var(--fn-card);
+  --color-popover-foreground: var(--fn-ink);
+  --color-primary: var(--fn-ink);
+  --color-primary-foreground: var(--fn-paper);
+  --color-secondary: var(--fn-paper-2);
+  --color-secondary-foreground: var(--fn-ink);
+  --color-muted: var(--fn-paper-2);
+  --color-muted-foreground: var(--fn-muted);
+  --color-accent: var(--fn-paper-2);
+  --color-accent-foreground: var(--fn-ink);
+  --color-destructive: var(--fn-danger);
+  --color-border: var(--fn-edge);
+  --color-input: var(--fn-edge);
+  --color-ring: color-mix(in oklab, var(--fn-info) 55%, transparent);
+  --color-sidebar: var(--fn-side);
+  --color-sidebar-foreground: var(--fn-side-ink);
+  --color-sidebar-primary: var(--fn-side-active);
+  --color-sidebar-primary-foreground: var(--fn-side);
+  --color-sidebar-accent: var(--fn-side-line);
+  --color-sidebar-accent-foreground: var(--fn-side-active);
+  --color-sidebar-border: var(--fn-side-line);
+  --color-sidebar-ring: var(--fn-side-muted);
+  --color-chart-1: var(--fn-success);
+  --color-chart-2: var(--fn-warning);
+  --color-chart-3: var(--fn-info);
+  --color-chart-4: var(--fn-danger);
+  --color-chart-5: var(--fn-muted);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  body { @apply bg-background text-foreground font-sans antialiased; min-width: 320px; }
+  h1, h2 { font-family: var(--font-mono); font-weight: 500; text-transform: uppercase; letter-spacing: .02em; }
+}

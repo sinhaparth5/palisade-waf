@@ -23,7 +23,7 @@ var auditSkip = map[string]bool{
 	"POST /api/notifications/seen": true,
 	"POST /settings/webhook/test":  true,
 	"POST /settings/email/test":    true,
-	"POST /waf-rules/dry-run":      true,
+	"POST /api/waf-rules/dry-run":  true,
 	"POST /api/v1/mcp":             true, // read-only tool calls
 }
 
@@ -32,10 +32,13 @@ var auditSkip = map[string]bool{
 // rather than a denylist so a field added later (a password, a token, a URL
 // with credentials in it) stays out until someone decides it's safe.
 var auditFields = []string{
-	"action", "ai_search", "ai_training", "ai_user", "aliases", "app_name", "bot_mode", "breach_action", "breach_fields", "canonical", "canonical_host", "captcha_provider", "cert_id", "client_id",
-	"cookie_exempt", "cookie_mode", "country_code", "email", "enabled", "group", "honeypot_paths", "host", "host_aliases", "ip", "issuer", "jwt_mode", "label", "lb_policy", "login_paths", "maintenance",
-	"match_type", "mode", "mtls_mode", "name", "note", "openapi_mode", "path", "policy_max_kib", "policy_methods", "policy_mode", "policy_types", "prefix", "read_only", "reason", "response_inspect",
-	"role", "rule_id", "rule_type", "service", "service_id", "trusted_ips", "waiting_room", "wr_crawlers", "wr_max",
+	"action", "addr", "ai_search", "ai_training", "ai_user", "algorithms", "aliases", "app_name", "approved", "audience", "bot_mode", "breach_action", "breach_fields", "burst", "by_session",
+	"canonical", "canonical_host", "captcha_provider", "cert_id", "client_id", "compress", "content_types", "cookie_exempt", "cookie_mode", "country_code", "crawlers", "destination_type",
+	"disabled", "email", "enabled", "events", "exempt", "grace", "group", "health_interval", "health_path", "honeypot_paths", "host", "host_aliases", "ids", "ip", "issuer", "jwks_url",
+	"jwt_mode", "keep", "label", "large_js", "lb_policy", "login_paths", "maintenance", "malware_scan", "match_type", "max_active", "max_body_kib", "methods", "mode", "mtls_mode",
+	"multipart_mb", "name", "note", "openapi_mode", "origins", "path", "path_rules", "policy_max_kib", "policy_methods", "policy_mode", "policy_types", "prefix", "prefixes", "read_only",
+	"reason", "response_inspect", "role", "rps", "rule_id", "rule_type", "service", "service_id", "session_cookie", "threshold", "tools", "trusted_ips", "ttl", "ttl_ceiling", "ttl_floor",
+	"waiting_room", "window_days", "wr_crawlers", "wr_max",
 }
 
 const auditValueMax = 120
@@ -136,33 +139,11 @@ func auditValue(v string) string {
 	return v
 }
 
-const auditFailedKey = "audit_failed"
-
-// markAuditFailure flags a request whose handler answered 200 with an inline
-// validation error instead of a 4xx, which by this package's convention is a
-// non-empty "...Err"/"...Error" string in the template data. Called from
-// render/renderPartial so new handlers are covered without remembering to.
-// ponytail: a "Saved, but applying failed" message also counts as a failure,
-// so that rare half-applied save goes unrecorded.
-func markAuditFailure(c *echo.Context, data any) {
-	m, ok := data.(map[string]any)
-	if !ok {
-		return
-	}
-	for k, v := range m {
-		if s, ok := v.(string); ok && s != "" && (strings.HasSuffix(k, "Err") || strings.HasSuffix(k, "Error")) {
-			c.Set(auditFailedKey, true)
-			return
-		}
-	}
-}
-
-// auditFailed reports whether the handler rejected the request while still
-// answering 200: flagged by markAuditFailure, or an htmx error box swap
-// (HX-Retarget, the fail() helpers in the service handlers).
+// auditFailed reports whether a handler rejected the request while still
+// answering 200 with an htmx error box swap (HX-Retarget), which add-on
+// cards on the Pro page may do.
 func auditFailed(c *echo.Context) bool {
-	failed, _ := c.Get(auditFailedKey).(bool)
-	return failed || c.Response().Header().Get("HX-Retarget") != ""
+	return c.Response().Header().Get("HX-Retarget") != ""
 }
 
 // auditRowsData fetches one page of the audit log for the audit-rows
@@ -187,16 +168,6 @@ func (h *Handler) auditRowsData(page int) (map[string]any, error) {
 		"TotalPages": totalPages,
 		"Total":      total,
 	}, nil
-}
-
-// AuditRows renders one page of the audit card for its Prev/Next buttons.
-func (h *Handler) AuditRows(c *echo.Context) error {
-	page, _ := strconv.Atoi(c.QueryParam("page"))
-	data, err := h.auditRowsData(page)
-	if err != nil {
-		return err
-	}
-	return h.renderPartial(c, "settings", "audit-rows", data)
 }
 
 // responseStatus is the status echo recorded for c's response (0 when its

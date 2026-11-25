@@ -15,16 +15,30 @@ updates:
     commit-message:
       prefix: "deps(go)"
       include: "scope"
-    # minify 2.24.20 (with parse 2.8.17) loops forever minifying
-    # static/js/src/logs.js, which hangs go generate. Drop this once a later
-    # release minifies it again.
-    ignore:
-      - dependency-name: "github.com/tdewolff/minify/v2"
-        versions: ["2.24.20"]
-      - dependency-name: "github.com/tdewolff/parse/v2"
-        versions: ["2.8.17"]
     groups:
       go-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "bun"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps(web)"
+      include: "scope"
+    groups:
+      web-dependencies:
         patterns:
           - "*"
         update-types:

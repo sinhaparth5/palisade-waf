@@ -14,7 +14,6 @@ import (
 	"palisade/internal/notify/metrics"
 	"palisade/internal/proxy"
 	"palisade/internal/security/blocklist"
-	"palisade/internal/security/bot"
 	"palisade/internal/security/breach"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
@@ -22,7 +21,6 @@ import (
 	"palisade/internal/security/threatscore"
 	"palisade/internal/services"
 	"palisade/internal/storage"
-	"slices"
 	"strings"
 	"time"
 
@@ -33,7 +31,7 @@ import (
 //go:embed templates
 var templateFS embed.FS
 
-// vendorFS holds the third-party admin assets (htmx, Chart.js, fonts, icons,
+// vendorFS holds the third-party admin assets (htmx for the Pro page, fonts, icons,
 // flags), served from the binary so the admin CSP can be 'self' only and the
 // UI works air-gapped (issue #195). See THIRD_PARTY_NOTICES.md.
 //
@@ -55,73 +53,6 @@ func setCSP(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-var funcs = template.FuncMap{
-	// can reports whether role may use routes declared for need, by the
-	// same order requireRole enforces (issue #216): {{if can $.Role "admin"}}.
-	// A missing role (nil) has no rank, so it gets read-only markup.
-	"can": func(role any, need string) bool {
-		r, _ := role.(string)
-		return roleRank[r] >= roleRank[need]
-	},
-	"flagClass":   func(code string) string { return "fi fi-" + strings.ToLower(code) },
-	"fmtTime":     func(t time.Time) string { return t.Format("02 Jan 15:04:05") },
-	"fmtTimeFull": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05 UTC") },
-	"fmtDur":      func(ms int64) string { return fmt.Sprintf("%dms", ms) },
-	"fmtLastUsed": func(t *time.Time) string {
-		if t == nil {
-			return "Never"
-		}
-		return t.Format("02 Jan 15:04:05")
-	},
-	"today": func() string { return time.Now().Format("2 January 2006") },
-	// truncate counts runes, not bytes: slicing bytes could cut a multi-byte
-	// character in half and render U+FFFD.
-	"truncate": func(s string, n int) string {
-		r := []rune(s)
-		if len(r) <= n {
-			return s
-		}
-		return string(r[:n]) + "…"
-	},
-	"shortDate": func(s string) string {
-		if len(s) < 10 {
-			return s
-		}
-		return s[:10]
-	},
-	"add":      func(a, b int) int { return a + b },
-	"sub":      func(a, b int) int { return a - b },
-	"isOdd":    func(i int) bool { return i%2 == 1 },
-	"contains": strings.Contains,
-	"aiPolicy": bot.ParseAIPolicy,
-	"join":     strings.Join,
-	"has":      slices.Contains[[]string, string],
-	"splitComma": func(s string) []string {
-		var out []string
-		for _, p := range strings.Split(s, ",") {
-			p = strings.TrimSpace(p)
-			if p != "" {
-				out = append(out, p)
-			}
-		}
-		return out
-	},
-	"map": func(pairs ...any) (map[string]any, error) {
-		if len(pairs)%2 != 0 {
-			return nil, fmt.Errorf("map: odd number of args")
-		}
-		m := make(map[string]any, len(pairs)/2)
-		for i := 0; i < len(pairs); i += 2 {
-			k, ok := pairs[i].(string)
-			if !ok {
-				return nil, fmt.Errorf("map: key must be string")
-			}
-			m[k] = pairs[i+1]
-		}
-		return m, nil
-	},
-}
-
 // Handler holds all UI dependencies.
 type Handler struct {
 	cfg             *config.Config
@@ -130,12 +61,15 @@ type Handler struct {
 	geoBl           *geo.Blocker
 	registry        *services.Registry
 	broadcaster     *LogBroadcaster
-	tmpls           map[string]*template.Template
-	sections        []section // page cards for the top bar search, see search.go
+	pro             *template.Template // templates/pro.html, the add-on cards page
 	staticJS        fs.FS
 	staticCSS       fs.FS
 	assetVer        string // cache-busting stamp for the embedded CSS/JS URLs
 	staticImgs      fs.FS
+	appIndex        *template.Template // React admin index.html (app.go); nil when not built
+	appFS           fs.FS
+	loginIndex      *template.Template // the public sign-in page (web/login.html)
+	loginFS         fs.FS              // its own build: no app code before sign-in
 	reloadBot       func(*challenge.Challenger)
 	buildChallenger func(enabled bool, threshold, ttl int) *challenge.Challenger
 	reloadRateLimit func()
@@ -162,8 +96,8 @@ type Handler struct {
 	extCards        []ext.Card        // Settings cards from ext.Mounts, filled by Register
 }
 
-// NewHandler builds the UI handler. jsFS must contain the minified JS
-// assets at "js/dist/*" (see package static); it's served under
+// NewHandler builds the UI handler. jsFS must contain the theme script at
+// "js/*.js" (see package static); it's served under
 // /<admin_path>/static/js/. cssFS must contain the compiled Tailwind
 // stylesheet at "css/dist/*" (built by `make css`, committed, embedded — no
 // CDN); it's served under /<admin_path>/static/css/. imgsFS must contain
@@ -173,9 +107,9 @@ type Handler struct {
 // route in internal/app); see hostGuard for why the admin/API routes need to be
 // able to hand a request off to it.
 func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist, geoBl *geo.Blocker, registry *services.Registry, bc *LogBroadcaster, jsFS embed.FS, cssFS embed.FS, imgsFS embed.FS, reloadBot func(*challenge.Challenger), buildChallenger func(bool, int, int) *challenge.Challenger, reloadRateLimit func(), reloadWAF func(), syncThreatIntel func(int64), sendReportNow func() error, sendTestWebhook func() error, sendLoginCode func(string) error, sendInvite func(to, inviter, role, link string) error, reloadAutoban func(), scorer *threatscore.Scorer, reloadAdaptive func(), proxyHandle echo.HandlerFunc) (*Handler, error) {
-	sub, err := fs.Sub(jsFS, "js/dist")
+	sub, err := fs.Sub(jsFS, "js")
 	if err != nil {
-		return nil, fmt.Errorf("sub static/js/dist: %w", err)
+		return nil, fmt.Errorf("sub static/js: %w", err)
 	}
 	cssSub, err := fs.Sub(cssFS, "css/dist")
 	if err != nil {
@@ -197,79 +131,57 @@ func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist,
 }
 
 func (h *Handler) parseTemplates() error {
-	// Standalone login page, doesn't use base.html.
-	login, err := template.New("login").Funcs(funcs).ParseFS(templateFS, "templates/login.html")
+	pro, err := template.ParseFS(templateFS, "templates/pro.html")
 	if err != nil {
-		return fmt.Errorf("parse template login: %w", err)
+		return fmt.Errorf("parse pro.html: %w", err)
 	}
-
-	h.tmpls = make(map[string]*template.Template, len(adminPages)+1)
-	h.tmpls["login"] = login
-	for _, page := range adminPages {
-		t, err := template.New("").Funcs(funcs).ParseFS(templateFS,
-			"templates/components/*.html",
-			"templates/log_row.html",
-			"templates/base.html",
-			"templates/"+page+".html",
-		)
-		if err != nil {
-			return fmt.Errorf("parse template %s: %w", page, err)
-		}
-		h.tmpls[page] = t
-	}
-	// log-row partial used by the SSE stream handler
-	t, err := template.New("log-row").Funcs(funcs).ParseFS(templateFS, "templates/log_row.html")
-	if err != nil {
-		return fmt.Errorf("parse log-row: %w", err)
-	}
-	h.tmpls["log-row"] = t
-
-	// notifications partial used by the bell dropdown
-	notif, err := template.New("notifications-panel").Funcs(funcs).ParseFS(templateFS, "templates/notifications.html")
-	if err != nil {
-		return fmt.Errorf("parse notifications: %w", err)
-	}
-	h.tmpls["notifications"] = notif
-	// Before any Execute: html/template rewrites the trees on first use.
-	h.sections = h.searchSections()
+	h.pro = pro
 	return nil
 }
 
 const sessionCookie = "cz_session"
 
+// signIn sends a request without a live session to the login page. The
+// React app gets a 401 instead: fetch would follow the redirect into HTML.
+func (h *Handler) signIn(c *echo.Context, query string) error {
+	if wantsJSON(c) {
+		return &jsonError{Status: http.StatusUnauthorized, Code: "unauthenticated", Message: "Your session has ended. Sign in again."}
+	}
+	return c.Redirect(http.StatusFound, h.cfg.Admin.Path+"/login"+query)
+}
+
 // sessionAuth is the session-cookie middleware that guards every admin route.
-// Unauthenticated requests are redirected to the login page.
+// Unauthenticated requests are sent to the login page (signIn).
 func (h *Handler) sessionAuth(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
-		login := h.cfg.Admin.Path + "/login"
 		cookie, err := c.Cookie(sessionCookie)
 		if err != nil || cookie.Value == "" {
-			return c.Redirect(http.StatusFound, login)
+			return h.signIn(c, "")
 		}
 		sess, err := h.db.GetSession(cookie.Value)
 		if err != nil || sess == nil {
-			return c.Redirect(http.StatusFound, login)
+			return h.signIn(c, "")
 		}
 		if !sess.Live() {
 			// Say which of the two happened. A revoked session means
 			// someone logged in elsewhere (or revoked this device from the
 			// Settings page); an expired one is just the 24h TTL.
 			if sess.Revoked() {
-				return c.Redirect(http.StatusFound, login+"?reason=revoked")
+				return h.signIn(c, "?reason=revoked")
 			}
-			return c.Redirect(http.StatusFound, login)
+			return h.signIn(c, "")
 		}
 		// A disabled user's sessions are revoked when they're disabled;
 		// checking here too keeps a stale row from ever authenticating.
 		u, err := h.db.GetAdminUser(sess.UserID)
 		if err != nil {
-			return c.Redirect(http.StatusFound, login)
+			return h.signIn(c, "")
 		}
 		if u == nil || u.Disabled {
 			// Drop the row too: LoginPage would otherwise see a live
 			// session and bounce straight back here.
 			h.db.DeleteSession(sess.ID) //nolint — best effort, it can't authenticate either way
-			return c.Redirect(http.StatusFound, login)
+			return h.signIn(c, "")
 		}
 		c.Set(ctxUser, u)
 		// Record last-seen off the hot path, throttled like TouchAPIKey so
@@ -381,6 +293,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	admin.GET("/login/sso/callback", h.SSOCallback)
 	// Set-password page from an invite email (issue #229).
 	admin.GET("/invite/:token", h.InvitePage)
+	// The sign-in page's own bundle, public; the app's stays behind a session.
+	admin.GET("/login/assets/*", h.LoginAsset)
 	admin.POST("/invite/:token", h.InvitePost, bodyLimit)
 	// Static assets are public so the login page can load spirals/JS before auth.
 	static := admin.Group("/static", staticGzip, h.staticCache)
@@ -390,8 +304,17 @@ func (h *Handler) Register(e *echo.Echo) {
 	static.StaticFS("/vendor", echo.MustSubFS(vendorFS, "vendor"))
 
 	g := admin.Group("")
-	// bodyLimit must run ahead of csrfProtect, which parses the form body.
-	g.Use(bodyLimit, h.sessionAuth, h.requireRole, h.csrfProtect, h.auditLog)
+	// jsonErrors wraps the rest so the React app gets its error body from
+	// every one of them; the body limit must run ahead of csrfProtect,
+	// which parses the form body.
+	// The OpenAPI tab takes a spec up to openAPIMaxBytes, as a JSON string
+	// (escaping can double it), so that one route gets its own cap.
+	openAPIPath := base + "/api/services/:id/openapi"
+	sessionLimit := middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{
+		LimitBytes: 1 << 20,
+		Skipper:    func(c *echo.Context) bool { return c.Path() == openAPIPath },
+	})
+	g.Use(jsonErrors, sessionLimit, h.sessionAuth, h.requireRole, h.csrfProtect, h.auditLog)
 
 	// as declares the minimum role for routes (issue #196); requireRole
 	// enforces it. Every mutating route is listed under one of the three
@@ -404,42 +327,49 @@ func (h *Handler) Register(e *echo.Echo) {
 	}
 
 	g.GET("/metrics", echo.WrapHandler(metrics.Handler()))
-	g.GET("", h.Dashboard)
+	g.GET("/api/dashboard", h.Dashboard)
+	g.GET("/api/logs", h.APIListLogs)
+	g.GET("/api/logs/apps", h.LogApps)
 	g.GET("/api/notifications", h.NotificationsPanel)
 	g.GET("/api/notifications/stream", h.NotificationsStream)
-	g.GET("/api/traffic", h.TrafficSeries)
-	g.GET("/api/threats", h.ThreatsSeries)
-	g.GET("/logs", h.Logs)
 	g.GET("/logs/stream", h.LogsStream)
 	g.GET("/logs/stats", h.LogStatsSeed)
 	g.GET("/logs/:id", h.LogDetail)
-	g.GET("/ip-rules", h.IPRulesPage)
-	g.GET("/ip-rules/rows", h.IPRulesRows)
-	g.GET("/geo-rules", h.GeoRulesPage)
-	g.GET("/services", h.ServicesPage)
-	g.GET("/services/rows", h.ServicesRows)
-	g.GET("/services/openapi/:id", h.ServiceOpenAPI)
-	g.GET("/services/cache-stats", h.ServicesCacheStats)
-	g.GET("/certificates", h.CertificatesPage)
-	g.GET("/waf-rules", h.WAFRulesPage)
-	g.GET("/threat-intel", h.ThreatIntelPage)
-	g.GET("/settings", h.SettingsPage)
-	g.GET("/settings/audit", h.AuditRows)
+	g.GET("/api/ip-rules", h.ListIPRules)
+	g.GET("/api/ip-rules/settings", h.IPRulesSettings)
+	g.GET("/api/geo-rules", h.APIListGeoRules)
+	g.GET("/api/services", h.ListServices)
+	g.GET("/api/services/cache-stats", h.CacheStats)
+	g.GET("/api/services/:id/openapi", h.ServiceOpenAPIJSON)
+	g.GET("/api/certificates", h.ListCertificates)
+	g.GET("/api/waf-rules", h.ListWAFRules)
+	g.GET("/api/threat-intel", h.ListThreatIntel)
+	// Add-on cards (ext.Card) render on the server.
+	g.GET("/settings/pro", h.SettingsPro)
+	g.GET("/api/settings/account", h.Account)
+	g.GET("/api/settings/protection", h.Protection)
+	g.GET("/api/settings/audit", h.Audit)
 	g.GET("/search", h.Search)
+	// The React app (issue #357): every other GET renders it, so the client
+	// router handles deep links. /app/* is where it lived before.
+	g.GET("", h.AppPage)
+	g.GET("/*", h.AppPage)
+	g.GET("/app", h.fromApp)
+	g.GET("/app/*", h.fromApp)
 
 	// Every role: the user's own session, credentials and second factors.
 	as(storage.RoleViewer,
 		g.POST("/logout", h.Logout),
 		g.POST("/api/notifications/seen", h.MarkNotificationsSeen),
-		g.POST("/settings/credentials", h.ChangeCredentials),
-		g.POST("/settings/2fa/start", h.StartTOTPEnrollment),
-		g.POST("/settings/2fa/confirm", h.ConfirmTOTPEnrollment),
-		g.POST("/settings/2fa/disable", h.DisableTOTP),
-		g.POST("/settings/passkeys/begin", h.BeginPasskeyEnrollment),
-		g.POST("/settings/passkeys/finish", h.FinishPasskeyEnrollment),
-		g.DELETE("/settings/passkeys/:id", h.DeletePasskey),
-		g.DELETE("/settings/devices/:token", h.RevokeDevice),
-		g.POST("/settings/devices/revoke-others", h.RevokeOtherDevices),
+		g.PUT("/api/settings/credentials", h.SetCredentials),
+		g.POST("/api/settings/2fa/start", h.StartTOTP),
+		g.POST("/api/settings/2fa/confirm", h.ConfirmTOTP),
+		g.POST("/api/settings/2fa/disable", h.DisableTOTPJSON),
+		g.POST("/api/settings/passkeys/begin", h.BeginPasskey),
+		g.POST("/api/settings/passkeys/finish", h.FinishPasskey),
+		g.DELETE("/api/settings/passkeys/:id", h.RemovePasskey),
+		g.DELETE("/api/settings/devices/:id", h.SignOutDevice),
+		g.POST("/api/settings/devices/sign-out-others", h.SignOutOthers),
 	)
 
 	as(storage.RoleAdmin,
@@ -447,82 +377,76 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.GET("/logs/export", h.ExportLogs),
 		g.POST("/logs/feedback/:id", h.MarkLogFeedback),
 		g.POST("/logs/exception/:id", h.CreateLogException),
-		g.POST("/ip-rules", h.AddIPRule),
-		g.POST("/ip-rules/autoban", h.SaveAutobanSettings),
-		g.POST("/ip-rules/adaptive", h.SaveAdaptiveSettings),
-		g.POST("/ip-rules/honeypots", h.SaveHoneypots),
-		g.DELETE("/ip-rules/:id", h.DeleteIPRule),
-		g.POST("/geo-rules", h.AddGeoRule),
-		g.DELETE("/geo-rules/:id", h.DeleteGeoRule),
-		g.POST("/services", h.AddService),
-		g.DELETE("/services/:id", h.DeleteService),
-		g.POST("/services/tls/upload", h.UploadServiceTLS),
-		g.POST("/services/tls/auto", h.EnableServiceAutoTLS),
-		g.POST("/services/tls/pool", h.AssignPoolCert),
-		g.POST("/services/tls/clear", h.ClearServiceTLS),
-		g.POST("/certificates", h.AddCertificate),
-		g.DELETE("/certificates/:id", h.DeleteCertificate),
-		g.POST("/services/ratelimit", h.SetServiceRateLimit),
-		g.POST("/services/bot/:id", h.SetServiceBotMode),
-		g.POST("/services/uploads/:id", h.SetServiceLargeJSUploads),
-		g.POST("/services/http3/:id", h.SetServiceHTTP3),
-		g.POST("/services/mtls/:id", h.SetServiceMTLS),
-		g.POST("/services/login/:id", h.SetServiceLoginPaths),
-		g.POST("/services/ai/:id", h.SetServiceAICrawlers),
-		g.POST("/services/breach/:id", h.SetServiceBreachCheck),
-		g.POST("/services/responses/:id", h.SetServiceResponseInspect),
-		g.POST("/services/gate/:id", h.SetServiceGate),
-		g.POST("/services/compress/:id", h.SetServiceCompress),
-		g.POST("/services/backends/:id", h.SetServiceBackends),
-		g.POST("/services/hosts/:id", h.SetServiceHosts),
-		g.POST("/services/name/:id", h.RenameService),
-		g.POST("/services/schema/:id", h.SetServiceSchema),
-		g.POST("/services/openapi/:id", h.SetServiceOpenAPI),
-		g.POST("/services/mcp/:id", h.SetServiceMCP),
-		g.POST("/services/jwt/:id", h.SetServiceJWT),
-		g.POST("/services/csp/:id", h.SetServiceCSP),
-		g.POST("/services/cookies/:id", h.SetServiceCookies),
-		g.POST("/services/policy/:id", h.SetServiceRequestPolicy),
-		g.POST("/services/cache/:id", h.SetServiceCache),
-		g.POST("/services/cache-session/:id", h.SetServiceCacheSession),
-		g.POST("/services/cache-tuning/:id", h.SetServiceCacheTuning),
-		g.POST("/services/cache-purge/:id", h.PurgeServiceCache),
-		g.POST("/settings/varnish", h.SaveVarnishConfig),
-		g.POST("/settings/acme-email", h.SaveAcmeEmail),
-		g.POST("/settings/bot", h.SaveBotSettings),
-		g.POST("/settings/ratelimit", h.SaveRateLimitConfig),
-		g.POST("/settings/trusted-ips", h.SaveTrustedIPs),
-		g.POST("/waf-rules/disable", h.DisableWAFRule),
-		g.POST("/waf-rules/dry-run", h.WAFDryRun),
-		g.POST("/waf-rules/custom", h.SaveCustomRule),
-		g.POST("/waf-rules/custom/:id/toggle", h.ToggleCustomRule),
-		g.DELETE("/waf-rules/custom/:id", h.DeleteCustomRule),
-		g.DELETE("/waf-rules/:id", h.EnableWAFRule),
-		g.DELETE("/waf-rules/service/:id", h.EnableWAFRuleForService),
-		g.POST("/waf-rules/feedback-config", h.SaveWAFFeedbackConfig),
-		g.POST("/threat-intel", h.AddThreatIntelSource),
-		g.POST("/threat-intel/crowdsec", h.AddCrowdSecSource),
-		g.DELETE("/threat-intel/:id", h.DeleteThreatIntelSource),
-		g.POST("/threat-intel/:id/toggle", h.ToggleThreatIntelSource),
-		g.POST("/threat-intel/:id/sync", h.SyncThreatIntelSource),
+		g.POST("/api/ip-rules", h.AddIPRules),
+		g.POST("/api/ip-rules/remove", h.RemoveIPRules),
+		g.PUT("/api/ip-rules/autoban", h.SaveAutobanSettings),
+		g.PUT("/api/ip-rules/adaptive", h.SaveAdaptiveSettings),
+		g.PUT("/api/ip-rules/honeypots", h.SaveHoneypots),
+		g.POST("/api/geo-rules", h.AddGeoRules),
+		g.POST("/api/geo-rules/remove", h.RemoveGeoRules),
+		g.POST("/api/services", h.APICreateService),
+		g.DELETE("/api/services/:id", h.APIDeleteService),
+		g.PUT("/api/services/:id/name", h.SetServiceName),
+		g.PUT("/api/services/:id/hosts", h.SetServiceHostsJSON),
+		g.PUT("/api/services/:id/backends", h.SetServiceBackendsJSON),
+		g.PUT("/api/services/:id/rate-limit", h.SetServiceRateLimitJSON),
+		g.PUT("/api/services/:id/bot", h.SetServiceBot),
+		g.PUT("/api/services/:id/gate", h.SetServiceGateJSON),
+		g.PUT("/api/services/:id/uploads", h.SetServiceUploads),
+		g.PUT("/api/services/:id/schema", h.SetServiceSchemaJSON),
+		g.PUT("/api/services/:id/openapi", h.SetServiceOpenAPIJSON, middleware.BodyLimit(2*openAPIMaxBytes)),
+		g.PUT("/api/services/:id/mcp", h.SetServiceMCPJSON),
+		g.PUT("/api/services/:id/jwt", h.SetServiceJWTJSON),
+		g.PUT("/api/services/:id/csp", h.SetServiceCSPJSON),
+		g.PUT("/api/services/:id/cookies", h.SetServiceCookiesJSON),
+		g.PUT("/api/services/:id/policy", h.SetServicePolicyJSON),
+		g.PUT("/api/services/:id/responses", h.SetServiceResponsesJSON),
+		g.PUT("/api/services/:id/cache", h.SetServiceCacheJSON),
+		g.POST("/api/services/:id/purge", h.PurgeServiceCacheJSON),
+		g.PUT("/api/services/:id/tls", h.SetServiceTLSJSON),
+		g.PUT("/api/services/:id/http3", h.SetServiceHTTP3JSON),
+		g.PUT("/api/services/:id/mtls", h.SetServiceMTLSJSON),
+		g.POST("/api/certificates", h.AddCertificate),
+		g.DELETE("/api/certificates/:id", h.DeleteCertificate),
+		g.PUT("/api/settings/bot", h.SetBot),
+		g.PUT("/api/settings/rate-limit", h.SetRateLimit),
+		g.PUT("/api/settings/trusted-ips", h.SetTrustedIPs),
+		g.PUT("/api/settings/varnish", h.SetVarnish),
+		g.POST("/api/waf-rules/exceptions", h.AddWAFException),
+		g.DELETE("/api/waf-rules/exceptions/global/:id", h.DeleteWAFException),
+		g.DELETE("/api/waf-rules/exceptions/services/:id", h.DeleteWAFException),
+		g.PUT("/api/waf-rules/feedback", h.SetWAFFeedback),
+		g.POST("/api/waf-rules/dry-run", h.WAFDryRun),
+		g.POST("/api/waf-rules/custom", h.AddCustomRule),
+		g.PUT("/api/waf-rules/custom/:id", h.UpdateCustomRule),
+		g.PUT("/api/waf-rules/custom/:id/enabled", h.SetCustomRuleEnabled),
+		g.DELETE("/api/waf-rules/custom/:id", h.DeleteCustomRule),
+		g.POST("/api/threat-intel", h.AddThreatIntelSource),
+		g.POST("/api/threat-intel/crowdsec", h.AddCrowdSecSource),
+		g.PUT("/api/threat-intel/:id", h.SetThreatIntelSource),
+		g.DELETE("/api/threat-intel/:id", h.DeleteThreatIntelSource),
+		g.POST("/api/threat-intel/:id/sync", h.SyncThreatIntelSource),
 	)
 
 	// Owner: users, the DB connection, secrets and API keys.
 	as(storage.RoleOwner,
-		g.POST("/settings/users", h.CreateUser),
-		g.POST("/settings/users/:id", h.UpdateUser),
-		g.POST("/settings/users/:id/invite", h.ResendUserInvite),
-		g.DELETE("/settings/users/:id", h.DeleteUser),
-		g.POST("/settings/users/invites", h.CreateSSOInvite),
-		g.POST("/settings/users/invites/:id", h.RenewSSOInvite),
-		g.DELETE("/settings/users/invites/:id", h.RevokeSSOInvite),
-		g.POST("/settings/sso", h.SaveSSOSettings),
-		g.POST("/settings/webhook", h.SaveWebhookConfig),
-		g.POST("/settings/webhook/test", h.TestWebhook),
-		g.POST("/settings/email", h.SaveEmailSettings),
-		g.POST("/settings/email/test", h.TestEmailReport),
-		g.POST("/settings/api-keys", h.CreateAPIKey),
-		g.DELETE("/settings/api-keys/:id", h.DeleteAPIKey),
+		g.GET("/api/settings/team", h.Team),
+		g.POST("/api/settings/users", h.AddUser),
+		g.PUT("/api/settings/users/:id", h.UpdateUserJSON),
+		g.POST("/api/settings/users/:id/invite", h.ResendInvite),
+		g.POST("/api/settings/users/:id/reset-2fa", h.ResetUser2FA),
+		g.DELETE("/api/settings/users/:id", h.RemoveUser),
+		g.POST("/api/settings/sso-invites", h.AddSSOInvite),
+		g.POST("/api/settings/sso-invites/:id/renew", h.RenewSSOInviteJSON),
+		g.DELETE("/api/settings/sso-invites/:id", h.RemoveSSOInvite),
+		g.PUT("/api/settings/sso", h.SetSSO),
+		g.POST("/api/settings/api-keys", h.AddAPIKey),
+		g.DELETE("/api/settings/api-keys/:id", h.RemoveAPIKey),
+		g.GET("/api/settings/alerts", h.Alerts),
+		g.PUT("/api/settings/webhook", h.SetWebhook),
+		g.POST("/api/settings/webhook/test", h.TestWebhookJSON),
+		g.PUT("/api/settings/email", h.SetEmail),
+		g.POST("/api/settings/email/test", h.TestEmailJSON),
 		// POST, not GET: this streams the full DB (password hashes,
 		// challenge secret), so it must never be reachable via cross-site
 		// top-level navigation.
@@ -551,71 +475,4 @@ func (h *Handler) Register(e *echo.Echo) {
 			h.extCards = append(h.extCards, f.Card)
 		}
 	}
-}
-
-func (h *Handler) render(c *echo.Context, page string, data map[string]any) error {
-	t, ok := h.tmpls[page]
-	if !ok {
-		return fmt.Errorf("template %q not found", page)
-	}
-	markAuditFailure(c, data)
-	if data == nil {
-		data = map[string]any{}
-	}
-	data["Page"] = page
-	if _, ok := data["Heading"]; !ok {
-		data["Heading"] = pageHeadings[page]
-	}
-	if _, ok := data["AdminPath"]; !ok {
-		data["AdminPath"] = h.cfg.Admin.Path
-	}
-	if _, ok := data["Asset"]; !ok {
-		data["Asset"] = h.assetVer
-	}
-	if _, ok := data["AlertCount"]; !ok {
-		data["AlertCount"] = h.unreadAlertCount()
-	}
-	// The signed-in user, for the sidebar and role-gated cards. Always
-	// set, so templates can compare .Role without a nil check.
-	data["UserEmail"], data["Role"] = "", ""
-	if u := currentUser(c); u != nil {
-		data["UserEmail"], data["Role"] = u.Email, u.Role
-	}
-	// Shell chrome: sidebar status box and bottom status bar.
-	data["Version"], data["WAFOn"] = h.cfg.Version, h.cfg.WAF.Enabled
-	// CSRF token for this session: picked up by hx-headers on <body> for all
-	// HTMX requests and by hidden _csrf inputs in plain HTML forms.
-	if _, ok := data["CSRF"]; !ok {
-		data["CSRF"] = h.csrfFromContext(c)
-	}
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	// no-store keeps these pages out of the browser's back/forward cache.
-	// Without it, navigating away leaves the previous page (and its live
-	// notifications/logs EventSource, see notify.js and logs.html) frozen in
-	// bfcache instead of torn down, so each connection stays open for as long
-	// as that bfcache entry survives. A few quick page navigations can pile
-	// up more open SSE connections than Chrome's ~6-per-origin HTTP/1.1 limit
-	// allows, stalling every other request behind them for as long as it
-	// takes bfcache to evict an old entry. It's also the right call for an
-	// authenticated admin panel anyway: these pages shouldn't be restorable
-	// from cache after logout.
-	c.Response().Header().Set("Cache-Control", "no-store")
-	return t.ExecuteTemplate(c.Response(), "base", data)
-}
-
-// renderPartial executes a named sub-template from a page template (used for HTMX swaps).
-func (h *Handler) renderPartial(c *echo.Context, page, tmplName string, data any) error {
-	t, ok := h.tmpls[page]
-	if !ok {
-		return fmt.Errorf("template %q not found", page)
-	}
-	markAuditFailure(c, data)
-	// Swapped fragments gate their controls with can, like full pages.
-	if m, ok := data.(map[string]any); ok && m["Role"] == nil {
-		if u := currentUser(c); u != nil {
-			m["Role"] = u.Role
-		}
-	}
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return t.ExecuteTemplate(c.Response(), tmplName, data)
 }

@@ -1,11 +1,9 @@
 package ui
 
 import (
-	"net/url"
-	"regexp"
+	"net/http"
 	"sort"
 	"strings"
-	"text/template/parse"
 
 	"github.com/labstack/echo/v5"
 
@@ -15,125 +13,58 @@ import (
 // Top bar search (issue #225): page cards the caller's role can see, then
 // live records. Read-only, so every role can use it.
 
-// adminPages are the base.html pages, in sidebar order.
-var adminPages = []string{"dashboard", "logs", "services", "certificates", "ip_rules", "geo_rules", "waf_rules", "threat_intel", "settings"}
-
-var pageHeadings = map[string]string{
-	"dashboard":    "Dashboard",
-	"logs":         "Live Logs",
-	"ip_rules":     "IP Rules",
-	"geo_rules":    "Geo Rules",
-	"services":     "Services",
-	"waf_rules":    "WAF Rules",
-	"threat_intel": "Threat Intel",
-	"certificates": "Certificates",
-	"settings":     "Settings",
-}
+// appSections are the app's pages and their cards, listed by hand. Cards
+// link to the page itself; admin and owner cards are hidden from roles the
+// page hides them from.
+var appSections = func() []section {
+	var out []section
+	for _, p := range []struct {
+		heading, url        string
+		cards, admin, owner []string
+	}{
+		{"Dashboard", "/", []string{"Overview", "Traffic, last 24h", "Top countries", "Services", "Latest blocked requests", "Daily log", "Recent requests", "Enforcement today", "Blocked by country", "Engine"}, nil, nil},
+		{"Live Logs", "/logs", []string{"Request inspector", "Stats"}, nil, nil},
+		{"Services", "/services", []string{"Configured Services", "Cache performance"}, []string{"Add Service"}, nil},
+		{"IP Rules", "/ip-rules", []string{"Automatic banning", "Adaptive enforcement", "Honeypot paths", "Rules overview", "Active IP Rules"}, []string{"Add IP Rules"}, nil},
+		{"Geo Rules", "/geo-rules", []string{"Rules overview", "GeoIP database bundled", "Active Geo Rules"}, []string{"Add Geo Rules"}, nil},
+		{"Certificates", "/certificates", []string{"Saved Certificates", "Service TLS"}, []string{"Add Certificate"}, nil},
+		{"WAF Rules", "/waf-rules", []string{"Virtual Patches", "Suggested Exceptions", "Top Firing Rules", "Custom Rules", "Rule Exceptions"}, []string{"Disable Rule", "Write Custom Rule"}, nil},
+		{"Threat Intel", "/threat-intel", []string{"Threat Intel Feeds"}, []string{"Add Feed", "CrowdSec LAPI"}, nil},
+		{"Settings", "/settings", []string{"Account", "Two-Factor Authentication", "Passkeys", "Registered Devices", "Bot Protection", "Rate Limiting", "Trusted IPs", "Varnish Cache", "WAF rules", "Audit log"}, nil,
+			[]string{"Users", "Single Sign-On", "API Keys", "Database backup", "Configuration export", "Webhook / SIEM Export", "Email Alerts"}},
+	} {
+		out = append(out, section{searchHit{p.heading, "Page", p.url}, storage.RoleViewer})
+		for _, c := range p.cards {
+			out = append(out, section{searchHit{c, p.heading, p.url}, storage.RoleViewer})
+		}
+		for _, c := range p.admin {
+			out = append(out, section{searchHit{c, p.heading, p.url}, storage.RoleAdmin})
+		}
+		for _, c := range p.owner {
+			out = append(out, section{searchHit{c, p.heading, p.url}, storage.RoleOwner})
+		}
+	}
+	return out
+}()
 
 const searchLimit = 8 // hits per group
 
-type searchHit struct{ Title, Detail, URL string }
+type searchHit struct {
+	Title  string `json:"title"`
+	Detail string `json:"detail"`
+	URL    string `json:"url"`
+}
 
 type searchGroup struct {
-	Label, Icon string
-	Hits        []searchHit
+	Label string      `json:"label"`
+	Icon  string      `json:"icon"`
+	Hits  []searchHit `json:"hits"`
 }
 
 // section is a page or one of its cards, shown to roles of at least need.
 type section struct {
 	searchHit
 	need string
-}
-
-var (
-	// Components whose "Title" argument is a card heading.
-	headerTemplates = map[string]bool{"card-header": true, "panel-header": true, "section-head": true, "settings-section-title": true}
-	titleArg        = regexp.MustCompile(`"Title" "([^"]+)"`)
-	literalHeading  = regexp.MustCompile(`<h[23][^>]*>([^<]+)</h[23]>`)
-)
-
-// searchSections walks each page's "content" parse tree for card headings,
-// following {{template}} calls and raising the required role inside
-// {{if can .Role "x"}}, so a card is offered only to roles that see it.
-func (h *Handler) searchSections() []section {
-	var out []section
-	for _, page := range adminPages {
-		t := h.tmpls[page]
-		pageURL := strings.TrimSuffix("/"+strings.ReplaceAll(page, "_", "-"), "/dashboard") // under the admin path
-		heading := pageHeadings[page]
-		out = append(out, section{searchHit{heading, "Page", pageURL}, storage.RoleViewer})
-		seen := map[string]bool{}
-		add := func(title, need string) {
-			title = strings.TrimSpace(title)
-			if title == "" || seen[title] {
-				return
-			}
-			seen[title] = true
-			out = append(out, section{searchHit{title, heading, pageURL + "#find=" + url.PathEscape(title)}, need})
-		}
-		var walk func(n parse.Node, need string, depth int)
-		walk = func(n parse.Node, need string, depth int) {
-			if n == nil || depth > 20 {
-				return
-			}
-			switch n := n.(type) {
-			case *parse.ListNode:
-				if n == nil {
-					return
-				}
-				for _, c := range n.Nodes {
-					walk(c, need, depth)
-				}
-			case *parse.TextNode:
-				for _, m := range literalHeading.FindAllSubmatch(n.Text, -1) {
-					add(string(m[1]), need)
-				}
-			case *parse.IfNode:
-				walk(n.List, higherRole(need, canRole(n.Pipe)), depth)
-				walk(n.ElseList, need, depth)
-			case *parse.RangeNode:
-				walk(n.List, need, depth)
-				walk(n.ElseList, need, depth)
-			case *parse.WithNode:
-				walk(n.List, need, depth)
-				walk(n.ElseList, need, depth)
-			case *parse.TemplateNode:
-				if headerTemplates[n.Name] {
-					if m := titleArg.FindStringSubmatch(n.Pipe.String()); m != nil {
-						add(m[1], need)
-					}
-				} else if sub := t.Lookup(n.Name); sub != nil && sub.Tree != nil {
-					walk(sub.Tree.Root, need, depth+1)
-				}
-			}
-		}
-		if c := t.Lookup("content"); c != nil && c.Tree != nil {
-			walk(c.Tree.Root, storage.RoleViewer, 0)
-		}
-	}
-	return out
-}
-
-// canRole returns the role an {{if can .Role "x"}} pipe requires, or "".
-func canRole(p *parse.PipeNode) string {
-	if p == nil || len(p.Cmds) != 1 || len(p.Cmds[0].Args) != 3 {
-		return ""
-	}
-	args := p.Cmds[0].Args
-	if id, ok := args[0].(*parse.IdentifierNode); !ok || id.Ident != "can" {
-		return ""
-	}
-	if s, ok := args[2].(*parse.StringNode); ok {
-		return s.Text
-	}
-	return ""
-}
-
-func higherRole(a, b string) string {
-	if roleRank[b] > roleRank[a] {
-		return b
-	}
-	return a
 }
 
 // matchHits returns up to searchLimit hits whose haystack contains q.
@@ -156,20 +87,18 @@ func scope(app string) string {
 	return app
 }
 
-// Search renders the top bar search results for ?q=.
+// Search answers the top bar search for ?q= as JSON groups.
 func (h *Handler) Search(c *echo.Context) error {
-	raw := strings.TrimSpace(c.QueryParam("q"))
-	q := strings.ToLower(raw)
-	data := map[string]any{"Q": raw}
+	q := strings.ToLower(strings.TrimSpace(c.QueryParam("q")))
 	if q == "" {
-		return h.renderPartial(c, "dashboard", "search-results", data)
+		return c.JSON(http.StatusOK, []searchGroup{})
 	}
 	role := ""
 	if u := currentUser(c); u != nil {
 		role = u.Role
 	}
 	admin := h.cfg.Admin.Path
-	var groups []searchGroup
+	groups := []searchGroup{}
 	group := func(label, icon string, hits []searchHit) {
 		if len(hits) > 0 {
 			groups = append(groups, searchGroup{label, icon, hits})
@@ -177,7 +106,7 @@ func (h *Handler) Search(c *echo.Context) error {
 	}
 
 	var visible []section
-	for _, s := range h.sections {
+	for _, s := range appSections {
 		if roleRank[role] >= roleRank[s.need] {
 			visible = append(visible, s)
 		}
@@ -248,6 +177,5 @@ func (h *Handler) Search(c *echo.Context) error {
 		return searchHit{title, scope(r.ServiceName), admin + "/waf-rules"}, r.Rule + " " + r.Note + " " + r.ServiceName
 	}))
 
-	data["Groups"] = groups
-	return h.renderPartial(c, "dashboard", "search-results", data)
+	return c.JSON(http.StatusOK, groups)
 }
