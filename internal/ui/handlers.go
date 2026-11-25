@@ -433,6 +433,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/services/cache-stats", h.ServicesCacheStats)
 	g.GET("/api/services", h.ListServices)
 	g.GET("/api/services/cache-stats", h.CacheStats)
+	g.GET("/api/services/:id/openapi", h.ServiceOpenAPIJSON)
 	g.GET("/certificates", h.toApp("/certificates"))
 	g.GET("/api/certificates", h.ListCertificates)
 	g.GET("/waf-rules", h.toApp("/waf-rules"))
@@ -486,6 +487,14 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.PUT("/api/services/:id/bot", h.SetServiceBot),
 		g.PUT("/api/services/:id/gate", h.SetServiceGateJSON),
 		g.PUT("/api/services/:id/uploads", h.SetServiceUploads),
+		g.PUT("/api/services/:id/schema", h.SetServiceSchemaJSON),
+		g.PUT("/api/services/:id/openapi", h.SetServiceOpenAPIJSON),
+		g.PUT("/api/services/:id/mcp", h.SetServiceMCPJSON),
+		g.PUT("/api/services/:id/jwt", h.SetServiceJWTJSON),
+		g.PUT("/api/services/:id/csp", h.SetServiceCSPJSON),
+		g.PUT("/api/services/:id/cookies", h.SetServiceCookiesJSON),
+		g.PUT("/api/services/:id/policy", h.SetServicePolicyJSON),
+		g.PUT("/api/services/:id/responses", h.SetServiceResponsesJSON),
 		g.DELETE("/services/:id", h.DeleteService),
 		g.POST("/services/tls/upload", h.UploadServiceTLS),
 		g.POST("/services/tls/auto", h.EnableServiceAutoTLS),

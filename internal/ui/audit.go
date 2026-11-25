@@ -32,11 +32,12 @@ var auditSkip = map[string]bool{
 // rather than a denylist so a field added later (a password, a token, a URL
 // with credentials in it) stays out until someone decides it's safe.
 var auditFields = []string{
-	"action", "addr", "ai_search", "ai_training", "ai_user", "aliases", "app_name", "bot_mode", "breach_action", "breach_fields", "burst", "canonical", "canonical_host", "captcha_provider", "cert_id",
-	"client_id", "cookie_exempt", "cookie_mode", "country_code", "crawlers", "destination_type", "disabled", "email", "enabled", "events", "group", "health_interval", "health_path", "honeypot_paths",
-	"host", "host_aliases", "ids", "ip", "issuer", "jwt_mode", "label", "large_js", "lb_policy", "login_paths", "maintenance", "malware_scan", "match_type", "max_active", "mode", "mtls_mode",
-	"multipart_mb", "name", "note", "openapi_mode", "path", "path_rules", "policy_max_kib", "policy_methods", "policy_mode", "policy_types", "prefix", "read_only", "reason", "response_inspect", "role",
-	"rps", "rule_id", "rule_type", "service", "service_id", "threshold", "trusted_ips", "ttl", "waiting_room", "window_days", "wr_crawlers", "wr_max",
+	"action", "addr", "ai_search", "ai_training", "ai_user", "algorithms", "aliases", "app_name", "approved", "audience", "bot_mode", "breach_action", "breach_fields", "burst", "canonical",
+	"canonical_host", "captcha_provider", "cert_id", "client_id", "content_types", "cookie_exempt", "cookie_mode", "country_code", "crawlers", "destination_type", "disabled", "email",
+	"enabled", "events", "exempt", "group", "health_interval", "health_path", "honeypot_paths", "host", "host_aliases", "ids", "ip", "issuer", "jwks_url", "jwt_mode", "label", "large_js",
+	"lb_policy", "login_paths", "maintenance", "malware_scan", "match_type", "max_active", "max_body_kib", "methods", "mode", "mtls_mode", "multipart_mb", "name", "note", "openapi_mode",
+	"origins", "path", "path_rules", "policy_max_kib", "policy_methods", "policy_mode", "policy_types", "prefix", "prefixes", "read_only", "reason", "response_inspect", "role", "rps",
+	"rule_id", "rule_type", "service", "service_id", "threshold", "tools", "trusted_ips", "ttl", "waiting_room", "window_days", "wr_crawlers", "wr_max",
 }
 
 const auditValueMax = 120

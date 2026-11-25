@@ -1842,3 +1842,313 @@ func (h *Handler) SetServiceUploads(c *echo.Context) error {
 	}
 	return h.applied(c, true)
 }
+
+// fields trims a JSON list and drops blank or repeated entries.
+func fields(in []string) []string {
+	var out []string
+	for _, s := range in {
+		for _, s := range strings.Fields(s) {
+			if !slices.Contains(out, s) {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}
+
+// SetServiceSchemaJSON answers PUT /api/services/:id/schema: the JSON
+// Schema request bodies are checked against (issue #75).
+func (h *Handler) SetServiceSchemaJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcSchema
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	v.Schema = strings.TrimSpace(v.Schema)
+	if v.Mode != "log" && v.Mode != "enforce" {
+		v.Mode = "off"
+	}
+	if v.Schema != "" && v.Mode != "off" {
+		if err := waf.ValidateSchema(v.Schema); err != nil {
+			return fieldError("schema", "Not a valid JSON Schema: "+err.Error())
+		}
+	}
+	if err := h.db.SetServiceSchema(s.ID, v.Schema, v.Mode); err != nil {
+		return err
+	}
+	return h.applied(c, true)
+}
+
+type svcOpenAPI struct {
+	Mode string `json:"mode"`
+	Spec string `json:"spec"`
+}
+
+// ServiceOpenAPIJSON answers GET /api/services/:id/openapi. The spec can be
+// large, so the page list carries only its mode.
+func (h *Handler) ServiceOpenAPIJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	o, err := h.db.GetServiceOpenAPI(s.ID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, svcOpenAPI{cmp.Or(o.Mode, "off"), o.Spec})
+}
+
+// SetServiceOpenAPIJSON answers PUT /api/services/:id/openapi (issue #190).
+// An empty spec removes it.
+func (h *Handler) SetServiceOpenAPIJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcOpenAPI
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	v.Spec = strings.TrimSpace(v.Spec)
+	if v.Mode != "log" && v.Mode != "enforce" {
+		v.Mode = "off"
+	}
+	if len(v.Spec) > openAPIMaxBytes {
+		return fieldError("spec", "The spec is larger than 2 MiB.")
+	}
+	if v.Spec != "" {
+		if err := waf.ValidateOpenAPI(v.Spec); err != nil {
+			return fieldError("spec", "Not a valid OpenAPI spec: "+err.Error())
+		}
+	}
+	if err := h.db.SetServiceOpenAPI(s.ID, v.Spec, v.Mode); err != nil {
+		return err
+	}
+	return h.applied(c, true)
+}
+
+// SetServiceMCPJSON answers PUT /api/services/:id/mcp (issue #234).
+func (h *Handler) SetServiceMCPJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcMCP
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	m := storage.ServiceMCP{
+		Mode: v.Mode, Path: strings.TrimSpace(v.Path),
+		Origins: strings.Join(fields(v.Origins), "\n"), Methods: strings.Join(fields(v.Methods), "\n"), Tools: strings.Join(fields(v.Tools), "\n"),
+	}
+	switch m.Mode {
+	case "log", "enforce":
+		if !strings.HasPrefix(m.Path, "/") {
+			return fieldError("path", "Start the endpoint path with /, e.g. /mcp.")
+		}
+		for _, o := range strings.Fields(m.Origins) {
+			if u, err := neturl.Parse(o); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || strings.TrimSuffix(u.Path, "/") != "" || u.RawQuery != "" || u.User != nil {
+				return fieldError("origins", o+" must look like https://app.example.com.")
+			}
+		}
+	case "off":
+	default:
+		return fieldError("mode", "Pick off, log or enforce.")
+	}
+	if err := h.db.SetServiceMCP(s.ID, m); err != nil {
+		return err
+	}
+	return h.applied(c, true)
+}
+
+// SetServiceJWTJSON answers PUT /api/services/:id/jwt (issue #279). The
+// verifier is built once here so a bad key or URL never reaches a reload.
+func (h *Handler) SetServiceJWTJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcJWT
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	j := storage.ServiceJWT{
+		Mode: v.Mode, JWKSURL: strings.TrimSpace(v.JWKSURL), PublicKey: strings.TrimSpace(v.PublicKey),
+		Issuer: strings.TrimSpace(v.Issuer), Audience: strings.TrimSpace(v.Audience),
+		Algorithms: strings.Join(fields(v.Algorithms), " "), Prefixes: strings.Join(fields(v.Prefixes), "\n"),
+	}
+	switch j.Mode {
+	case "log", "enforce":
+		if _, err := jwtauth.New(services.JWTConfig(j)); err != nil {
+			return badBody(err.Error())
+		}
+	case "off":
+	default:
+		return fieldError("mode", "Pick off, log or enforce.")
+	}
+	if err := h.db.SetServiceJWT(s.ID, j); err != nil {
+		return err
+	}
+	return h.applied(c, false)
+}
+
+// SetServiceCSPJSON answers PUT /api/services/:id/csp: the script inventory
+// policy (issue #235) and enforcement with approved sources (issue #283).
+// Approvals must be in the service's inventory; off keeps them.
+func (h *Handler) SetServiceCSPJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcCSP
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	policy := ""
+	switch v.Mode {
+	case "report", "enforce":
+		policy = cmp.Or(strings.Join(strings.Fields(v.Policy), " "), defaultCSP)
+		lower := strings.ToLower(policy)
+		switch {
+		case len(policy) > 4096:
+			return fieldError("policy", "At most 4096 characters.")
+		case strings.Contains(lower, "report-uri") || strings.Contains(lower, "report-to"):
+			return fieldError("policy", "Leave out report-uri and report-to; Palisade adds them.")
+		case strings.IndexFunc(policy, func(r rune) bool { return r < 0x20 || r > 0x7e }) >= 0:
+			return fieldError("policy", "Only printable ASCII.")
+		}
+		policy = strings.TrimSuffix(policy, ";")
+	case "off":
+	default:
+		return fieldError("mode", "Pick off, report or enforce.")
+	}
+	var approved []string
+	if policy == "" {
+		cur, err := h.db.ListCSPEnforcement()
+		if err != nil {
+			return err
+		}
+		approved = cur[s.ID].Approved
+	} else {
+		all, err := h.db.ListCSPScripts()
+		if err != nil {
+			return err
+		}
+		for _, o := range v.Approved {
+			if slices.ContainsFunc(all[s.ID], func(sc storage.CSPScript) bool { return sc.Origin == o }) && !slices.Contains(approved, o) {
+				approved = append(approved, o)
+			}
+		}
+	}
+	if err := h.db.SetServiceCSP(s.ID, policy); err != nil {
+		return err
+	}
+	if err := h.db.SetCSPEnforcement(s.ID, storage.CSPEnforcement{Enforce: v.Mode == "enforce", Approved: approved}); err != nil {
+		return err
+	}
+	return h.applied(c, false)
+}
+
+// SetServiceCookiesJSON answers PUT /api/services/:id/cookies (issue #281).
+func (h *Handler) SetServiceCookiesJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcCookies
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	var exempt []string
+	for _, e := range v.Exempt {
+		exempt = append(exempt, splitList(e)...)
+	}
+	exempt = fields(exempt)
+	if len(exempt) > 50 {
+		return fieldError("exempt", "At most 50 cookie names.")
+	}
+	for _, n := range exempt {
+		if len(n) > 128 || !cookieName.MatchString(n) {
+			return fieldError("exempt", "Not a cookie name: "+n)
+		}
+	}
+	if err := h.db.SetServiceCookiePolicy(s.ID, v.Enabled, exempt); err != nil {
+		return err
+	}
+	return h.applied(c, false)
+}
+
+// SetServicePolicyJSON answers PUT /api/services/:id/policy: the methods,
+// Content-Types and body size a service accepts (issue #282).
+func (h *Handler) SetServicePolicyJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcPolicy
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	p := storage.RequestPolicy{Mode: v.Mode}
+	switch p.Mode {
+	case "off":
+		p.Mode = ""
+	case "log", "enforce":
+		for _, m := range fields(v.Methods) {
+			if m = strings.ToUpper(m); !methodToken.MatchString(m) {
+				return fieldError("methods", "Not an HTTP method: "+m)
+			}
+			p.Methods = append(p.Methods, m)
+		}
+		for _, t := range fields(v.ContentTypes) {
+			if t = strings.ToLower(t); len(t) > 127 || !mediaType.MatchString(t) {
+				return fieldError("content_types", "Not a media type: "+t)
+			}
+			p.ContentTypes = append(p.ContentTypes, t)
+		}
+		if len(p.Methods) > 20 {
+			return fieldError("methods", "At most 20 methods.")
+		}
+		if len(p.ContentTypes) > 30 {
+			return fieldError("content_types", "At most 30 content types.")
+		}
+		if v.MaxBodyKiB < 0 || v.MaxBodyKiB > 1<<20 {
+			return fieldError("max_body_kib", "Between 0 and 1048576 KiB (1 GiB).")
+		}
+		p.MaxBodyKiB = v.MaxBodyKiB
+		if len(p.Methods) == 0 && len(p.ContentTypes) == 0 && p.MaxBodyKiB == 0 {
+			return badBody("Set methods, content types or a body size, or turn the policy off.")
+		}
+	default:
+		return fieldError("mode", "Pick off, log or enforce.")
+	}
+	if err := h.db.SetServiceRequestPolicy(s.ID, p); err != nil {
+		return err
+	}
+	return h.applied(c, false)
+}
+
+// SetServiceResponsesJSON answers PUT /api/services/:id/responses: response
+// inspection (issue #192), "" off, "log" or "block".
+func (h *Handler) SetServiceResponsesJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v struct {
+		Mode string `json:"mode"`
+	}
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	if v.Mode != "" && v.Mode != "log" && v.Mode != "block" {
+		return fieldError("mode", "Pick off, log or block.")
+	}
+	if err := h.db.SetServiceResponseInspect(s.ID, v.Mode); err != nil {
+		return err
+	}
+	return h.applied(c, false)
+}

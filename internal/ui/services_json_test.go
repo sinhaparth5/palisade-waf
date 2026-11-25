@@ -3,6 +3,7 @@ package ui
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"palisade/internal/storage"
 )
@@ -214,5 +215,102 @@ func TestServicesJSONBotGateUploads(t *testing.T) {
 	}
 	if got := env.services(t, env.sessionAs(storage.RoleViewer))[0].Gate.Bypass; got != "" {
 		t.Errorf("viewer sees the bypass token %q", got)
+	}
+}
+
+func TestServicesJSONRequestChecks(t *testing.T) {
+	env := newAdminEnv(t)
+	if err := env.db.AddService("api", "api.example.com", "", env.backend.URL, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.h.registry.Reload(env.db); err != nil {
+		t.Fatal(err)
+	}
+	id := env.services(t, env.session)[0].ID
+	if _, err := env.db.AddCSPScript(id, storage.CSPScript{Origin: "https://cdn.example.com", Page: "/", FirstSeen: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	svc := "/admin/api/services/" + itoa(id)
+	const spec = "openapi: 3.0.3\npaths:\n  /users/{id}:\n    get: {}"
+
+	for _, tc := range []struct {
+		path  string
+		body  any
+		field string
+	}{
+		{"/schema", svcSchema{"enforce", "{nope"}, "schema"},
+		{"/openapi", svcOpenAPI{"enforce", "not: [a spec"}, "spec"},
+		{"/mcp", svcMCP{Mode: "enforce", Path: "mcp"}, "path"},
+		{"/mcp", svcMCP{Mode: "log", Path: "/mcp", Origins: []string{"app.example.com"}}, "origins"},
+		{"/jwt", svcJWT{Mode: "always"}, "mode"},
+		{"/csp", svcCSP{Mode: "report", Policy: "script-src 'self'; report-uri /x"}, "policy"},
+		{"/cookies", svcCookies{true, []string{"ok, bad;name"}}, "exempt"},
+		{"/policy", svcPolicy{Mode: "enforce", Methods: []string{"GET", "G3T"}}, "methods"},
+		{"/policy", svcPolicy{Mode: "enforce", ContentTypes: []string{"json"}}, "content_types"},
+		{"/policy", svcPolicy{Mode: "log", MaxBodyKiB: -1}, "max_body_kib"},
+		{"/responses", map[string]string{"mode": "redact"}, "mode"},
+	} {
+		var got jsonError
+		if rec := env.doJSON(env.session, http.MethodPut, svc+tc.path, tc.body, &got); rec.Code != http.StatusBadRequest || got.Fields[tc.field] == "" {
+			t.Errorf("%s %+v: %d %s, want a %s error", tc.path, tc.body, rec.Code, rec.Body, tc.field)
+		}
+	}
+	for path, body := range map[string]any{
+		"/jwt":    svcJWT{Mode: "enforce"}, // no key or JWKS URL
+		"/policy": svcPolicy{Mode: "enforce"},
+	} {
+		if rec := env.doJSON(env.session, http.MethodPut, svc+path, body, nil); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s %+v: %d, want 400", path, body, rec.Code)
+		}
+	}
+
+	for _, tc := range []struct {
+		path string
+		body any
+	}{
+		{"/schema", svcSchema{"log", `{"type": "object"}`}},
+		{"/openapi", svcOpenAPI{"enforce", spec}},
+		{"/mcp", svcMCP{Mode: "enforce", Path: "/mcp", Origins: []string{"https://app.example.com"}, Methods: []string{"initialize", "tools/call"}, Tools: []string{"search"}}},
+		{"/csp", svcCSP{Mode: "enforce", Approved: []string{"https://cdn.example.com", "https://evil.example.com"}}},
+		{"/cookies", svcCookies{true, []string{"csrftoken, theme"}}},
+		{"/policy", svcPolicy{Mode: "enforce", Methods: []string{"get", "post"}, ContentTypes: []string{"application/json"}, MaxBodyKiB: 1024}},
+		{"/responses", map[string]string{"mode": "block"}},
+	} {
+		if rec := env.doJSON(env.session, http.MethodPut, svc+tc.path, tc.body, nil); rec.Code != http.StatusNoContent {
+			t.Fatalf("%s: %d %s", tc.path, rec.Code, rec.Body)
+		}
+	}
+	s := env.services(t, env.session)[0]
+	if s.Schema != (svcSchema{"log", `{"type": "object"}`}) || s.OpenAPIMode != "enforce" {
+		t.Errorf("schema = %+v, openapi %q", s.Schema, s.OpenAPIMode)
+	}
+	if m := s.MCP; m.Mode != "enforce" || m.Path != "/mcp" || len(m.Methods) != 2 || len(m.Tools) != 1 {
+		t.Errorf("mcp = %+v", m)
+	}
+	if c := s.CSP; c.Mode != "enforce" || c.Policy != defaultCSP || len(c.Approved) != 1 || c.Approved[0] != "https://cdn.example.com" {
+		t.Errorf("csp = %+v (an approval outside the inventory must be dropped)", c)
+	}
+	if c := s.Cookies; !c.Enabled || len(c.Exempt) != 2 {
+		t.Errorf("cookies = %+v", c)
+	}
+	if p := s.Policy; p.Mode != "enforce" || p.Methods[0] != "GET" || p.MaxBodyKiB != 1024 {
+		t.Errorf("policy = %+v", p)
+	}
+	if s.Responses != "block" {
+		t.Errorf("responses = %q", s.Responses)
+	}
+	viewer := env.sessionAs(storage.RoleViewer)
+	var o svcOpenAPI
+	if rec := env.doJSON(viewer, http.MethodGet, svc+"/openapi", nil, &o); rec.Code != http.StatusOK || o != (svcOpenAPI{"enforce", spec}) {
+		t.Errorf("openapi read: %d %+v", rec.Code, o)
+	}
+
+	// Off keeps the approvals for next time.
+	env.doJSON(env.session, http.MethodPut, svc+"/csp", svcCSP{Mode: "off"}, nil)
+	if c := env.services(t, env.session)[0].CSP; c.Mode != "off" || len(c.Approved) != 1 {
+		t.Errorf("csp off = %+v", c)
+	}
+	if rec := env.doJSON(viewer, http.MethodPut, svc+"/responses", map[string]string{"mode": ""}, nil); rec.Code != http.StatusForbidden {
+		t.Errorf("viewer write: %d", rec.Code)
 	}
 }

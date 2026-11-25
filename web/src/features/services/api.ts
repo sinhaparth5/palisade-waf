@@ -98,3 +98,8 @@ export const lines = (s: string) =>
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
+
+// The OpenAPI spec can be large, so the list carries only its mode and the
+// Requests tab reads the spec itself.
+export type OpenAPI = { mode: Mode3; spec: string };
+export const useOpenAPI = (id: number) => useQuery({ queryKey: ["services", id, "openapi"], queryFn: () => api<OpenAPI>(`/api/services/${id}/openapi`) });
