@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { fromB64, toB64 } from "@/lib/b64";
 import { cn } from "@/lib/utils";
+import loginArt from "@/assets/art/login.webp";
+import loginArtSm from "@/assets/art/login-sm.webp";
 
 // The public sign-in page (web/login.html, its own build): password, the 2FA
 // step and an invite's set-password step. Forms post to Go as before, and Go
@@ -58,12 +60,11 @@ export function LoginPage({ state = readLogin() }: { state?: LoginState }) {
   return (
     <div className="min-h-dvh w-full bg-canvas text-ink lg:flex lg:items-stretch lg:gap-8 lg:p-8">
       <div className="flex flex-1 flex-col lg:overflow-hidden lg:border lg:border-edge lg:bg-card">
-        <div className="relative h-52 w-full shrink-0 overflow-hidden sm:h-64 lg:hidden">
-          <Art admin={s.admin} />
-          <div className="absolute inset-0 bg-linear-to-t from-black/35 via-transparent to-transparent" />
+        <div className="relative h-52 w-full shrink-0 overflow-hidden border-b border-edge bg-card sm:h-64 lg:hidden">
+          <Art className="right-4 left-auto w-auto py-3" />
           <span className="absolute bottom-4 left-5 flex items-center gap-2">
-            <img src={`${s.admin}/static/imgs/logo.svg`} alt="" className="h-6 w-6 drop-shadow-sm" />
-            <span className="font-mono text-sm uppercase tracking-[.16em] text-white drop-shadow-sm">Palisade</span>
+            <img src={`${s.admin}/static/imgs/logo.svg`} alt="" className="h-6 w-6" />
+            <span className="font-mono text-sm uppercase tracking-[.16em] text-ink">Palisade</span>
           </span>
         </div>
 
@@ -104,23 +105,27 @@ export function LoginPage({ state = readLogin() }: { state?: LoginState }) {
         </div>
       </div>
 
-      <div className="relative hidden overflow-hidden border border-edge lg:block lg:w-[42%] xl:w-[45%]">
-        <Art admin={s.admin} />
-        <div className="absolute inset-0 bg-linear-to-t from-black/25 via-transparent to-transparent" />
+      <div className="relative hidden overflow-hidden border border-edge bg-card lg:block lg:w-[42%] xl:w-[45%]">
+        <Art className="w-full p-10 xl:p-14" />
       </div>
     </div>
   );
 }
 
-const Art = ({ admin }: { admin: string }) => (
+// The palisade scene from scripts/art (dissolve.py --palette ledger), the
+// same treatment as the app's page heroes, whole and on the card colour.
+const Art = ({ className }: { className?: string }) => (
   <img
-    src={`${admin}/static/imgs/login-security-v2.webp`}
+    src={loginArtSm}
+    srcSet={`${loginArtSm} 586w, ${loginArt} 1173w`}
+    sizes="(min-width: 1024px) 45vw, 200px"
     alt=""
     aria-hidden
-    width={1000}
-    height={1250}
+    width={1173}
+    height={1445}
     fetchPriority="high"
-    className="absolute inset-0 h-full w-full object-cover object-center grayscale-[.6] sepia-[.25]"
+    draggable={false}
+    className={cn("pointer-events-none absolute inset-0 h-full object-contain object-center select-none", className)}
   />
 );
 
