@@ -101,3 +101,20 @@ export type Protection = { bot: Bot; rate_limit: RateLimit; trusted_ips: string[
 export const useProtection = () => useQuery({ queryKey: ["protection"], queryFn: () => api<Protection>("/api/settings/protection") });
 export const useSetProtection = <V,>(path: "bot" | "rate-limit" | "trusted-ips" | "varnish") =>
   useWrite("protection", (v: V) => api<null>(`/api/settings/${path}`, json("PUT", v)));
+
+// Owner only: GET {admin}/api/settings/alerts. The email token is write-only.
+export type WebhookEvent = "blocked" | "challenged" | "scripts";
+export type Webhook = { enabled: boolean; url: string; secret: string; events: WebhookEvent[]; destination_type: "generic" | "slack" | "discord" };
+export type Email = { enabled: boolean; sender: string; to: string; token_set: boolean };
+export type Alerts = { webhook: Webhook; email: Email };
+
+export const useAlerts = () => useQuery({ queryKey: ["alerts"], queryFn: () => api<Alerts>("/api/settings/alerts") });
+export const useSetWebhook = () => useWrite("alerts", (w: Webhook) => api<null>("/api/settings/webhook", json("PUT", w)));
+export const useSetEmail = () => useWrite("alerts", (e: { enabled: boolean; to: string; token: string }) => api<null>("/api/settings/email", json("PUT", e)));
+export const useSendTest = (what: "webhook" | "email") => useMutation({ mutationFn: () => api<null>(`/api/settings/${what}/test`, json("POST")) });
+
+// Every role: GET {admin}/api/settings/audit?page=n, newest first.
+export type AuditEntry = { ts: string; actor: string; ip: string; action: string; target: string; summary: string };
+export type AuditPage = { entries: AuditEntry[]; page: number; pages: number; total: number };
+export const useAudit = (page: number) =>
+  useQuery({ queryKey: ["audit", page], queryFn: () => api<AuditPage>(`/api/settings/audit?page=${page}`), placeholderData: (prev) => prev });

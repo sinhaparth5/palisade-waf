@@ -8,33 +8,6 @@ import (
 	"palisade/internal/storage"
 )
 
-// TestVarnishCardRenders executes the Settings-page Varnish card standalone
-// (the same partial SaveVarnishConfig re-renders) so a renamed field or
-// broken pipeline fails here instead of at first click in the UI.
-func TestVarnishCardRenders(t *testing.T) {
-	h := &Handler{}
-	if err := h.parseTemplates(); err != nil {
-		t.Fatalf("parse templates: %v", err)
-	}
-
-	var buf bytes.Buffer
-	err := h.tmpls["settings"].ExecuteTemplate(&buf, "varnish-card", map[string]any{
-		"AdminPath":      "/admin",
-		"VarnishEnabled": true,
-		"VarnishAddr":    "127.0.0.1:6081",
-		"VarnishSaveOK":  true,
-	})
-	if err != nil {
-		t.Fatalf("execute varnish-card: %v", err)
-	}
-	out := buf.String()
-	for _, want := range []string{"127.0.0.1:6081", "/admin/settings/varnish", "Settings saved"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("varnish-card output missing %q", want)
-		}
-	}
-}
-
 // TestServicesRowsAreLabelsPlusEdit renders the services table and checks the
 // row layout contract: status badges only, one Edit button per row carrying
 // every data attribute the edit modal populates itself from, and none of the
@@ -102,38 +75,6 @@ func TestServicesPageRendersEditModal(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("services page missing edit-modal element %q", want)
-		}
-	}
-}
-
-// TestRateLimitCardRenders executes the Settings-page rate-limit card with
-// the global limiter fields so a renamed field or broken form wiring fails
-// here instead of at first click in the UI.
-func TestRateLimitCardRenders(t *testing.T) {
-	h := &Handler{}
-	if err := h.parseTemplates(); err != nil {
-		t.Fatalf("parse templates: %v", err)
-	}
-
-	var buf bytes.Buffer
-	err := h.tmpls["settings"].ExecuteTemplate(&buf, "ratelimit-card", map[string]any{
-		"AdminPath": "/admin",
-		"RLEnabled": true,
-		"RLRPS":     2.5,
-		"RLBurst":   40,
-		"RLSaveOK":  true,
-	})
-	if err != nil {
-		t.Fatalf("execute ratelimit-card: %v", err)
-	}
-	out := buf.String()
-	for _, want := range []string{
-		"/admin/settings/ratelimit",
-		`name="rl_enabled"`, `name="rl_rps"`, `name="rl_burst"`,
-		`value="2.5"`, `value="40"`, "Settings saved",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("ratelimit-card output missing %q", want)
 		}
 	}
 }

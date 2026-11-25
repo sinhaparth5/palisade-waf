@@ -271,7 +271,7 @@ func TestAppJSONErrors(t *testing.T) {
 		{"no session", "", "GET", "/admin/search?q=x", nil, 401, "unauthenticated"},
 		{"unknown session", "nope", "GET", "/admin/api/notifications", nil, 401, "unauthenticated"},
 		{"role too low", viewer, "POST", "/admin/api/ip-rules", map[string]string{"ip": "192.0.2.1"}, 403, "forbidden"},
-		{"demo write", demoSession, "POST", "/admin/settings/credentials", map[string]string{}, 403, "demo"},
+		{"demo write", demoSession, "PUT", "/admin/api/settings/credentials", map[string]string{}, 403, "demo"},
 		{"body over the limit", env.session, "POST", "/admin/api/ip-rules", map[string]string{"note": strings.Repeat("x", 1<<20)}, 413, "too_large"},
 		// Handlers shared with /api/v1 (apiError) answer the app the same way.
 		{"shared handler, missing row", env.session, "GET", "/admin/logs/999999", nil, 404, "not_found"},

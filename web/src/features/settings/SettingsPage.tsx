@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
+import { ArtHero } from "@/components/Art";
 import { Page, PageHeader, labelMono } from "@/components/layout/Page";
-import { can } from "@/lib/boot";
+import { btn } from "@/features/rules/shared";
+import { boot, can } from "@/lib/boot";
 import { cn } from "@/lib/utils";
 import { CredentialsCard, DevicesCard, PasskeysCard, TwoFactorCard } from "./Account";
-import { useAccount, useProtection, useTeam } from "./api";
+import { AuditCard, EmailCard, WebhookCard } from "./Alerts";
+import { useAccount, useAlerts, useProtection, useTeam } from "./api";
 import { BotCard, InfraCards, RateLimitCard, TrustedIPsCard, VarnishCard } from "./Protection";
 import { APIKeysCard, SSOCard, UsersCard } from "./Team";
 
@@ -18,10 +21,23 @@ export function SettingsPage() {
     ...(owner ? [{ id: "team", title: "Users & API keys" }] : []),
     { id: "protection", title: "Protection" },
     { id: "infrastructure", title: "Infrastructure" },
+    ...(owner ? [{ id: "alerts", title: "Alerts & integrations" }] : []),
+    { id: "activity", title: "Activity" },
   ];
   return (
     <Page>
       <PageHeader title="Settings" />
+      <ArtHero art="console" eyebrow="System control" title="Who gets in, what is enforced, where alerts go.">
+        <p className="max-w-[56ch] text-[14px] leading-relaxed text-slate-600">
+          Accounts and sign-in, global protection defaults, the cache and backups, alert destinations and the record of every change. Each section saves on its own and applies without a restart.
+        </p>
+        {boot.pro && (
+          <a href={`${boot.admin}/settings/pro`} className={cn(btn, "self-start")}>
+            <i aria-hidden className="hgi hgi-stroke hgi-rounded hgi-license text-base" />
+            Palisade Pro settings
+          </a>
+        )}
+      </ArtHero>
       <nav aria-label="Settings sections" className="flex flex-wrap gap-2">
         {sections.map((s) => (
           <a key={s.id} href={`#settings-${s.id}`} className="flex min-h-10 items-center border border-edge px-4 font-mono text-[12px] uppercase tracking-[.04em] text-ink no-underline hover:bg-surface">
@@ -38,6 +54,14 @@ export function SettingsPage() {
         </Section>
       )}
       <ProtectionSections />
+      {owner && (
+        <Section id="alerts" title="Alerts & integrations" copy="Where security events and reports are sent. Owners only.">
+          <AlertsSection />
+        </Section>
+      )}
+      <Section id="activity" title="Activity" copy="Every change made from this dashboard or the REST API.">
+        <AuditCard />
+      </Section>
     </Page>
   );
 }
@@ -133,5 +157,19 @@ function ProtectionSections() {
         <InfraCards />
       </Section>
     </>
+  );
+}
+
+function AlertsSection() {
+  const q = useAlerts();
+  return (
+    <Loaded q={q} what="the alert settings">
+      {(a) => (
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+          <WebhookCard key={JSON.stringify(a.webhook)} v={a.webhook} />
+          <EmailCard key={JSON.stringify(a.email)} v={a.email} />
+        </div>
+      )}
+    </Loaded>
   );
 }

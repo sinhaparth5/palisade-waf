@@ -60,99 +60,13 @@ func TestRouteRoles(t *testing.T) {
 		t.Errorf("viewer log export = %d, want 403", rec.Code)
 	}
 	// Viewers still read everything else and manage their own account.
-	for _, p := range []string{"/admin/api/dashboard", "/admin/api/logs", "/admin/services", "/admin/settings"} {
+	for _, p := range []string{"/admin/api/dashboard", "/admin/api/logs", "/admin/services", "/admin/api/settings/account", "/admin/api/settings/protection", "/admin/api/settings/audit"} {
 		if rec := env.doWith("GET", p, nil, viewer); rec.Code != http.StatusOK {
 			t.Errorf("viewer GET %s = %d, want 200", p, rec.Code)
 		}
 	}
-	if rec := env.doWith("POST", "/admin/settings/devices/revoke-others", nil, viewer); rec.Code != http.StatusOK {
+	if rec := env.doJSON(viewer, "POST", "/admin/api/settings/devices/sign-out-others", map[string]any{}, nil); rec.Code != http.StatusNoContent {
 		t.Errorf("viewer revoke own devices = %d, want 200", rec.Code)
-	}
-}
-
-func TestUsersCard(t *testing.T) {
-	env := newAdminEnv(t)
-
-	for _, tc := range []struct{ f []string }{
-		{[]string{"email", "nope", "role", "viewer"}},
-		{[]string{"email", "v@example.com", "role", "root"}},
-		{[]string{"email", testAdminEmail, "role", "viewer"}},
-	} {
-		rec := env.do("POST", "/admin/settings/users", form(tc.f...))
-		if !strings.Contains(rec.Body.String(), "bg-red-50") {
-			t.Errorf("create %v: no error shown", tc.f)
-		}
-	}
-	if n, _ := env.db.CountAdminUsers(); n != 1 {
-		t.Fatalf("invalid creates added users: %d", n)
-	}
-
-	env.do("POST", "/admin/settings/users", form("email", "Dev@Example.com", "role", "viewer"))
-	dev, _ := env.db.GetAdminUserByEmail("dev@example.com")
-	if dev == nil || dev.Role != storage.RoleViewer {
-		t.Fatalf("created user = %+v", dev)
-	}
-	devURL := "/admin/settings/users/" + itoa(int(dev.ID))
-
-	env.do("POST", devURL, form("action", "role", "role", "admin"))
-	if u, _ := env.db.GetAdminUser(dev.ID); u.Role != storage.RoleAdmin {
-		t.Errorf("role = %q, want admin", u.Role)
-	}
-
-	// The only owner can't demote, disable or delete themselves.
-	ownerURL := "/admin/settings/users/" + itoa(int(env.uid))
-	for _, rec := range []*httptest.ResponseRecorder{
-		env.do("POST", ownerURL, form("action", "role", "role", "viewer")),
-		env.do("POST", ownerURL, form("action", "disable")),
-		env.do("DELETE", ownerURL, nil),
-	} {
-		if !strings.Contains(rec.Body.String(), "last owner") {
-			t.Errorf("last-owner change not refused: %s", rec.Body)
-		}
-	}
-	if rec := env.do("POST", ownerURL, form("action", "reset-2fa")); !strings.Contains(rec.Body.String(), "your own 2FA") {
-		t.Errorf("self 2FA reset not refused: %s", rec.Body)
-	}
-	if u, _ := env.db.GetAdminUser(env.uid); u == nil || u.Role != storage.RoleOwner || u.Disabled {
-		t.Fatalf("owner changed: %+v", u)
-	}
-
-	// Disabling signs the user out at once.
-	devSession, _ := env.db.CreateSession(dev.ID, "10.0.0.5", "ua", "")
-	env.do("POST", devURL, form("action", "disable"))
-	if rec := env.doWith("GET", "/admin/settings", nil, devSession); rec.Code != http.StatusFound {
-		t.Errorf("disabled user's session still works: %d", rec.Code)
-	}
-	env.do("POST", devURL, form("action", "enable"))
-	if u, _ := env.db.GetAdminUser(dev.ID); u.Disabled {
-		t.Error("user not re-enabled")
-	}
-
-	if err := env.db.SetPendingTOTPSecret(dev.ID, "S"); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.db.EnableTOTP(dev.ID, nil); err != nil {
-		t.Fatal(err)
-	}
-	env.do("POST", devURL, form("action", "reset-2fa"))
-	if on, _ := env.db.TOTPEnabled(dev.ID); on {
-		t.Error("2FA not reset")
-	}
-
-	env.do("DELETE", devURL, nil)
-	if u, _ := env.db.GetAdminUser(dev.ID); u != nil {
-		t.Error("user not deleted")
-	}
-
-	// The audit log names the acting user, and refused changes aren't logged.
-	entries, _, _ := env.db.ListAudit(50, 0)
-	for _, e := range entries {
-		if e.Actor != testAdminEmail {
-			t.Errorf("audit actor = %q, want %q", e.Actor, testAdminEmail)
-		}
-	}
-	if len(entries) != 6 {
-		t.Errorf("audit entries = %d, want 6 (create, role, disable, enable, reset, delete; none for refusals)", len(entries))
 	}
 }
 
@@ -180,7 +94,7 @@ func TestTwoUsersLoggedIn(t *testing.T) {
 		t.Fatal("login did not issue a session")
 	}
 	for _, s := range []string{a, b} {
-		if rec := env.doWith("GET", "/admin/settings", nil, s); rec.Code != http.StatusOK {
+		if rec := env.doWith("GET", "/admin/api/settings/account", nil, s); rec.Code != http.StatusOK {
 			t.Errorf("session %s… = %d, want both users signed in", s[:8], rec.Code)
 		}
 	}
@@ -203,8 +117,8 @@ func TestAccountLoginThrottle(t *testing.T) {
 // the link works once, then the user signs in with that password.
 func TestUserInvite(t *testing.T) {
 	env := newAdminEnv(t)
-	rec := env.do("POST", "/admin/settings/users", form("email", "new@example.com", "role", "admin"))
-	if !strings.Contains(rec.Body.String(), "Invite sent to new@example.com") || len(env.invites) != 1 {
+	rec := env.doJSON(env.session, "POST", "/admin/api/settings/users", inviteRequest{Email: "new@example.com", Role: "admin"}, nil)
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"sent":true`) || len(env.invites) != 1 {
 		t.Fatalf("no invite sent: %v\n%s", env.invites, rec.Body)
 	}
 	to, link, _ := strings.Cut(env.invites[0], " ")
@@ -249,7 +163,7 @@ func TestUserInvite(t *testing.T) {
 			t.Errorf("spent link %s = %d, want 404", m, rec.Code)
 		}
 	}
-	if rec := env.do("POST", "/admin/settings/users/"+itoa(int(u.ID))+"/invite", nil); !strings.Contains(rec.Body.String(), "already set a password") {
+	if rec := env.doJSON(env.session, "POST", "/admin/api/settings/users/"+itoa(int(u.ID))+"/invite", map[string]any{}, nil); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "already set a password") {
 		t.Error("resend allowed after the password was set")
 	}
 }
@@ -259,18 +173,19 @@ func TestUserInvite(t *testing.T) {
 func TestUserInviteFallbackAndResend(t *testing.T) {
 	env := newAdminEnv(t)
 	env.inviteErr = errors.New("email is not set up")
-	rec := env.do("POST", "/admin/settings/users", form("email", "v@example.com", "role", "viewer"))
+	var sent inviteAnswer
+	env.doJSON(env.session, "POST", "/admin/api/settings/users", inviteRequest{Email: "v@example.com", Role: "viewer"}, &sent)
 	_, first, _ := strings.Cut(env.invites[0], " ")
-	if !strings.Contains(rec.Body.String(), `value="`+first+`"`) || !strings.Contains(rec.Body.String(), "email is not set up") {
-		t.Fatalf("link not shown on send failure:\n%s", rec.Body)
+	if sent.Link != first || sent.SendError != "email is not set up" {
+		t.Fatalf("link not given on send failure: %+v", sent)
 	}
-	if strings.Contains(env.do("GET", "/admin/settings", nil).Body.String(), first) {
-		t.Error("link shown again on a later page load")
+	if strings.Contains(env.doJSON(env.session, "GET", "/admin/api/settings/team", nil, nil).Body.String(), first) {
+		t.Error("link given again on a later read")
 	}
 
 	env.inviteErr = nil
 	u, _ := env.db.GetAdminUserByEmail("v@example.com")
-	env.do("POST", "/admin/settings/users/"+itoa(int(u.ID))+"/invite", nil)
+	env.doJSON(env.session, "POST", "/admin/api/settings/users/"+itoa(int(u.ID))+"/invite", map[string]any{}, nil)
 	_, second, _ := strings.Cut(env.invites[1], " ")
 	if second == first {
 		t.Fatal("resend reused the token")

@@ -20,7 +20,7 @@ func TestListCaps(t *testing.T) {
 	if rec := env.doJSON(env.session, "PUT", "/admin/api/ip-rules/honeypots", map[string]string{"honeypot_paths": strings.Join(paths, "\n")}, nil); !strings.Contains(rec.Body.String(), "At most") {
 		t.Errorf("honeypots over the cap: %d", rec.Code)
 	}
-	if rec := env.do("POST", "/admin/settings/trusted-ips", form("trusted_ips", strings.Join(ips, "\n"))); !strings.Contains(rec.Body.String(), "At most") {
+	if rec := env.doJSON(env.session, "PUT", "/admin/api/settings/trusted-ips", map[string]string{"trusted_ips": strings.Join(ips, "\n")}, nil); !strings.Contains(rec.Body.String(), "At most") {
 		t.Errorf("trusted IPs over the cap: %d", rec.Code)
 	}
 	if got, _ := env.db.GetHoneypotPaths(); len(got) != 0 {

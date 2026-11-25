@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -146,7 +145,7 @@ func TestSSOLogin(t *testing.T) {
 		t.Fatalf("uninvited login created a user: %d users", n)
 	}
 
-	if rec := env.do("POST", "/admin/settings/users/invites", form("email", "alice@example.com", "role", "admin")); rec.Code != http.StatusOK {
+	if rec := env.doJSON(env.session, "POST", "/admin/api/settings/sso-invites", inviteRequest{Email: "alice@example.com", Role: "admin"}, nil); rec.Code != http.StatusCreated {
 		t.Fatalf("invite = %d", rec.Code)
 	}
 	for name, claims := range map[string]map[string]any{
@@ -284,49 +283,6 @@ func TestSSOTokenChecks(t *testing.T) {
 	}
 }
 
-func TestSSOSettings(t *testing.T) {
-	env := newAdminEnv(t)
-	idp := newFakeIdP(t)
-
-	for _, tc := range []struct {
-		f    []string
-		want string
-	}{
-		{[]string{"issuer", "http://idp.example", "client_id", "x", "client_secret", "y"}, "https"},
-		{[]string{"issuer", idp.srv.URL, "client_id", "x"}, "client secret"},
-		{[]string{"issuer", idp.srv.URL + "/wrong", "client_id", "x", "client_secret", "y"}, "discovery failed"},
-	} {
-		if rec := env.do("POST", "/admin/settings/sso", form(tc.f...)); !strings.Contains(rec.Body.String(), tc.want) {
-			t.Errorf("save %v: body lacks %q", tc.f, tc.want)
-		}
-	}
-	if cfg, _ := env.db.GetSSOConfig(); cfg.Issuer != "" {
-		t.Fatalf("invalid config saved: %+v", cfg)
-	}
-
-	env.do("POST", "/admin/settings/sso", form("issuer", idp.srv.URL+"/", "client_id", "palisade", "client_secret", "s3cret", "group", "palisade"))
-	// A blank secret keeps the stored one, which is never echoed.
-	rec := env.do("POST", "/admin/settings/sso", form("issuer", idp.srv.URL, "client_id", "palisade", "group", "palisade"))
-	if cfg, _ := env.db.GetSSOConfig(); cfg.Issuer != idp.srv.URL || cfg.ClientSecret != "s3cret" || cfg.Group != "palisade" {
-		t.Fatalf("saved config = %+v", cfg)
-	}
-	page := env.do("GET", "/admin/settings", nil).Body.String()
-	if strings.Contains(rec.Body.String()+page, "s3cret") {
-		t.Error("client secret echoed back")
-	}
-	if !strings.Contains(page, "/admin/login/sso/callback") {
-		t.Error("settings page doesn't show the redirect URI")
-	}
-	if body := env.doWith("GET", "/admin/login", nil, "").Body.String(); !strings.Contains(body, "Sign in with "+strings.TrimPrefix(idp.srv.URL, "http://")) {
-		t.Error("login page has no SSO button")
-	}
-
-	env.do("POST", "/admin/settings/sso", form("issuer", ""))
-	if cfg, _ := env.db.GetSSOConfig(); cfg != (storage.SSOConfig{}) {
-		t.Errorf("turning SSO off left %+v", cfg)
-	}
-}
-
 // TestSSOCallbackFailures: every way the IdP leg can go wrong lands on the
 // login page with no session and no new user.
 func TestSSOCallbackFailures(t *testing.T) {
@@ -397,36 +353,6 @@ func TestSSOCallbackFailures(t *testing.T) {
 	}
 }
 
-// TestSSOInviteRoutes covers renew and revoke, and their bad-id answers.
-func TestSSOInviteRoutes(t *testing.T) {
-	env := newAdminEnv(t)
-	if rec := env.do("POST", "/admin/settings/users/invites", form("email", "nope", "role", "viewer")); !strings.Contains(rec.Body.String(), "valid email") {
-		t.Errorf("bad email = %s", rec.Body)
-	}
-	env.do("POST", "/admin/settings/users/invites", form("email", "pat@example.com", "role", "viewer"))
-	inv, _ := env.db.ListSSOInvites()
-	if len(inv) != 1 {
-		t.Fatalf("invites = %+v", inv)
-	}
-	id := strconv.FormatInt(inv[0].ID, 10)
-	for _, tc := range []struct {
-		method, path string
-		want         int
-	}{
-		{"POST", "/admin/settings/users/invites/x", 400},
-		{"DELETE", "/admin/settings/users/invites/x", 400},
-		{"POST", "/admin/settings/users/invites/" + id, 200},
-		{"DELETE", "/admin/settings/users/invites/" + id, 200},
-	} {
-		if rec := env.do(tc.method, tc.path, nil); rec.Code != tc.want {
-			t.Errorf("%s %s = %d, want %d", tc.method, tc.path, rec.Code, tc.want)
-		}
-	}
-	if inv, _ := env.db.ListSSOInvites(); len(inv) != 0 {
-		t.Errorf("revoke left %+v", inv)
-	}
-}
-
 // TestSSOLinkExistingUser: an invite for an existing user's email links SSO
 // to that user (issue #296), who keeps their role and password.
 func TestSSOLinkExistingUser(t *testing.T) {
@@ -443,7 +369,7 @@ func TestSSOLinkExistingUser(t *testing.T) {
 	}
 
 	for _, email := range []string{testAdminEmail, "dev@example.com"} {
-		if rec := env.do("POST", "/admin/settings/users/invites", form("email", email, "role", "viewer")); rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "already") {
+		if rec := env.doJSON(env.session, "POST", "/admin/api/settings/sso-invites", inviteRequest{Email: email, Role: "viewer"}, nil); rec.Code != http.StatusCreated {
 			t.Fatalf("invite %s = %d", email, rec.Code)
 		}
 	}

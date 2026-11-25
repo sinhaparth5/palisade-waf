@@ -412,142 +412,8 @@ func TestCertificateAndTLSHandlers(t *testing.T) {
 
 }
 
-func TestSettingsCards(t *testing.T) {
-	env := newAdminEnv(t)
-
-	// Bot protection.
-	env.do("POST", "/admin/settings/bot", form("bot_enabled", "1", "bot_threshold", "0", "bot_ttl", "-5"))
-	if en, th, ttl, _ := env.db.GetBotSettings(); !en || th != 8 || ttl != 3600 || env.count("bot") != 1 {
-		t.Errorf("bot = %v %d %d reloads=%d", en, th, ttl, env.count("bot"))
-	}
-
-	// AI crawler default: invalid actions dropped, applied without a restart.
-	aiRec := env.do("POST", "/admin/settings/bot", form("ai_training", "block", "ai_search", "bogus", "ai_user", "allow"))
-	if p, _ := env.db.GetAICrawlerPolicy(); p != "training=block,user=allow" {
-		t.Errorf("ai policy = %q", p)
-	}
-	if env.h.registry.AIAction(nil, "training") != "block" {
-		t.Error("registry not reloaded with the AI crawler policy")
-	}
-	if !strings.Contains(aiRec.Body.String(), `<option value="block" selected>Block</option>`) {
-		t.Error("saved AI policy not shown in the card")
-	}
-
-	// CAPTCHA fallback: bad provider and missing secret are refused, a blank
-	// secret on re-save keeps the stored one, and it is never echoed back.
-	for _, tc := range []struct {
-		f       []string
-		wantErr string
-	}{
-		{[]string{"captcha_provider", "recaptcha", "captcha_site_key", "s", "captcha_secret", "k"}, "Unknown CAPTCHA provider"},
-		{[]string{"captcha_provider", "turnstile", "captcha_site_key", "s"}, "needs both"},
-		{[]string{"captcha_provider", "turnstile", "captcha_site_key", "s", "captcha_secret", "top-secret"}, ""},
-		{[]string{"captcha_provider", "hcaptcha", "captcha_site_key", "s2"}, ""},
-	} {
-		rec := env.do("POST", "/admin/settings/bot", form(append([]string{"bot_enabled", "1"}, tc.f...)...))
-		body := rec.Body.String()
-		if tc.wantErr != "" && !strings.Contains(body, tc.wantErr) || tc.wantErr == "" && strings.Contains(body, "bg-red-50") {
-			t.Errorf("captcha %v: %s", tc.f, body)
-		}
-		if strings.Contains(body, "top-secret") {
-			t.Error("captcha secret echoed back")
-		}
-	}
-	if cc, _ := env.db.GetCaptchaConfig(); cc != (storage.CaptchaConfig{Provider: "hcaptcha", SiteKey: "s2", Secret: "top-secret"}) {
-		t.Errorf("captcha = %+v", cc)
-	}
-
-	// Varnish: non-loopback rejected, loopback saved.
-	for addr, wantErr := range map[string]string{"bad": "host:port", "10.0.0.1:6081": "loopback", "": ""} {
-		rec := env.do("POST", "/admin/settings/varnish", form("varnish_enabled", "1", "varnish_addr", addr))
-		if wantErr != "" && !strings.Contains(rec.Body.String(), wantErr) {
-			t.Errorf("varnish %q: %s", addr, rec.Body)
-		}
-	}
-	if vc, _ := env.db.GetVarnishConfig(); !vc.Enabled || vc.Addr != storage.DefaultVarnishAddr {
-		t.Errorf("varnish = %+v", vc)
-	}
-
-	// Rate limit.
-	for _, tc := range []struct {
-		f       []string
-		wantErr string
-	}{
-		{[]string{"rl_enabled", "1", "rl_rps", "0", "rl_burst", "5"}, "positive numbers"},
-		{[]string{"rl_enabled", "1", "rl_rps", "5", "rl_burst", "10"}, ""},
-		{nil, ""}, // disabled with blank numbers keeps stored ones
-	} {
-		rec := env.do("POST", "/admin/settings/ratelimit", form(tc.f...))
-		if tc.wantErr != "" && !strings.Contains(rec.Body.String(), tc.wantErr) {
-			t.Errorf("ratelimit %v: %s", tc.f, rec.Body)
-		}
-	}
-	if en, rps, burst, _ := env.db.GetRateLimitSettings(); en || rps != 5 || burst != 10 {
-		t.Errorf("rate limit = %v %v %v", en, rps, burst)
-	}
-	if env.count("ratelimit") != 2 {
-		t.Errorf("ratelimit reloads = %d", env.count("ratelimit"))
-	}
-	// Webhook.
-	if rec := env.do("POST", "/admin/settings/webhook", form("webhook_url", "ftp://x", "webhook_enabled", "1")); !strings.Contains(rec.Body.String(), "absolute http") {
-		t.Errorf("webhook bad url: %s", rec.Body)
-	}
-	env.do("POST", "/admin/settings/webhook", url2(form("webhook_url", "https://hooks.example.com/x", "webhook_enabled", "1", "webhook_destination_type", "bogus"), "webhook_events", "blocked", "challenged"))
-	if wh, _ := env.db.GetWebhookConfig(); !wh.Enabled || wh.Events != "blocked,challenged" || wh.DestinationType != "generic" {
-		t.Errorf("webhook = %+v", wh)
-	}
-	if rec := env.do("POST", "/admin/settings/webhook/test", nil); !strings.Contains(rec.Body.String(), "Test alert sent") || env.count("webhook") != 1 {
-		t.Errorf("webhook test: %s", rec.Body)
-	}
-
-	// Email: enabling needs recipient + token; blank token keeps the stored one.
-	if rec := env.do("POST", "/admin/settings/email", form("email_enabled", "1")); !strings.Contains(rec.Body.String(), "required") {
-		t.Errorf("email missing: %s", rec.Body)
-	}
-	env.do("POST", "/admin/settings/email", form("email_enabled", "1", "email_to", "a@b.c", "email_token", "tok"))
-	env.do("POST", "/admin/settings/email", form("email_enabled", "1", "email_to", "x@y.z"))
-	if ec, _ := env.db.GetEmailConfig(); !ec.Enabled || ec.To != "x@y.z" || ec.Token != "tok" {
-		t.Errorf("email = %+v", ec)
-	}
-	if rec := env.do("POST", "/admin/settings/email/test", nil); !strings.Contains(rec.Body.String(), "Report sent") || env.count("report") != 1 {
-		t.Errorf("email test: %s", rec.Body)
-	}
-
-	// API keys.
-	if rec := env.do("POST", "/admin/settings/api-keys", form("name", " ")); !strings.Contains(rec.Body.String(), "Name is required") {
-		t.Errorf("api key no name: %s", rec.Body)
-	}
-	rec := env.do("POST", "/admin/settings/api-keys", form("name", "ci", "read_only", "1"))
-	if !strings.Contains(rec.Body.String(), "cwaf_") {
-		t.Errorf("new key not shown: %s", rec.Body)
-	}
-	keys, _ := env.db.ListAPIKeys()
-	if len(keys) != 1 || !keys[0].ReadOnly {
-		t.Fatalf("keys = %+v", keys)
-	}
-	wantCode(t, "delete key bad", env.do("DELETE", "/admin/settings/api-keys/x", nil).Code, 400, "")
-	env.do("DELETE", "/admin/settings/api-keys/"+itoa(keys[0].ID), nil)
-	if keys, _ := env.db.ListAPIKeys(); len(keys) != 0 {
-		t.Error("api key not deleted")
-	}
-
-	// Devices: revoke every other session.
-	other, _ := env.db.CreateSession(env.uid, "10.0.0.2", "other", "dev2") // revokes env.session...
-	env.session = other                                                    // ...so continue as the new one
-	mine, _ := env.db.GetSession(other)
-	if !mine.Live() {
-		t.Fatal("precondition: new session live")
-	}
-	wantCode(t, "revoke others", env.do("POST", "/admin/settings/devices/revoke-others", nil).Code, 200, "")
-}
-
-// url2 appends repeated values for a multi-value field.
-func url2(v map[string][]string, key string, vals ...string) map[string][]string {
-	v[key] = append(v[key], vals...)
-	return v
-}
-
-func TestChangeCredentialsAndBackup(t *testing.T) {
+// TestBackupDownloads: the database and config downloads Settings links to.
+func TestBackupDownloads(t *testing.T) {
 	env := newAdminEnv(t)
 
 	rec := env.do("POST", "/admin/settings/backup", nil)
@@ -560,70 +426,38 @@ func TestChangeCredentialsAndBackup(t *testing.T) {
 		!strings.Contains(rec.Header().Get("Content-Disposition"), "palisade-config-") {
 		t.Errorf("config export: %d %q", rec.Code, rec.Header().Get("Content-Disposition"))
 	}
-
-	for _, tc := range []struct {
-		f    []string
-		want string
-	}{
-		{[]string{"current_password", "wrong"}, "Current password is incorrect"},
-		{[]string{"current_password", testAdminPassword, "new_password", "abcdefgh", "confirm_password", "x"}, "do not match"},
-		{[]string{"current_password", testAdminPassword, "new_password", "elevenchars", "confirm_password", "elevenchars"}, "at least 12"},
-		{[]string{"current_password", testAdminPassword, "new_email", "someone@example.com", "new_password", "Someone@Example.com", "confirm_password", "Someone@Example.com"}, "must not be your email"},
-		{[]string{"current_password", testAdminPassword, "new_password", breachedTestPassword, "confirm_password", breachedTestPassword}, "known data breach"},
-	} {
-		if rec := env.do("POST", "/admin/settings/credentials", form(tc.f...)); !strings.Contains(rec.Body.String(), tc.want) {
-			t.Errorf("credentials %q: %s", tc.want, rec.Body)
-		}
-	}
-	rec = env.do("POST", "/admin/settings/credentials", form("current_password", testAdminPassword, "new_email", "new@example.com", "new_password", "a-new-password", "confirm_password", "a-new-password"))
-	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/admin/login" {
-		t.Fatalf("credentials ok: %d", rec.Code)
-	}
-	if ok, _ := env.db.CheckAdminPassword(env.uid, "a-new-password"); !ok {
-		t.Error("password not changed")
-	}
-	if u, _ := env.db.GetAdminUser(env.uid); u.Email != "new@example.com" {
-		t.Errorf("email = %q", u.Email)
-	}
-	if sess, _ := env.db.GetSession(env.session); sess != nil {
-		t.Error("session should be dropped after a credential change")
-	}
 }
 
-func TestPasskeyHandlers(t *testing.T) {
+// TestPasskeyEnrollment: a secure context gets a WebAuthn challenge, a bogus
+// attestation spends the pending ceremony, and an expired slot isn't taken.
+func TestPasskeyEnrollment(t *testing.T) {
 	env := newAdminEnv(t)
-
-	// Plain HTTP on a non-localhost host can't do WebAuthn at all.
-	req := env.do("POST", "/admin/settings/passkeys/begin", nil)
-	wantCode(t, "insecure begin", req.Code, http.StatusBadRequest, req.Body.String())
-
 	secure := func(method, path, body string) *httptestRecorder {
 		r := newReq(env, method, path, body)
 		r.Host = "localhost"
+		r.Header.Set("Accept", "application/json")
 		return serve(env, r)
 	}
-	rec := secure("POST", "/admin/settings/passkeys/begin", `{"name":"YubiKey"}`)
+	rec := secure("POST", "/admin/api/settings/passkeys/begin", `{"name":"YubiKey"}`)
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "challenge") {
 		t.Fatalf("begin enrollment: %d %s", rec.Code, rec.Body)
 	}
-	if rec := secure("POST", "/admin/settings/passkeys/finish", `{}`); rec.Code != 400 {
+	if rec := secure("POST", "/admin/api/settings/passkeys/finish", `{}`); rec.Code != 400 {
 		t.Errorf("finish with bogus attestation = %d", rec.Code)
 	}
-	if rec := secure("POST", "/admin/settings/passkeys/finish", `{}`); !strings.Contains(rec.Body.String(), "expired") {
-		t.Errorf("finish without a pending ceremony: %s", rec.Body)
+	if rec := secure("POST", "/admin/api/settings/passkeys/finish", `{}`); rec.Code != 409 || !strings.Contains(rec.Body.String(), "expired") {
+		t.Errorf("finish without a pending ceremony: %d %s", rec.Code, rec.Body)
 	}
 
 	_ = env.db.AddWebAuthnCredential(env.uid, "AQID", "Key", []byte(`{"id":"AQID"}`))
 	creds, _ := env.db.ListWebAuthnCredentials(env.uid)
-	wantCode(t, "delete bad", env.do("DELETE", "/admin/settings/passkeys/x", nil).Code, 400, "")
-	if rec := env.do("DELETE", "/admin/settings/passkeys/"+itoa(creds[0].ID), nil); rec.Code != 200 {
+	if rec := env.doJSON(env.session, "DELETE", "/admin/api/settings/passkeys/"+itoa(creds[0].ID), nil, nil); rec.Code != 204 {
 		t.Errorf("delete passkey: %d", rec.Code)
 	}
 	if creds, _ := env.db.ListWebAuthnCredentials(env.uid); len(creds) != 0 {
 		t.Error("passkey not deleted")
 	}
 
-	// Expired enrollment slot.
 	env.h.pkEnroll.m[env.uid] = pkEnrollment{name: "x", expires: time.Now().Add(-time.Second)}
 	if _, _, ok := env.h.pkEnroll.take(env.uid); ok {
 		t.Error("expired enrollment should not be taken")
@@ -672,32 +506,6 @@ func TestPasskeyLogin(t *testing.T) {
 	}
 	if rec := post("/admin/login/webauthn/finish", pending); rec.Code != http.StatusTooManyRequests {
 		t.Errorf("finish after lockout = %d", rec.Code)
-	}
-}
-
-func TestSaveTrustedIPs(t *testing.T) {
-	env := newAdminEnv(t)
-	rec := env.do("POST", "/admin/settings/trusted-ips", form("trusted_ips", "203.0.113.10\r\n198.51.100.0/24\n203.0.113.10\n"))
-	wantCode(t, "save", rec.Code, 200, rec.Body.String())
-	if got, _ := env.db.GetTrustedIPs(); strings.Join(got, ",") != "203.0.113.10,198.51.100.0/24" {
-		t.Errorf("stored = %v", got)
-	}
-	for ip, want := range map[string]bool{"203.0.113.10": true, "198.51.100.77": true, "203.0.113.11": false} {
-		if env.h.registry.Trusted(ip) != want {
-			t.Errorf("Trusted(%s) != %v without a reload", ip, want)
-		}
-	}
-	for _, bad := range []string{"not-an-ip", "10.0.0.0/33"} {
-		rec = env.do("POST", "/admin/settings/trusted-ips", form("trusted_ips", "192.0.2.1\n"+bad))
-		if !strings.Contains(rec.Body.String(), "is not an IP address") || !strings.Contains(rec.Body.String(), "192.0.2.1") {
-			t.Errorf("%q: no inline error / input lost: %s", bad, rec.Body)
-		}
-	}
-	if got, _ := env.db.GetTrustedIPs(); len(got) != 2 {
-		t.Errorf("rejected save changed the list: %v", got)
-	}
-	if !strings.Contains(env.do("GET", "/admin/settings", nil).Body.String(), "198.51.100.0/24") {
-		t.Error("settings page does not show the saved list")
 	}
 }
 

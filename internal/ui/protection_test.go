@@ -69,6 +69,9 @@ func TestProtectionSettings(t *testing.T) {
 	if !env.h.registry.Trusted("198.51.100.7") {
 		t.Error("trusted IPs not applied")
 	}
+	if env.h.registry.AIAction(nil, "training") != "block" {
+		t.Error("registry not reloaded with the AI crawler policy")
+	}
 
 	var p protectionPage
 	rec := env.doJSON(env.session, http.MethodGet, base+"protection", nil, &p)

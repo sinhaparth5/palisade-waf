@@ -205,9 +205,10 @@ func (h *Handler) parseTemplates() error {
 		return fmt.Errorf("parse template login: %w", err)
 	}
 
-	h.tmpls = make(map[string]*template.Template, len(adminPages)+1)
+	h.tmpls = make(map[string]*template.Template, len(adminPages)+2)
 	h.tmpls["login"] = login
-	for _, page := range adminPages {
+	// settings is the add-on cards page: rendered, but not searched.
+	for _, page := range append(slices.Clone(adminPages), "settings") {
 		t, err := template.New("").Funcs(funcs).ParseFS(templateFS,
 			"templates/components/*.html",
 			"templates/base.html",
@@ -436,10 +437,12 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/api/waf-rules", h.ListWAFRules)
 	g.GET("/threat-intel", h.toApp("/threat-intel"))
 	g.GET("/api/threat-intel", h.ListThreatIntel)
-	g.GET("/settings", h.SettingsPage)
-	g.GET("/settings/audit", h.AuditRows)
+	// Settings live in the app (issue #355); add-on cards stay on /settings/pro.
+	g.GET("/settings", h.toApp("/settings"))
+	g.GET("/settings/pro", h.SettingsPro)
 	g.GET("/api/settings/account", h.Account)
 	g.GET("/api/settings/protection", h.Protection)
+	g.GET("/api/settings/audit", h.Audit)
 	g.GET("/search", h.Search)
 	g.GET("/app", h.AppPage)
 	g.GET("/app/*", h.AppPage)
@@ -448,15 +451,6 @@ func (h *Handler) Register(e *echo.Echo) {
 	as(storage.RoleViewer,
 		g.POST("/logout", h.Logout),
 		g.POST("/api/notifications/seen", h.MarkNotificationsSeen),
-		g.POST("/settings/credentials", h.ChangeCredentials),
-		g.POST("/settings/2fa/start", h.StartTOTPEnrollment),
-		g.POST("/settings/2fa/confirm", h.ConfirmTOTPEnrollment),
-		g.POST("/settings/2fa/disable", h.DisableTOTP),
-		g.POST("/settings/passkeys/begin", h.BeginPasskeyEnrollment),
-		g.POST("/settings/passkeys/finish", h.FinishPasskeyEnrollment),
-		g.DELETE("/settings/passkeys/:id", h.DeletePasskey),
-		g.DELETE("/settings/devices/:token", h.RevokeDevice),
-		g.POST("/settings/devices/revoke-others", h.RevokeOtherDevices),
 		g.PUT("/api/settings/credentials", h.SetCredentials),
 		g.POST("/api/settings/2fa/start", h.StartTOTP),
 		g.POST("/api/settings/2fa/confirm", h.ConfirmTOTP),
@@ -513,11 +507,7 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/services/cache-session/:id", h.SetServiceCacheSession),
 		g.POST("/services/cache-tuning/:id", h.SetServiceCacheTuning),
 		g.POST("/services/cache-purge/:id", h.PurgeServiceCache),
-		g.POST("/settings/varnish", h.SaveVarnishConfig),
 		g.POST("/settings/acme-email", h.SaveAcmeEmail),
-		g.POST("/settings/bot", h.SaveBotSettings),
-		g.POST("/settings/ratelimit", h.SaveRateLimitConfig),
-		g.POST("/settings/trusted-ips", h.SaveTrustedIPs),
 		g.PUT("/api/settings/bot", h.SetBot),
 		g.PUT("/api/settings/rate-limit", h.SetRateLimit),
 		g.PUT("/api/settings/trusted-ips", h.SetTrustedIPs),
@@ -540,20 +530,6 @@ func (h *Handler) Register(e *echo.Echo) {
 
 	// Owner: users, the DB connection, secrets and API keys.
 	as(storage.RoleOwner,
-		g.POST("/settings/users", h.CreateUser),
-		g.POST("/settings/users/:id", h.UpdateUser),
-		g.POST("/settings/users/:id/invite", h.ResendUserInvite),
-		g.DELETE("/settings/users/:id", h.DeleteUser),
-		g.POST("/settings/users/invites", h.CreateSSOInvite),
-		g.POST("/settings/users/invites/:id", h.RenewSSOInvite),
-		g.DELETE("/settings/users/invites/:id", h.RevokeSSOInvite),
-		g.POST("/settings/sso", h.SaveSSOSettings),
-		g.POST("/settings/webhook", h.SaveWebhookConfig),
-		g.POST("/settings/webhook/test", h.TestWebhook),
-		g.POST("/settings/email", h.SaveEmailSettings),
-		g.POST("/settings/email/test", h.TestEmailReport),
-		g.POST("/settings/api-keys", h.CreateAPIKey),
-		g.DELETE("/settings/api-keys/:id", h.DeleteAPIKey),
 		g.GET("/api/settings/team", h.Team),
 		g.POST("/api/settings/users", h.AddUser),
 		g.PUT("/api/settings/users/:id", h.UpdateUserJSON),
@@ -566,6 +542,11 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.PUT("/api/settings/sso", h.SetSSO),
 		g.POST("/api/settings/api-keys", h.AddAPIKey),
 		g.DELETE("/api/settings/api-keys/:id", h.RemoveAPIKey),
+		g.GET("/api/settings/alerts", h.Alerts),
+		g.PUT("/api/settings/webhook", h.SetWebhook),
+		g.POST("/api/settings/webhook/test", h.TestWebhookJSON),
+		g.PUT("/api/settings/email", h.SetEmail),
+		g.POST("/api/settings/email/test", h.TestEmailJSON),
 		// POST, not GET: this streams the full DB (password hashes,
 		// challenge secret), so it must never be reachable via cross-site
 		// top-level navigation.

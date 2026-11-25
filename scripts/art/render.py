@@ -3,7 +3,7 @@
 
     uv run --with numpy --with pillow scripts/art/render.py <out-dir>
 
-Writes <out-dir>/palisade.png, rack.png, vault.png, beacon.png and sieve.png, the inputs for
+Writes <out-dir>/palisade.png, rack.png, vault.png, beacon.png, sieve.png and console.png, the inputs for
 dissolve.py. Drawn here rather than downloaded so the art is ours to ship and
 every shape is a plain grey the gradient map can recolour.
 """
@@ -266,6 +266,48 @@ def sieve(out):
     sc.render(out)
 
 
+def console(out):
+    """Settings: a control desk of toggle switches and dials, a key for the
+    accounts, and a ledger beside it for the audit log."""
+    sc = Scene(1800, 2000, 30, (900, 1000))
+    sc.box(-1, -1, -1, 17, 15, 1, -10, layer=-1)  # ground slab
+
+    # Back panel: a tall cabinet with rows of switches, some flipped up.
+    def switches(x, y, z, w, d, h):
+        X = x + w
+        for row in range(3):
+            zz = z + 2.0 + row * 2.6
+            for k in range(5):
+                yy = y + 0.8 + k * 1.3
+                up = (row * 5 + k) % 3 == 0
+                sc.line((X, yy, zz), (X, yy, zz + (0.9 if up else -0.9)), 250 if up else LINE + 10, 3)
+    sc.box(1, 1, 0, 2.6, 7.6, 9.4, -15, switches)
+    sc.box(0.8, 0.8, 9.4, 3.0, 8.0, 0.5, 5, layer=1)  # cap
+
+    # Desk: a sloped top stepped in two, with dials standing on it.
+    sc.box(5, 1, 0, 5.4, 7.6, 2.6, 0)
+    sc.box(5, 1, 2.6, 2.6, 7.6, 1.2, 10, layer=1)
+    for k, (x, y) in enumerate([(5.6, 1.8), (5.6, 4.2), (5.6, 6.6), (8.4, 2.6), (8.4, 5.4)]):
+        z = 3.8 if x < 8 else 2.6
+        sc.box(x, y, z, 1.2, 1.2, 0.5, 20, layer=2)  # after both desk steps
+        sc.box(x + 0.45, y + 0.45, z + 0.5, 0.3, 0.3, 0.6 + 0.2 * (k % 3), -10, layer=2)
+
+    # Key, lying in front of the desk: bow, shaft and teeth.
+    sc.box(11.2, 3.0, 0, 1.6, 1.6, 0.35, 25)
+    sc.box(12.8, 3.6, 0, 3.0, 0.4, 0.3, 15)
+    sc.box(15.0, 4.0, 0, 0.4, 0.5, 0.3, 15)
+    sc.box(14.2, 4.0, 0, 0.4, 0.4, 0.3, 15)
+
+    # Ledger: a closed book with its pages, and an open one on top of it.
+    def pages(x, y, z, w, d, h):
+        for k in range(5):
+            yy = y + 0.5 + k * 0.6
+            sc.line((x + 0.5, yy, z + h), (x + w - (0.5 if k % 2 else 1.4), yy, z + h), LINE + 30, 2)
+    sc.box(10.6, 8.8, 0, 4.2, 4.6, 0.9, -5)
+    sc.box(10.9, 9.0, 0.9, 3.6, 4.2, 0.3, 30, pages, layer=1)
+    sc.render(out)
+
+
 if __name__ == '__main__':
     out = Path(sys.argv[1] if len(sys.argv) > 1 else '.')
     out.mkdir(parents=True, exist_ok=True)
@@ -274,3 +316,4 @@ if __name__ == '__main__':
     vault(out / 'vault.png')
     beacon(out / 'beacon.png')
     sieve(out / 'sieve.png')
+    console(out / 'console.png')

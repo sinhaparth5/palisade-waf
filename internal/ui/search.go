@@ -18,11 +18,10 @@ import (
 // live records. Read-only, so every role can use it.
 
 // adminPages are the base.html pages, in sidebar order.
-var adminPages = []string{"services", "settings"}
+var adminPages = []string{"services"}
 
 var pageHeadings = map[string]string{
 	"services": "Services",
-	"settings": "Settings",
 }
 
 // appSections are the React app's pages and their cards, listed by hand
@@ -31,16 +30,18 @@ var pageHeadings = map[string]string{
 var appSections = func() []section {
 	var out []section
 	for _, p := range []struct {
-		heading, url string
-		cards, admin []string
+		heading, url        string
+		cards, admin, owner []string
 	}{
-		{"Dashboard", "/app/", []string{"Overview", "Traffic, last 24h", "Top countries", "Services", "Latest blocked requests", "Daily log", "Recent requests", "Enforcement today", "Blocked by country", "Engine"}, nil},
-		{"Live Logs", "/app/logs", []string{"Request inspector", "Stats"}, nil},
-		{"IP Rules", "/app/ip-rules", []string{"Automatic banning", "Adaptive enforcement", "Honeypot paths", "Rules overview", "Active IP Rules"}, []string{"Add IP Rules"}},
-		{"Geo Rules", "/app/geo-rules", []string{"Rules overview", "GeoIP database bundled", "Active Geo Rules"}, []string{"Add Geo Rules"}},
-		{"Certificates", "/app/certificates", []string{"Saved Certificates", "Service TLS"}, []string{"Add Certificate"}},
-		{"WAF Rules", "/app/waf-rules", []string{"Virtual Patches", "Suggested Exceptions", "Top Firing Rules", "Custom Rules", "Rule Exceptions"}, []string{"Disable Rule", "Write Custom Rule"}},
-		{"Threat Intel", "/app/threat-intel", []string{"Threat Intel Feeds"}, []string{"Add Feed", "CrowdSec LAPI"}},
+		{"Dashboard", "/app/", []string{"Overview", "Traffic, last 24h", "Top countries", "Services", "Latest blocked requests", "Daily log", "Recent requests", "Enforcement today", "Blocked by country", "Engine"}, nil, nil},
+		{"Live Logs", "/app/logs", []string{"Request inspector", "Stats"}, nil, nil},
+		{"IP Rules", "/app/ip-rules", []string{"Automatic banning", "Adaptive enforcement", "Honeypot paths", "Rules overview", "Active IP Rules"}, []string{"Add IP Rules"}, nil},
+		{"Geo Rules", "/app/geo-rules", []string{"Rules overview", "GeoIP database bundled", "Active Geo Rules"}, []string{"Add Geo Rules"}, nil},
+		{"Certificates", "/app/certificates", []string{"Saved Certificates", "Service TLS"}, []string{"Add Certificate"}, nil},
+		{"WAF Rules", "/app/waf-rules", []string{"Virtual Patches", "Suggested Exceptions", "Top Firing Rules", "Custom Rules", "Rule Exceptions"}, []string{"Disable Rule", "Write Custom Rule"}, nil},
+		{"Threat Intel", "/app/threat-intel", []string{"Threat Intel Feeds"}, []string{"Add Feed", "CrowdSec LAPI"}, nil},
+		{"Settings", "/app/settings", []string{"Account", "Two-Factor Authentication", "Passkeys", "Registered Devices", "Bot Protection", "Rate Limiting", "Trusted IPs", "Varnish Cache", "WAF rules", "Audit log"}, nil,
+			[]string{"Users", "Single Sign-On", "API Keys", "Database backup", "Configuration export", "Webhook / SIEM Export", "Email Alerts"}},
 	} {
 		out = append(out, section{searchHit{p.heading, "Page", p.url}, storage.RoleViewer})
 		for _, c := range p.cards {
@@ -48,6 +49,9 @@ var appSections = func() []section {
 		}
 		for _, c := range p.admin {
 			out = append(out, section{searchHit{c, p.heading, p.url}, storage.RoleAdmin})
+		}
+		for _, c := range p.owner {
+			out = append(out, section{searchHit{c, p.heading, p.url}, storage.RoleOwner})
 		}
 	}
 	return out

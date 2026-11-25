@@ -42,15 +42,17 @@ func TestAuditLog(t *testing.T) {
 	// message, and skipped routes all leave the log alone.
 	before := len(audit())
 	env.doJSON(env.session, http.MethodPost, "/admin/api/ip-rules", map[string]string{"ip": "nope", "rule_type": "block"}, nil)
-	env.do(http.MethodPost, "/admin/settings/api-keys", form("name", ""))
-	env.do(http.MethodPost, "/admin/settings/credentials", form("current_password", "wrong", "new_password", "hunter22hunter22", "confirm_password", "hunter22hunter22"))
+	env.doJSON(env.session, http.MethodPost, "/admin/api/settings/api-keys", map[string]string{"name": ""}, nil)
+	env.doJSON(env.session, http.MethodPut, "/admin/api/settings/credentials", map[string]string{"current_password": "wrong", "new_password": "hunter22hunter22", "confirm_password": "hunter22hunter22"}, nil)
 	env.do(http.MethodPost, "/admin/api/notifications/seen", nil)
 	if n := len(audit()); n != before {
 		t.Fatalf("rejected/skipped requests were logged: %+v", audit()[:n-before])
 	}
 
 	// Secret-bearing fields never reach the log, even on success.
-	env.do(http.MethodPost, "/admin/settings/webhook", form("webhook_url", "https://hooks.example/T0/secret-path", "webhook_secret", "s3cr3t", "webhook_enabled", "on"))
+	if rec := env.doJSON(env.session, http.MethodPut, "/admin/api/settings/webhook", map[string]any{"url": "https://hooks.example/T0/secret-path", "secret": "s3cr3t", "enabled": true, "events": []string{"blocked"}}, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("webhook: %d %s", rec.Code, rec.Body)
+	}
 	for _, e := range audit() {
 		if strings.Contains(e.Summary+e.Target, "secret") || strings.Contains(e.Summary, "s3cr3t") {
 			t.Fatalf("secret leaked into audit entry %+v", e)
@@ -70,8 +72,8 @@ func TestAuditLog(t *testing.T) {
 	}
 
 	// The Settings card shows the trail.
-	if body := env.do(http.MethodGet, "/admin/settings", nil).Body.String(); !strings.Contains(body, "POST /api/v1/ip-rules") {
-		t.Fatal("settings page does not list audit entries")
+	if body := env.doJSON(env.session, http.MethodGet, "/admin/api/settings/audit", nil, nil).Body.String(); !strings.Contains(body, "POST /api/v1/ip-rules") {
+		t.Fatal("the audit read does not list entries")
 	}
 }
 
@@ -85,35 +87,6 @@ func TestAuditValue(t *testing.T) {
 	} {
 		if got := auditValue(in); got != want {
 			t.Errorf("auditValue(%.20q) = %.30q, want %.30q", in, got, want)
-		}
-	}
-}
-
-func TestAuditRowsPagination(t *testing.T) {
-	env := newAdminEnv(t)
-	for range 25 {
-		if err := env.db.InsertAudit(storage.AuditEntry{Actor: "admin", Action: "POST /ip-rules"}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, tc := range []struct {
-		path      string
-		wantLabel string
-		wantRows  int
-	}{
-		{"/admin/settings", "Page 1 of 3 · 25 entries", auditPageSize},
-		{"/admin/settings/audit?page=2", "Page 2 of 3 · 25 entries", auditPageSize},
-		{"/admin/settings/audit?page=3", "Page 3 of 3 · 25 entries", 5},
-		{"/admin/settings/audit?page=99", "Page 3 of 3 · 25 entries", 5},
-		{"/admin/settings/audit?page=junk", "Page 1 of 3 · 25 entries", auditPageSize},
-	} {
-		rec := env.do(http.MethodGet, tc.path, nil)
-		body := rec.Body.String()
-		if rec.Code != http.StatusOK || !strings.Contains(body, tc.wantLabel) {
-			t.Errorf("%s: status %d, missing %q", tc.path, rec.Code, tc.wantLabel)
-		}
-		if n := strings.Count(body, "POST /ip-rules</span>"); n != tc.wantRows {
-			t.Errorf("%s: %d rows, want %d", tc.path, n, tc.wantRows)
 		}
 	}
 }

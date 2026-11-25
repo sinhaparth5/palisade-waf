@@ -72,7 +72,7 @@
     {{template "nav-item" (map "Page" .Page "Key" "geo_rules" "Href" (print .AdminPath "/app/geo-rules") "Icon" "hgi-earth" "Label" "Geo Rules")}}
     {{template "nav-item" (map "Page" .Page "Key" "waf_rules" "Href" (print .AdminPath "/app/waf-rules") "Icon" "hgi-security-block" "Label" "WAF Rules")}}
     {{template "nav-item" (map "Page" .Page "Key" "threat_intel" "Href" (print .AdminPath "/app/threat-intel") "Icon" "hgi-database-01" "Label" "Threat Intel")}}
-    {{template "nav-item" (map "Page" .Page "Key" "settings" "Href" (print .AdminPath "/settings") "Icon" "hgi-user-account" "Label" "Settings")}}
+    {{template "nav-item" (map "Page" .Page "Key" "settings" "Href" (print .AdminPath "/app/settings") "Icon" "hgi-user-account" "Label" "Settings")}}
   </nav>
 
   <!-- Account -->
@@ -151,7 +151,6 @@
 {{template "site-search" .}}
 <script src="{{.AdminPath}}/static/js/toast.min.js?v={{.Asset}}" defer></script>
 <script src="{{.AdminPath}}/static/js/notify.min.js?v={{.Asset}}" defer></script>
-<script src="{{.AdminPath}}/static/js/clipboard.min.js?v={{.Asset}}" defer></script>
 <script src="{{.AdminPath}}/static/js/motion.min.js?v={{.Asset}}" defer></script>
 <script src="{{.AdminPath}}/static/js/admin.min.js?v={{.Asset}}" defer></script>
 {{block "scripts" .}}{{end}}

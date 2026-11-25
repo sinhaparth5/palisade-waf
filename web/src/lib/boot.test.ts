@@ -13,7 +13,7 @@ describe("boot", () => {
     try {
       const fresh = await import("./boot");
       // Least privilege: no role rendered means viewer.
-      expect(fresh.boot).toEqual({ admin: "/admin", csrf: "", role: "viewer", email: "", demo: false, version: "", waf: false, nonce: "" });
+      expect(fresh.boot).toEqual({ admin: "/admin", csrf: "", role: "viewer", email: "", demo: false, version: "", waf: false, pro: false, nonce: "" });
       expect(fresh.can("admin")).toBe(false);
     } finally {
       Object.assign(document.body.dataset, saved);

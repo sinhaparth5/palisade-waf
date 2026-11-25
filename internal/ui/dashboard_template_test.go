@@ -55,7 +55,6 @@ func TestBaseTemplateCarriesCSRF(t *testing.T) {
 		wantHeaders,
 		`data-csrf="` + token + `"`,
 		`name="_csrf" value="` + token + `"`,
-		`action="/admin/settings/backup" method="POST"`, // backup must not be a GET link
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("rendered page missing %q", want)

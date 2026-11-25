@@ -75,6 +75,7 @@ func (h *Handler) appHTML(c *echo.Context) error {
 		"CSRF":      h.csrfFromContext(c),
 		"Version":   h.cfg.Version,
 		"WAF":       h.cfg.WAF.Enabled,
+		"Pro":       len(h.extCards) > 0, // add-on cards: Settings links to /settings/pro
 		"Nonce":     nonce,
 		"Role":      "",
 		"Email":     "",

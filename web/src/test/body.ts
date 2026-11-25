@@ -7,5 +7,6 @@ Object.assign(document.body.dataset, {
   demo: "false",
   version: "v0.0.0-test",
   waf: "true",
+  pro: "false",
   nonce: "test-nonce",
 });

@@ -1,9 +1,7 @@
 package ui
 
 import (
-	"bytes"
 	"errors"
-	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -265,113 +263,6 @@ func TestLoginWithoutTOTPSkipsSecondStep(t *testing.T) {
 	})
 	if rec.Code != http.StatusFound || cookieByName(rec, sessionCookie) == nil {
 		t.Fatalf("password-only login: status %d, want direct 302 with session", rec.Code)
-	}
-}
-
-// TestTwoFACardStates renders the settings card in its four states.
-func TestTwoFACardStates(t *testing.T) {
-	h := &Handler{}
-	if err := h.parseTemplates(); err != nil {
-		t.Fatal(err)
-	}
-	render := func(data map[string]any) string {
-		data["AdminPath"] = "/admin"
-		var buf bytes.Buffer
-		if err := h.tmpls["settings"].ExecuteTemplate(&buf, "twofa-card", data); err != nil {
-			t.Fatalf("execute twofa-card: %v", err)
-		}
-		return buf.String()
-	}
-
-	off := render(map[string]any{"TOTPEnabled": false})
-	if !strings.Contains(off, "/admin/settings/2fa/start") {
-		t.Error("disabled state missing the Enable 2FA form")
-	}
-	on := render(map[string]any{"TOTPEnabled": true})
-	if !strings.Contains(on, "/admin/settings/2fa/disable") {
-		t.Error("enabled state missing the disable form")
-	}
-	enrolling := render(map[string]any{"Enrolling": true, "QRDataURI": template.URL("data:image/png;base64,AAAA"), "ManualKey": "ABCD EFGH"})
-	for _, want := range []string{"data:image/png;base64,AAAA", "ABCD EFGH", "/admin/settings/2fa/confirm"} {
-		if !strings.Contains(enrolling, want) {
-			t.Errorf("enrolling state missing %q", want)
-		}
-	}
-	done := render(map[string]any{"TOTPEnabled": true, "BackupCodes": []string{"AAAA-BBBB", "CCCC-DDDD"}})
-	for _, want := range []string{"AAAA-BBBB", "CCCC-DDDD", "won't be shown again"} {
-		if !strings.Contains(done, want) {
-			t.Errorf("backup-codes state missing %q", want)
-		}
-	}
-}
-
-// TestTOTPEnrollmentHandlers drives the settings card's handler flow
-// directly: start shows a QR + manual key, a wrong code re-prompts without
-// enabling, the right code enables and prints backup codes, and disabling
-// demands a current code.
-func TestTOTPEnrollmentHandlers(t *testing.T) {
-	h, _, db := newTestLoginHandler(t)
-	e := echo.New()
-	me, _ := db.GetAdminUserByEmail(twoFATestEmail)
-	uid := me.ID
-
-	invoke := func(handler echo.HandlerFunc, form url.Values) (*httptest.ResponseRecorder, error) {
-		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-		c.Set(ctxUser, me)
-		return rec, handler(c)
-	}
-
-	rec, err := invoke(h.StartTOTPEnrollment, url.Values{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(rec.Body.String(), "data:image/png;base64,") {
-		t.Fatal("enrollment start did not render a QR code")
-	}
-	secret, _ := db.GetPendingTOTPSecret(uid)
-	if secret == "" {
-		t.Fatal("enrollment start did not store a pending secret")
-	}
-
-	rec, err = invoke(h.ConfirmTOTPEnrollment, url.Values{"code": {"000000"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if enabled, _ := db.TOTPEnabled(uid); enabled {
-		t.Fatal("wrong confirm code enabled 2FA")
-	}
-	if !strings.Contains(rec.Body.String(), "didn") {
-		t.Error("wrong confirm code did not re-prompt with an error")
-	}
-
-	code, _ := totp.Code(secret, time.Now())
-	rec, err = invoke(h.ConfirmTOTPEnrollment, url.Values{"code": {code}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if enabled, _ := db.TOTPEnabled(uid); !enabled {
-		t.Fatal("valid confirm code did not enable 2FA")
-	}
-	if got := strings.Count(rec.Body.String(), "select-all"); got < backupCodeCount {
-		t.Errorf("confirm rendered %d backup-code cells, want %d", got, backupCodeCount)
-	}
-
-	// Disable requires a real code — the session alone isn't enough.
-	if _, err = invoke(h.DisableTOTP, url.Values{"code": {"000000"}}); err != nil {
-		t.Fatal(err)
-	}
-	if enabled, _ := db.TOTPEnabled(uid); !enabled {
-		t.Fatal("2FA disabled without a valid code")
-	}
-	code, _ = totp.Code(secret, time.Now())
-	if _, err = invoke(h.DisableTOTP, url.Values{"code": {code}}); err != nil {
-		t.Fatal(err)
-	}
-	if enabled, _ := db.TOTPEnabled(uid); enabled {
-		t.Fatal("valid code did not disable 2FA")
 	}
 }
 

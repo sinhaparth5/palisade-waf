@@ -17,7 +17,7 @@ const account: Account = {
   ],
 };
 
-const base = { "GET /api/notifications": { unread: 0, blocks: [] }, "GET /api/settings/account": account, "GET /api/settings/protection": pending };
+const base = { "GET /api/notifications": { unread: 0, blocks: [] }, "GET /api/settings/account": account, "GET /api/settings/protection": pending, "GET /api/settings/alerts": pending, "GET /api/settings/audit?page=1": pending };
 const card = (title: string) => within(screen.getByRole("heading", { name: title }).closest("section")!);
 const dialogButton = async (name: string) => within(await screen.findByRole("dialog")).getByRole("button", { name });
 

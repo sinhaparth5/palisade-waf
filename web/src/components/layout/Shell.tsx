@@ -17,7 +17,7 @@ export const nav = [
   { path: "/geo-rules", icon: "hgi-earth", label: "Geo Rules", app: true },
   { path: "/waf-rules", icon: "hgi-security-block", label: "WAF Rules", app: true },
   { path: "/threat-intel", icon: "hgi-database-01", label: "Threat Intel", app: true },
-  { path: "/settings", icon: "hgi-user-account", label: "Settings" },
+  { path: "/settings", icon: "hgi-user-account", label: "Settings", app: true },
 ];
 
 const Icon = ({ name, className }: { name: string; className?: string }) => (

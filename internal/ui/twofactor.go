@@ -5,10 +5,8 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base32"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"strings"
@@ -21,7 +19,6 @@ import (
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/labstack/echo/v5"
-	qrcode "github.com/skip2/go-qrcode"
 )
 
 const (
@@ -327,112 +324,6 @@ func (h *Handler) renderLoginTOTP(c *echo.Context, uid int64, status int, errMsg
 }
 
 // ── Settings: enrollment ─────────────────────────────────────────────────────
-
-// twoFACardData builds the settings card's default (no enrollment in
-// progress) rendering state.
-func (h *Handler) twoFACardData(c *echo.Context, extra map[string]any) map[string]any {
-	enabled, _ := h.db.TOTPEnabled(currentUID(c))
-	data := map[string]any{
-		"AdminPath":   h.cfg.Admin.Path,
-		"TOTPEnabled": enabled,
-	}
-	for k, v := range extra {
-		data[k] = v
-	}
-	return data
-}
-
-// StartTOTPEnrollment generates a fresh secret and shows the QR code +
-// manual key with the confirm form. Nothing is enforced until the admin
-// proves their authenticator works (ConfirmTOTPEnrollment).
-func (h *Handler) StartTOTPEnrollment(c *echo.Context) error {
-	secret, err := totp.GenerateSecret()
-	if err != nil {
-		return err
-	}
-	if err := h.db.SetPendingTOTPSecret(currentUID(c), secret); err != nil {
-		return err
-	}
-	return h.renderTOTPEnrollment(c, secret, "")
-}
-
-func (h *Handler) renderTOTPEnrollment(c *echo.Context, secret, errMsg string) error {
-	uri := totp.ProvisioningURI(secret, currentUser(c).Email, totpIssuer)
-	png, err := qrcode.Encode(uri, qrcode.Medium, 220)
-	// template.URL: html/template's URL filter rejects data: URIs from plain
-	// strings (rendered as ZgotmplZ); this one is built entirely server-side
-	// from our own PNG bytes, never from user input.
-	var qr template.URL
-	if err == nil {
-		qr = template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)) //nolint:gosec // G203: built from our own PNG bytes, never user input
-	}
-	return h.renderPartial(c, "settings", "twofa-card", h.twoFACardData(c, map[string]any{
-		"Enrolling": true,
-		"QRDataURI": qr,
-		"ManualKey": groupKey(secret),
-		"EnrollErr": errMsg,
-	}))
-}
-
-// ConfirmTOTPEnrollment checks a code against the pending secret and, on
-// match, activates 2FA and hands out the one-time backup codes — shown once,
-// stored only as SHA-256 hashes (they're high-entropy random, same reasoning
-// as API keys).
-func (h *Handler) ConfirmTOTPEnrollment(c *echo.Context) error {
-	uid := currentUID(c)
-	pending, err := h.db.GetPendingTOTPSecret(uid)
-	if err != nil {
-		return err
-	}
-	if pending == "" {
-		return h.renderPartial(c, "settings", "twofa-card",
-			h.twoFACardData(c, map[string]any{"CardErr": "No enrollment in progress. Start again."}))
-	}
-	code := c.FormValue("code")
-	if ok, _ := totp.Validate(pending, code, time.Now()); !ok {
-		return h.renderTOTPEnrollment(c, pending,
-			"That code didn't match. Check the app and try again.")
-	}
-
-	codes, hashes, err := newBackupCodes(backupCodeCount)
-	if err != nil {
-		return err
-	}
-	if err := h.db.EnableTOTP(uid, hashes); err != nil {
-		return err
-	}
-	log.Printf("admin 2FA: enabled for %s", currentUser(c).Email)
-	return h.renderPartial(c, "settings", "twofa-card", h.twoFACardData(c, map[string]any{
-		"BackupCodes": codes,
-	}))
-}
-
-// DisableTOTP turns 2FA off. It demands a current authenticator or backup
-// code, not just the session cookie: a hijacked session shouldn't be able to
-// quietly remove the second factor.
-func (h *Handler) DisableTOTP(c *echo.Context) error {
-	uid := currentUID(c)
-	secret, err := h.db.GetTOTPSecret(uid)
-	if err != nil {
-		return err
-	}
-	code := c.FormValue("code")
-	ok, _ := totp.Validate(secret, code, time.Now())
-	if !ok {
-		if used, _ := h.db.ConsumeTOTPBackupCode(uid, hashBackupCode(code)); used {
-			ok = true
-		}
-	}
-	if !ok {
-		return h.renderPartial(c, "settings", "twofa-card",
-			h.twoFACardData(c, map[string]any{"CardErr": "Enter a valid authenticator or backup code to disable 2FA."}))
-	}
-	if err := h.db.DisableTOTP(uid); err != nil {
-		return err
-	}
-	log.Printf("admin 2FA: disabled for %s", currentUser(c).Email)
-	return h.renderPartial(c, "settings", "twofa-card", h.twoFACardData(c, nil))
-}
 
 // ── Code helpers ─────────────────────────────────────────────────────────────
 

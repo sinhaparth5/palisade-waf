@@ -57,7 +57,7 @@ func TestDemoSharedSessions(t *testing.T) {
 		}
 	}
 	// One visitor's device list never shows another's IP.
-	if body := env.doWith(http.MethodGet, "/admin/settings", nil, a).Body.String(); strings.Contains(body, "10.0.0.2") {
+	if body := env.doWith(http.MethodGet, "/admin/api/settings/account", nil, a).Body.String(); strings.Contains(body, "10.0.0.2") {
 		t.Error("settings page lists another demo visitor's IP")
 	}
 }
@@ -80,11 +80,11 @@ func TestDemoWritesBlocked(t *testing.T) {
 		method, path string
 		want         int
 	}{
-		{http.MethodPost, "/admin/settings/credentials", http.StatusForbidden},
-		{http.MethodPost, "/admin/settings/2fa/start", http.StatusForbidden},
-		{http.MethodPost, "/admin/settings/passkeys/begin", http.StatusForbidden},
-		{http.MethodPost, "/admin/settings/devices/revoke-others", http.StatusForbidden},
-		{http.MethodGet, "/admin/settings", http.StatusOK},
+		{http.MethodPut, "/admin/api/settings/credentials", http.StatusForbidden},
+		{http.MethodPost, "/admin/api/settings/2fa/start", http.StatusForbidden},
+		{http.MethodPost, "/admin/api/settings/passkeys/begin", http.StatusForbidden},
+		{http.MethodPost, "/admin/api/settings/devices/sign-out-others", http.StatusForbidden},
+		{http.MethodGet, "/admin/api/settings/account", http.StatusOK},
 		{http.MethodPost, "/admin/logout", http.StatusFound},
 	} {
 		if rec := env.doWith(tc.method, tc.path, form("current_password", demoPass), tok); rec.Code != tc.want {
@@ -92,7 +92,7 @@ func TestDemoWritesBlocked(t *testing.T) {
 		}
 	}
 	// A normal viewer keeps its own account controls.
-	if rec := env.doWith(http.MethodPost, "/admin/settings/2fa/start", nil, env.sessionAs(storage.RoleViewer)); rec.Code == http.StatusForbidden {
+	if rec := env.doWith(http.MethodPost, "/admin/api/settings/2fa/start", nil, env.sessionAs(storage.RoleViewer)); rec.Code == http.StatusForbidden {
 		t.Error("non-demo viewer blocked from 2FA enrollment")
 	}
 }

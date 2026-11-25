@@ -102,8 +102,8 @@ func TestAdminPagesRender(t *testing.T) {
 	}
 
 	pages := map[string]string{
-		"/admin/services": "Services",
-		"/admin/settings": "Settings",
+		"/admin/services":     "Services",
+		"/admin/settings/pro": "Palisade Pro",
 	}
 	// Pages moved to the React app; old links land there.
 	for path, to := range map[string]string{
@@ -112,6 +112,7 @@ func TestAdminPagesRender(t *testing.T) {
 		"/admin/certificates":    "/admin/app/certificates",
 		"/admin/threat-intel":    "/admin/app/threat-intel",
 		"/admin/waf-rules":       "/admin/app/waf-rules",
+		"/admin/settings":        "/admin/app/settings",
 		"/admin":                 "/admin/app/",
 
 		"/admin/logs?status=blocked&mode=history": "/admin/app/logs?status=blocked&mode=history",

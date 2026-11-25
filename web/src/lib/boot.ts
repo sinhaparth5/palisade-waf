@@ -12,6 +12,7 @@ export const boot = {
   demo: d.demo === "true",
   version: d.version ?? "",
   waf: d.waf === "true",
+  pro: d.pro === "true", // add-on cards on the server-rendered /settings/pro
   nonce: d.nonce ?? "",
 };
 

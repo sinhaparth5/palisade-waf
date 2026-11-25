@@ -16,6 +16,8 @@ const base = {
   "GET /api/settings/account": pending,
   "GET /api/settings/team": pending,
   "GET /api/settings/protection": protection,
+  "GET /api/settings/alerts": pending,
+  "GET /api/settings/audit?page=1": pending,
 };
 const card = async (title: string) => within((await screen.findByRole("heading", { name: title })).closest("section")!);
 

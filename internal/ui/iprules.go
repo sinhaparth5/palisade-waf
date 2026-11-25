@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"palisade/internal/services"
 	"palisade/internal/storage"
 	"slices"
 	"strconv"
@@ -327,34 +326,3 @@ func (h *Handler) SaveHoneypots(c *echo.Context) error {
 
 // trustedIPsMax caps the trusted list; every proxied request scans it.
 const trustedIPsMax = 200
-
-// SaveTrustedIPs replaces the trusted IP list (issue #179) and swaps it into
-// the registry, so its requests skip every blocking stage straight away.
-func (h *Handler) SaveTrustedIPs(c *echo.Context) error {
-	var entries []string
-	for _, e := range strings.Fields(c.FormValue("trusted_ips")) {
-		if !slices.Contains(entries, e) {
-			entries = append(entries, e)
-		}
-	}
-	nets, err := services.ParseTrustedIPs(entries)
-	saveErr := ""
-	switch {
-	case err != nil:
-		saveErr = err.Error() + "."
-	case len(entries) > trustedIPsMax:
-		saveErr = fmt.Sprintf("At most %d entries.", trustedIPsMax)
-	default:
-		if err := h.db.SetTrustedIPs(entries); err != nil {
-			saveErr = "Could not save: " + err.Error()
-		} else {
-			h.registry.SetTrustedIPs(nets)
-		}
-	}
-	return h.renderPartial(c, "settings", "trusted-ips-card", map[string]any{
-		"AdminPath":      h.cfg.Admin.Path,
-		"TrustedIPs":     entries,
-		"TrustedSaveOK":  saveErr == "",
-		"TrustedSaveErr": saveErr,
-	})
-}

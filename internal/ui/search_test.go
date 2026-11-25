@@ -31,14 +31,14 @@ func TestSearch(t *testing.T) {
 		found         bool
 	}{
 		// Cards follow the role gates, including ones reached via {{template}}.
-		{storage.RoleOwner, "api keys", "/admin/settings#find=API%20Keys", true},
-		{storage.RoleAdmin, "api keys", "#find=API%20Keys", false},
+		{storage.RoleOwner, "api keys", ">API Keys<", true},
+		{storage.RoleAdmin, "api keys", ">API Keys<", false},
 		{storage.RoleAdmin, "add ip", "Add IP Rules", true},
 		{storage.RoleViewer, "add ip", "Add IP Rule", false},
 		{storage.RoleViewer, "active ip", `href="/admin/app/ip-rules"`, true},
 		{storage.RoleViewer, "113.9", `href="/admin/app/ip-rules"`, true},
-		{storage.RoleViewer, "rate limiting", "Rate Limiting", false},
-		{storage.RoleViewer, "two-factor", "/admin/settings#find=Two-Factor%20Authentication", true},
+		{storage.RoleViewer, "rate limiting", `href="/admin/app/settings"`, true},
+		{storage.RoleViewer, "two-factor", ">Two-Factor Authentication<", true},
 		{storage.RoleViewer, "dashboard", `href="/admin/app/"`, true},
 		{storage.RoleViewer, "enforcement", `href="/admin/app/"`, true},
 		// Live records.
