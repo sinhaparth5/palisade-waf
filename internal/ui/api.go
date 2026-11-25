@@ -290,6 +290,11 @@ func (h *Handler) APICreateService(c *echo.Context) error {
 	if req.Burst < 0 {
 		req.Burst = 0
 	}
+	for _, s := range h.registry.List() {
+		if s.Name == req.Name {
+			return apiError(c, http.StatusConflict, "another service is already called "+req.Name)
+		}
+	}
 
 	var host, prefix string
 	if req.MatchType == "host" {

@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"cmp"
+	"database/sql"
+	"errors"
 	"fmt"
 	"html"
 	"net/http"
@@ -1188,4 +1191,489 @@ func (h *Handler) ServicesCacheStats(c *echo.Context) error {
 	}
 	data["Services"] = rows
 	return h.renderPartial(c, "services", "cache-stats", data)
+}
+
+// ── Services in the React app (issue #356) ───────────────────────────────────
+
+// The page reads every service with all its settings in one GET, grouped as
+// its tabs are, and writes one tab at a time. Lists travel as arrays; the
+// line-based rule grammars (path limits, cache rules) as text.
+
+type backendJSON struct {
+	URL     string `json:"url"`
+	Healthy bool   `json:"healthy"`
+	Known   bool   `json:"known"`
+}
+
+type svcBackends struct {
+	URLs           []string      `json:"urls"`
+	Health         []backendJSON `json:"health,omitempty"` // read only
+	LBPolicy       string        `json:"lb_policy"`
+	HealthPath     string        `json:"health_path"`
+	HealthInterval int           `json:"health_interval"`
+	CA             string        `json:"ca"`
+}
+
+type svcHosts struct {
+	Aliases   []string `json:"aliases"`
+	Canonical string   `json:"canonical"`
+}
+
+type svcRateLimit struct {
+	RPS       float64 `json:"rps"`
+	Burst     int     `json:"burst"`
+	PathRules string  `json:"path_rules"`
+}
+
+type svcBot struct {
+	Mode         string            `json:"mode"`
+	AI           map[string]string `json:"ai"`
+	LoginPaths   []string          `json:"login_paths"`
+	BreachAction string            `json:"breach_action"`
+	BreachFields []string          `json:"breach_fields"`
+}
+
+// svcGate times are UTC in the datetime-local layout the form edits.
+type svcGate struct {
+	Maintenance bool   `json:"maintenance"`
+	Message     string `json:"message"`
+	Start       string `json:"start"`
+	End         string `json:"end"`
+	Bypass      string `json:"bypass,omitempty"` // admins only
+	WaitingRoom bool   `json:"waiting_room"`
+	MaxActive   int    `json:"max_active"`
+	IdleMins    int    `json:"idle_mins"`
+	WaitMessage string `json:"wait_message"`
+	Crawlers    string `json:"crawlers"`
+}
+
+type svcUploads struct {
+	LargeJS     bool   `json:"large_js"`
+	MultipartMB int    `json:"multipart_mb"`
+	MalwareScan string `json:"malware_scan"`
+}
+
+type svcSchema struct {
+	Mode   string `json:"mode"`
+	Schema string `json:"schema"`
+}
+
+type svcMCP struct {
+	Mode    string   `json:"mode"`
+	Path    string   `json:"path"`
+	Origins []string `json:"origins"`
+	Methods []string `json:"methods"`
+	Tools   []string `json:"tools"`
+}
+
+type svcJWT struct {
+	Mode       string   `json:"mode"`
+	JWKSURL    string   `json:"jwks_url"`
+	PublicKey  string   `json:"public_key"`
+	Issuer     string   `json:"issuer"`
+	Audience   string   `json:"audience"`
+	Algorithms []string `json:"algorithms"`
+	Prefixes   []string `json:"prefixes"`
+}
+
+type cspScriptJSON struct {
+	Origin    string `json:"origin"`
+	Page      string `json:"page"`
+	FirstSeen string `json:"first_seen"`
+}
+
+type svcCSP struct {
+	Mode     string          `json:"mode"` // off | report | enforce
+	Policy   string          `json:"policy"`
+	Scripts  []cspScriptJSON `json:"scripts,omitempty"` // read only
+	Approved []string        `json:"approved"`
+	Recent   bool            `json:"recent,omitempty"` // read only
+	Full     bool            `json:"full,omitempty"`   // read only
+}
+
+type svcCookies struct {
+	Enabled bool     `json:"enabled"`
+	Exempt  []string `json:"exempt"`
+}
+
+type svcPolicy struct {
+	Mode         string   `json:"mode"`
+	Methods      []string `json:"methods"`
+	ContentTypes []string `json:"content_types"`
+	MaxBodyKiB   int      `json:"max_body_kib"`
+}
+
+type svcCache struct {
+	Enabled       bool   `json:"enabled"`
+	BySession     bool   `json:"by_session"`
+	SessionCookie string `json:"session_cookie"`
+	TTLFloor      int    `json:"ttl_floor"`
+	TTLCeiling    int    `json:"ttl_ceiling"`
+	Grace         int    `json:"grace"`
+	Keep          int    `json:"keep"`
+	Rules         string `json:"rules"`
+}
+
+type svcMTLS struct {
+	Mode  string   `json:"mode"`
+	CASet bool     `json:"ca_set"`
+	Allow []string `json:"allow"`
+}
+
+type svcTLS struct {
+	Mode      string  `json:"mode"` // custom | auto | ""
+	CertID    int64   `json:"cert_id"`
+	CertName  string  `json:"cert_name"`
+	ExpiresAt string  `json:"expires_at"`
+	HTTP3     bool    `json:"http3"`
+	MTLS      svcMTLS `json:"mtls"`
+}
+
+type serviceJSON struct {
+	ID          int          `json:"id"`
+	Name        string       `json:"name"`
+	Host        string       `json:"host"`
+	Prefix      string       `json:"prefix"`
+	Docker      bool         `json:"docker"`
+	CreatedAt   string       `json:"created_at"`
+	Healthy     bool         `json:"healthy"`
+	Known       bool         `json:"known"`
+	Hosts       svcHosts     `json:"hosts"`
+	Backends    svcBackends  `json:"backends"`
+	RateLimit   svcRateLimit `json:"rate_limit"`
+	Bot         svcBot       `json:"bot"`
+	Gate        svcGate      `json:"gate"`
+	Uploads     svcUploads   `json:"uploads"`
+	Schema      svcSchema    `json:"schema"`
+	OpenAPIMode string       `json:"openapi_mode"`
+	MCP         svcMCP       `json:"mcp"`
+	JWT         svcJWT       `json:"jwt"`
+	CSP         svcCSP       `json:"csp"`
+	Cookies     svcCookies   `json:"cookies"`
+	Policy      svcPolicy    `json:"policy"`
+	Responses   string       `json:"responses"`
+	Cache       svcCache     `json:"cache"`
+	Compress    bool         `json:"compress"`
+	TLS         svcTLS       `json:"tls"`
+}
+
+func gateTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(gateTimeLayout)
+}
+
+// lines splits a newline-joined stored list into a JSON array.
+func lines(s string) []string { return nonNil(strings.Fields(s)) }
+
+func serviceToJSON(v ServiceView, admin bool) serviceJSON {
+	s := v.Service
+	health := make([]backendJSON, len(v.Health))
+	for i, b := range v.Health {
+		health[i] = backendJSON{b.URL, b.Healthy, b.Known}
+	}
+	scripts := make([]cspScriptJSON, len(v.Scripts))
+	for i, sc := range v.Scripts {
+		scripts[i] = cspScriptJSON{sc.Origin, sc.Page, rfc3339(sc.FirstSeen)}
+	}
+	cspMode := "off"
+	if v.CSP != "" {
+		cspMode = "report"
+		if v.CSPEnforce {
+			cspMode = "enforce"
+		}
+	}
+	g := svcGate{
+		Maintenance: s.Gate.Maintenance, Message: s.Gate.MaintMsg, Start: gateTime(s.Gate.MaintStart), End: gateTime(s.Gate.MaintEnd),
+		WaitingRoom: s.Gate.WaitingRoom, MaxActive: s.Gate.MaxActive, IdleMins: s.Gate.IdleMins(), WaitMessage: s.Gate.WaitMsg, Crawlers: s.Gate.Crawlers,
+	}
+	if admin {
+		g.Bypass = s.Gate.BypassToken
+	}
+	if g.Crawlers == "" {
+		g.Crawlers = "bypass"
+	}
+	tlsMode := s.TLSMode
+	if tlsMode != "custom" && tlsMode != "auto" {
+		tlsMode = "" // "none" after a clear, "" before any
+	}
+	mtlsMode := v.MTLS.Mode
+	if mtlsMode == "" {
+		mtlsMode = "off"
+	}
+	return serviceJSON{
+		ID: s.ID, Name: s.Name, Host: s.Host, Prefix: s.Prefix, Docker: s.DockerManaged, CreatedAt: rfc3339(s.CreatedAt),
+		Healthy: v.Healthy, Known: v.Known,
+		Hosts: svcHosts{nonNil(s.HostAliases), s.CanonicalHost},
+		Backends: svcBackends{
+			URLs: nonNil(s.Backends()), Health: health, LBPolicy: cmp.Or(s.LBPolicy, "round_robin"),
+			HealthPath: s.HealthPath, HealthInterval: s.HealthInterval, CA: s.BackendCA,
+		},
+		RateLimit: svcRateLimit{s.RateLimitRPS, s.RateLimitBurst, v.RateRules},
+		Bot: svcBot{
+			Mode: cmp.Or(s.BotMode, "inherit"), AI: bot.ParseAIPolicy(s.AICrawlerPolicy), LoginPaths: nonNil(s.LoginPaths),
+			BreachAction: s.BreachAction, BreachFields: nonNil(s.BreachFields),
+		},
+		Gate:        g,
+		Uploads:     svcUploads{s.AllowLargeJSUploads, s.MultipartLimitMB, s.MalwareScan},
+		Schema:      svcSchema{cmp.Or(s.SchemaMode, "off"), s.RequestSchema},
+		OpenAPIMode: cmp.Or(v.OpenAPIMode, "off"),
+		MCP:         svcMCP{cmp.Or(v.MCP.Mode, "off"), v.MCP.Path, lines(v.MCP.Origins), lines(v.MCP.Methods), lines(v.MCP.Tools)},
+		JWT: svcJWT{
+			Mode: cmp.Or(v.JWT.Mode, "off"), JWKSURL: v.JWT.JWKSURL, PublicKey: v.JWT.PublicKey, Issuer: v.JWT.Issuer, Audience: v.JWT.Audience,
+			Algorithms: lines(v.JWT.Algorithms), Prefixes: lines(v.JWT.Prefixes),
+		},
+		CSP:       svcCSP{cspMode, v.CSP, scripts, nonNil(v.CSPApproved), v.CSPRecent, v.CSPFull},
+		Cookies:   svcCookies{v.CookiesOn, lines(v.CookieExempt)},
+		Policy:    svcPolicy{cmp.Or(s.Policy.Mode, "off"), nonNil(s.Policy.Methods), nonNil(s.Policy.ContentTypes), s.Policy.MaxBodyKiB},
+		Responses: s.ResponseInspect,
+		Cache:     svcCache{s.CacheEnabled, s.CacheBySession, s.SessionCookieName, s.CacheTTLFloor, s.CacheTTLCeiling, s.CacheGrace, s.CacheKeep, s.CacheRules},
+		Compress:  s.CompressEnabled,
+		TLS: svcTLS{
+			Mode: tlsMode, CertID: s.CertID, CertName: v.CertName, ExpiresAt: s.TLSExpiresAt, HTTP3: s.HTTP3Enabled,
+			MTLS: svcMTLS{mtlsMode, v.MTLS.CAPath != "", lines(v.MTLS.Allow)},
+		},
+	}
+}
+
+type poolCertJSON struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	Domains string `json:"domains"`
+}
+
+// ListServices answers GET /api/services: every service, the certificate
+// pool a service can pick from, and the server facts the tabs mention. The
+// page polls it for the health dots.
+func (h *Handler) ListServices(c *echo.Context) error {
+	certs, err := h.db.ListCertificates()
+	if err != nil {
+		return err
+	}
+	email, err := h.db.GetAcmeEmail()
+	if err != nil {
+		return err
+	}
+	vcfg, err := h.db.GetVarnishConfig()
+	if err != nil {
+		return err
+	}
+	u := currentUser(c)
+	admin := u != nil && roleRank[u.Role] >= roleRank[storage.RoleAdmin]
+	views := h.serviceViews()
+	out := make([]serviceJSON, len(views))
+	for i, v := range views {
+		out[i] = serviceToJSON(v, admin)
+	}
+	pool := make([]poolCertJSON, len(certs))
+	for i, ct := range certs {
+		pool[i] = poolCertJSON{ct.ID, ct.Name, ct.Domains}
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"services": out, "certificates": pool, "acme_email": email != "",
+		"http3_listener": h.cfg.ListenAddrH3 != "", "varnish": vcfg.Enabled,
+	})
+}
+
+// serviceFor loads the :id service, or answers 404.
+func (h *Handler) serviceFor(c *echo.Context) (storage.Service, error) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		return storage.Service{}, badBody("Invalid service id.")
+	}
+	s, err := h.db.GetService(id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return s, &jsonError{Status: http.StatusNotFound, Code: "not_found", Message: "No such service."}
+	}
+	return s, err
+}
+
+// routingFor is serviceFor for the routing tabs, which a Docker-managed
+// service takes from its container labels instead.
+func (h *Handler) routingFor(c *echo.Context) (storage.Service, error) {
+	s, err := h.serviceFor(c)
+	if err == nil && s.DockerManaged {
+		return s, &jsonError{Status: http.StatusConflict, Code: "docker_managed", Message: errDockerManaged}
+	}
+	return s, err
+}
+
+// applied reloads the registry (and the WAF engines when a tab feeds them)
+// after a service write and answers 204.
+func (h *Handler) applied(c *echo.Context, wafToo bool) error {
+	if err := h.registry.Reload(h.db); err != nil {
+		return err
+	}
+	if wafToo && h.reloadWAF != nil {
+		h.reloadWAF()
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// SetServiceName answers PUT /api/services/:id/name (issue #320).
+func (h *Handler) SetServiceName(c *echo.Context) error {
+	s, err := h.routingFor(c)
+	if err != nil {
+		return err
+	}
+	var v struct {
+		Name string `json:"name"`
+	}
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	name := strings.TrimSpace(v.Name)
+	switch {
+	case name == "":
+		return fieldError("name", "Give the service a name.")
+	case len(name) > 255:
+		return fieldError("name", "At most 255 characters.")
+	case name == s.Name:
+		return c.NoContent(http.StatusNoContent)
+	}
+	for _, o := range h.registry.List() {
+		if o.Name == name {
+			return fieldError("name", "Another service is already called "+name+".")
+		}
+	}
+	if err := h.db.UpdateService(s.ID, name, s.Host, s.Prefix, s.Backend); err != nil {
+		return err
+	}
+	return h.applied(c, true)
+}
+
+// SetServiceHostsJSON answers PUT /api/services/:id/hosts.
+func (h *Handler) SetServiceHostsJSON(c *echo.Context) error {
+	s, err := h.routingFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcHosts
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	if s.Host == "" {
+		return badBody("Extra hostnames need a host-matched service.")
+	}
+	aliases, canonical, err := services.ValidateHosts(s.ID, s.Host, v.Aliases, v.Canonical, h.registry.List())
+	if err != nil {
+		return fieldError("aliases", err.Error())
+	}
+	if err := h.db.SetServiceHosts(s.ID, aliases, canonical); err != nil {
+		return err
+	}
+	return h.applied(c, false)
+}
+
+// SetServiceBackendsJSON answers PUT /api/services/:id/backends: the list
+// (first = primary), balancing, active health check and trusted backend
+// certificate.
+func (h *Handler) SetServiceBackendsJSON(c *echo.Context) error {
+	s, err := h.routingFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcBackends
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	var urls []string
+	for _, u := range v.URLs {
+		if u = strings.TrimSpace(u); u != "" {
+			urls = append(urls, u)
+		}
+	}
+	if v.LBPolicy != "round_robin" && v.LBPolicy != "least_conn" {
+		return fieldError("lb_policy", "Pick round robin or least connections.")
+	}
+	path := strings.TrimSpace(v.HealthPath)
+	if v.HealthInterval < 0 || v.HealthInterval > 3600 {
+		return fieldError("health_interval", "Between 1 and 3600 seconds, or blank.")
+	}
+	if err := services.ValidateBackends(urls, path, v.HealthInterval); err != nil {
+		return fieldError("urls", err.Error())
+	}
+	ca := strings.TrimSpace(strings.ReplaceAll(v.CA, "\r\n", "\n"))
+	if err := services.ValidateBackendCA(ca); err != nil {
+		return fieldError("ca", err.Error())
+	}
+	if err := h.db.SetServiceBackends(s.ID, urls, v.LBPolicy, path, v.HealthInterval); err != nil {
+		return err
+	}
+	if err := h.db.SetServiceBackendCA(s.ID, ca); err != nil {
+		return err
+	}
+	return h.applied(c, false)
+}
+
+// SetServiceRateLimitJSON answers PUT /api/services/:id/rate-limit: 0 falls
+// through to the global limit; path limits ride on top (issue #280).
+func (h *Handler) SetServiceRateLimitJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcRateLimit
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	rc := rangeCheck{}
+	rc.num("rps", v.RPS, 0, 1e6)
+	rc.num("burst", float64(v.Burst), 0, 1e6)
+	if err := rc.err(); err != nil {
+		return err
+	}
+	rules := strings.TrimSpace(strings.ReplaceAll(v.PathRules, "\r\n", "\n"))
+	if _, err := services.ParseRateRules(rules); err != nil {
+		return fieldError("path_rules", err.Error())
+	}
+	if err := h.db.SetServiceRateLimit(s.ID, v.RPS, v.Burst); err != nil {
+		return err
+	}
+	if err := h.db.SetServiceRateRules(s.ID, rules); err != nil {
+		return err
+	}
+	return h.applied(c, false)
+}
+
+type cacheRowJSON struct {
+	App    string `json:"app"`
+	Hits   int64  `json:"hits"`
+	Misses int64  `json:"misses"`
+	Passes int64  `json:"passes"`
+	Errors int64  `json:"errors"`
+	Ratio  string `json:"ratio"`
+}
+
+// CacheStats answers GET /api/services/cache-stats: Varnish-wide counters
+// from varnishstat (best effort: stats_error says why they're missing) and
+// per-service results of the last 24 hours from the request log.
+func (h *Handler) CacheStats(c *echo.Context) error {
+	vcfg, err := h.db.GetVarnishConfig()
+	if err != nil {
+		return err
+	}
+	out := map[string]any{"enabled": vcfg.Enabled}
+	if !vcfg.Enabled {
+		return c.JSON(http.StatusOK, out)
+	}
+	if st, err := services.ReadVarnishStats(c.Request().Context()); err != nil {
+		out["stats_error"] = err.Error()
+	} else {
+		out["stats"] = map[string]any{
+			"ratio": cacheRatio(st.Hits, st.Misses), "objects": st.Objects,
+			"used": fmtMiB(st.BytesUsed), "total": fmtMiB(st.BytesUsed + st.BytesFree), "evicted": st.Evicted,
+		}
+	}
+	results, err := h.db.CacheResultsSince(time.Now().Add(-24 * time.Hour))
+	if err != nil {
+		return err
+	}
+	rows := make([]cacheRowJSON, len(results))
+	for i, r := range results {
+		rows[i] = cacheRowJSON{r.App, int64(r.Hits), int64(r.Misses), int64(r.Passes), int64(r.Errors), cacheRatio(uint64(r.Hits), uint64(r.Misses))} //nolint:gosec // G115: counts are never negative
+	}
+	out["services"] = rows
+	return c.JSON(http.StatusOK, out)
 }

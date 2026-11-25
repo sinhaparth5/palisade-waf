@@ -431,6 +431,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/services/rows", h.ServicesRows)
 	g.GET("/services/openapi/:id", h.ServiceOpenAPI)
 	g.GET("/services/cache-stats", h.ServicesCacheStats)
+	g.GET("/api/services", h.ListServices)
+	g.GET("/api/services/cache-stats", h.CacheStats)
 	g.GET("/certificates", h.toApp("/certificates"))
 	g.GET("/api/certificates", h.ListCertificates)
 	g.GET("/waf-rules", h.toApp("/waf-rules"))
@@ -475,6 +477,12 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/api/geo-rules", h.AddGeoRules),
 		g.POST("/api/geo-rules/remove", h.RemoveGeoRules),
 		g.POST("/services", h.AddService),
+		g.POST("/api/services", h.APICreateService),
+		g.DELETE("/api/services/:id", h.APIDeleteService),
+		g.PUT("/api/services/:id/name", h.SetServiceName),
+		g.PUT("/api/services/:id/hosts", h.SetServiceHostsJSON),
+		g.PUT("/api/services/:id/backends", h.SetServiceBackendsJSON),
+		g.PUT("/api/services/:id/rate-limit", h.SetServiceRateLimitJSON),
 		g.DELETE("/services/:id", h.DeleteService),
 		g.POST("/services/tls/upload", h.UploadServiceTLS),
 		g.POST("/services/tls/auto", h.EnableServiceAutoTLS),
