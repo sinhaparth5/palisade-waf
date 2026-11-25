@@ -1,49 +1,46 @@
 import type { ReactNode } from "react";
-import beacon from "@/assets/art/beacon.webp";
-import beaconSm from "@/assets/art/beacon-sm.webp";
-import consoleArt from "@/assets/art/console.webp";
-import consoleSm from "@/assets/art/console-sm.webp";
 import palisade from "@/assets/art/palisade.webp";
 import palisadeSm from "@/assets/art/palisade-sm.webp";
+import palisadeDark from "@/assets/art/palisade-dark.webp";
+import palisadeDarkSm from "@/assets/art/palisade-dark-sm.webp";
 import rack from "@/assets/art/rack.webp";
 import rackSm from "@/assets/art/rack-sm.webp";
-import sieve from "@/assets/art/sieve.webp";
-import sieveSm from "@/assets/art/sieve-sm.webp";
+import rackDark from "@/assets/art/rack-dark.webp";
+import rackDarkSm from "@/assets/art/rack-dark-sm.webp";
 import vault from "@/assets/art/vault.webp";
 import vaultSm from "@/assets/art/vault-sm.webp";
+import vaultDark from "@/assets/art/vault-dark.webp";
+import vaultDarkSm from "@/assets/art/vault-dark-sm.webp";
+import beacon from "@/assets/art/beacon.webp";
+import beaconSm from "@/assets/art/beacon-sm.webp";
+import beaconDark from "@/assets/art/beacon-dark.webp";
+import beaconDarkSm from "@/assets/art/beacon-dark-sm.webp";
+import sieve from "@/assets/art/sieve.webp";
+import sieveSm from "@/assets/art/sieve-sm.webp";
+import sieveDark from "@/assets/art/sieve-dark.webp";
+import sieveDarkSm from "@/assets/art/sieve-dark-sm.webp";
+import consoleArt from "@/assets/art/console.webp";
+import consoleSm from "@/assets/art/console-sm.webp";
+import consoleDark from "@/assets/art/console-dark.webp";
+import consoleDarkSm from "@/assets/art/console-dark-sm.webp";
+import { ArtImage, type ArtPair } from "@/components/ArtImage";
 import { labelMono } from "@/components/layout/Page";
-import { cn } from "@/lib/utils";
 
-// Decorative scenes drawn by scripts/art (render.py, then dissolve.py with
-// the ledger palette). Transparent WebP, so one file sits on both themes.
+// Decorative scenes drawn by scripts/art (render.py, then dissolve.py
+// --palette ledger-light and ledger-dark --headroom 0.18), one file per theme.
+// Sizes are what dissolve.py prints.
 const scenes = {
-  palisade: { full: palisade, sm: palisadeSm, w: 601, h: 793 },
-  rack: { full: rack, sm: rackSm, w: 594, h: 917 },
-  vault: { full: vault, sm: vaultSm, w: 591, h: 818 },
-  beacon: { full: beacon, sm: beaconSm, w: 585, h: 976 },
-  sieve: { full: sieve, sm: sieveSm, w: 583, h: 808 },
-  console: { full: consoleArt, sm: consoleSm, w: 583, h: 791 },
-};
+  palisade: { light: { full: palisade, sm: palisadeSm, w: 733, h: 781 }, dark: { full: palisadeDark, sm: palisadeDarkSm, w: 742, h: 781 } },
+  rack: { light: { full: rack, sm: rackSm, w: 665, h: 870 }, dark: { full: rackDark, sm: rackDarkSm, w: 673, h: 870 } },
+  vault: { light: { full: vault, sm: vaultSm, w: 728, h: 821 }, dark: { full: vaultDark, sm: vaultDarkSm, w: 737, h: 821 } },
+  beacon: { light: { full: beacon, sm: beaconSm, w: 611, h: 870 }, dark: { full: beaconDark, sm: beaconDarkSm, w: 618, h: 870 } },
+  sieve: { light: { full: sieve, sm: sieveSm, w: 723, h: 817 }, dark: { full: sieveDark, sm: sieveDarkSm, w: 731, h: 817 } },
+  console: { light: { full: consoleArt, sm: consoleSm, w: 723, h: 794 }, dark: { full: consoleDark, sm: consoleDarkSm, w: 731, h: 794 } },
+} satisfies Record<string, ArtPair>;
 
-// Art is decoration only: empty alt and hidden from assistive tech. Width and
-// height reserve the space before it loads; size it with a width class.
+// Size it with a width class; className must not set display (see ArtImage).
 export function Art({ name, className }: { name: keyof typeof scenes; className?: string }) {
-  const s = scenes[name];
-  return (
-    <img
-      src={s.sm}
-      srcSet={`${s.sm} ${s.w >> 1}w, ${s.full} ${s.w}w`}
-      sizes="(min-width: 640px) 280px, 200px"
-      width={s.w}
-      height={s.h}
-      alt=""
-      aria-hidden
-      decoding="async"
-      loading="lazy"
-      draggable={false}
-      className={cn("pointer-events-none h-auto select-none transition-opacity duration-700 ease-out starting:opacity-0 motion-reduce:transition-none", className)}
-    />
-  );
+  return <ArtImage art={scenes[name]} sizes="(min-width: 640px) 240px, 200px" className={className} />;
 }
 
 // ArtHero opens a page: eyebrow, title and a line of copy on the left, the
@@ -52,12 +49,14 @@ export function Art({ name, className }: { name: keyof typeof scenes; className?
 export function ArtHero({ art, eyebrow, title, children }: { art: keyof typeof scenes; eyebrow: string; title: string; children: ReactNode }) {
   return (
     <section className="relative overflow-hidden border border-edge bg-card sm:min-h-[240px]">
-      <div className="relative z-10 flex flex-col gap-3 p-6 sm:pr-[240px] lg:pr-[260px]">
+      <div className="relative z-10 flex flex-col gap-3 p-6 sm:pr-[270px] lg:pr-[300px]">
         <p className={labelMono}>{eyebrow}</p>
         <h2 className="text-[24px] leading-tight text-ink sm:text-[30px]">{title}</h2>
         {children}
       </div>
-      <Art name={art} className="absolute inset-y-3 right-4 hidden h-[calc(100%-1.5rem)] w-auto max-w-[220px] object-contain object-bottom sm:block lg:right-8" />
+      <div className="absolute inset-y-3 right-4 hidden sm:block lg:right-8">
+        <Art name={art} className="h-full w-auto max-w-[240px] object-contain object-bottom" />
+      </div>
     </section>
   );
 }

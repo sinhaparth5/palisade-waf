@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """504/505 treatment for a subject image.
 
-    uv run --with numpy --with pillow scripts/art/dissolve.py <input> <output.webp> [--palette ledger] [--seed N] [--size 1400]
+    uv run --with numpy --with pillow scripts/art/dissolve.py <input> <output.webp> [--palette ledger-light] [--headroom 0.2] [--seed N] [--size 1400]
 
 The dashboard art: render.py draws the scenes, this turns them into
 web/src/assets/art/*.webp (see web/README.md).
@@ -34,6 +34,11 @@ PALETTES = {
     # The admin theme (static/css/ledger.css): info blue on top, danger and
     # warning at the base, success green in the sparks. Mid-tones only, so the
     # same file reads on the cream and the dark paper.
+    # The admin theme (static/css/ledger.css), one file per theme: ink on the
+    # cream paper, paper on the dark one, rust (danger) at the base. Glow kept
+    # low: the theme is flat print, not neon.
+    'ledger-light': dict(cool=('#2a2926', '#6b655a', '#e6dfd0'), warm=('#6e2412', '#c84b31', '#ecc193'), shade='#2a2926', accents=('#c84b31', '#2e5aa3'), glow=0.22, shade_a=0.18),
+    'ledger-dark': dict(cool=('#33322c', '#8c867a', '#e8dfce'), warm=('#5a2416', '#e07a61', '#e0ae6e'), shade='#000000', accents=('#e07a61', '#7fa4e6'), glow=0.3, shade_a=0.3),
     'ledger': dict(cool=('#1d2f5c', '#2e5aa3', '#7fa4e6'), warm=('#7a2414', '#c84b31', '#e0ae6e'), shade='#5b88d9', accents=('#d9a05b', '#6aac6f')),
 }
 
@@ -70,7 +75,7 @@ def isolate(img):
     return rgba
 
 
-def run(src, dst, seed=7, size=1400, palette='indigo'):
+def run(src, dst, seed=7, size=1400, palette='indigo', headroom=0.45):
     pal = PALETTES[palette]
     cool_stops, warm_stops = [tuple(hexc(c) for c in pal[k]) for k in ('cool', 'warm')]
     glow_c, acc1, acc2 = hexc(pal['warm'][1]), hexc(pal['accents'][0]), hexc(pal['accents'][1])
@@ -81,7 +86,7 @@ def run(src, dst, seed=7, size=1400, palette='indigo'):
 
     # Pad: room above for particles, below for streaks and glow.
     h, w = sub.shape[:2]
-    top_pad, bot_pad, side = int(h * 0.45), int(h * 0.22), int(w * 0.12)
+    top_pad, bot_pad, side = int(h * headroom), int(h * min(0.22, headroom)), int(w * 0.12)
     H, W = h + top_pad + bot_pad, w + side * 2
     canvas = np.zeros((H, W, 4), np.float32)
     canvas[top_pad:top_pad + h, side:side + w] = sub
@@ -140,8 +145,8 @@ def run(src, dst, seed=7, size=1400, palette='indigo'):
     glow_a = np.asarray(Image.fromarray((glow_a * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(gw * 0.06))) / 255
     shade = ((gx - cx - gw * 0.15) / (gw * 0.6)) ** 2 + ((gy - base - gw * 0.03) / (gw * 0.12)) ** 2
     shade_a = np.asarray(Image.fromarray((np.clip(1 - shade, 0, 1) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(gw * 0.08))) / 255
-    over(np.broadcast_to(hexc(pal['shade']), (H, W, 3)), shade_a * 0.35)
-    over(np.broadcast_to(glow_c, (H, W, 3)), glow_a * 0.7)
+    over(np.broadcast_to(hexc(pal['shade']), (H, W, 3)), shade_a * pal.get('shade_a', 0.35))
+    over(np.broadcast_to(glow_c, (H, W, 3)), glow_a * pal.get('glow', 0.7))
 
     over(streak_c, np.clip(streak_a * 0.9, 0, 1))
     over(col, body_a)
@@ -153,7 +158,7 @@ def run(src, dst, seed=7, size=1400, palette='indigo'):
     if n:
         pick = rng.choice(len(by), n, replace=False)
         py, px = by[pick], bx[pick]
-        rise = (rng.random(n) ** 2.6) * (top_pad + (y1 - y0) * 0.3) * 0.95
+        rise = (rng.random(n) ** 2.6) * top_pad * 1.4
         dash = (1 + rng.random(n) * 5 + (rng.random(n) < 0.12) * rng.random(n) * 18).astype(int)
         width = 1 + (rng.random(n) < 0.35)
         snap = 3
@@ -196,6 +201,7 @@ if __name__ == '__main__':
     p.add_argument('--seed', type=int, help='default: derived from the file name, so re-runs match')
     p.add_argument('--size', type=int, default=1400)
     p.add_argument('--palette', choices=sorted(PALETTES), default='indigo')
+    p.add_argument('--headroom', type=float, default=0.45, help='space above the subject for the rising dashes, as a share of its height')
     args = p.parse_args()
     seed = args.seed if args.seed is not None else zlib.crc32(os.path.basename(args.src).encode())
-    run(args.src, args.dst, seed, args.size, args.palette)
+    run(args.src, args.dst, seed, args.size, args.palette, args.headroom)

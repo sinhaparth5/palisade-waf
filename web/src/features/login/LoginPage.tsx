@@ -1,8 +1,11 @@
 import { useState, type ReactNode } from "react";
 import { fromB64, toB64 } from "@/lib/b64";
 import { cn } from "@/lib/utils";
-import loginArt from "@/assets/art/login.webp";
-import loginArtSm from "@/assets/art/login-sm.webp";
+import gate from "@/assets/art/gate.webp";
+import gateSm from "@/assets/art/gate-sm.webp";
+import gateDark from "@/assets/art/gate-dark.webp";
+import gateDarkSm from "@/assets/art/gate-dark-sm.webp";
+import { ArtImage } from "@/components/ArtImage";
 
 // The public sign-in page (web/login.html, its own build): password, the 2FA
 // step and an invite's set-password step. Forms post to Go as before, and Go
@@ -112,20 +115,18 @@ export function LoginPage({ state = readLogin() }: { state?: LoginState }) {
   );
 }
 
-// The palisade scene from scripts/art (dissolve.py --palette ledger), the
-// same treatment as the app's page heroes, whole and on the card colour.
+// The gatehouse from scripts/art (render.py gate, dissolve.py --size 1100
+// --headroom 0.18), the same treatment as the app's page heroes.
+const gateArt = {
+  light: { full: gate, sm: gateSm, w: 1081, h: 1272 },
+  dark: { full: gateDark, sm: gateDarkSm, w: 1093, h: 1272 },
+};
 const Art = ({ className }: { className?: string }) => (
-  <img
-    src={loginArtSm}
-    srcSet={`${loginArtSm} 586w, ${loginArt} 1173w`}
-    sizes="(min-width: 1024px) 45vw, 200px"
-    alt=""
-    aria-hidden
-    width={1173}
-    height={1445}
-    fetchPriority="high"
-    draggable={false}
-    className={cn("pointer-events-none absolute inset-0 h-full object-contain object-center select-none", className)}
+  <ArtImage
+    art={gateArt}
+    sizes="(min-width: 1024px) 40vw, 200px"
+    priority
+    className={cn("absolute inset-0 h-full object-contain object-center", className)}
   />
 );
 

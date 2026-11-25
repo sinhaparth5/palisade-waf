@@ -3,7 +3,7 @@
 
     uv run --with numpy --with pillow scripts/art/render.py <out-dir>
 
-Writes <out-dir>/palisade.png, rack.png, vault.png, beacon.png, sieve.png and console.png, the inputs for
+Writes <out-dir>/palisade.png, rack.png, vault.png, beacon.png, sieve.png, console.png and gate.png, the inputs for
 dissolve.py. Drawn here rather than downloaded so the art is ours to ship and
 every shape is a plain grey the gradient map can recolour.
 """
@@ -308,6 +308,44 @@ def console(out):
     sc.render(out)
 
 
+def gate(out):
+    """Sign-in: a gatehouse with the portcullis down and a badge reader on the
+    path in front of it."""
+    sc = Scene(1800, 2000, 30, (900, 1000))
+    sc.box(-1, -1, -1, 18, 16, 1, -10, layer=-2)  # ground slab
+    sc.box(8, 5.2, 0, 9, 3.6, 0.15, 25, layer=-1)  # path up to the gate
+
+    def slits(x, y, z, w, d, h):
+        X = x + w
+        for k in range(2):
+            zz = z + 3.5 + k * 4.0
+            sc.poly([(X, y + d / 2 - 0.25, zz), (X, y + d / 2 + 0.25, zz), (X, y + d / 2 + 0.25, zz + 1.8), (X, y + d / 2 - 0.25, zz + 1.8)], LINE)
+
+    # Two towers with battlements, a wall walk between them over the gate.
+    for ty in (0, 10):
+        sc.box(3, ty, 0, 5, 4, 12, 0, slits)
+        for k in range(2):
+            sc.box(3 + k * 2, ty, 12, 0.8, 0.8, 1, 10, layer=1)
+        for k in range(3):
+            sc.box(7.2, ty + k * 1.6, 12, 0.8, 0.8, 1, 10, layer=1)
+    sc.box(3.5, 4, 0, 3.5, 6, 10.5, -15)  # wall behind the gate
+    sc.box(3.5, 4, 9, 4.4, 6, 1.6, 10)  # lintel, before the near tower
+
+    # Portcullis: bars and cross rails in the gate opening, down.
+    for k in range(6):
+        sc.box(7.4, 4.4 + k * 1.0, 0, 0.3, 0.3, 9, -20 + (k % 2) * 10)
+    for z in (2.5, 5.5):
+        sc.box(7.35, 4.2, z, 0.4, 5.6, 0.3, 20, layer=1)
+
+    # Badge reader on a post beside the path, its screen lit.
+    def screen(x, y, z, w, d, h):
+        X = x + w
+        sc.poly([(X, y + 0.2, z + 0.4), (X, y + d - 0.2, z + 0.4), (X, y + d - 0.2, z + h - 0.2), (X, y + 0.2, z + h - 0.2)], 250)
+    sc.box(12, 9.6, 0, 0.6, 0.6, 3.6, -10)
+    sc.box(11.7, 9.3, 3.6, 1.2, 1.2, 1.6, 0, screen)
+    sc.render(out)
+
+
 if __name__ == '__main__':
     out = Path(sys.argv[1] if len(sys.argv) > 1 else '.')
     out.mkdir(parents=True, exist_ok=True)
@@ -317,3 +355,4 @@ if __name__ == '__main__':
     beacon(out / 'beacon.png')
     sieve(out / 'sieve.png')
     console(out / 'console.png')
+    gate(out / 'gate.png')
