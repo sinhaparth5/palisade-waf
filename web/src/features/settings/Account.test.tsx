@@ -17,7 +17,7 @@ const account: Account = {
   ],
 };
 
-const base = { "GET /api/notifications": { unread: 0, blocks: [] }, "GET /api/settings/account": account };
+const base = { "GET /api/notifications": { unread: 0, blocks: [] }, "GET /api/settings/account": account, "GET /api/settings/protection": pending };
 const card = (title: string) => within(screen.getByRole("heading", { name: title }).closest("section")!);
 const dialogButton = async (name: string) => within(await screen.findByRole("dialog")).getByRole("button", { name });
 
@@ -28,7 +28,7 @@ describe("settings: account & access", () => {
   it("shows loading and error states", async () => {
     mockApi({ ...base, "GET /api/settings/account": pending });
     const r = await renderRoute("/settings");
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Account & access" })).getByText("Loading…")).toBeInTheDocument();
     r.unmount();
     mockApi({ ...base, "GET /api/settings/account": reply(500, {}) });
     await renderRoute("/settings");

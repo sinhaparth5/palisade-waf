@@ -199,3 +199,66 @@ export function RuleList<R>({
     </>
   );
 }
+
+// SettingsCard is one settings form: viewers see it read-only, admins save
+// it with one button and see the server's field errors under each field.
+export function SettingsCard({
+  title,
+  intro,
+  onSubmit,
+  pending,
+  error,
+  fields,
+  children,
+}: {
+  title: string;
+  intro: ReactNode;
+  onSubmit: (f: FormData) => void;
+  pending: boolean;
+  error: unknown;
+  fields: string[];
+  children: ReactNode;
+}) {
+  const admin = can("admin");
+  return (
+    <Card title={title}>
+      <p className={cn(help, "mb-4")}>{intro}</p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit(new FormData(e.currentTarget));
+        }}
+      >
+        <fieldset disabled={!admin} className="flex flex-col gap-4">
+          {children}
+          <FormError error={error} fields={fields} />
+          {admin && (
+            <button type="submit" disabled={pending} className={primary}>
+              <i aria-hidden className="hgi hgi-stroke hgi-rounded hgi-checkmark-circle-02 text-sm" />
+              Save &amp; apply
+            </button>
+          )}
+        </fieldset>
+      </form>
+    </Card>
+  );
+}
+
+export function Toggle({ name, label, on }: { name: string; label: string; on: boolean }) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3">
+      <span className="text-[13px] font-medium text-ink">{label}</span>
+      <input type="checkbox" name={name} defaultChecked={on} className="h-5 w-5 accent-ink" />
+    </label>
+  );
+}
+
+export function Num({ name, label, value, error, min, max, step, className }: { name: string; label: string; value: number | string; error: unknown; min?: number; max?: number; step?: number; className?: string }) {
+  return (
+    <div className={cn("min-w-0", className)}>
+      <FormRow label={label} error={fieldError(error, name)}>
+        <input name={name} type={typeof value === "number" ? "number" : "text"} min={min} max={max} step={step} defaultValue={value} className={field} />
+      </FormRow>
+    </div>
+  );
+}

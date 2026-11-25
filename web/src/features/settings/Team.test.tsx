@@ -17,7 +17,7 @@ const team: Team = {
   sso: { issuer: "https://auth.example.com", client_id: "palisade", secret_set: true, group: "", callback_url: "https://waf.example.com/admin/login/sso/callback" },
 };
 
-const base = { "GET /api/notifications": { unread: 0, blocks: [] }, "GET /api/settings/account": account, "GET /api/settings/team": team };
+const base = { "GET /api/notifications": { unread: 0, blocks: [] }, "GET /api/settings/account": account, "GET /api/settings/team": team, "GET /api/settings/protection": pending };
 const card = async (title: string) => within((await screen.findByRole("heading", { name: title })).closest("section")!);
 const dialogButton = async (name: string) => within(await screen.findByRole("dialog")).getByRole("button", { name });
 

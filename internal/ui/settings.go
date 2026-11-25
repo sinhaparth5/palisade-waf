@@ -12,8 +12,10 @@ import (
 	"palisade/internal/security/bot"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/passkey"
+	"palisade/internal/services"
 	"palisade/internal/storage"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -485,4 +487,222 @@ func (h *Handler) ExportConfig(c *echo.Context) error {
 	filename := fmt.Sprintf("palisade-config-%s.json", time.Now().Format("2006-01-02"))
 	c.Response().Header().Set(echo.HeaderContentDisposition, `attachment; filename="`+filename+`"`)
 	return c.Blob(http.StatusOK, "application/json", buf.Bytes())
+}
+
+// ── Settings JSON (issue #355): protection and infrastructure ────────────────
+
+// botView is the Bot Protection card. The CAPTCHA secret is write-only: a
+// read says only whether one is stored, and a blank one keeps it. Flat keys,
+// so the audit summary picks up the ai_* and captcha_provider fields.
+type botView struct {
+	Enabled          bool   `json:"enabled"`
+	Threshold        int    `json:"threshold"`
+	TTL              int    `json:"ttl"`
+	CaptchaProvider  string `json:"captcha_provider"`
+	CaptchaSiteKey   string `json:"captcha_site_key"`
+	CaptchaSecret    string `json:"captcha_secret,omitempty"`
+	CaptchaSecretSet bool   `json:"captcha_secret_set"`
+	AITraining       string `json:"ai_training"`
+	AISearch         string `json:"ai_search"`
+	AIUser           string `json:"ai_user"`
+}
+
+type rateLimitView struct {
+	Enabled bool    `json:"enabled"`
+	RPS     float64 `json:"rps"`
+	Burst   int     `json:"burst"`
+}
+
+type varnishView struct {
+	Enabled bool   `json:"enabled"`
+	Addr    string `json:"addr"`
+}
+
+// Protection returns the protection and infrastructure cards' settings.
+func (h *Handler) Protection(c *echo.Context) error {
+	botOn, threshold, ttl, err := h.db.GetBotSettings()
+	if err != nil {
+		return err
+	}
+	ai, err := h.db.GetAICrawlerPolicy()
+	if err != nil {
+		return err
+	}
+	captcha, err := h.db.GetCaptchaConfig()
+	if err != nil {
+		return err
+	}
+	rlOn, rps, burst, err := h.db.GetRateLimitSettings()
+	if err != nil {
+		return err
+	}
+	trusted, err := h.db.GetTrustedIPs()
+	if err != nil {
+		return err
+	}
+	vc, err := h.db.GetVarnishConfig()
+	if err != nil {
+		return err
+	}
+	p := bot.ParseAIPolicy(ai)
+	return c.JSON(http.StatusOK, map[string]any{
+		"bot": botView{Enabled: botOn, Threshold: threshold, TTL: ttl, CaptchaProvider: captcha.Provider, CaptchaSiteKey: captcha.SiteKey,
+			CaptchaSecretSet: captcha.Secret != "", AITraining: p[bot.AITraining], AISearch: p[bot.AISearch], AIUser: p[bot.AIUser]},
+		"rate_limit":  rateLimitView{rlOn, rps, burst},
+		"trusted_ips": nonNil(trusted),
+		"varnish":     varnishView{vc.Enabled, vc.Addr},
+	})
+}
+
+// SetBot saves bot protection, the CAPTCHA fallback and the AI crawler
+// defaults, then reloads the registry and the challenger.
+func (h *Handler) SetBot(c *echo.Context) error {
+	var v botView
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	rc := rangeCheck{}
+	rc.num("threshold", float64(v.Threshold), 1, 100)
+	rc.num("ttl", float64(v.TTL), 60, 30*86400)
+	stored, err := h.db.GetCaptchaConfig()
+	if err != nil {
+		return err
+	}
+	cc := storage.CaptchaConfig{Provider: v.CaptchaProvider, SiteKey: strings.TrimSpace(v.CaptchaSiteKey), Secret: strings.TrimSpace(v.CaptchaSecret)}
+	if cc.Secret == "" {
+		cc.Secret = stored.Secret
+	}
+	if cc.Provider != "" {
+		switch {
+		case !challenge.ValidCaptchaProvider(cc.Provider):
+			rc["captcha_provider"] = "Unknown CAPTCHA provider."
+		case cc.SiteKey == "":
+			rc["captcha_site_key"] = "Enter the site key."
+		case cc.Secret == "":
+			rc["captcha_secret"] = "Enter the secret key."
+		}
+	}
+	ai := bot.AIPolicy{}
+	for cat, a := range map[string]string{bot.AITraining: v.AITraining, bot.AISearch: v.AISearch, bot.AIUser: v.AIUser} {
+		switch {
+		case a == "":
+		case bot.ValidAIAction(a):
+			ai[cat] = a
+		default:
+			rc["ai_"+cat] = "Pick allow, challenge or block."
+		}
+	}
+	if err := rc.err(); err != nil {
+		return err
+	}
+	if err := h.db.SetBotSettings(v.Enabled, v.Threshold, v.TTL); err != nil {
+		return err
+	}
+	if err := h.db.SetCaptchaConfig(cc); err != nil {
+		return err
+	}
+	if err := h.db.SetAICrawlerPolicy(ai.String()); err != nil {
+		return err
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return err
+	}
+	if h.reloadBot != nil && h.buildChallenger != nil {
+		h.reloadBot(h.buildChallenger(v.Enabled, v.Threshold, v.TTL))
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// SetRateLimit saves the global per-IP limit and reloads the limiter. With
+// the limiter off, numbers left blank keep the stored ones.
+func (h *Handler) SetRateLimit(c *echo.Context) error {
+	var v rateLimitView
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	if v.Enabled {
+		rc := rangeCheck{}
+		rc.num("rps", v.RPS, 0.1, 1e6)
+		rc.num("burst", float64(v.Burst), 1, 1e6)
+		if err := rc.err(); err != nil {
+			return err
+		}
+	}
+	if v.RPS <= 0 || v.Burst < 1 {
+		_, rps, burst, err := h.db.GetRateLimitSettings()
+		if err != nil {
+			return err
+		}
+		if v.RPS <= 0 {
+			v.RPS = rps
+		}
+		if v.Burst < 1 {
+			v.Burst = burst
+		}
+	}
+	if err := h.db.SetRateLimitSettings(v.Enabled, v.RPS, v.Burst); err != nil {
+		return err
+	}
+	if h.reloadRateLimit != nil {
+		h.reloadRateLimit()
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// SetTrustedIPs replaces the trusted IP list and swaps it into the registry.
+func (h *Handler) SetTrustedIPs(c *echo.Context) error {
+	var req struct {
+		IPs string `json:"trusted_ips"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	var entries []string
+	for _, e := range strings.Fields(req.IPs) {
+		if !slices.Contains(entries, e) {
+			entries = append(entries, e)
+		}
+	}
+	nets, err := services.ParseTrustedIPs(entries)
+	if err != nil {
+		return fieldError("trusted_ips", err.Error()+".")
+	}
+	if len(entries) > trustedIPsMax {
+		return fieldError("trusted_ips", fmt.Sprintf("At most %d entries.", trustedIPsMax))
+	}
+	if err := h.db.SetTrustedIPs(entries); err != nil {
+		return err
+	}
+	h.registry.SetTrustedIPs(nets)
+	return c.NoContent(http.StatusNoContent)
+}
+
+// SetVarnish saves the Varnish switch and address. The address must be
+// loopback, or clients could reach the cache without passing the WAF. The
+// cache-return address isn't editable (it must match the installed VCL), so
+// a save keeps the stored one.
+func (h *Handler) SetVarnish(c *echo.Context) error {
+	var v varnishView
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	if v.Addr = strings.TrimSpace(v.Addr); v.Addr == "" {
+		v.Addr = storage.DefaultVarnishAddr
+	}
+	if host, _, err := net.SplitHostPort(v.Addr); err != nil {
+		return fieldError("addr", "Enter host:port, e.g. 127.0.0.1:6081.")
+	} else if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+		return fieldError("addr", "Use a loopback address, or clients could reach the cache without passing the WAF.")
+	}
+	stored, err := h.db.GetVarnishConfig()
+	if err != nil {
+		return err
+	}
+	if err := h.db.SetVarnishConfig(storage.VarnishConfig{Enabled: v.Enabled, Addr: v.Addr, ReturnAddr: stored.ReturnAddr}); err != nil {
+		return err
+	}
+	if err := h.registry.Reload(h.db); err != nil {
+		return err
+	}
+	return c.NoContent(http.StatusNoContent)
 }

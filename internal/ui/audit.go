@@ -32,10 +32,10 @@ var auditSkip = map[string]bool{
 // rather than a denylist so a field added later (a password, a token, a URL
 // with credentials in it) stays out until someone decides it's safe.
 var auditFields = []string{
-	"action", "ai_search", "ai_training", "ai_user", "aliases", "app_name", "bot_mode", "breach_action", "breach_fields", "canonical", "canonical_host", "captcha_provider", "cert_id", "client_id",
+	"action", "addr", "ai_search", "ai_training", "ai_user", "aliases", "app_name", "bot_mode", "breach_action", "breach_fields", "burst", "canonical", "canonical_host", "captcha_provider", "cert_id", "client_id",
 	"cookie_exempt", "cookie_mode", "country_code", "disabled", "email", "enabled", "group", "honeypot_paths", "host", "host_aliases", "ids", "ip", "issuer", "jwt_mode", "label", "lb_policy", "login_paths", "maintenance",
 	"match_type", "mode", "mtls_mode", "name", "note", "openapi_mode", "path", "policy_max_kib", "policy_methods", "policy_mode", "policy_types", "prefix", "read_only", "reason", "response_inspect",
-	"role", "rule_id", "rule_type", "service", "service_id", "threshold", "trusted_ips", "waiting_room", "window_days", "wr_crawlers", "wr_max",
+	"role", "rps", "rule_id", "rule_type", "service", "service_id", "threshold", "trusted_ips", "ttl", "waiting_room", "window_days", "wr_crawlers", "wr_max",
 }
 
 const auditValueMax = 120

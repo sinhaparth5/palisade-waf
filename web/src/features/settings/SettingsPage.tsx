@@ -3,7 +3,8 @@ import { Page, PageHeader, labelMono } from "@/components/layout/Page";
 import { can } from "@/lib/boot";
 import { cn } from "@/lib/utils";
 import { CredentialsCard, DevicesCard, PasskeysCard, TwoFactorCard } from "./Account";
-import { useAccount, useTeam } from "./api";
+import { useAccount, useProtection, useTeam } from "./api";
+import { BotCard, InfraCards, RateLimitCard, TrustedIPsCard, VarnishCard } from "./Protection";
 import { APIKeysCard, SSOCard, UsersCard } from "./Team";
 
 // Settings (issue #355), grouped as the HTMX page was: account & access,
@@ -12,7 +13,12 @@ import { APIKeysCard, SSOCard, UsersCard } from "./Team";
 
 export function SettingsPage() {
   const owner = can("owner");
-  const sections = [{ id: "access", title: "Account & access" }, ...(owner ? [{ id: "team", title: "Users & API keys" }] : [])];
+  const sections = [
+    { id: "access", title: "Account & access" },
+    ...(owner ? [{ id: "team", title: "Users & API keys" }] : []),
+    { id: "protection", title: "Protection" },
+    { id: "infrastructure", title: "Infrastructure" },
+  ];
   return (
     <Page>
       <PageHeader title="Settings" />
@@ -31,6 +37,7 @@ export function SettingsPage() {
           <TeamSection />
         </Section>
       )}
+      <ProtectionSections />
     </Page>
   );
 }
@@ -95,5 +102,36 @@ function TeamSection() {
         </>
       )}
     </Loaded>
+  );
+}
+
+// Protection and Infrastructure share one read.
+function ProtectionSections() {
+  const q = useProtection();
+  const body = (children: (p: NonNullable<typeof q.data>) => ReactNode) => (
+    <Loaded q={q} what="these settings">
+      {children}
+    </Loaded>
+  );
+  return (
+    <>
+      <Section id="protection" title="Protection" copy="Global bot and rate-limit defaults, and IPs that are never blocked.">
+        {body((p) => (
+          <>
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+              <BotCard key={JSON.stringify(p.bot)} v={p.bot} />
+              <RateLimitCard key={JSON.stringify(p.rate_limit)} v={p.rate_limit} />
+            </div>
+            <TrustedIPsCard key={p.trusted_ips.join()} ips={p.trusted_ips} />
+          </>
+        ))}
+      </Section>
+      <Section id="infrastructure" title="Infrastructure" copy="Cache, the database and rule reloads.">
+        {body((p) => (
+          <VarnishCard key={JSON.stringify(p.varnish)} v={p.varnish} />
+        ))}
+        <InfraCards />
+      </Section>
+    </>
   );
 }

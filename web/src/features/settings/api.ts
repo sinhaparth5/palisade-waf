@@ -79,3 +79,25 @@ export const useSetSSO = () =>
   useWrite("team", (s: { issuer: string; client_id: string; client_secret: string; group: string }) => api<null>("/api/settings/sso", json("PUT", s)));
 export const useAddAPIKey = () => useWrite("team", (k: { name: string; read_only: boolean }) => api<{ key: string }>("/api/settings/api-keys", json("POST", k)));
 export const useRemoveAPIKey = () => useWrite("team", (id: number) => api<null>(`/api/settings/api-keys/${id}`, { method: "DELETE" }));
+
+// GET {admin}/api/settings/protection (internal/ui/settings.go): every role
+// reads it, admins save each card. The CAPTCHA secret is write-only.
+export type AIAction = "" | "allow" | "challenge" | "block";
+export type Bot = {
+  enabled: boolean;
+  threshold: number;
+  ttl: number;
+  captcha_provider: "" | "turnstile" | "hcaptcha";
+  captcha_site_key: string;
+  captcha_secret_set: boolean;
+  ai_training: AIAction;
+  ai_search: AIAction;
+  ai_user: AIAction;
+};
+export type RateLimit = { enabled: boolean; rps: number; burst: number };
+export type Varnish = { enabled: boolean; addr: string };
+export type Protection = { bot: Bot; rate_limit: RateLimit; trusted_ips: string[]; varnish: Varnish };
+
+export const useProtection = () => useQuery({ queryKey: ["protection"], queryFn: () => api<Protection>("/api/settings/protection") });
+export const useSetProtection = <V,>(path: "bot" | "rate-limit" | "trusted-ips" | "varnish") =>
+  useWrite("protection", (v: V) => api<null>(`/api/settings/${path}`, json("PUT", v)));

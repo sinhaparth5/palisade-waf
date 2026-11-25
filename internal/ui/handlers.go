@@ -439,6 +439,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/settings", h.SettingsPage)
 	g.GET("/settings/audit", h.AuditRows)
 	g.GET("/api/settings/account", h.Account)
+	g.GET("/api/settings/protection", h.Protection)
 	g.GET("/search", h.Search)
 	g.GET("/app", h.AppPage)
 	g.GET("/app/*", h.AppPage)
@@ -517,6 +518,10 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/settings/bot", h.SaveBotSettings),
 		g.POST("/settings/ratelimit", h.SaveRateLimitConfig),
 		g.POST("/settings/trusted-ips", h.SaveTrustedIPs),
+		g.PUT("/api/settings/bot", h.SetBot),
+		g.PUT("/api/settings/rate-limit", h.SetRateLimit),
+		g.PUT("/api/settings/trusted-ips", h.SetTrustedIPs),
+		g.PUT("/api/settings/varnish", h.SetVarnish),
 		g.POST("/api/waf-rules/exceptions", h.AddWAFException),
 		g.DELETE("/api/waf-rules/exceptions/global/:id", h.DeleteWAFException),
 		g.DELETE("/api/waf-rules/exceptions/services/:id", h.DeleteWAFException),
