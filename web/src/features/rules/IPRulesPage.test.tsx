@@ -12,12 +12,13 @@ const rule = (id: number, ip: string, extra: Partial<IPRule> = {}): IPRule => ({
   note: "",
   auto: false,
   score: 0,
+  proxy: "",
   created_at: "2026-11-24T10:00:00Z",
   ...extra,
 });
 
 const page: IPRulesPage = {
-  rules: [rule(1, "203.0.113.9", { auto: true, note: "Auto-banned — sqli", score: 42 }), rule(2, "10.0.0.0/8", { rule_type: "allow", app_name: "shop" })],
+  rules: [rule(1, "203.0.113.9", { auto: true, note: "Auto-banned — sqli", score: 42, proxy: "DCH" }), rule(2, "10.0.0.0/8", { rule_type: "allow", app_name: "shop" })],
   page: 1,
   total_pages: 2,
   total: 18,
@@ -40,12 +41,15 @@ const base = {
 
 describe("ip rules page", () => {
   it("lists rules with auto bans, scores, counts and pages", async () => {
-    mockApi(base);
+    mockApi({ ...base, "GET /api/ip-rules?page=1": { ...page, rules: [...page.rules, rule(3, "17.0.0.1", { proxy: "CPN" })] } });
     await renderRoute("/ip-rules");
     expect(await screen.findByText("203.0.113.9")).toBeInTheDocument();
     expect(screen.getByText("Auto")).toBeInTheDocument();
     expect(screen.getByText("Score 42")).toBeInTheDocument();
-    expect(screen.getByText("Score —")).toBeInTheDocument();
+    expect(screen.getAllByText("Score —")).toHaveLength(2);
+    // Proxy type from --proxy-db: only listed addresses get a tag.
+    expect(screen.getByText("Data centre")).toHaveAttribute("title", expect.stringMatching(/counts toward/));
+    expect(screen.getByText("Privacy relay")).toHaveAttribute("title", expect.stringMatching(/not scored/));
     expect(screen.getByText(/Auto-banned — sqli/)).toBeInTheDocument();
     expect(screen.getByText(/shop ·/)).toBeInTheDocument();
     expect(screen.getByText("18 rules")).toBeInTheDocument();

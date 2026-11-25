@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/netip"
 	"strconv"
 
 	"github.com/ip2location/ip2proxy-go/v4"
@@ -78,73 +79,87 @@ func probeProxyDB(db *ip2proxy.DB) (err error) {
 	return nil
 }
 
-// proxyScores reports whether an IP2Proxy record counts as the hosting/VPN
-// signal. The type string is what decides: IsProxy is 2 for DCH, which
-// counts, and for SES and AIC, which do not. CPN and EPN are consumer
-// privacy networks (iCloud Private Relay) and enterprise networks.
+// proxyKind is an IP2Proxy record's proxy type, "" when the address isn't
+// listed. IsProxy is 2 for DCH, SES and AIC alike, so the type string is
+// what tells them apart.
 //
 // PX1 has no proxy-type column — the reader's position table stores 0 for
 // that package — so GetAll leaves ProxyType as its placeholder and sets
 // IsProxy to 1 when the address is in the file. LITE PX1 is a list of
-// public proxies, which is the PUB signal the free file can give. A miss
-// stays IsProxy -1 with the same placeholder, and a "-" country is IsProxy 0.
-func proxyScores(rec ip2proxy.IP2ProxyRecord, px1 bool) bool {
+// public proxies, so a PX1 listing is PUB. A miss stays IsProxy -1 with
+// the same placeholder, and a "-" country is IsProxy 0.
+func proxyKind(rec ip2proxy.IP2ProxyRecord, px1 bool) string {
 	switch rec.ProxyType {
-	case "VPN", "TOR", "DCH", "PUB", "WEB", "RES":
-		return true
-	case "SES", "AIC", "CPN", "EPN", "-":
-		return false
-	default:
-		return px1 && rec.IsProxy == 1
+	case "VPN", "TOR", "DCH", "PUB", "WEB", "RES", "SES", "AIC", "CPN", "EPN":
+		return rec.ProxyType
 	}
+	if px1 && rec.IsProxy == 1 {
+		return "PUB"
+	}
+	return ""
 }
 
-// proxyHit looks ip up in the optional BIN. A nil DB is "no flag": the
-// caller keeps the ASN heuristic alone. Record runs on the log-worker
-// goroutine, and a corrupt row panics inside the reader (a short row
-// sliced at a column offset); that panic is a miss, logged once, so one
-// bad address cannot kill the worker.
-func (s *Scorer) proxyHit(ip string) bool {
-	if s.proxy == nil || ip == "" {
-		return false
+// scoredKinds are the proxy types that count as the hosting/VPN signal.
+// SES and AIC are crawlers, which have their own handling; CPN and EPN are
+// consumer privacy networks (iCloud Private Relay) and enterprise networks,
+// whose users shouldn't be scored for them.
+var scoredKinds = map[string]bool{"VPN": true, "TOR": true, "DCH": true, "PUB": true, "WEB": true, "RES": true}
+
+// proxyHit reports whether ip's proxy type counts as the hosting signal.
+func (s *Scorer) proxyHit(ip string) bool { return scoredKinds[s.ProxyType(ip)] }
+
+// ProxyType is ip's IP2Proxy type (VPN, TOR, DCH, PUB, WEB, RES, SES, AIC,
+// CPN or EPN), or "" without --proxy-db, for an address the file doesn't
+// list, or for anything that isn't a single address (a CIDR rule). Safe
+// from any goroutine: the reader only reads the file.
+func (s *Scorer) ProxyType(ip string) string {
+	if s == nil || s.proxy == nil {
+		return ""
+	}
+	if _, err := netip.ParseAddr(ip); err != nil {
+		return ""
 	}
 	// The file never changes while it is open, so an address's answer
 	// doesn't either. A lookup is ~20 file reads; most requests come from
 	// an address seen moments ago.
 	s.proxyMu.Lock()
-	hit, ok := s.proxySeen[ip]
+	kind, ok := s.proxySeen[ip]
 	s.proxyMu.Unlock()
 	if ok {
-		return hit
+		return kind
 	}
-	hit = s.lookupProxy(ip)
+	kind = s.lookupProxy(ip)
 	s.proxyMu.Lock()
 	// ponytail: dropped whole when full; an LRU only if a busy server
 	// keeps refilling it.
 	if len(s.proxySeen) >= proxyCacheMax {
 		clear(s.proxySeen)
 	}
-	s.proxySeen[ip] = hit
+	s.proxySeen[ip] = kind
 	s.proxyMu.Unlock()
-	return hit
+	return kind
 }
 
-// proxyCacheMax bounds proxyHit's per-address answers.
+// proxyCacheMax bounds ProxyType's per-address answers.
 const proxyCacheMax = 65536
 
-func (s *Scorer) lookupProxy(ip string) (hit bool) {
+// lookupProxy reads ip from the BIN. Record runs on the log-worker
+// goroutine, and a corrupt row panics inside the reader (a short row
+// sliced at a column offset); that panic is a miss, logged once, so one
+// bad address cannot kill the worker.
+func (s *Scorer) lookupProxy(ip string) (kind string) {
 	defer func() {
 		if r := recover(); r != nil {
 			s.noteProxyFailure(fmt.Sprintf("panicked: %v", r))
-			hit = false
+			kind = ""
 		}
 	}()
 	rec, err := s.proxy.GetAll(ip)
 	if err != nil {
 		s.noteProxyFailure(err.Error())
-		return false
+		return ""
 	}
-	return proxyScores(rec, s.proxyPX1)
+	return proxyKind(rec, s.proxyPX1)
 }
 
 func (s *Scorer) noteProxyFailure(detail string) {
@@ -155,6 +170,6 @@ func (s *Scorer) noteProxyFailure(detail string) {
 
 func (s *Scorer) setProxy(db *ip2proxy.DB) {
 	s.proxy = db
-	s.proxySeen = map[string]bool{}
+	s.proxySeen = map[string]string{}
 	s.proxyPX1 = db != nil && db.PackageVersion() == "1"
 }

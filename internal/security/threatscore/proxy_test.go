@@ -525,10 +525,39 @@ func TestProxyHitCachesPerAddress(t *testing.T) {
 		t.Fatal("cached answers changed")
 	}
 	for i := range proxyCacheMax {
-		s.proxySeen[strconv.Itoa(i)] = false
+		s.proxySeen[strconv.Itoa(i)] = ""
 	}
 	s.proxyHit("203.0.113.2") // a miss on a full cache: lookup fails on the closed file
 	if len(s.proxySeen) != 1 {
 		t.Fatalf("cache size after overflow = %d, want 1", len(s.proxySeen))
+	}
+}
+
+// ProxyType shows every listed type, scored or not, for the admin UI.
+func TestProxyType(t *testing.T) {
+	px2, px1 := testScorer(newFakeStore(), nil), testScorer(newFakeStore(), nil)
+	px2.setProxy(openProxyFile(t, px2Sample()))
+	px1.setProxy(openProxyFile(t, px1Sample()))
+	for _, tc := range []struct {
+		s        *Scorer
+		ip, want string
+	}{
+		{px2, "203.0.113.1", "VPN"},
+		{px2, "203.0.113.3", "DCH"},
+		{px2, "203.0.113.7", "SES"},
+		{px2, "203.0.113.9", "CPN"},
+		{px2, "203.0.113.11", ""},
+		{px2, "203.0.113.50", ""},
+		{px2, "2001:db8::1", "PUB"},
+		{px2, "203.0.113.0/24", ""},
+		{px2, "", ""},
+		{px1, "203.0.113.20", "PUB"},
+		{px1, "8.8.8.8", ""},
+		{testScorer(newFakeStore(), nil), "203.0.113.1", ""},
+		{nil, "203.0.113.1", ""},
+	} {
+		if got := tc.s.ProxyType(tc.ip); got != tc.want {
+			t.Errorf("ProxyType(%q) = %q, want %q", tc.ip, got, tc.want)
+		}
 	}
 }

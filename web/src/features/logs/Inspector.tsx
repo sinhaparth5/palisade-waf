@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { labelMono } from "@/components/layout/Page";
 import { Flag } from "@/components/Flag";
 import { can } from "@/lib/boot";
+import { proxyLabel, proxyScored, proxyTitle } from "@/lib/proxy";
 import { cn } from "@/lib/utils";
 import { useLogDetail, useLogException, useRuleFeedback, type LogDetail } from "./api";
 
@@ -146,9 +147,17 @@ function Detail({ d }: { d: LogDetail }) {
               </svg>
               <span className="absolute inset-0 flex items-center justify-center font-mono text-[13px]">{d.threat_score}</span>
             </div>
-            <p className="font-mono text-[12px] leading-relaxed text-slate-600">
-              autoban {d.threat_autoban} · bot {d.threat_bot} · asn {d.threat_asn} · geo {d.threat_geo} · ja4 {d.threat_ja4}
-            </p>
+            <div className="text-[12px] leading-relaxed text-slate-600">
+              <p className="font-mono">
+                autoban {d.threat_autoban} · bot {d.threat_bot} · hosting {d.threat_asn} · geo {d.threat_geo} · ja4 {d.threat_ja4}
+              </p>
+              {d.proxy_type && (
+                <p title={proxyTitle(d.proxy_type)}>
+                  Proxy: <span className="font-semibold text-ink">{proxyLabel(d.proxy_type)}</span>
+                  {!proxyScored(d.proxy_type) && " (not scored)"}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}

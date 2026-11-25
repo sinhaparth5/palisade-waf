@@ -227,6 +227,10 @@ func TestLogDetailFeedbackAndException(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &d); err != nil || d["path"] != "/q" || d["has_threat_score"] != true {
 		t.Fatalf("detail: %v %s", err, rec.Body)
 	}
+	// No --proxy-db in the harness: the key is there and empty.
+	if pt, ok := d["proxy_type"]; !ok || pt != "" {
+		t.Errorf("proxy_type = %v, %v", pt, ok)
+	}
 	if h, _ := d["headers"].(map[string]any); h["User-Agent"] != "x" {
 		t.Errorf("headers = %v", d["headers"])
 	}

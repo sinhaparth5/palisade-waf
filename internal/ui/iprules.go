@@ -37,6 +37,7 @@ type ipRuleView struct {
 	Note      string    `json:"note"`
 	Auto      bool      `json:"auto"`
 	Score     int       `json:"score"`
+	Proxy     string    `json:"proxy"` // IP2Proxy type, "" without --proxy-db or for a range
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -71,7 +72,7 @@ func (h *Handler) ListIPRules(c *echo.Context) error {
 	}
 	views := make([]ipRuleView, len(rules))
 	for i, r := range rules {
-		views[i] = ipRuleView{r.ID, r.AppName, r.IP, r.RuleType, r.Note, r.Auto(), scores[r.IP], r.CreatedAt}
+		views[i] = ipRuleView{r.ID, r.AppName, r.IP, r.RuleType, r.Note, r.Auto(), scores[r.IP], h.scorer.ProxyType(r.IP), r.CreatedAt}
 	}
 	return c.JSON(http.StatusOK, map[string]any{
 		"rules": views, "page": page, "total_pages": totalPages, "total": total,

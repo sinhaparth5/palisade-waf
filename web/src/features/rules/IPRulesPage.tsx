@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Card, FormRow, Page, PageHeader, labelMono } from "@/components/layout/Page";
 import { can } from "@/lib/boot";
 import { fmtTime } from "@/lib/format";
+import { proxyLabel, proxyTitle } from "@/lib/proxy";
 import { cn } from "@/lib/utils";
 import { useIPRules, useIPSettings, useRemove, useWrite, type Adaptive, type Autoban, type IPRule } from "./api";
 import { FormError, Num, Overview, RuleBadge, RuleList, ScopeAction, SettingsCard, Toggle, btn, field, fieldError, help, primary, tag } from "./shared";
@@ -99,6 +100,11 @@ function IPRow({ r }: { r: IPRule }) {
         <span className={cn(tag, "text-amber-700")}>
           <span aria-hidden className="h-2 w-2 rounded-full bg-amber-500" />
           Auto
+        </span>
+      )}
+      {r.proxy && (
+        <span className={cn(tag, "text-slate-600")} title={proxyTitle(r.proxy)}>
+          {proxyLabel(r.proxy)}
         </span>
       )}
       <span className={cn(tag, "text-slate-600")} title="Composite threat score (0-100)">

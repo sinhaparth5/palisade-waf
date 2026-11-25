@@ -122,6 +122,7 @@ func (h *Handler) LogDetail(c *echo.Context) error {
 		"threat_asn":       threat.ASNScore,
 		"threat_geo":       threat.GeoScore,
 		"threat_ja4":       threat.JA4Score,
+		"proxy_type":       h.scorer.ProxyType(d.RealIP),
 	})
 }
 

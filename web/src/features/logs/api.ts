@@ -111,6 +111,7 @@ export type LogDetail = {
   threat_asn: number;
   threat_geo: number;
   threat_ja4: number;
+  proxy_type: string; // "" unless --proxy-db lists the address
 };
 
 export const useLogDetail = (id: number | null) =>

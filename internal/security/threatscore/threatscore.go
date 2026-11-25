@@ -87,12 +87,12 @@ type Scorer struct {
 
 	// proxy is the optional IP2Proxy BIN. Nil means the ASN heuristic is
 	// the only hosting signal. proxyPX1 is that file's package: PX1 has no
-	// proxy-type column (see proxyScores).
+	// proxy-type column (see proxyKind).
 	proxy     *ip2proxy.DB
 	proxyPX1  bool
 	proxyFail sync.Once
 	proxyMu   sync.Mutex
-	proxySeen map[string]bool // proxyHit's answers, at most proxyCacheMax
+	proxySeen map[string]string // ProxyType's answers, at most proxyCacheMax
 
 	now func() time.Time // injectable for tests
 }

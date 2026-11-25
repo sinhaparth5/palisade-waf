@@ -14,6 +14,7 @@ export type IPRule = {
   note: string;
   auto: boolean;
   score: number; // 0 = no recorded threat score
+  proxy: string; // proxy type, "" unless --proxy-db lists the address
   created_at: string;
 };
 

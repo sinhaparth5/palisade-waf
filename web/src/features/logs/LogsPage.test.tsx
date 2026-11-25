@@ -30,7 +30,8 @@ const detail: LogDetail = {
   method: "POST", host: "shop.example", path: "/login", query: "next=%2F", status: 403, blocked: true, rule_id: 942100, action: "waf_blocked",
   user_agent: "sqlmap/1.7", duration_ms: 12, proto: "HTTP/2.0", tls_version: "TLS 1.3", tls_cipher: "TLS_AES_128_GCM_SHA256", tls_sni: "shop.example",
   asn: 64500, org: "Example Net", ja4: "", visitor_id: "", bot_score: 0, cache_status: "", headers: { "User-Agent": "sqlmap/1.7", Accept: "*/*" },
-  has_threat_score: true, threat_score: 42, threat_autoban: 30, threat_bot: 12, threat_asn: 0, threat_geo: 0, threat_ja4: 0,
+  has_threat_score: true, threat_score: 42, threat_autoban: 30, threat_bot: 12, threat_asn: 15, threat_geo: 0, threat_ja4: 0,
+  proxy_type: "VPN",
 };
 
 const base = {
@@ -135,7 +136,8 @@ describe("logs page", () => {
     expect(within(sheet).getByText("Rule #942100 · waf_blocked")).toBeInTheDocument();
     expect(within(sheet).getByText("AS64500")).toBeInTheDocument();
     expect(within(sheet).getByText("sqlmap/1.7", { selector: "span" })).toBeInTheDocument();
-    expect(within(sheet).getByText(/autoban 30 · bot 12/)).toBeInTheDocument();
+    expect(within(sheet).getByText(/autoban 30 · bot 12 · hosting 15/)).toBeInTheDocument();
+    expect(within(sheet).getByText("VPN").closest("p")).toHaveAttribute("title", expect.stringMatching(/counts toward/));
 
     await user.click(within(sheet).getByRole("button", { name: "False positive" }));
     expect(await within(sheet).findByText("Marked false positive.")).toBeInTheDocument();
@@ -202,7 +204,7 @@ describe("logs page", () => {
     vi.spyOn(window, "matchMedia").mockImplementation((query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }) as unknown as MediaQueryList);
     const sparse: LogDetail = {
       ...detail, request_id: "", query: "", country: "", asn: 0, org: "", tls_version: "", tls_cipher: "", action: "", status: 502,
-      bot_score: 3, ja4: "t13d1516h2", headers: {}, has_threat_score: false, cache_status: "HIT", proxy_ip: "",
+      bot_score: 3, ja4: "t13d1516h2", headers: {}, has_threat_score: false, cache_status: "HIT", proxy_ip: "", proxy_type: "",
     };
     const api = mockApi({
       ...base,
