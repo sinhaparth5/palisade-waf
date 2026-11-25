@@ -2,6 +2,7 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { codecovVitePlugin } from "@codecov/vite-plugin";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { goTemplate, precompress, sonnerNoInlineStyle, unbrand, devPalisade } from "./build/palisade.ts";
 
@@ -24,6 +25,15 @@ export default defineConfig(({ command, mode }) => ({
     goTemplate(),
     precompress(),
     devPalisade(process.env.PALISADE_URL ?? "http://127.0.0.1:8080"),
+    // Bundle size per build to Codecov, only where CI passes the token (empty
+    // on fork PRs). A failed upload is logged, not a failed build. Last, so it
+    // sees the files as written.
+    codecovVitePlugin({
+      enableBundleAnalysis: !!process.env.CODECOV_TOKEN,
+      bundleName: mode === "login" ? "admin-login" : "admin-app",
+      uploadToken: process.env.CODECOV_TOKEN,
+      telemetry: false,
+    }),
   ],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   build: {

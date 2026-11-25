@@ -97,6 +97,9 @@ jobs:
 
       - name: Typecheck, test and build
         run: make web-check
+        env:
+          # The build uploads bundle sizes to Codecov (web/vite.config.ts).
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Audit dependencies
         working-directory: web
