@@ -102,13 +102,13 @@ func TestAdminPagesRender(t *testing.T) {
 	}
 
 	pages := map[string]string{
-		"/admin/services":     "Services",
 		"/admin/settings/pro": "Palisade Pro",
 	}
 	// Pages moved to the React app; old links land there.
 	for path, to := range map[string]string{
 		"/admin/ip-rules?page=2": "/admin/app/ip-rules?page=2",
 		"/admin/geo-rules":       "/admin/app/geo-rules",
+		"/admin/services":        "/admin/app/services",
 		"/admin/certificates":    "/admin/app/certificates",
 		"/admin/threat-intel":    "/admin/app/threat-intel",
 		"/admin/waf-rules":       "/admin/app/waf-rules",
@@ -129,19 +129,6 @@ func TestAdminPagesRender(t *testing.T) {
 		if rec.Header().Get("Cache-Control") != "no-store" {
 			t.Errorf("GET %s missing no-store", path)
 		}
-	}
-
-	if rec := env.do("GET", "/admin/services/rows", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "shop") {
-		t.Errorf("service rows: %d", rec.Code)
-	}
-	if rec := env.do("GET", "/admin/services/cache-stats", nil); rec.Code != http.StatusOK {
-		t.Errorf("cache stats: %d", rec.Code)
-	}
-	// With Varnish enabled the card also reads varnishstat (absent here,
-	// so it renders the error) and the per-service request-log ratios.
-	_ = env.db.SetVarnishConfig(storage.VarnishConfig{Enabled: true, Addr: storage.DefaultVarnishAddr})
-	if rec := env.do("GET", "/admin/services/cache-stats", nil); rec.Code != http.StatusOK {
-		t.Errorf("cache stats (enabled): %d", rec.Code)
 	}
 }
 

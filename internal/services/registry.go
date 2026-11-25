@@ -1045,6 +1045,9 @@ func Purge(vcfg storage.VarnishConfig, svc storage.Service, pathPrefix string) e
 	return sendPurge(vcfg.Addr, svc.Name, re)
 }
 
+// ValidPurgePath reports whether Purge accepts p as a path prefix.
+func ValidPurgePath(p string) bool { return safePurgePath.MatchString(p) }
+
 // backendURLPath maps a client-facing path to the URL the backend (and so
 // Varnish's cache) sees for svc: routing prefix stripped, backend base path
 // joined — the same two steps Handle and the outer Director apply.

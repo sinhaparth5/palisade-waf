@@ -89,7 +89,6 @@ func TestRolePageSweep(t *testing.T) {
 	}
 	id := env.seedLog(storage.RequestLog{AppName: svc.Name, RealIP: "203.0.113.9", Status: 403, Blocked: true, Action: "waf_blocked", Method: "GET", Path: "/x"})
 	pages := []string{
-		"/admin/services", "/admin/services/rows",
 		"/admin/settings/pro",
 		"/admin/api/notifications", fmt.Sprintf("/admin/logs/%d", id),
 	}
@@ -114,39 +113,5 @@ func TestRolePageSweep(t *testing.T) {
 				}
 			}
 		}
-	}
-}
-
-// TestViewerServiceView: a viewer reads a service's settings as text in the
-// View modal's template, with no edit modal and no maintenance bypass token.
-func TestViewerServiceView(t *testing.T) {
-	env := newAdminEnv(t)
-	svc := env.seedService("shop", "shop.example.com")
-	if err := env.db.SetServiceCacheTuning(svc.ID, 60, 0, 0, 0, "cache /assets/\nbypass /api/"); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.db.SetServiceMTLS(svc.ID, storage.ServiceMTLS{Mode: "required", CAPath: "ca.pem"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.db.SetServiceGate(svc.ID, storage.ServiceGate{Maintenance: true, BypassToken: "secret-bypass-token"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.h.registry.Reload(env.db); err != nil {
-		t.Fatal(err)
-	}
-
-	body := env.doWith("GET", "/admin/services", nil, env.sessionAs(storage.RoleViewer)).Body.String()
-	for _, want := range []string{"svc-view-overlay", "svc-view-btn", "cache /assets/", "60s / none", "required · CA saved", "Maintenance"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("viewer services page missing %q", want)
-		}
-	}
-	for _, bad := range []string{"svc-modal-overlay", "svc-edit-btn", "service-wizard", "secret-bypass-token"} {
-		if strings.Contains(body, bad) {
-			t.Errorf("viewer services page contains %q", bad)
-		}
-	}
-	if admin := env.do("GET", "/admin/services", nil).Body.String(); !strings.Contains(admin, "svc-edit-btn") || strings.Contains(admin, "svc-view-btn") {
-		t.Error("owner should get the Edit button, not View")
 	}
 }

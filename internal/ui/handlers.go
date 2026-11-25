@@ -131,7 +131,6 @@ type Handler struct {
 	registry        *services.Registry
 	broadcaster     *LogBroadcaster
 	tmpls           map[string]*template.Template
-	sections        []section // page cards for the top bar search, see search.go
 	staticJS        fs.FS
 	staticCSS       fs.FS
 	assetVer        string // cache-busting stamp for the embedded CSS/JS URLs
@@ -205,28 +204,20 @@ func (h *Handler) parseTemplates() error {
 		return fmt.Errorf("parse template login: %w", err)
 	}
 
-	h.tmpls = make(map[string]*template.Template, len(adminPages)+2)
+	h.tmpls = make(map[string]*template.Template, 3)
 	h.tmpls["login"] = login
-	// settings is the add-on cards page: rendered, but not searched.
-	for _, page := range append(slices.Clone(adminPages), "settings") {
-		t, err := template.New("").Funcs(funcs).ParseFS(templateFS,
-			"templates/components/*.html",
-			"templates/base.html",
-			"templates/"+page+".html",
-		)
-		if err != nil {
-			return fmt.Errorf("parse template %s: %w", page, err)
-		}
-		h.tmpls[page] = t
+	// settings is the add-on cards page (ext.Card), the last base.html page.
+	settings, err := template.New("").Funcs(funcs).ParseFS(templateFS, "templates/components/*.html", "templates/base.html", "templates/settings.html")
+	if err != nil {
+		return fmt.Errorf("parse template settings: %w", err)
 	}
+	h.tmpls["settings"] = settings
 	// notifications partial used by the bell dropdown
 	notif, err := template.New("notifications-panel").Funcs(funcs).ParseFS(templateFS, "templates/notifications.html")
 	if err != nil {
 		return fmt.Errorf("parse notifications: %w", err)
 	}
 	h.tmpls["notifications"] = notif
-	// Before any Execute: html/template rewrites the trees on first use.
-	h.sections = h.searchSections()
 	return nil
 }
 
@@ -427,13 +418,10 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/api/ip-rules", h.ListIPRules)
 	g.GET("/api/ip-rules/settings", h.IPRulesSettings)
 	g.GET("/api/geo-rules", h.APIListGeoRules)
-	g.GET("/services", h.ServicesPage)
-	g.GET("/services/rows", h.ServicesRows)
-	g.GET("/services/openapi/:id", h.ServiceOpenAPI)
-	g.GET("/services/cache-stats", h.ServicesCacheStats)
 	g.GET("/api/services", h.ListServices)
 	g.GET("/api/services/cache-stats", h.CacheStats)
 	g.GET("/api/services/:id/openapi", h.ServiceOpenAPIJSON)
+	g.GET("/services", h.toApp("/services"))
 	g.GET("/certificates", h.toApp("/certificates"))
 	g.GET("/api/certificates", h.ListCertificates)
 	g.GET("/waf-rules", h.toApp("/waf-rules"))
@@ -477,7 +465,6 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.PUT("/api/ip-rules/honeypots", h.SaveHoneypots),
 		g.POST("/api/geo-rules", h.AddGeoRules),
 		g.POST("/api/geo-rules/remove", h.RemoveGeoRules),
-		g.POST("/services", h.AddService),
 		g.POST("/api/services", h.APICreateService),
 		g.DELETE("/api/services/:id", h.APIDeleteService),
 		g.PUT("/api/services/:id/name", h.SetServiceName),
@@ -495,39 +482,13 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.PUT("/api/services/:id/cookies", h.SetServiceCookiesJSON),
 		g.PUT("/api/services/:id/policy", h.SetServicePolicyJSON),
 		g.PUT("/api/services/:id/responses", h.SetServiceResponsesJSON),
-		g.DELETE("/services/:id", h.DeleteService),
-		g.POST("/services/tls/upload", h.UploadServiceTLS),
-		g.POST("/services/tls/auto", h.EnableServiceAutoTLS),
-		g.POST("/services/tls/pool", h.AssignPoolCert),
-		g.POST("/services/tls/clear", h.ClearServiceTLS),
+		g.PUT("/api/services/:id/cache", h.SetServiceCacheJSON),
+		g.POST("/api/services/:id/purge", h.PurgeServiceCacheJSON),
+		g.PUT("/api/services/:id/tls", h.SetServiceTLSJSON),
+		g.PUT("/api/services/:id/http3", h.SetServiceHTTP3JSON),
+		g.PUT("/api/services/:id/mtls", h.SetServiceMTLSJSON),
 		g.POST("/api/certificates", h.AddCertificate),
 		g.DELETE("/api/certificates/:id", h.DeleteCertificate),
-		g.POST("/services/ratelimit", h.SetServiceRateLimit),
-		g.POST("/services/bot/:id", h.SetServiceBotMode),
-		g.POST("/services/uploads/:id", h.SetServiceLargeJSUploads),
-		g.POST("/services/http3/:id", h.SetServiceHTTP3),
-		g.POST("/services/mtls/:id", h.SetServiceMTLS),
-		g.POST("/services/login/:id", h.SetServiceLoginPaths),
-		g.POST("/services/ai/:id", h.SetServiceAICrawlers),
-		g.POST("/services/breach/:id", h.SetServiceBreachCheck),
-		g.POST("/services/responses/:id", h.SetServiceResponseInspect),
-		g.POST("/services/gate/:id", h.SetServiceGate),
-		g.POST("/services/compress/:id", h.SetServiceCompress),
-		g.POST("/services/backends/:id", h.SetServiceBackends),
-		g.POST("/services/hosts/:id", h.SetServiceHosts),
-		g.POST("/services/name/:id", h.RenameService),
-		g.POST("/services/schema/:id", h.SetServiceSchema),
-		g.POST("/services/openapi/:id", h.SetServiceOpenAPI),
-		g.POST("/services/mcp/:id", h.SetServiceMCP),
-		g.POST("/services/jwt/:id", h.SetServiceJWT),
-		g.POST("/services/csp/:id", h.SetServiceCSP),
-		g.POST("/services/cookies/:id", h.SetServiceCookies),
-		g.POST("/services/policy/:id", h.SetServiceRequestPolicy),
-		g.POST("/services/cache/:id", h.SetServiceCache),
-		g.POST("/services/cache-session/:id", h.SetServiceCacheSession),
-		g.POST("/services/cache-tuning/:id", h.SetServiceCacheTuning),
-		g.POST("/services/cache-purge/:id", h.PurgeServiceCache),
-		g.POST("/settings/acme-email", h.SaveAcmeEmail),
 		g.PUT("/api/settings/bot", h.SetBot),
 		g.PUT("/api/settings/rate-limit", h.SetRateLimit),
 		g.PUT("/api/settings/trusted-ips", h.SetTrustedIPs),
@@ -607,9 +568,6 @@ func (h *Handler) render(c *echo.Context, page string, data map[string]any) erro
 		data = map[string]any{}
 	}
 	data["Page"] = page
-	if _, ok := data["Heading"]; !ok {
-		data["Heading"] = pageHeadings[page]
-	}
 	if _, ok := data["AdminPath"]; !ok {
 		data["AdminPath"] = h.cfg.Admin.Path
 	}

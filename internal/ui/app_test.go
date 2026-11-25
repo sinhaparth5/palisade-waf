@@ -225,7 +225,7 @@ func TestAppJSONViews(t *testing.T) {
 
 	var groups []searchGroup
 	get("/admin/search?q=shop", &groups)
-	if len(groups) == 0 || groups[0].Label != "Services" || groups[0].Hits[0] != (searchHit{"shop", "shop.example.com", "/admin/services"}) {
+	if len(groups) == 0 || groups[0].Label != "Services" || groups[0].Hits[0] != (searchHit{"shop", "shop.example.com", "/admin/app/services"}) {
 		t.Errorf("search = %+v", groups)
 	}
 	if rec := get("/admin/search?q=+", &groups); len(groups) != 0 || strings.TrimSpace(rec.Body.String()) != "[]" {

@@ -60,7 +60,7 @@ func TestRouteRoles(t *testing.T) {
 		t.Errorf("viewer log export = %d, want 403", rec.Code)
 	}
 	// Viewers still read everything else and manage their own account.
-	for _, p := range []string{"/admin/api/dashboard", "/admin/api/logs", "/admin/services", "/admin/api/settings/account", "/admin/api/settings/protection", "/admin/api/settings/audit"} {
+	for _, p := range []string{"/admin/api/dashboard", "/admin/api/logs", "/admin/api/services", "/admin/api/settings/account", "/admin/api/settings/protection", "/admin/api/settings/audit"} {
 		if rec := env.doWith("GET", p, nil, viewer); rec.Code != http.StatusOK {
 			t.Errorf("viewer GET %s = %d, want 200", p, rec.Code)
 		}

@@ -185,11 +185,15 @@ function Main({ d }: { d: Dashboard }) {
         </Section>
       </div>
 
-      <Section title="Services" action={<Old href="/services">View all</Old>}>
+      <Section title="Services" action={
+          <Link to="/services" className={more}>
+            View all
+          </Link>
+        }>
         {d.services.length ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {d.services.slice(0, 4).map((s) => (
-              <a key={s.name} href={`${boot.admin}/services`} className={cn(card, "block p-4 text-ink no-underline transition-colors hover:bg-surface")}>
+              <Link key={s.name} to="/services" className={cn(card, "block p-4 text-ink no-underline transition-colors hover:bg-surface")}>
                 <p className="truncate font-mono text-[14px] uppercase tracking-[.04em]">{s.name}</p>
                 <p className="mb-3 truncate font-mono text-[12px] text-slate-500">{s.route}</p>
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[12px]">
@@ -203,7 +207,7 @@ function Main({ d }: { d: Dashboard }) {
                   <dt className="text-slate-500">TLS</dt>
                   <dd className="capitalize">{s.tls || "none"}</dd>
                 </dl>
-              </a>
+              </Link>
             ))}
           </div>
         ) : (

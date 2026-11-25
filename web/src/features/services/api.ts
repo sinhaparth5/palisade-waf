@@ -89,6 +89,8 @@ function useServiceWrite<V>(fn: (v: V) => Promise<unknown>) {
 export const useAddService = () => useServiceWrite((s: NewService) => api<unknown>("/api/services", json("POST", s)));
 export const useDeleteService = () => useServiceWrite((id: number) => api<null>(`/api/services/${id}`, { method: "DELETE" }));
 
+export const usePurge = (id: number) => useServiceWrite((path: string) => api<null>(`/api/services/${id}/purge`, json("POST", { path })));
+
 // useSetService writes one tab: PUT /api/services/:id/<tab>.
 export const useSetService = <V>(id: number, tab: string) => useServiceWrite((v: V) => api<null>(`/api/services/${id}/${tab}`, json("PUT", v)));
 
@@ -103,3 +105,6 @@ export const lines = (s: string) =>
 // Requests tab reads the spec itself.
 export type OpenAPI = { mode: Mode3; spec: string };
 export const useOpenAPI = (id: number) => useQuery({ queryKey: ["services", id, "openapi"], queryFn: () => api<OpenAPI>(`/api/services/${id}/openapi`) });
+
+export type TLSWrite = { mode: "pool" | "custom" | "auto" | "none"; cert_id?: number; cert_pem?: string; key_pem?: string; acme_email?: string };
+export type MTLSWrite = { mode: TLS["mtls"]["mode"]; ca: string; allow: string[] };

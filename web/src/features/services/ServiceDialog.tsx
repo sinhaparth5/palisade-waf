@@ -7,6 +7,7 @@ import { FormError, btn, field, fieldError, help } from "@/features/rules/shared
 import { can } from "@/lib/boot";
 import { cn } from "@/lib/utils";
 import { RequestsTab, ResponsesTab } from "./Checks";
+import { CacheTab, TLSTab } from "./Delivery";
 import { BotTab, GateTab, UploadsTab } from "./Protection";
 import { BackendsTab, HostsTab, RateLimitTab } from "./Routing";
 import { useDeleteService, useSetService, type Service, type ServicesPage } from "./api";
@@ -25,6 +26,8 @@ const tabs: { id: string; label: string; show?: (s: Service) => boolean; body: (
   { id: "uploads", label: "Uploads", body: ({ s }) => <UploadsTab key={JSON.stringify(s.uploads)} s={s} /> },
   { id: "requests", label: "Requests", body: ({ s }) => <RequestsTab s={s} /> },
   { id: "responses", label: "Responses", body: ({ s }) => <ResponsesTab s={s} /> },
+  { id: "cache", label: "Cache", body: ({ s, d }) => <CacheTab s={s} d={d} /> },
+  { id: "tls", label: "TLS", show: (s) => !!s.host, body: ({ s, d }) => <TLSTab s={s} d={d} /> },
   { id: "gate", label: "Availability", body: ({ s }) => <GateTab key={JSON.stringify(s.gate)} s={s} /> },
 ];
 

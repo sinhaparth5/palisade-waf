@@ -2,12 +2,8 @@ package ui
 
 import (
 	"net/http"
-	"net/url"
-	"regexp"
-	"slices"
 	"sort"
 	"strings"
-	"text/template/parse"
 
 	"github.com/labstack/echo/v5"
 
@@ -17,16 +13,9 @@ import (
 // Top bar search (issue #225): page cards the caller's role can see, then
 // live records. Read-only, so every role can use it.
 
-// adminPages are the base.html pages, in sidebar order.
-var adminPages = []string{"services"}
-
-var pageHeadings = map[string]string{
-	"services": "Services",
-}
-
-// appSections are the React app's pages and their cards, listed by hand
-// until the app owns search (#357). Cards link to the page itself; admin
-// cards are hidden from viewers, as the page hides them.
+// appSections are the app's pages and their cards, listed by hand. Cards
+// link to the page itself; admin and owner cards are hidden from roles the
+// page hides them from.
 var appSections = func() []section {
 	var out []section
 	for _, p := range []struct {
@@ -35,6 +24,7 @@ var appSections = func() []section {
 	}{
 		{"Dashboard", "/app/", []string{"Overview", "Traffic, last 24h", "Top countries", "Services", "Latest blocked requests", "Daily log", "Recent requests", "Enforcement today", "Blocked by country", "Engine"}, nil, nil},
 		{"Live Logs", "/app/logs", []string{"Request inspector", "Stats"}, nil, nil},
+		{"Services", "/app/services", []string{"Configured Services", "Cache performance"}, []string{"Add Service"}, nil},
 		{"IP Rules", "/app/ip-rules", []string{"Automatic banning", "Adaptive enforcement", "Honeypot paths", "Rules overview", "Active IP Rules"}, []string{"Add IP Rules"}, nil},
 		{"Geo Rules", "/app/geo-rules", []string{"Rules overview", "GeoIP database bundled", "Active Geo Rules"}, []string{"Add Geo Rules"}, nil},
 		{"Certificates", "/app/certificates", []string{"Saved Certificates", "Service TLS"}, []string{"Add Certificate"}, nil},
@@ -77,97 +67,6 @@ type section struct {
 	need string
 }
 
-var (
-	// Components whose "Title" argument is a card heading.
-	headerTemplates = map[string]bool{"card-header": true, "panel-header": true, "section-head": true, "settings-section-title": true}
-	titleArg        = regexp.MustCompile(`"Title" "([^"]+)"`)
-	literalHeading  = regexp.MustCompile(`<h[23][^>]*>([^<]+)</h[23]>`)
-)
-
-// searchSections walks each page's "content" parse tree for card headings,
-// following {{template}} calls and raising the required role inside
-// {{if can .Role "x"}}, so a card is offered only to roles that see it.
-func (h *Handler) searchSections() []section {
-	out := slices.Clone(appSections)
-	for _, page := range adminPages {
-		t := h.tmpls[page]
-		pageURL := "/" + strings.ReplaceAll(page, "_", "-") // under the admin path
-		heading := pageHeadings[page]
-		out = append(out, section{searchHit{heading, "Page", pageURL}, storage.RoleViewer})
-		seen := map[string]bool{}
-		add := func(title, need string) {
-			title = strings.TrimSpace(title)
-			if title == "" || seen[title] {
-				return
-			}
-			seen[title] = true
-			out = append(out, section{searchHit{title, heading, pageURL + "#find=" + url.PathEscape(title)}, need})
-		}
-		var walk func(n parse.Node, need string, depth int)
-		walk = func(n parse.Node, need string, depth int) {
-			if n == nil || depth > 20 {
-				return
-			}
-			switch n := n.(type) {
-			case *parse.ListNode:
-				if n == nil {
-					return
-				}
-				for _, c := range n.Nodes {
-					walk(c, need, depth)
-				}
-			case *parse.TextNode:
-				for _, m := range literalHeading.FindAllSubmatch(n.Text, -1) {
-					add(string(m[1]), need)
-				}
-			case *parse.IfNode:
-				walk(n.List, higherRole(need, canRole(n.Pipe)), depth)
-				walk(n.ElseList, need, depth)
-			case *parse.RangeNode:
-				walk(n.List, need, depth)
-				walk(n.ElseList, need, depth)
-			case *parse.WithNode:
-				walk(n.List, need, depth)
-				walk(n.ElseList, need, depth)
-			case *parse.TemplateNode:
-				if headerTemplates[n.Name] {
-					if m := titleArg.FindStringSubmatch(n.Pipe.String()); m != nil {
-						add(m[1], need)
-					}
-				} else if sub := t.Lookup(n.Name); sub != nil && sub.Tree != nil {
-					walk(sub.Tree.Root, need, depth+1)
-				}
-			}
-		}
-		if c := t.Lookup("content"); c != nil && c.Tree != nil {
-			walk(c.Tree.Root, storage.RoleViewer, 0)
-		}
-	}
-	return out
-}
-
-// canRole returns the role an {{if can .Role "x"}} pipe requires, or "".
-func canRole(p *parse.PipeNode) string {
-	if p == nil || len(p.Cmds) != 1 || len(p.Cmds[0].Args) != 3 {
-		return ""
-	}
-	args := p.Cmds[0].Args
-	if id, ok := args[0].(*parse.IdentifierNode); !ok || id.Ident != "can" {
-		return ""
-	}
-	if s, ok := args[2].(*parse.StringNode); ok {
-		return s.Text
-	}
-	return ""
-}
-
-func higherRole(a, b string) string {
-	if roleRank[b] > roleRank[a] {
-		return b
-	}
-	return a
-}
-
 // matchHits returns up to searchLimit hits whose haystack contains q.
 func matchHits[T any](q string, rows []T, hit func(T) (searchHit, string)) []searchHit {
 	var out []searchHit
@@ -198,7 +97,7 @@ func (h *Handler) Search(c *echo.Context) error {
 		if asJSON {
 			return c.JSON(http.StatusOK, []searchGroup{})
 		}
-		return h.renderPartial(c, "services", "search-results", data)
+		return h.renderPartial(c, "settings", "search-results", data)
 	}
 	role := ""
 	if u := currentUser(c); u != nil {
@@ -213,7 +112,7 @@ func (h *Handler) Search(c *echo.Context) error {
 	}
 
 	var visible []section
-	for _, s := range h.sections {
+	for _, s := range appSections {
 		if roleRank[role] >= roleRank[s.need] {
 			visible = append(visible, s)
 		}
@@ -241,7 +140,7 @@ func (h *Handler) Search(c *echo.Context) error {
 		return err
 	}
 	group("Services", "hgi-settings-01", matchHits(q, svcs, func(s storage.Service) (searchHit, string) {
-		return searchHit{s.Name, s.Host + s.Prefix, admin + "/services"},
+		return searchHit{s.Name, s.Host + s.Prefix, admin + "/app/services"},
 			strings.Join(append([]string{s.Name, s.Host, s.Prefix}, s.HostAliases...), " ")
 	}))
 	ips, err := h.db.ListIPRules()
@@ -288,5 +187,5 @@ func (h *Handler) Search(c *echo.Context) error {
 		return c.JSON(http.StatusOK, groups)
 	}
 	data["Groups"] = groups
-	return h.renderPartial(c, "services", "search-results", data)
+	return h.renderPartial(c, "settings", "search-results", data)
 }

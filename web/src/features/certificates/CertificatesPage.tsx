@@ -172,7 +172,7 @@ function ServiceList({ d }: { d: CertsPage }) {
       )}
       <p className={cn(help, "mt-4 border-t border-line pt-4")}>
         Change a service's TLS on the{" "}
-        <a href={`${boot.admin}/services`} className="text-ink underline">
+        <a href={`${boot.admin}/app/services`} className="text-ink underline">
           Services
         </a>{" "}
         page.

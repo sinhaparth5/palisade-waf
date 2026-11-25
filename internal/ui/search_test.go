@@ -41,8 +41,11 @@ func TestSearch(t *testing.T) {
 		{storage.RoleViewer, "two-factor", ">Two-Factor Authentication<", true},
 		{storage.RoleViewer, "dashboard", `href="/admin/app/"`, true},
 		{storage.RoleViewer, "enforcement", `href="/admin/app/"`, true},
+		{storage.RoleViewer, "configured serv", `href="/admin/app/services"`, true},
+		{storage.RoleAdmin, "add service", ">Add Service<", true},
+		{storage.RoleViewer, "add service", ">Add Service<", false},
 		// Live records.
-		{storage.RoleViewer, "SHOP.example", "/admin/services", true},
+		{storage.RoleViewer, "SHOP.example", `href="/admin/app/services"`, true},
 		{storage.RoleViewer, "113.9", "203.0.113.9", true},
 		{storage.RoleViewer, "tor", "Tor exits", true},
 		{storage.RoleViewer, "zzz-nothing", "No results for", true},

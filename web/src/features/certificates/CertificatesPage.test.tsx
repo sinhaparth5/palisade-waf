@@ -46,7 +46,7 @@ describe("certificates page", () => {
     expect(screen.getByText("No TLS")).toBeInTheDocument();
     expect(screen.getByText("10 days left")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("contact email");
-    expect(within(screen.getByRole("main")).getByRole("link", { name: "Services" })).toHaveAttribute("href", "/admin/services");
+    expect(within(screen.getByRole("main")).getByRole("link", { name: "Services" })).toHaveAttribute("href", "/admin/app/services");
   });
 
   it("shows loading, empty and error states", async () => {
