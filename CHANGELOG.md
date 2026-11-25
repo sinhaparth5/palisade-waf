@@ -14,11 +14,9 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
-- (#361) Add dissolve-style art to the React dashboard
-
-## [3.5.1] - 2026-11-25
+## [3.5.2] - 2026-11-25
 
 - (#361) Add dissolve-style art to the React dashboard
 
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.5.1...main
-[3.5.1]: https://github.com/sinhaparth5/palisade-waf/compare/v3.5.0...v3.5.1
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.5.2...main
+[3.5.2]: https://github.com/sinhaparth5/palisade-waf/compare/v3.5.1...v3.5.2
