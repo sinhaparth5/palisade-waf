@@ -43,7 +43,7 @@ export function WebhookCard({ v }: { v: Webhook }) {
       intro={
         <>
           Push security events to any HTTP endpoint as they happen: Splunk HEC, Elastic, Loki or your own receiver. Logs can also be downloaded as NDJSON from the{" "}
-          <a href={`${boot.admin}/app/logs`} className="text-ink underline">
+          <a href={`${boot.admin}/logs`} className="text-ink underline">
             Logs
           </a>{" "}
           page.

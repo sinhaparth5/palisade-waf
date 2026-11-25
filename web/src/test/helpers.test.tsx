@@ -62,7 +62,7 @@ describe("renderRoute", () => {
   it("renders a route under the admin base path", async () => {
     const { router } = await renderRoute("/");
     expect(router.state.location.pathname).toBe("/"); // relative to the base path
-    expect(router.history.location.pathname).toBe("/admin/app/");
+    expect(router.history.location.pathname).toBe("/admin/");
     expect(await screen.findByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
   });
 });

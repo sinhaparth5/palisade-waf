@@ -12,7 +12,7 @@ function Screen({ code, title, children }: { code: string; title: string; childr
         <h1 className="mt-2 text-xl">{title}</h1>
         <div className="mt-3 text-sm text-slate-600">{children}</div>
         {/* A full load, not a client link: after a crash, start from clean state. */}
-        <a href={`${boot.admin}/app/`} className="mt-6 inline-block font-mono text-xs uppercase tracking-[.06em] underline underline-offset-4">
+        <a href={`${boot.admin}/`} className="mt-6 inline-block font-mono text-xs uppercase tracking-[.06em] underline underline-offset-4">
           Back to dashboard
         </a>
       </section>

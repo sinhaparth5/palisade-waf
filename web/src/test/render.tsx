@@ -26,9 +26,9 @@ export function renderWithProviders(ui: ReactElement, options: RenderOptions & {
 }
 
 // renderRoute renders the real app router at path ("/services/3"), the way a
-// browser opening {admin}/app/services/3 would. Await it: the route loads first.
+// browser opening {admin}/services/3 would. Await it: the route loads first.
 export async function renderRoute(path: string, { queryClient = testQueryClient() } = {}) {
-  const router = createAppRouter(queryClient, createMemoryHistory({ initialEntries: [`${boot.admin}/app${path}`] }));
+  const router = createAppRouter(queryClient, createMemoryHistory({ initialEntries: [`${boot.admin}${path}`] }));
   await router.load();
   const result = render(
     <QueryClientProvider client={queryClient}>

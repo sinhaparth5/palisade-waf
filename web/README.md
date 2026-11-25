@@ -106,7 +106,7 @@ and run `bun run smoke`.
 1. `make web` once, so Palisade has an `index.html` to render.
 2. Run Palisade on `:8080` (or set `PALISADE_URL`).
 3. `bun run dev`, open `http://localhost:5173/admin/login` and sign in, then
-   `http://localhost:5173/admin/app/`.
+   `http://localhost:5173/admin/`.
 
 Vite proxies every `/admin` path except the app to Palisade and copies the
 session values from the page Go renders for the same cookie.

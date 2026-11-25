@@ -400,10 +400,6 @@ func (h *Handler) Register(e *echo.Echo) {
 	}
 
 	g.GET("/metrics", echo.WrapHandler(metrics.Handler()))
-	// Dashboard and Logs live in the React app (issue #350); the old URLs
-	// (bookmarks, HTMX nav, notification links) land there.
-	g.GET("", h.toApp("/"))
-	g.GET("/logs", h.toApp("/logs"))
 	g.GET("/api/dashboard", h.Dashboard)
 	g.GET("/api/logs", h.APIListLogs)
 	g.GET("/api/logs/apps", h.LogApps)
@@ -412,31 +408,27 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/logs/stream", h.LogsStream)
 	g.GET("/logs/stats", h.LogStatsSeed)
 	g.GET("/logs/:id", h.LogDetail)
-	// IP and Geo Rules too (issue #351).
-	g.GET("/ip-rules", h.toApp("/ip-rules"))
-	g.GET("/geo-rules", h.toApp("/geo-rules"))
 	g.GET("/api/ip-rules", h.ListIPRules)
 	g.GET("/api/ip-rules/settings", h.IPRulesSettings)
 	g.GET("/api/geo-rules", h.APIListGeoRules)
 	g.GET("/api/services", h.ListServices)
 	g.GET("/api/services/cache-stats", h.CacheStats)
 	g.GET("/api/services/:id/openapi", h.ServiceOpenAPIJSON)
-	g.GET("/services", h.toApp("/services"))
-	g.GET("/certificates", h.toApp("/certificates"))
 	g.GET("/api/certificates", h.ListCertificates)
-	g.GET("/waf-rules", h.toApp("/waf-rules"))
 	g.GET("/api/waf-rules", h.ListWAFRules)
-	g.GET("/threat-intel", h.toApp("/threat-intel"))
 	g.GET("/api/threat-intel", h.ListThreatIntel)
-	// Settings live in the app (issue #355); add-on cards stay on /settings/pro.
-	g.GET("/settings", h.toApp("/settings"))
+	// Add-on cards (ext.Card) render on the server.
 	g.GET("/settings/pro", h.SettingsPro)
 	g.GET("/api/settings/account", h.Account)
 	g.GET("/api/settings/protection", h.Protection)
 	g.GET("/api/settings/audit", h.Audit)
 	g.GET("/search", h.Search)
-	g.GET("/app", h.AppPage)
-	g.GET("/app/*", h.AppPage)
+	// The React app (issue #357): every other GET renders it, so the client
+	// router handles deep links. /app/* is where it lived before.
+	g.GET("", h.AppPage)
+	g.GET("/*", h.AppPage)
+	g.GET("/app", h.fromApp)
+	g.GET("/app/*", h.fromApp)
 
 	// Every role: the user's own session, credentials and second factors.
 	as(storage.RoleViewer,

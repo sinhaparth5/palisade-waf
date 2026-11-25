@@ -167,7 +167,7 @@ describe("services page", () => {
     const c = within((await screen.findByRole("heading", { name: "Cache performance" })).closest("section")!);
     expect(await c.findByText("3 MiB / 256 MiB")).toBeInTheDocument();
     expect(c.getByText(/evicting objects/)).toBeInTheDocument();
-    expect(c.getByRole("link", { name: "4" })).toHaveAttribute("href", "/admin/app/logs?app=blog&status=cache_error&mode=history");
+    expect(c.getByRole("link", { name: "4" })).toHaveAttribute("href", "/admin/logs?app=blog&status=cache_error&mode=history");
     r.unmount();
     mockApi({ ...base([]), "GET /api/services/cache-stats": { enabled: true, stats_error: "varnishstat: not found", services: [] } });
     await renderRoute("/services");

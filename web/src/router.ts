@@ -10,7 +10,7 @@ import { routeTree } from "./routeTree.gen";
 export const createAppRouter = (queryClient: QueryClient, history?: RouterHistory) =>
   createRouter({
     routeTree,
-    basepath: `${boot.admin}/app`,
+    basepath: boot.admin,
     context: { queryClient },
     history,
     defaultErrorComponent: ErrorScreen,

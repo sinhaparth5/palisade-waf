@@ -13,9 +13,9 @@ describe("shell", () => {
     await renderRoute("/");
     const sidebar = screen.getByRole("navigation");
     const dash = within(sidebar).getByRole("link", { name: "Dashboard" });
-    expect(dash).toHaveAttribute("href", "/admin/app/");
+    expect(dash).toHaveAttribute("href", "/admin/");
     expect(dash).toHaveAttribute("aria-current", "page");
-    expect(within(sidebar).getByRole("link", { name: "Live Logs" })).toHaveAttribute("href", "/admin/app/logs");
+    expect(within(sidebar).getByRole("link", { name: "Live Logs" })).toHaveAttribute("href", "/admin/logs");
     expect(within(sidebar).getAllByRole("link")).toHaveLength(nav.length);
     expect(document.title).toBe("Palisade · Dashboard");
   });

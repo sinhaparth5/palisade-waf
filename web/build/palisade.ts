@@ -5,8 +5,8 @@ import { brotliCompressSync, gzipSync, constants } from "node:zlib";
 import type { Plugin } from "vite";
 
 // goTemplate points the built index.html's asset URLs at {{.Base}}, which Go
-// fills with "<admin path>/app/". Relative URLs would break on deep routes
-// (/admin/app/logs/5), and <base href> is ruled out by the CSP's base-uri 'none'.
+// fills with "<admin path>/". Relative URLs would break on deep routes
+// (/admin/logs/5), and <base href> is ruled out by the CSP's base-uri 'none'.
 export function goTemplate(): Plugin {
   return {
     name: "palisade:go-template",
@@ -167,25 +167,28 @@ export function unbrand(): Plugin {
   };
 }
 
-// devPalisade runs `bun run dev` against a local Palisade: every admin request
-// except the app itself is proxied there, and the app's HTML gets the session
-// values (CSRF, role, ...) from the page Go renders for the same cookie.
-// Needs one `make web` first so Go has an index.html to render.
+// devPalisade runs `bun run dev` against a local Palisade: a page navigation
+// gets the app, with the session values (CSRF, role, ...) taken from the page
+// Go renders for the same cookie, and every other admin request but Vite's
+// own is proxied there. Needs one `make web` first so Go has an index.html.
 export function devPalisade(target: string): Plugin {
   const admin = "/admin";
+  // Pages and downloads Go renders itself, never the app.
+  const goPages = new RegExp(`^${admin}/(api/|static/|login|logout|invite/|settings/pro|logs/export|debug/|metrics)`);
   return {
     name: "palisade:dev",
     apply: "serve",
     config: () => ({
       server: {
-        proxy: { [`^${admin}(?!/app(/|$))`]: { target, changeOrigin: false, ws: true } },
+        proxy: { [`^${admin}(?!/(@vite|@id/|@fs/|@react-refresh|src/|node_modules/)|/?(\\?|$))`]: { target, changeOrigin: false, ws: true } },
       },
     }),
     configureServer(server) {
+      // Runs ahead of Vite's proxy.
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? "";
-        if (!url.startsWith(`${admin}/app`) || !(req.headers.accept ?? "").includes("text/html")) return next();
-        const go = await fetch(new URL(`${admin}/app/`, target), {
+        if (!url.startsWith(admin) || goPages.test(url) || !(req.headers.accept ?? "").includes("text/html")) return next();
+        const go = await fetch(new URL(`${admin}/`, target), {
           headers: { cookie: req.headers.cookie ?? "" },
           redirect: "manual",
         }).catch(() => null);

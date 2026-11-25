@@ -276,7 +276,7 @@ function CacheStatsCard() {
   const q = useCacheStats();
   const d = q.data;
   const settings = (
-    <a href={`${boot.admin}/app/settings#settings-infrastructure`} className="text-ink underline">
+    <a href={`${boot.admin}/settings#settings-infrastructure`} className="text-ink underline">
       Settings
     </a>
   );
@@ -349,7 +349,7 @@ function CacheStatsCard() {
                       <td className="px-2 py-2 text-right font-mono text-slate-500">{r.passes}</td>
                       <td className="px-2 py-2 text-right font-mono">
                         {r.errors ? (
-                          <a href={`${boot.admin}/app/logs?app=${encodeURIComponent(r.app)}&status=cache_error&mode=history`} className="text-red-600 underline">
+                          <a href={`${boot.admin}/logs?app=${encodeURIComponent(r.app)}&status=cache_error&mode=history`} className="text-red-600 underline">
                             {r.errors}
                           </a>
                         ) : (

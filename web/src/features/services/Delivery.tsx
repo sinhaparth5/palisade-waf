@@ -14,7 +14,7 @@ import { lines, usePurge, useSetService, type Cache, type MTLSWrite, type Servic
 const mono = cn(field, "font-mono");
 const warn = "border border-amber-300 bg-amber-50 p-3 text-[12px] leading-normal text-amber-800";
 const settings = (
-  <a href={`${boot.admin}/app/settings#settings-infrastructure`} className="text-ink underline">
+  <a href={`${boot.admin}/settings#settings-infrastructure`} className="text-ink underline">
     Settings
   </a>
 );
@@ -198,7 +198,7 @@ function CertForm({ s, d }: { s: Service; d: ServicesPage }) {
         ) : (
           <p className={help}>
             No certificates in the pool yet.{" "}
-            <a href={`${boot.admin}/app/certificates`} className="text-ink underline">
+            <a href={`${boot.admin}/certificates`} className="text-ink underline">
               Add one on Certificates
             </a>
             .

@@ -64,15 +64,15 @@
   <!-- Nav links -->
   <p class="px-6 pt-4 pb-2 font-mono text-[10px] uppercase tracking-[.14em] text-side-muted">Navigation</p>
   <nav class="flex-1 flex flex-col gap-0.5 px-3 overflow-y-auto">
-    {{template "nav-item" (map "Page" .Page "Key" "dashboard" "Href" (print .AdminPath "/app/") "Icon" "hgi-dashboard-square-01" "Label" "Dashboard")}}
-    {{template "nav-item" (map "Page" .Page "Key" "logs" "Href" (print .AdminPath "/app/logs") "Icon" "hgi-activity-01" "Label" "Live Logs")}}
+    {{template "nav-item" (map "Page" .Page "Key" "dashboard" "Href" (print .AdminPath "/") "Icon" "hgi-dashboard-square-01" "Label" "Dashboard")}}
+    {{template "nav-item" (map "Page" .Page "Key" "logs" "Href" (print .AdminPath "/logs") "Icon" "hgi-activity-01" "Label" "Live Logs")}}
     {{template "nav-item" (map "Page" .Page "Key" "services" "Href" (print .AdminPath "/services") "Icon" "hgi-settings-01" "Label" "Services")}}
-    {{template "nav-item" (map "Page" .Page "Key" "certificates" "Href" (print .AdminPath "/app/certificates") "Icon" "hgi-certificate-01" "Label" "Certificates")}}
-    {{template "nav-item" (map "Page" .Page "Key" "ip_rules" "Href" (print .AdminPath "/app/ip-rules") "Icon" "hgi-cancel-circle" "Label" "IP Rules")}}
-    {{template "nav-item" (map "Page" .Page "Key" "geo_rules" "Href" (print .AdminPath "/app/geo-rules") "Icon" "hgi-earth" "Label" "Geo Rules")}}
-    {{template "nav-item" (map "Page" .Page "Key" "waf_rules" "Href" (print .AdminPath "/app/waf-rules") "Icon" "hgi-security-block" "Label" "WAF Rules")}}
-    {{template "nav-item" (map "Page" .Page "Key" "threat_intel" "Href" (print .AdminPath "/app/threat-intel") "Icon" "hgi-database-01" "Label" "Threat Intel")}}
-    {{template "nav-item" (map "Page" .Page "Key" "settings" "Href" (print .AdminPath "/app/settings") "Icon" "hgi-user-account" "Label" "Settings")}}
+    {{template "nav-item" (map "Page" .Page "Key" "certificates" "Href" (print .AdminPath "/certificates") "Icon" "hgi-certificate-01" "Label" "Certificates")}}
+    {{template "nav-item" (map "Page" .Page "Key" "ip_rules" "Href" (print .AdminPath "/ip-rules") "Icon" "hgi-cancel-circle" "Label" "IP Rules")}}
+    {{template "nav-item" (map "Page" .Page "Key" "geo_rules" "Href" (print .AdminPath "/geo-rules") "Icon" "hgi-earth" "Label" "Geo Rules")}}
+    {{template "nav-item" (map "Page" .Page "Key" "waf_rules" "Href" (print .AdminPath "/waf-rules") "Icon" "hgi-security-block" "Label" "WAF Rules")}}
+    {{template "nav-item" (map "Page" .Page "Key" "threat_intel" "Href" (print .AdminPath "/threat-intel") "Icon" "hgi-database-01" "Label" "Threat Intel")}}
+    {{template "nav-item" (map "Page" .Page "Key" "settings" "Href" (print .AdminPath "/settings") "Icon" "hgi-user-account" "Label" "Settings")}}
   </nav>
 
   <!-- Account -->

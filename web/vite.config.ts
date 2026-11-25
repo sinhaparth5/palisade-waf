@@ -10,7 +10,7 @@ import { goTemplate, precompress, sonnerNoInlineStyle, unbrand, devPalisade } fr
 export default defineConfig(({ command }) => ({
   // Build: relative, so CSS fonts and lazy chunks resolve next to their file
   // wherever the admin path puts them. Dev: under the default admin path.
-  base: command === "build" ? "./" : "/admin/app/",
+  base: command === "build" ? "./" : "/admin/",
   plugins: [
     // Not under Vitest: routeTree.gen.ts is committed, and the plugin's code
     // splitting and HMR code add branches to route files no test can reach.

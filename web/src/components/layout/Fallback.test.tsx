@@ -13,7 +13,7 @@ describe("fallback screens", () => {
     renderWithProviders(<ErrorScreen error={new Error("db at /var/lib/secret")} />);
     expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(screen.queryByText(/var\/lib\/secret/)).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /back to dashboard/i })).toHaveAttribute("href", "/admin/app/");
+    expect(screen.getByRole("link", { name: /back to dashboard/i })).toHaveAttribute("href", "/admin/");
   });
 });
 

@@ -104,21 +104,21 @@ func TestAdminPagesRender(t *testing.T) {
 	pages := map[string]string{
 		"/admin/settings/pro": "Palisade Pro",
 	}
-	// Pages moved to the React app; old links land there.
+	// The app's address before #357; bookmarks land on the same page.
 	for path, to := range map[string]string{
-		"/admin/ip-rules?page=2": "/admin/app/ip-rules?page=2",
-		"/admin/geo-rules":       "/admin/app/geo-rules",
-		"/admin/services":        "/admin/app/services",
-		"/admin/certificates":    "/admin/app/certificates",
-		"/admin/threat-intel":    "/admin/app/threat-intel",
-		"/admin/waf-rules":       "/admin/app/waf-rules",
-		"/admin/settings":        "/admin/app/settings",
-		"/admin":                 "/admin/app/",
-
-		"/admin/logs?status=blocked&mode=history": "/admin/app/logs?status=blocked&mode=history",
+		"/admin/app":                         "/admin/",
+		"/admin/app/":                        "/admin/",
+		"/admin/app/ip-rules?page=2":         "/admin/ip-rules?page=2",
+		"/admin/app/logs?status=blocked&x=1": "/admin/logs?status=blocked&x=1",
 	} {
 		if rec := env.do("GET", path, nil); rec.Code != http.StatusFound || rec.Header().Get("Location") != to {
 			t.Errorf("GET %s = %d %q, want a redirect to %s", path, rec.Code, rec.Header().Get("Location"), to)
+		}
+	}
+	// Unknown API and static paths stay 404s, never the app's page.
+	for _, path := range []string{"/admin/api/nope", "/admin/static/nope.js"} {
+		if rec := env.do("GET", path, nil); rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", path, rec.Code)
 		}
 	}
 	for path, heading := range pages {

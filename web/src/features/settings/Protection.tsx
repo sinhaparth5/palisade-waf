@@ -25,7 +25,7 @@ export function BotCard({ v }: { v: Bot }) {
   const save = useSetProtection<Omit<Bot, "captcha_secret_set"> & { captcha_secret: string }>("bot");
   const e = save.error;
   const servicesLink = (
-    <a href={`${boot.admin}/app/services`} className="text-ink underline">
+    <a href={`${boot.admin}/services`} className="text-ink underline">
       Services
     </a>
   );

@@ -17,7 +17,7 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-// The React admin app (web/, issue #348), served under {admin}/app behind
+// The React admin app (web/, issue #348), served at the admin root behind
 // the same session, role and CSP middleware as every other admin page, so an
 // anonymous visitor gets the login redirect and never the app's JS.
 
@@ -49,9 +49,9 @@ func (h *Handler) SetApp(fsys fs.FS) error {
 	return nil
 }
 
-// AppPage serves {admin}/app and everything under it: hashed files from
-// assets/, the licence notices, and index.html for every other path so the
-// client router handles deep links.
+// AppPage serves every admin GET no other route takes: hashed files from
+// assets/, the licence notices, and index.html for the rest so the client
+// router handles deep links. An unknown api/ or static/ path stays a 404.
 func (h *Handler) AppPage(c *echo.Context) error {
 	if h.appIndex == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "admin app not built (make web)")
@@ -62,6 +62,8 @@ func (h *Handler) AppPage(c *echo.Context) error {
 		return h.appAsset(c, rel)
 	case rel == "licenses.md":
 		return h.appAsset(c, rel)
+	case strings.HasPrefix(rel, "api/"), strings.HasPrefix(rel, "static/"):
+		return echo.ErrNotFound
 	}
 	return h.appHTML(c)
 }
@@ -70,7 +72,7 @@ func (h *Handler) appHTML(c *echo.Context) error {
 	nonce := rand.Text() // 128+ bits, base32: nothing for HTML or the CSP to escape
 	data := map[string]any{
 		"AdminPath": h.cfg.Admin.Path,
-		"Base":      h.cfg.Admin.Path + "/app/",
+		"Base":      h.cfg.Admin.Path + "/",
 		"Asset":     h.assetVer,
 		"CSRF":      h.csrfFromContext(c),
 		"Version":   h.cfg.Version,
@@ -237,14 +239,12 @@ func denied(c *echo.Context, code, msg string) error {
 	return c.String(http.StatusForbidden, msg)
 }
 
-// toApp redirects an HTMX page that moved to the React app to its new
-// address, query kept, so bookmarks and links into it still work.
-func (h *Handler) toApp(path string) echo.HandlerFunc {
-	return func(c *echo.Context) error {
-		u := h.cfg.Admin.Path + "/app" + path
-		if q := c.Request().URL.RawQuery; q != "" {
-			u += "?" + q
-		}
-		return c.Redirect(http.StatusFound, u)
+// fromApp redirects {admin}/app/... (the app's address before #357) to the
+// same page at the admin root, query kept, so bookmarks still work.
+func (h *Handler) fromApp(c *echo.Context) error {
+	u := h.cfg.Admin.Path + "/" + c.Param("*")
+	if q := c.Request().URL.RawQuery; q != "" {
+		u += "?" + q
 	}
+	return c.Redirect(http.StatusFound, u)
 }

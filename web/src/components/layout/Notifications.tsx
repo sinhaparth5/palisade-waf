@@ -89,7 +89,7 @@ export function Notifications() {
             </li>
           ))}
         </ul>
-        <a href={`${boot.admin}/app/logs?status=blocked`} className="mt-1 block border-t border-edge p-2 text-center font-mono text-[11px] uppercase tracking-[.06em] text-ink no-underline">
+        <a href={`${boot.admin}/logs?status=blocked`} className="mt-1 block border-t border-edge p-2 text-center font-mono text-[11px] uppercase tracking-[.06em] text-ink no-underline">
           View all blocked →
         </a>
       </PopoverContent>

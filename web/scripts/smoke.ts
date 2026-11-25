@@ -8,12 +8,12 @@ import { JSDOM, VirtualConsole } from "jsdom";
 
 const dist = fileURLToPath(new URL("../../static/app/dist/", import.meta.url));
 const html = (await readFile(`${dist}index.html`, "utf8"))
-  .replaceAll("{{.Base}}", "/admin/app/")
+  .replaceAll("{{.Base}}", "/admin/")
   .replaceAll("{{.AdminPath}}", "/admin")
   .replace(/\{\{\.(\w+)\}\}/g, (_, k: string) => ({ Role: "owner", Demo: "false" })[k] ?? "x");
 
 // A quiet console: jsdom logs "not implemented" for scrollTo.
-const dom = new JSDOM(html, { url: "http://localhost/admin/app/", virtualConsole: new VirtualConsole() });
+const dom = new JSDOM(html, { url: "http://localhost/admin/", virtualConsole: new VirtualConsole() });
 const w = dom.window as unknown as Record<string, unknown>;
 for (const k of Object.getOwnPropertyNames(w)) if (!(k in globalThis)) (globalThis as Record<string, unknown>)[k] = w[k];
 // jsdom has no EventSource; the notification stream just stays silent.
@@ -27,7 +27,7 @@ const fail = (msg: string) => {
   process.exit(1);
 };
 
-const entry = html.match(/<script type="module"[^>]*src="\/admin\/app\/(assets\/[^"]+)"/)?.[1];
+const entry = html.match(/<script type="module"[^>]*src="\/admin\/(assets\/[^"]+)"/)?.[1];
 if (!entry) fail("no entry script in index.html");
 await import(`${dist}${entry}`);
 

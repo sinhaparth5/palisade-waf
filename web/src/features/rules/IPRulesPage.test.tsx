@@ -50,7 +50,7 @@ describe("ip rules page", () => {
     expect(screen.getByText(/shop ·/)).toBeInTheDocument();
     expect(screen.getByText("18 rules")).toBeInTheDocument();
     expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Next →" })).toHaveAttribute("href", "/admin/app/ip-rules?page=2");
+    expect(screen.getByRole("link", { name: "Next →" })).toHaveAttribute("href", "/admin/ip-rules?page=2");
     expect(await screen.findByDisplayValue("/wp-login.php")).toBeInTheDocument();
   });
 
@@ -58,7 +58,7 @@ describe("ip rules page", () => {
     mockApi({ ...base, "GET /api/ip-rules?page=2": { ...page, page: 2, rules: [rule(3, "192.0.2.1")] } });
     await renderRoute("/ip-rules?page=2");
     expect(await screen.findByText("192.0.2.1")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "← Prev" })).toHaveAttribute("href", "/admin/app/ip-rules");
+    expect(screen.getByRole("link", { name: "← Prev" })).toHaveAttribute("href", "/admin/ip-rules");
   });
 
   it("shows loading, empty and error states", async () => {
@@ -174,7 +174,7 @@ describe("ip rules page", () => {
   it("selects all on the page, unticks, and cancels a removal", async () => {
     const api = mockApi({ ...base, "GET /api/ip-rules?page=3": { ...page, page: 3, total_pages: 3 } });
     const { user } = await renderRoute("/ip-rules?page=3");
-    expect(await screen.findByRole("link", { name: "← Prev" })).toHaveAttribute("href", "/admin/app/ip-rules?page=2");
+    expect(await screen.findByRole("link", { name: "← Prev" })).toHaveAttribute("href", "/admin/ip-rules?page=2");
     await user.click(screen.getByLabelText("Select all on this page"));
     expect(screen.getByRole("button", { name: "Remove selected (2)" })).toBeEnabled();
     await user.click(screen.getByLabelText("Select 10.0.0.0/8"));

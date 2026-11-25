@@ -22,15 +22,15 @@ var appSections = func() []section {
 		heading, url        string
 		cards, admin, owner []string
 	}{
-		{"Dashboard", "/app/", []string{"Overview", "Traffic, last 24h", "Top countries", "Services", "Latest blocked requests", "Daily log", "Recent requests", "Enforcement today", "Blocked by country", "Engine"}, nil, nil},
-		{"Live Logs", "/app/logs", []string{"Request inspector", "Stats"}, nil, nil},
-		{"Services", "/app/services", []string{"Configured Services", "Cache performance"}, []string{"Add Service"}, nil},
-		{"IP Rules", "/app/ip-rules", []string{"Automatic banning", "Adaptive enforcement", "Honeypot paths", "Rules overview", "Active IP Rules"}, []string{"Add IP Rules"}, nil},
-		{"Geo Rules", "/app/geo-rules", []string{"Rules overview", "GeoIP database bundled", "Active Geo Rules"}, []string{"Add Geo Rules"}, nil},
-		{"Certificates", "/app/certificates", []string{"Saved Certificates", "Service TLS"}, []string{"Add Certificate"}, nil},
-		{"WAF Rules", "/app/waf-rules", []string{"Virtual Patches", "Suggested Exceptions", "Top Firing Rules", "Custom Rules", "Rule Exceptions"}, []string{"Disable Rule", "Write Custom Rule"}, nil},
-		{"Threat Intel", "/app/threat-intel", []string{"Threat Intel Feeds"}, []string{"Add Feed", "CrowdSec LAPI"}, nil},
-		{"Settings", "/app/settings", []string{"Account", "Two-Factor Authentication", "Passkeys", "Registered Devices", "Bot Protection", "Rate Limiting", "Trusted IPs", "Varnish Cache", "WAF rules", "Audit log"}, nil,
+		{"Dashboard", "/", []string{"Overview", "Traffic, last 24h", "Top countries", "Services", "Latest blocked requests", "Daily log", "Recent requests", "Enforcement today", "Blocked by country", "Engine"}, nil, nil},
+		{"Live Logs", "/logs", []string{"Request inspector", "Stats"}, nil, nil},
+		{"Services", "/services", []string{"Configured Services", "Cache performance"}, []string{"Add Service"}, nil},
+		{"IP Rules", "/ip-rules", []string{"Automatic banning", "Adaptive enforcement", "Honeypot paths", "Rules overview", "Active IP Rules"}, []string{"Add IP Rules"}, nil},
+		{"Geo Rules", "/geo-rules", []string{"Rules overview", "GeoIP database bundled", "Active Geo Rules"}, []string{"Add Geo Rules"}, nil},
+		{"Certificates", "/certificates", []string{"Saved Certificates", "Service TLS"}, []string{"Add Certificate"}, nil},
+		{"WAF Rules", "/waf-rules", []string{"Virtual Patches", "Suggested Exceptions", "Top Firing Rules", "Custom Rules", "Rule Exceptions"}, []string{"Disable Rule", "Write Custom Rule"}, nil},
+		{"Threat Intel", "/threat-intel", []string{"Threat Intel Feeds"}, []string{"Add Feed", "CrowdSec LAPI"}, nil},
+		{"Settings", "/settings", []string{"Account", "Two-Factor Authentication", "Passkeys", "Registered Devices", "Bot Protection", "Rate Limiting", "Trusted IPs", "Varnish Cache", "WAF rules", "Audit log"}, nil,
 			[]string{"Users", "Single Sign-On", "API Keys", "Database backup", "Configuration export", "Webhook / SIEM Export", "Email Alerts"}},
 	} {
 		out = append(out, section{searchHit{p.heading, "Page", p.url}, storage.RoleViewer})
@@ -140,7 +140,7 @@ func (h *Handler) Search(c *echo.Context) error {
 		return err
 	}
 	group("Services", "hgi-settings-01", matchHits(q, svcs, func(s storage.Service) (searchHit, string) {
-		return searchHit{s.Name, s.Host + s.Prefix, admin + "/app/services"},
+		return searchHit{s.Name, s.Host + s.Prefix, admin + "/services"},
 			strings.Join(append([]string{s.Name, s.Host, s.Prefix}, s.HostAliases...), " ")
 	}))
 	ips, err := h.db.ListIPRules()
@@ -148,28 +148,28 @@ func (h *Handler) Search(c *echo.Context) error {
 		return err
 	}
 	group("IP rules", "hgi-cancel-circle", matchHits(q, ips, func(r storage.IPRule) (searchHit, string) {
-		return searchHit{r.IP, r.RuleType + " · " + scope(r.AppName), admin + "/app/ip-rules"}, r.IP + " " + r.Note
+		return searchHit{r.IP, r.RuleType + " · " + scope(r.AppName), admin + "/ip-rules"}, r.IP + " " + r.Note
 	}))
 	geo, err := h.db.ListGeoRules()
 	if err != nil {
 		return err
 	}
 	group("Geo rules", "hgi-earth", matchHits(q, geo, func(r storage.GeoRule) (searchHit, string) {
-		return searchHit{r.CountryCode, r.RuleType + " · " + scope(r.AppName), admin + "/app/geo-rules"}, r.CountryCode
+		return searchHit{r.CountryCode, r.RuleType + " · " + scope(r.AppName), admin + "/geo-rules"}, r.CountryCode
 	}))
 	certs, err := h.db.ListCertificates()
 	if err != nil {
 		return err
 	}
 	group("Certificates", "hgi-certificate-01", matchHits(q, certs, func(r storage.CertRecord) (searchHit, string) {
-		return searchHit{r.Name, r.Domains, admin + "/app/certificates"}, r.Name + " " + r.Domains
+		return searchHit{r.Name, r.Domains, admin + "/certificates"}, r.Name + " " + r.Domains
 	}))
 	feeds, err := h.db.ListThreatIntelSources()
 	if err != nil {
 		return err
 	}
 	group("Threat intel", "hgi-database-01", matchHits(q, feeds, func(r storage.ThreatIntelSource) (searchHit, string) {
-		return searchHit{r.Label, r.URL, admin + "/app/threat-intel"}, r.Label + " " + r.URL
+		return searchHit{r.Label, r.URL, admin + "/threat-intel"}, r.Label + " " + r.URL
 	}))
 	rules, err := h.db.ListWAFCustomRules()
 	if err != nil {
@@ -180,7 +180,7 @@ func (h *Handler) Search(c *echo.Context) error {
 		if title == "" {
 			title, _, _ = strings.Cut(r.Rule, "\n")
 		}
-		return searchHit{title, scope(r.ServiceName), admin + "/app/waf-rules"}, r.Rule + " " + r.Note + " " + r.ServiceName
+		return searchHit{title, scope(r.ServiceName), admin + "/waf-rules"}, r.Rule + " " + r.Note + " " + r.ServiceName
 	}))
 
 	if asJSON {

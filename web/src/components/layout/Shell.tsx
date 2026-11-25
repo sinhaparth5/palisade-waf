@@ -6,18 +6,17 @@ import { Notifications } from "./Notifications";
 import { Search } from "./Search";
 
 // The admin frame, the same as the HTMX base.html: dark sidebar, top bar with
-// clock, page content, status footer. Areas not moved to this app yet link
-// to their HTMX page; set `app` on an item once its route lives here.
+// clock, page content, status footer.
 export const nav = [
-  { path: "/", icon: "hgi-dashboard-square-01", label: "Dashboard", app: true },
-  { path: "/logs", icon: "hgi-activity-01", label: "Live Logs", app: true },
-  { path: "/services", icon: "hgi-settings-01", label: "Services", app: true },
-  { path: "/certificates", icon: "hgi-certificate-01", label: "Certificates", app: true },
-  { path: "/ip-rules", icon: "hgi-cancel-circle", label: "IP Rules", app: true },
-  { path: "/geo-rules", icon: "hgi-earth", label: "Geo Rules", app: true },
-  { path: "/waf-rules", icon: "hgi-security-block", label: "WAF Rules", app: true },
-  { path: "/threat-intel", icon: "hgi-database-01", label: "Threat Intel", app: true },
-  { path: "/settings", icon: "hgi-user-account", label: "Settings", app: true },
+  { path: "/", icon: "hgi-dashboard-square-01", label: "Dashboard" },
+  { path: "/logs", icon: "hgi-activity-01", label: "Live Logs" },
+  { path: "/services", icon: "hgi-settings-01", label: "Services" },
+  { path: "/certificates", icon: "hgi-certificate-01", label: "Certificates" },
+  { path: "/ip-rules", icon: "hgi-cancel-circle", label: "IP Rules" },
+  { path: "/geo-rules", icon: "hgi-earth", label: "Geo Rules" },
+  { path: "/waf-rules", icon: "hgi-security-block", label: "WAF Rules" },
+  { path: "/threat-intel", icon: "hgi-database-01", label: "Threat Intel" },
+  { path: "/settings", icon: "hgi-user-account", label: "Settings" },
 ];
 
 const Icon = ({ name, className }: { name: string; className?: string }) => (
@@ -127,23 +126,12 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 
       <p className="px-6 pt-4 pb-2 font-mono text-[10px] uppercase tracking-[.14em] text-side-muted">Navigation</p>
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
-        {nav.map(({ path, icon, label, app }) => {
-          const inner = (
-            <>
-              <Icon name={icon} className="text-base" />
-              {label}
-            </>
-          );
-          return app ? (
-            <Link key={path} to={path} activeOptions={{ exact: path === "/" }} onClick={navigated} className={navItem}>
-              {inner}
-            </Link>
-          ) : (
-            <a key={path} href={boot.admin + path} className={navItem}>
-              {inner}
-            </a>
-          );
-        })}
+        {nav.map(({ path, icon, label }) => (
+          <Link key={path} to={path} activeOptions={{ exact: path === "/" }} onClick={navigated} className={navItem}>
+            <Icon name={icon} className="text-base" />
+            {label}
+          </Link>
+        ))}
       </nav>
 
       <div className="flex shrink-0 items-center gap-2 border-t border-side-line px-4 py-4">

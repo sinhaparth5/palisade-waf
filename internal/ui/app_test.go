@@ -34,14 +34,14 @@ func appEnv(t *testing.T) *adminEnv {
 
 func TestAppIndex(t *testing.T) {
 	env := appEnv(t)
-	for _, p := range []string{"/admin/app", "/admin/app/", "/admin/app/logs/5"} {
+	for _, p := range []string{"/admin", "/admin/", "/admin/waf-rules/5", "/admin/settings"} {
 		rec := env.do(http.MethodGet, p, nil)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("GET %s = %d", p, rec.Code)
 		}
 		body := rec.Body.String()
 		for _, want := range []string{
-			`src="/admin/app/assets/index-x.js"`,
+			`src="/admin/assets/index-x.js"`,
 			`data-admin="/admin"`,
 			`data-csrf="` + csrfToken(env.session) + `"`,
 			`data-role="owner"`,
@@ -67,8 +67,8 @@ func TestAppIndex(t *testing.T) {
 		}
 	}
 	a := regexp.MustCompile(`data-nonce="([^"]+)"`)
-	n1 := a.FindStringSubmatch(env.do(http.MethodGet, "/admin/app", nil).Body.String())[1]
-	n2 := a.FindStringSubmatch(env.do(http.MethodGet, "/admin/app", nil).Body.String())[1]
+	n1 := a.FindStringSubmatch(env.do(http.MethodGet, "/admin", nil).Body.String())[1]
+	n2 := a.FindStringSubmatch(env.do(http.MethodGet, "/admin", nil).Body.String())[1]
 	if n1 == n2 {
 		t.Error("nonce reused across responses")
 	}
@@ -76,7 +76,7 @@ func TestAppIndex(t *testing.T) {
 
 func TestAppRole(t *testing.T) {
 	env := appEnv(t)
-	rec := env.doWith(http.MethodGet, "/admin/app", nil, env.sessionAs(storage.RoleViewer))
+	rec := env.doWith(http.MethodGet, "/admin", nil, env.sessionAs(storage.RoleViewer))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `data-role="viewer"`) {
 		t.Fatalf("viewer: %d %s", rec.Code, rec.Body.String())
 	}
@@ -85,7 +85,7 @@ func TestAppRole(t *testing.T) {
 // Without a session neither the page nor its JS is served.
 func TestAppNeedsSession(t *testing.T) {
 	env := appEnv(t)
-	for _, p := range []string{"/admin/app", "/admin/app/logs", "/admin/app/assets/index-x.js", "/admin/app/licenses.md"} {
+	for _, p := range []string{"/admin", "/admin/logs", "/admin/assets/index-x.js", "/admin/licenses.md"} {
 		req := httptest.NewRequest(http.MethodGet, p, nil)
 		rec := httptest.NewRecorder()
 		env.e.ServeHTTP(rec, req)
@@ -105,16 +105,16 @@ func TestAppAsset(t *testing.T) {
 		code               int
 		body, encoding     string
 	}{
-		{"brotli preferred", "/admin/app/assets/index-x.js", "gzip, deflate, br", 200, "brotli", "br"},
-		{"gzip only", "/admin/app/assets/index-x.js", "gzip", 200, "gzip", "gzip"},
-		{"br refused by q=0", "/admin/app/assets/index-x.js", "br;q=0, gzip", 200, "gzip", "gzip"},
-		{"identity", "/admin/app/assets/index-x.js", "", 200, "plain", ""},
-		{"no compressed copy", "/admin/app/assets/tiny.js", "br, gzip", 200, "tiny", ""},
-		{"licenses", "/admin/app/licenses.md", "", 200, "# Licenses", ""},
-		{"missing asset is 404, not the page", "/admin/app/assets/nope.js", "", 404, "", ""},
-		{"unknown type", "/admin/app/assets/blob.zzz", "", 200, "blob", ""},
-		{"compressed copy not addressable", "/admin/app/assets/index-x.js.br", "", 404, "", ""},
-		{"no escape to the template", "/admin/app/assets/../index.html", "", 404, "", ""},
+		{"brotli preferred", "/admin/assets/index-x.js", "gzip, deflate, br", 200, "brotli", "br"},
+		{"gzip only", "/admin/assets/index-x.js", "gzip", 200, "gzip", "gzip"},
+		{"br refused by q=0", "/admin/assets/index-x.js", "br;q=0, gzip", 200, "gzip", "gzip"},
+		{"identity", "/admin/assets/index-x.js", "", 200, "plain", ""},
+		{"no compressed copy", "/admin/assets/tiny.js", "br, gzip", 200, "tiny", ""},
+		{"licenses", "/admin/licenses.md", "", 200, "# Licenses", ""},
+		{"missing asset is 404, not the page", "/admin/assets/nope.js", "", 404, "", ""},
+		{"unknown type", "/admin/assets/blob.zzz", "", 200, "blob", ""},
+		{"compressed copy not addressable", "/admin/assets/index-x.js.br", "", 404, "", ""},
+		{"no escape to the template", "/admin/assets/../index.html", "", 404, "", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -134,7 +134,7 @@ func TestAppAsset(t *testing.T) {
 				if ct := rec.Header().Get("Content-Type"); ct != "application/octet-stream" {
 					t.Errorf("Content-Type %q", ct)
 				}
-			} else if strings.HasPrefix(tc.path, "/admin/app/assets/") {
+			} else if strings.HasPrefix(tc.path, "/admin/assets/") {
 				if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/javascript") {
 					t.Errorf("Content-Type %q", ct)
 				}
@@ -154,7 +154,7 @@ func TestAppNotBuilt(t *testing.T) {
 	if err := env.h.SetApp(fstest.MapFS{"app/.gitkeep": {}}); err != nil {
 		t.Fatal(err)
 	}
-	if rec := env.do(http.MethodGet, "/admin/app", nil); rec.Code != http.StatusNotFound {
+	if rec := env.do(http.MethodGet, "/admin", nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("unbuilt app = %d", rec.Code)
 	}
 }
@@ -181,7 +181,7 @@ func TestAppRenderError(t *testing.T) {
 	if err := env.h.SetApp(fstest.MapFS{"app/dist/index.html": {Data: []byte("{{index .AdminPath 99}}")}}); err != nil {
 		t.Fatal(err)
 	}
-	if rec := env.do(http.MethodGet, "/admin/app", nil); rec.Code != http.StatusInternalServerError {
+	if rec := env.do(http.MethodGet, "/admin", nil); rec.Code != http.StatusInternalServerError {
 		t.Fatalf("render error = %d", rec.Code)
 	}
 }
@@ -225,7 +225,7 @@ func TestAppJSONViews(t *testing.T) {
 
 	var groups []searchGroup
 	get("/admin/search?q=shop", &groups)
-	if len(groups) == 0 || groups[0].Label != "Services" || groups[0].Hits[0] != (searchHit{"shop", "shop.example.com", "/admin/app/services"}) {
+	if len(groups) == 0 || groups[0].Label != "Services" || groups[0].Hits[0] != (searchHit{"shop", "shop.example.com", "/admin/services"}) {
 		t.Errorf("search = %+v", groups)
 	}
 	if rec := get("/admin/search?q=+", &groups); len(groups) != 0 || strings.TrimSpace(rec.Body.String()) != "[]" {

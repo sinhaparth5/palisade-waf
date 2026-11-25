@@ -8,7 +8,7 @@ import { lines, useSetService, type Bot, type Gate, type Service, type Uploads }
 // The Bot, Availability and Uploads tabs.
 
 const settings = (
-  <a href={`${boot.admin}/app/settings#settings-protection`} className="text-ink underline">
+  <a href={`${boot.admin}/settings#settings-protection`} className="text-ink underline">
     Settings
   </a>
 );
