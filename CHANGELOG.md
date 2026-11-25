@@ -15,6 +15,19 @@ rather than growing this file forever.
 ## [Unreleased]
 
 - (#324) Optional IP2Proxy database path for the hosting/VPN threat score signal
+- (#348) Scaffold React admin app with Vite, TypeScript and TanStack
+- (#349) Session JSON API for the React admin UI
+- (#350) Move Logs and Dashboard to React
+- (#351) Move IP Rules and Geo Rules to React
+- (#352) Move Certificates to React
+- (#353) Move Threat Intel to React
+- (#354) Move WAF Rules to React
+- (#355) Move Settings and Notifications to React
+- (#356) Move Services to React
+- (#357) Remove HTMX admin UI and finish React migration
+- (#358) Migrate admin UI from HTMX to React
+- (#361) Add dissolve-style art to the React dashboard
+- (#362) chore(structure): standardize test directory layout by scope across Go backend and React frontend
 
 ## [3.4.3] - 2026-11-21
 
