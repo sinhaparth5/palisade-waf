@@ -48,12 +48,25 @@ describe("dashboard page", () => {
     expect(screen.getByRole("link", { name: "Geo rules" })).toHaveAttribute("href", "/admin/app/geo-rules");
   });
 
+  it("opens with the perimeter hero, its art hidden from assistive tech", async () => {
+    mockApi({ ...notifications, "GET /api/dashboard": dash });
+    const { container } = await renderRoute("/");
+    expect(await screen.findByRole("heading", { name: "The wall is up." })).toBeInTheDocument();
+    expect(screen.getByText(/1 service behind Palisade, 56 requests stopped today/)).toBeInTheDocument();
+    expect(screen.getByText("Enforcing")).toBeInTheDocument();
+    const art = container.querySelector("img[srcset]")!;
+    expect(art).toHaveAttribute("alt", "");
+    expect(art).toHaveAttribute("aria-hidden", "true");
+    expect(art).toHaveAttribute("width");
+  });
+
   it("says when there is nothing yet", async () => {
     mockApi({ ...notifications, "GET /api/dashboard": { ...dash, countries: [], threats: [], services: [], recent: [], blocked: [], changes: [] } });
     await renderRoute("/");
     expect(await screen.findByText("Nothing blocked yet")).toBeInTheDocument();
     expect(screen.getByText(/No requests yet/)).toBeInTheDocument();
     expect(screen.getByText(/No services yet/)).toBeInTheDocument();
+    expect(screen.getByText(/0 services behind Palisade/)).toBeInTheDocument();
     expect(screen.getByText("No changes yet")).toBeInTheDocument();
     expect(screen.getByText("No country data yet")).toBeInTheDocument();
   });
@@ -64,6 +77,7 @@ describe("dashboard page", () => {
       ...notifications,
       "GET /api/dashboard": {
         ...dash,
+        blocked_today: 1,
         countries: [{ code: "NL", name: "Netherlands", count: 10 }, { code: "DE", name: "Germany", count: 1 }],
         traffic: { ...dash.traffic, blocked: Array(24).fill(1) },
         services: [
@@ -79,6 +93,9 @@ describe("dashboard page", () => {
     expect(screen.getByText("Unknown")).toBeInTheDocument();
     expect(screen.getAllByText("Off").length).toBeGreaterThan(1);
     expect(screen.getByText("none")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "The wall is down." })).toBeInTheDocument();
+    expect(screen.getByText(/unchecked\. 2 services behind Palisade, 1 request stopped today/)).toBeInTheDocument();
+    expect(screen.getByText("WAF off")).toBeInTheDocument();
     // The rule-less block in "Latest blocked", and the tag on the blocked recent row.
     expect(screen.getAllByText("blocked", { selector: "span" }).length).toBeGreaterThan(1);
   });

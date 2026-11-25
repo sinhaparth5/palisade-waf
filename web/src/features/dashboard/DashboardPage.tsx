@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Page, PageHeader, labelMono } from "@/components/layout/Page";
+import { Art } from "@/components/Art";
 import { Flag } from "@/components/Flag";
 import { boot } from "@/lib/boot";
 import { fmtTime, statusDot } from "@/lib/format";
@@ -35,6 +36,7 @@ export function DashboardPage() {
         </p>
       )}
       {isPending && <p className={cn(labelMono, "py-10 text-center")}>Loading…</p>}
+      {data && <Hero d={data} />}
       {data && (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <Main d={data} />
@@ -42,6 +44,30 @@ export function DashboardPage() {
         </div>
       )}
     </Page>
+  );
+}
+
+// Hero: where the wall stands today, with the fort art bleeding off the
+// card's right edge. The art is clipped at the top (only its rising dashes)
+// and the bottom (its streaks), never the fort itself.
+function Hero({ d }: { d: Dashboard }) {
+  const n = d.services.length;
+  return (
+    <section className={cn(card, "relative overflow-hidden sm:min-h-[220px]")}>
+      <div className="relative z-10 flex flex-col gap-3 p-6 sm:pr-[260px]">
+        <p className={labelMono}>Perimeter</p>
+        <h2 className="text-[24px] leading-tight text-ink sm:text-[30px]">{boot.waf ? "The wall is up." : "The wall is down."}</h2>
+        <p className="max-w-[56ch] text-[14px] leading-relaxed text-slate-600">
+          {boot.waf ? "Every request passes the firewall before it reaches a backend. " : "The firewall is switched off, so requests reach the backends unchecked. "}
+          {n === 1 ? "1 service" : `${n.toLocaleString()} services`} behind Palisade, {d.blocked_today.toLocaleString()} {d.blocked_today === 1 ? "request" : "requests"} stopped today.
+        </p>
+        <p className="flex items-center gap-2 font-mono text-[12px] uppercase tracking-[.06em] text-ink">
+          <span className={cn("h-2 w-2 rounded-full", boot.waf ? "bg-success" : "bg-danger")} />
+          {boot.waf ? "Enforcing" : "WAF off"}
+        </p>
+      </div>
+      <Art name="palisade" className="absolute right-2 -bottom-10 hidden w-[240px] sm:block lg:right-8" />
+    </section>
   );
 }
 
@@ -188,7 +214,10 @@ function Main({ d }: { d: Dashboard }) {
             ))}
           </div>
         ) : (
-          <p className={cn(card, "px-6 py-10 text-center text-slate-500")}>No services yet. Add one under Services to start proxying.</p>
+          <div className={cn(card, "flex flex-col items-center gap-2 px-6 pt-2 pb-8 text-center sm:flex-row sm:gap-6 sm:py-4 sm:text-left")}>
+            <Art name="rack" className="w-[120px] shrink-0" />
+            <p className="text-slate-500">No services yet. Add one under Services to start proxying.</p>
+          </div>
         )}
       </Section>
 
