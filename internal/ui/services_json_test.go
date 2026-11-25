@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +57,23 @@ func TestServicesJSON(t *testing.T) {
 		{"/backends", svcBackends{URLs: []string{env.backend.URL}, LBPolicy: "round_robin", CA: "not pem"}, "ca"},
 		{"/rate-limit", svcRateLimit{RPS: -1}, "rps"},
 		{"/rate-limit", svcRateLimit{PathRules: "GET nope"}, "path_rules"},
+		// Limits: the form shows which field is over.
+		{"/name", map[string]string{"name": strings.Repeat("a", 256)}, "name"},
+		{"/backends", svcBackends{URLs: []string{env.backend.URL}, LBPolicy: "round_robin", HealthInterval: 3601}, "health_interval"},
+		{"/bot", svcBot{Mode: "inherit", LoginPaths: many(loginPathsMax+1, "/login%d")}, "login_paths"},
+		{"/bot", svcBot{Mode: "inherit", BreachFields: []string{strings.Repeat("f", 65)}}, "breach_fields"},
+		{"/bot", svcBot{Mode: "inherit", BreachFields: many(11, "f%d")}, "breach_fields"},
+		{"/gate", map[string]string{"message": strings.Repeat("m", 501)}, "message"},
+		{"/gate", map[string]string{"wait_message": strings.Repeat("m", 501)}, "wait_message"},
+		{"/openapi", svcOpenAPI{Mode: "log", Spec: strings.Repeat("a", openAPIMaxBytes+1)}, "spec"},
+		{"/mcp", svcMCP{Mode: "block"}, "mode"},
+		{"/csp", svcCSP{Mode: "report", Policy: "script-src " + strings.Repeat("a", 4096)}, "policy"},
+		{"/csp", svcCSP{Mode: "report", Policy: "script-src 'self' caf\u00e9.example"}, "policy"},
+		{"/csp", svcCSP{Mode: "block"}, "mode"},
+		{"/cookies", svcCookies{Enabled: true, Exempt: many(51, "c%d")}, "exempt"},
+		{"/policy", svcPolicy{Mode: "enforce", Methods: many(21, "M%d")}, "methods"},
+		{"/policy", svcPolicy{Mode: "enforce", ContentTypes: many(31, "a/b%d")}, "content_types"},
+		{"/policy", svcPolicy{Mode: "block"}, "mode"},
 	} {
 		var got jsonError
 		if rec := env.doJSON(env.session, http.MethodPut, svc+tc.path, tc.body, &got); rec.Code != http.StatusBadRequest || got.Fields[tc.field] == "" {
@@ -313,4 +332,13 @@ func TestServicesJSONRequestChecks(t *testing.T) {
 	if rec := env.doJSON(viewer, http.MethodPut, svc+"/responses", map[string]string{"mode": ""}, nil); rec.Code != http.StatusForbidden {
 		t.Errorf("viewer write: %d", rec.Code)
 	}
+}
+
+// many is n distinct values from format and their index.
+func many(n int, format string) []string {
+	out := make([]string, n)
+	for i := range out {
+		out[i] = fmt.Sprintf(format, i)
+	}
+	return out
 }

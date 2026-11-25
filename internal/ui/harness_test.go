@@ -173,12 +173,16 @@ func (env *adminEnv) doWith(method, path string, form url.Values, session string
 // doJSON sends a request the way the React app does (web/src/lib/api.ts):
 // Accept JSON, a JSON body when body isn't nil, session cookie and CSRF
 // header (none for session ""), and decodes the answer into out unless nil.
+// A []byte body is sent as it is.
 func (env *adminEnv) doJSON(session, method, path string, body, out any) *httptest.ResponseRecorder {
 	env.t.Helper()
 	var r *strings.Reader
-	if body == nil {
+	switch b := body.(type) {
+	case nil:
 		r = strings.NewReader("")
-	} else {
+	case []byte:
+		r = strings.NewReader(string(b))
+	default:
 		raw, err := json.Marshal(body)
 		if err != nil {
 			env.t.Fatal(err)

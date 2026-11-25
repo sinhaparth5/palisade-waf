@@ -196,16 +196,12 @@ func trendLabel(current, previous int) string {
 
 // unreadAlertCount returns how many blocked requests happened since the
 // admin last marked notifications as read.
-func (h *Handler) unreadAlertCount() int {
+func (h *Handler) unreadAlertCount() (int, error) {
 	seenAt, err := h.db.NotificationsSeenAt()
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	n, err := h.db.CountBlockedSince(seenAt)
-	if err != nil {
-		return 0
-	}
-	return n
+	return h.db.CountBlockedSince(seenAt)
 }
 
 // NotificationsStream is an SSE endpoint that pushes the updated unread
@@ -234,7 +230,11 @@ func (h *Handler) NotificationsStream(c *echo.Context) error {
 			if !entry.Blocked {
 				continue
 			}
-			fmt.Fprintf(w, "event: count\ndata: %d\n\n", h.unreadAlertCount())
+			// A failed count sends none: the badge keeps its last number
+			// rather than showing 0.
+			if n, err := h.unreadAlertCount(); err == nil {
+				fmt.Fprintf(w, "event: count\ndata: %d\n\n", n)
+			}
 			toastData, _ := json.Marshal(map[string]string{
 				"action":  entry.Action,
 				"ip":      entry.RealIP,
@@ -273,7 +273,11 @@ func (h *Handler) NotificationsPanel(c *echo.Context) error {
 	for _, r := range rows {
 		blocks = append(blocks, block{r.Timestamp, r.RealIP, r.Country, r.Method, r.Path, r.AppName, r.RuleID, r.Action})
 	}
-	return c.JSON(http.StatusOK, map[string]any{"unread": h.unreadAlertCount(), "blocks": blocks})
+	unread, err := h.unreadAlertCount()
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string]any{"unread": unread, "blocks": blocks})
 }
 
 // MarkNotificationsSeen clears the unread notification badge.

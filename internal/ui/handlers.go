@@ -305,9 +305,16 @@ func (h *Handler) Register(e *echo.Echo) {
 
 	g := admin.Group("")
 	// jsonErrors wraps the rest so the React app gets its error body from
-	// every one of them; bodyLimit must run ahead of csrfProtect, which
-	// parses the form body.
-	g.Use(jsonErrors, bodyLimit, h.sessionAuth, h.requireRole, h.csrfProtect, h.auditLog)
+	// every one of them; the body limit must run ahead of csrfProtect,
+	// which parses the form body.
+	// The OpenAPI tab takes a spec up to openAPIMaxBytes, as a JSON string
+	// (escaping can double it), so that one route gets its own cap.
+	openAPIPath := base + "/api/services/:id/openapi"
+	sessionLimit := middleware.BodyLimitWithConfig(middleware.BodyLimitConfig{
+		LimitBytes: 1 << 20,
+		Skipper:    func(c *echo.Context) bool { return c.Path() == openAPIPath },
+	})
+	g.Use(jsonErrors, sessionLimit, h.sessionAuth, h.requireRole, h.csrfProtect, h.auditLog)
 
 	// as declares the minimum role for routes (issue #196); requireRole
 	// enforces it. Every mutating route is listed under one of the three
@@ -387,7 +394,7 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.PUT("/api/services/:id/gate", h.SetServiceGateJSON),
 		g.PUT("/api/services/:id/uploads", h.SetServiceUploads),
 		g.PUT("/api/services/:id/schema", h.SetServiceSchemaJSON),
-		g.PUT("/api/services/:id/openapi", h.SetServiceOpenAPIJSON),
+		g.PUT("/api/services/:id/openapi", h.SetServiceOpenAPIJSON, middleware.BodyLimit(2*openAPIMaxBytes)),
 		g.PUT("/api/services/:id/mcp", h.SetServiceMCPJSON),
 		g.PUT("/api/services/:id/jwt", h.SetServiceJWTJSON),
 		g.PUT("/api/services/:id/csp", h.SetServiceCSPJSON),

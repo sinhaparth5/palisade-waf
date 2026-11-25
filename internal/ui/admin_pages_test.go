@@ -182,13 +182,13 @@ func TestDashboardAPIs(t *testing.T) {
 	if rec := env.do("GET", "/admin/api/notifications", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "1.1.1.1") {
 		t.Errorf("notifications panel: %d", rec.Code)
 	}
-	if n := env.h.unreadAlertCount(); n != 1 {
+	if n, _ := env.h.unreadAlertCount(); n != 1 {
 		t.Errorf("unread before seen = %d", n)
 	}
 	if rec := env.do("POST", "/admin/api/notifications/seen", nil); rec.Code != http.StatusNoContent {
 		t.Errorf("mark seen: %d", rec.Code)
 	}
-	if n := env.h.unreadAlertCount(); n != 0 {
+	if n, _ := env.h.unreadAlertCount(); n != 0 {
 		t.Errorf("unread after seen = %d", n)
 	}
 
