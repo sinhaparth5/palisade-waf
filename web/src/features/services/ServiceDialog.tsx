@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { FormError, btn, field, fieldError, help } from "@/features/rules/shared";
 import { can } from "@/lib/boot";
 import { cn } from "@/lib/utils";
+import { BotTab, GateTab, UploadsTab } from "./Protection";
 import { BackendsTab, HostsTab, RateLimitTab } from "./Routing";
 import { useDeleteService, useSetService, type Service, type ServicesPage } from "./api";
 
@@ -19,6 +20,9 @@ const tabs: { id: string; label: string; show?: (s: Service) => boolean; body: (
   { id: "ratelimit", label: "Rate limit", body: ({ s }) => <RateLimitTab key={JSON.stringify(s.rate_limit)} s={s} /> },
   { id: "backends", label: "Backends", body: ({ s }) => <BackendsTab key={JSON.stringify({ ...s.backends, health: null })} s={s} /> },
   { id: "hosts", label: "Hosts", show: (s) => !!s.host, body: ({ s }) => <HostsTab key={JSON.stringify(s.hosts)} s={s} /> },
+  { id: "bot", label: "Bot", body: ({ s }) => <BotTab key={JSON.stringify(s.bot)} s={s} /> },
+  { id: "uploads", label: "Uploads", body: ({ s }) => <UploadsTab key={JSON.stringify(s.uploads)} s={s} /> },
+  { id: "gate", label: "Availability", body: ({ s }) => <GateTab key={JSON.stringify(s.gate)} s={s} /> },
 ];
 
 export function ServiceDialog({ d, s, onClose }: { d: ServicesPage; s: Service; onClose: () => void }) {

@@ -139,3 +139,80 @@ func TestCacheStatsJSON(t *testing.T) {
 		t.Fatalf("on: %d %v", rec.Code, got)
 	}
 }
+
+// TestServicesJSONBotGateUploads: the Bot, Availability and Uploads tabs
+// refuse bad input with field errors, save, and keep the bypass token away
+// from viewers.
+func TestServicesJSONBotGateUploads(t *testing.T) {
+	env := newAdminEnv(t)
+	if err := env.db.AddService("blog", "blog.example.com", "", env.backend.URL, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.h.registry.Reload(env.db); err != nil {
+		t.Fatal(err)
+	}
+	id := env.services(t, env.session)[0].ID
+	svc := "/admin/api/services/" + itoa(id)
+	okBot := svcBot{Mode: "always", AI: map[string]string{"training": "block"}}
+	okGate := map[string]any{"waiting_room": true, "max_active": 50, "idle_mins": 10}
+
+	for _, tc := range []struct {
+		path  string
+		body  any
+		field string
+	}{
+		{"/bot", svcBot{Mode: "sometimes"}, "mode"},
+		{"/bot", svcBot{Mode: "off", AI: map[string]string{"search": "maybe"}}, "ai_search"},
+		{"/bot", svcBot{Mode: "off", LoginPaths: []string{"login"}}, "login_paths"},
+		{"/bot", svcBot{Mode: "off", BreachAction: "warn"}, "breach_action"},
+		{"/gate", map[string]any{"start": "tomorrow"}, "start"},
+		{"/gate", map[string]any{"start": "2026-12-01T10:00", "end": "2026-12-01T09:00"}, "end"},
+		{"/gate", map[string]any{"waiting_room": true, "max_active": 0, "idle_mins": 10}, "max_active"},
+		{"/gate", map[string]any{"waiting_room": true, "max_active": 5, "idle_mins": 2000}, "idle_mins"},
+		{"/uploads", svcUploads{MultipartMB: 300}, "multipart_mb"},
+		{"/uploads", svcUploads{MalwareScan: "quarantine"}, "malware_scan"},
+	} {
+		var got jsonError
+		if rec := env.doJSON(env.session, http.MethodPut, svc+tc.path, tc.body, &got); rec.Code != http.StatusBadRequest || got.Fields[tc.field] == "" {
+			t.Errorf("%s %+v: %d %s, want a %s error", tc.path, tc.body, rec.Code, rec.Body, tc.field)
+		}
+	}
+
+	okBot.LoginPaths = []string{"/login", "/login", " /wp-login.php "}
+	okBot.BreachAction, okBot.BreachFields = "block", []string{"pw, password"}
+	for _, tc := range []struct {
+		path string
+		body any
+	}{
+		{"/bot", okBot},
+		{"/gate", okGate},
+		{"/gate", map[string]any{"maintenance": true, "message": "Back soon", "start": "2026-12-01T10:00"}},
+		{"/uploads", svcUploads{LargeJS: true, MultipartMB: 64, MalwareScan: "log"}},
+	} {
+		if rec := env.doJSON(env.session, http.MethodPut, svc+tc.path, tc.body, nil); rec.Code != http.StatusNoContent {
+			t.Fatalf("%s: %d %s", tc.path, rec.Code, rec.Body)
+		}
+	}
+	s := env.services(t, env.session)[0]
+	if b := s.Bot; b.Mode != "always" || b.AI["training"] != "block" || len(b.LoginPaths) != 2 || b.BreachAction != "block" || len(b.BreachFields) != 2 {
+		t.Errorf("bot = %+v", b)
+	}
+	if g := s.Gate; !g.Maintenance || g.Message != "Back soon" || g.Start != "2026-12-01T10:00" || g.Bypass == "" || g.WaitingRoom {
+		t.Errorf("gate = %+v", g)
+	}
+	if s.Uploads != (svcUploads{true, 64, "log"}) {
+		t.Errorf("uploads = %+v", s.Uploads)
+	}
+	token := s.Gate.Bypass
+	env.doJSON(env.session, http.MethodPut, svc+"/gate", map[string]any{"maintenance": true}, nil)
+	if got := env.services(t, env.session)[0].Gate.Bypass; got != token {
+		t.Error("a save without new_bypass changed the token")
+	}
+	env.doJSON(env.session, http.MethodPut, svc+"/gate", map[string]any{"maintenance": true, "new_bypass": true}, nil)
+	if got := env.services(t, env.session)[0].Gate.Bypass; got == token || got == "" {
+		t.Error("new_bypass kept the token")
+	}
+	if got := env.services(t, env.sessionAs(storage.RoleViewer))[0].Gate.Bypass; got != "" {
+		t.Errorf("viewer sees the bypass token %q", got)
+	}
+}

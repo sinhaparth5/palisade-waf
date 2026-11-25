@@ -2,7 +2,9 @@ package ui
 
 import (
 	"cmp"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html"
@@ -1676,4 +1678,167 @@ func (h *Handler) CacheStats(c *echo.Context) error {
 	}
 	out["services"] = rows
 	return c.JSON(http.StatusOK, out)
+}
+
+// SetServiceBot answers PUT /api/services/:id/bot: the bot challenge mode,
+// AI crawler overrides (issue #187), login protection (issue #132) and the
+// leaked password check (issue #188).
+func (h *Handler) SetServiceBot(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcBot
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	if v.Mode != "inherit" && v.Mode != "always" && v.Mode != "off" {
+		return fieldError("mode", "Pick inherit, always or off.")
+	}
+	ai := bot.AIPolicy{}
+	for _, cat := range bot.AICategories {
+		switch a := v.AI[cat]; {
+		case a == "":
+		case bot.ValidAIAction(a):
+			ai[cat] = a
+		default:
+			return fieldError("ai_"+cat, "Pick allow, challenge or block.")
+		}
+	}
+	var paths []string
+	for _, p := range v.LoginPaths {
+		if p = strings.TrimSpace(p); p == "" || slices.Contains(paths, p) {
+			continue
+		}
+		if !strings.HasPrefix(p, "/") || p == "/" {
+			return fieldError("login_paths", fmt.Sprintf("%q is not a path: start it with / and name the login page, e.g. /login.", p))
+		}
+		paths = append(paths, p)
+	}
+	if len(paths) > loginPathsMax {
+		return fieldError("login_paths", fmt.Sprintf("At most %d login paths.", loginPathsMax))
+	}
+	if v.BreachAction != "" && v.BreachAction != "log" && v.BreachAction != "block" {
+		return fieldError("breach_action", "Pick off, log or block.")
+	}
+	var fields []string
+	for _, f := range v.BreachFields {
+		for _, f := range splitList(f) {
+			if len(f) > 64 {
+				return fieldError("breach_fields", "Field names are at most 64 characters.")
+			}
+			if !slices.Contains(fields, f) {
+				fields = append(fields, f)
+			}
+		}
+	}
+	if len(fields) > 10 {
+		return fieldError("breach_fields", "At most 10 field names.")
+	}
+	for _, err := range []error{
+		h.db.SetServiceBotMode(s.ID, v.Mode),
+		h.db.SetServiceAICrawlerPolicy(s.ID, ai.String()),
+		h.db.SetServiceLoginPaths(s.ID, paths),
+		h.db.SetServiceBreachCheck(s.ID, v.BreachAction, fields),
+	} {
+		if err != nil {
+			return err
+		}
+	}
+	return h.applied(c, false)
+}
+
+// SetServiceGateJSON answers PUT /api/services/:id/gate: maintenance mode
+// and the waiting room (issue #198). Turning maintenance on mints a bypass
+// token if there is none; new_bypass replaces it, revoking shared links.
+func (h *Handler) SetServiceGateJSON(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v struct {
+		svcGate
+		NewBypass bool `json:"new_bypass"`
+	}
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	stored, err := h.db.ListServiceGates() // GetService leaves Gate empty
+	if err != nil {
+		return err
+	}
+	g := storage.ServiceGate{
+		Maintenance: v.Maintenance, MaintMsg: strings.TrimSpace(v.Message), BypassToken: stored[s.ID].BypassToken,
+		WaitingRoom: v.WaitingRoom, WaitMsg: strings.TrimSpace(v.WaitMessage), Crawlers: v.Crawlers,
+		MaxActive: v.MaxActive, IdleSecs: v.IdleMins * 60,
+	}
+	for _, f := range []struct {
+		name, in string
+		dst      *time.Time
+	}{{"start", v.Start, &g.MaintStart}, {"end", v.End, &g.MaintEnd}} {
+		if f.in != "" {
+			if *f.dst, err = time.Parse(gateTimeLayout, f.in); err != nil {
+				return fieldError(f.name, "Enter a date and time.")
+			}
+		}
+	}
+	if !g.MaintStart.IsZero() && !g.MaintEnd.IsZero() && !g.MaintEnd.After(g.MaintStart) {
+		return fieldError("end", "The end must be after the start.")
+	}
+	if len(g.MaintMsg) > 500 {
+		return fieldError("message", "At most 500 characters.")
+	}
+	if len(g.WaitMsg) > 500 {
+		return fieldError("wait_message", "At most 500 characters.")
+	}
+	if g.Crawlers != "deny" {
+		g.Crawlers = "bypass"
+	}
+	if g.WaitingRoom {
+		rc := rangeCheck{}
+		rc.num("max_active", float64(v.MaxActive), 1, 1_000_000)
+		rc.num("idle_mins", float64(v.IdleMins), 1, 1440)
+		if err := rc.err(); err != nil {
+			return err
+		}
+	}
+	if (g.Maintenance && g.BypassToken == "") || v.NewBypass {
+		b := make([]byte, 16)
+		rand.Read(b) //nolint:errcheck // never errors on modern platforms
+		g.BypassToken = hex.EncodeToString(b)
+	}
+	if err := h.db.SetServiceGate(s.ID, g); err != nil {
+		return err
+	}
+	return h.applied(c, false)
+}
+
+// SetServiceUploads answers PUT /api/services/:id/uploads: streaming large
+// JavaScript bodies, the multipart limit (issue #319) and the malware scan
+// (issue #340). The first two feed the WAF engines.
+func (h *Handler) SetServiceUploads(c *echo.Context) error {
+	s, err := h.serviceFor(c)
+	if err != nil {
+		return err
+	}
+	var v svcUploads
+	if err := c.Bind(&v); err != nil {
+		return badBody("Send a JSON body.")
+	}
+	if !validMultipartMB(v.MultipartMB) {
+		return fieldError("multipart_mb", "Between 0 (the 12.5 MiB default) and 256 MiB.")
+	}
+	if !validMalwareScan(v.MalwareScan) {
+		return fieldError("malware_scan", "Pick off, log or block.")
+	}
+	for _, err := range []error{
+		h.db.SetServiceLargeJSUploads(s.ID, v.LargeJS),
+		h.db.SetServiceMultipartLimit(s.ID, v.MultipartMB),
+		h.db.SetServiceMalwareScan(s.ID, v.MalwareScan),
+	} {
+		if err != nil {
+			return err
+		}
+	}
+	return h.applied(c, true)
 }
