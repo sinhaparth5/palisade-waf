@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"palisade/internal/ext"
 	"palisade/internal/security/bot"
 	"palisade/internal/security/csp"
 	"palisade/internal/security/egress"
@@ -89,11 +90,24 @@ var proxyBuffers = &copyBuffers{sync.Pool{New: func() any {
 	return &b
 }}}
 
+var backendDialer = egress.Dialer(5 * time.Second)
+
+// backendDial offers each backend connection to ext.Dial (issue #343)
+// before the guarded dialer. Clones in backendRT inherit it.
+func backendDial(ctx context.Context, network, addr string) (net.Conn, error) {
+	if ext.Dial != nil {
+		if c, handled, err := ext.Dial(ctx, network, addr); handled {
+			return c, err
+		}
+	}
+	return backendDialer.DialContext(ctx, network, addr)
+}
+
 var backendTransport = &http.Transport{
 	Proxy: http.ProxyFromEnvironment,
 	// The dial refuses cloud metadata addresses on the resolved IP (#270);
 	// Validate only sees the DNS answer at save time.
-	DialContext:           egress.Dialer(5 * time.Second).DialContext,
+	DialContext:           backendDial,
 	ResponseHeaderTimeout: 10 * time.Second,
 	ForceAttemptHTTP2:     true,
 	// Without MaxIdleConnsPerHost Go keeps only 2 idle conns per backend, so

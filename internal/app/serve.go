@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"palisade/internal/config"
+	"palisade/internal/docker"
 	"palisade/internal/ext"
 	"palisade/internal/notify/accesslog"
 	"palisade/internal/notify/mailer"
@@ -32,6 +33,7 @@ import (
 	"palisade/internal/security/blocklist"
 	"palisade/internal/security/bot"
 	"palisade/internal/security/challenge"
+	"palisade/internal/security/clamav"
 	"palisade/internal/security/csp"
 	"palisade/internal/security/geo"
 	ja4pkg "palisade/internal/security/ja4"
@@ -67,7 +69,10 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	trustedProxies := fs.String("trusted-proxies", "", "comma-separated trusted proxy IPs or CIDRs for X-Forwarded-For/X-Real-IP")
 	adminAllow := fs.String("admin-allow", "", "comma-separated client IPs or CIDRs that may reach the admin UI, API and metrics; everyone else gets a 404 (empty = any)")
 	adminListen := fs.String("admin-listen", "", "serve the admin UI only on this plain-HTTP address, e.g. 127.0.0.1:9090, and remove it from the public listener (empty = public listener)")
+	dockerAddr := fs.String("docker-discovery", "", "create services from labels of running containers via this Docker API: unix:///var/run/docker.sock or tcp://socket-proxy:2375 (empty = off)")
+	clamdAddr := fs.String("clamd", "", "clamd that scans uploads on services with a malware scan mode: tcp://host:port or unix:///path (empty = off)")
 	maxConns := fs.Int("max-conns-per-ip", 256, "concurrent TCP connections one client IP (IPv6 /64) may hold; trusted proxies, Cloudflare, loopback and trusted IPs are exempt (0 = no cap)")
+	googleFetchers := fs.Bool("google-fetchers", false, "let bodiless GET/HEAD from Google's own IPs (gstatic goog.json minus cloud.json, refreshed daily) skip the bot challenge; the WAF and rate limits still apply")
 	trustedCrawlers := fs.String("trusted-crawlers", "", "extra crawlers that skip the bot challenge, pinned by source: ua=cidr[,cidr];ua2=ip, or ua=https://host to verify Web Bot Auth signatures (empty = none)")
 	dbPath, dbDriver := dbFlags(fs)
 	certsDir := fs.String("certs", "./certs", "TLS certificate cache directory")
@@ -123,6 +128,9 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	}
 	if err := bot.AddPinnedCrawlers(*trustedCrawlers); err != nil {
 		return fmt.Errorf("--trusted-crawlers: %w", err)
+	}
+	if *googleFetchers {
+		go bot.RunGoogleRanges(ctx)
 	}
 	cfg.DB.Path = *dbPath
 	cfg.TLS.CacheDir = *certsDir
@@ -274,6 +282,8 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 		for _, f := range ext.OnBan {
 			f(ip, reason)
 		}
+		ab, _ := db.GetAutobanConfig()
+		intelWorker.PushBan(ip, reason, time.Duration(ab.BanHours)*time.Hour)
 		if err := emailReporter.SendBanAlert(ip, reason); err != nil {
 			log.Printf("autoban: ban alert email for %s: %v", ip, err)
 		}
@@ -363,6 +373,18 @@ func serve(ctx context.Context, args []string, version string, assets Assets) er
 	}))
 
 	h := proxy.NewHandler(registry, engine, wafByService, db, ipbl, geoBl, rl, asnLookup, ch, scorer, adaptivePolicy, cfg.TrustedProxies...)
+	clamd, err := clamav.New(*clamdAddr)
+	if err != nil {
+		return err
+	}
+	h.SetClamd(clamd)
+	dockerWatcher, err := docker.New(*dockerAddr, db, registry)
+	if err != nil {
+		return err
+	}
+	if dockerWatcher != nil {
+		go dockerWatcher.Run(ctx)
+	}
 	// Stops whichever rate limiter is active at shutdown — not necessarily
 	// rl, since ReloadRateLimit (Settings page) may have hot-swapped it.
 	defer h.StopRateLimit()

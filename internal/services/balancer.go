@@ -78,6 +78,9 @@ type attempt struct {
 func newPool(s storage.Service, health func(raw string) *backendHealth, stripPath bool, modify func(*http.Response) error) *pool {
 	p := &pool{name: s.Name, leastConn: s.LBPolicy == "least_conn", active: s.HealthPath != "", rt: backendRT(s)}
 	for _, raw := range s.Backends() {
+		if raw == "" { // a Docker-managed service with no running container
+			continue
+		}
 		target, err := url.Parse(raw)
 		if err != nil || target.Host == "" {
 			log.Printf("invalid backend URL %q for service %q: %v", raw, s.Name, err)

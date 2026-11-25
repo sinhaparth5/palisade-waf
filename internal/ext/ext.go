@@ -3,7 +3,9 @@
 package ext
 
 import (
+	"context"
 	"html/template"
+	"net"
 
 	"github.com/labstack/echo/v5"
 
@@ -45,3 +47,10 @@ var Mounts []func(Env) Feature
 // IP or CIDR). They run on the ban's goroutine, so return quickly. Append
 // from a Mount, before traffic starts.
 var OnBan []func(ip, reason string)
+
+// Dial, when set, gets every backend connection first: the service pools,
+// Probe and the active health checks (issue #343). handled=false falls
+// through to the normal dialer, whose metadata check still applies; a
+// handled connection is the hook's responsibility. Set it from a Mount,
+// before traffic starts. Outbound clients (webhooks, JWKS, HIBP) never use it.
+var Dial func(ctx context.Context, network, addr string) (conn net.Conn, handled bool, err error)

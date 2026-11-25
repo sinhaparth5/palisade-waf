@@ -84,6 +84,19 @@ type CheckOptions struct {
 	MultipartLimit int64
 }
 
+// Buffered is r.Body after Check held the whole body in memory, so a stage
+// after the WAF (the malware scan, issue #340) can read it without a copy.
+type Buffered struct {
+	*bytes.Reader
+	body []byte
+}
+
+// Bytes returns the whole body, however much of the reader was consumed.
+func (b *Buffered) Bytes() []byte { return b.body }
+
+// Close is a no-op; the socket's body was already read to the end.
+func (*Buffered) Close() error { return nil }
+
 // requestBodyLimit is the SecRequestBodyLimit value passed to Coraza and the
 // most Check ever buffers of a *multipart* request body in memory (13107200 =
 // the coraza.conf-recommended default, ~12.5 MiB). Multipart is the one shape
@@ -448,7 +461,7 @@ func (e *Engine) CheckWithOptions(r *http.Request, clientIP string, opts CheckOp
 		body = b
 		switch {
 		case int64(len(body)) <= limit:
-			r.Body = io.NopCloser(bytes.NewReader(body))
+			r.Body = &Buffered{bytes.NewReader(body), body}
 			buffered = true
 		default:
 			// Over the limit for its kind. Check refuses it rather than

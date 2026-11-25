@@ -135,6 +135,15 @@ func sanitizeHost(h string) string {
 	return h
 }
 
+// errDockerManaged refuses a routing edit of a service created from
+// container labels (issue #341): the next sync would undo it.
+const errDockerManaged = "Managed by Docker: change the container's palisade.* labels instead."
+
+func (h *Handler) dockerManaged(id int) bool {
+	s, err := h.db.GetService(id)
+	return err == nil && s.DockerManaged
+}
+
 // AddService creates a new backend service from the add-service wizard.
 // matchType picks which of host/prefix gets saved; the wizard only ever
 // collects one of the two from the user. The backend must pass a live
@@ -289,6 +298,11 @@ const multipartRangeErr = "multipart limit must be 0 (default 12.5 MiB) to 256 M
 // 0 keeps the default, the rest are capped at waf.MaxMultipartLimit.
 func validMultipartMB(mb int) bool { return mb >= 0 && mb <= waf.MaxMultipartLimit>>20 }
 
+const malwareScanErr = `malware scan must be "", "log" or "block"`
+
+// validMalwareScan checks a service's upload malware scan mode (issue #340).
+func validMalwareScan(mode string) bool { return mode == "" || mode == "log" || mode == "block" }
+
 // SetServiceLargeJSUploads opts one service into streaming JavaScript request
 // bodies. This avoids the small, deliberately conservative limit applied to
 // non-file bodies while leaving all header-phase WAF checks active.
@@ -304,10 +318,17 @@ func (h *Handler) SetServiceLargeJSUploads(c *echo.Context) error {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": multipartRangeErr})
 		}
 	}
+	scan := c.FormValue("malware_scan")
+	if !validMalwareScan(scan) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": malwareScanErr})
+	}
 	if err := h.db.SetServiceLargeJSUploads(id, enabled); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	if err := h.db.SetServiceMultipartLimit(id, mb); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	if err := h.db.SetServiceMalwareScan(id, scan); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	if err := h.registry.Reload(h.db); err != nil {
@@ -352,6 +373,9 @@ func (h *Handler) SetServiceBackends(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return fail("invalid service id")
+	}
+	if h.dockerManaged(id) {
+		return fail(errDockerManaged)
 	}
 	var backends []string
 	for _, line := range strings.Split(c.FormValue("backends"), "\n") {
@@ -399,6 +423,9 @@ func (h *Handler) RenameService(c *echo.Context) error {
 	if err != nil || id < 1 {
 		return fail("invalid service id")
 	}
+	if h.dockerManaged(id) {
+		return fail(errDockerManaged)
+	}
 	svc, err := h.db.GetService(id)
 	if err != nil {
 		return fail("service not found")
@@ -440,6 +467,9 @@ func (h *Handler) SetServiceHosts(c *echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id < 1 {
 		return fail("invalid service id")
+	}
+	if h.dockerManaged(id) {
+		return fail(errDockerManaged)
 	}
 	svc, err := h.db.GetService(id)
 	if err != nil {

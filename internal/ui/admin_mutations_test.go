@@ -198,10 +198,12 @@ func TestThreatIntelHandlers(t *testing.T) {
 
 	// CrowdSec LAPI source (issue #194): the key is required and never rendered.
 	wantCode(t, "crowdsec no key", env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080")).Code, 400, "")
-	rec := env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080/", "api_key", "s3cret-key"))
+	wantCode(t, "crowdsec login only", env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080", "api_key", "k", "machine_login", "m")).Code, 400, "")
+	rec := env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080/", "api_key", "s3cret-key",
+		"machine_login", "palisade", "machine_password", "m4chine-pw"))
 	wantCode(t, "crowdsec", rec.Code, 200, rec.Body.String())
-	if strings.Contains(rec.Body.String(), "s3cret-key") {
-		t.Error("bouncer key rendered back")
+	if strings.Contains(rec.Body.String(), "s3cret-key") || strings.Contains(rec.Body.String(), "m4chine-pw") {
+		t.Error("bouncer key or machine password rendered back")
 	}
 	srcs, _ = env.db.ListThreatIntelSources()
 	if len(srcs) != 1 || srcs[0].URL != "crowdsec+http://lapi:8080" {
@@ -209,6 +211,10 @@ func TestThreatIntelHandlers(t *testing.T) {
 	}
 	if key, _ := env.db.ThreatIntelKey(srcs[0].ID); key != "s3cret-key" {
 		t.Errorf("stored key = %q", key)
+	}
+	// Machine credentials for pushing autobans (issue #342).
+	if login, pw, ok, _ := env.db.CrowdSecMachine(srcs[0].ID); !ok || login != "palisade" || pw != "m4chine-pw" {
+		t.Errorf("machine = %q %q %v", login, pw, ok)
 	}
 }
 
@@ -288,6 +294,38 @@ func TestRenameService(t *testing.T) {
 	}
 }
 
+// TestDockerManagedLocked pins issue #341: the name, hosts and backends of
+// a service created from container labels refuse edits in the UI and API;
+// its other settings still save, even with no container running.
+func TestDockerManagedLocked(t *testing.T) {
+	env := newAdminEnv(t)
+	if _, err := env.db.SetDockerService("app", []string{"app.example.com"}, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.h.registry.Reload(env.db); err != nil {
+		t.Fatal(err)
+	}
+	svc := env.h.registry.List()[0]
+	id := itoa(svc.ID)
+	for _, tc := range []struct{ path, errBox string }{
+		{"/admin/services/name/" + id, "#svc-name-error"},
+		{"/admin/services/hosts/" + id, "#svc-hosts-error"},
+		{"/admin/services/backends/" + id, "#svc-backends-error"},
+	} {
+		rec := env.do("POST", tc.path, form("name", "x", "aliases", "www.app.example.com", "backends", "http://127.0.0.1:9001"))
+		if rec.Header().Get("HX-Retarget") != tc.errBox || !strings.Contains(rec.Body.String(), "Managed by Docker") {
+			t.Errorf("%s: %s", tc.path, rec.Body)
+		}
+	}
+	if rec := env.do("POST", "/admin/services/bot/"+id, form("bot_mode", "off")); rec.Code != 200 {
+		t.Errorf("bot mode: %d %s", rec.Code, rec.Body)
+	}
+	got, _ := env.db.GetService(svc.ID)
+	if got.Name != "app" || got.HostAliases != nil || got.Backend != "" || got.BotMode != "off" {
+		t.Errorf("service = %+v", got)
+	}
+}
+
 func TestServiceSettingHandlers(t *testing.T) {
 	env := newAdminEnv(t)
 	svc := env.seedService("shop", "shop.example.com")
@@ -305,7 +343,8 @@ func TestServiceSettingHandlers(t *testing.T) {
 		{"/admin/services/uploads/" + id, []string{"multipart_mb", "257"}, 400},
 		{"/admin/services/uploads/" + id, []string{"multipart_mb", "-1"}, 400},
 		{"/admin/services/uploads/" + id, []string{"multipart_mb", "x"}, 400},
-		{"/admin/services/uploads/" + id, []string{"enabled", "1", "multipart_mb", "64"}, 200},
+		{"/admin/services/uploads/" + id, []string{"malware_scan", "quarantine"}, 400},
+		{"/admin/services/uploads/" + id, []string{"enabled", "1", "multipart_mb", "64", "malware_scan", "block"}, 200},
 		{"/admin/services/http3/" + id, []string{"enabled", "1"}, 200},
 		{"/admin/services/http3/x", nil, 400},
 		{"/admin/services/compress/" + id, []string{"enabled", "1"}, 200},
@@ -333,7 +372,7 @@ func TestServiceSettingHandlers(t *testing.T) {
 	}
 
 	// The last uploads save set the multipart limit (issue #319).
-	if got, _ := env.h.db.GetService(svc.ID); got.MultipartLimitMB != 64 || !got.AllowLargeJSUploads {
+	if got, _ := env.h.db.GetService(svc.ID); got.MultipartLimitMB != 64 || !got.AllowLargeJSUploads || got.MalwareScan != "block" {
 		t.Errorf("uploads tab saved %+v", got)
 	}
 

@@ -45,7 +45,7 @@ func TestCrowdSecSync(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if err := db.AddCrowdSecSource("cs", srv.URL+"/", "bouncer-key"); err != nil {
+	if err := db.AddCrowdSecSource("cs", srv.URL+"/", "bouncer-key", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	srcs, _ := db.ListThreatIntelSources()

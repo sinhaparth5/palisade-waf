@@ -64,7 +64,7 @@
         <p class="label-mono mb-3">CrowdSec LAPI</p>
         <form hx-post="{{$.AdminPath}}/threat-intel/crowdsec"
               hx-target="#intel-rows" hx-swap="innerHTML"
-              class="grid grid-cols-1 items-end gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1.5fr_1fr_auto]">
+              class="grid grid-cols-1 items-end gap-4 md:grid-cols-2 xl:grid-cols-3">
           <div>
             <label class="field-label">Label</label>
             <input name="label" type="text" value="CrowdSec" required
@@ -83,12 +83,24 @@
               class="field font-mono"
             />
           </div>
+          <div>
+            <label class="field-label">Machine login <span class="text-slate-500">(optional)</span></label>
+            <input name="machine_login" type="text" autocomplete="off" placeholder="cscli machines add palisade"
+              class="field font-mono"
+            />
+          </div>
+          <div>
+            <label class="field-label">Machine password <span class="text-slate-500">(optional)</span></label>
+            <input name="machine_password" type="password" autocomplete="new-password"
+              class="field font-mono"
+            />
+          </div>
           <button type="submit" class="btn-primary flex w-full items-center justify-center gap-2 xl:w-auto">
             <i class="hgi hgi-stroke hgi-rounded hgi-add-01 text-sm"></i>
             Add LAPI
           </button>
         </form>
-        <p class="mt-2 text-[12px] text-slate-500">Polled every 30 seconds; only changes are transferred after the first sync. Ban decisions on IPs and ranges are blocked (logged as <code class="font-mono bg-surface px-1 rounded-sm text-[11px]">ip_blocked:crowdsec</code>) until CrowdSec expires them; captcha decisions are ignored.</p>
+        <p class="mt-2 text-[12px] text-slate-500">Polled every 30 seconds; only changes are transferred after the first sync. Ban decisions on IPs and ranges are blocked (logged as <code class="font-mono bg-surface px-1 rounded-sm text-[11px]">ip_blocked:crowdsec</code>) until CrowdSec expires them; captcha decisions are ignored. With machine credentials, every autoban is also pushed to the LAPI as a <code class="font-mono bg-surface px-1 rounded-sm text-[11px]">palisade/autoban</code> alert, so other bouncers on it block the IP for the same ban length.</p>
       </div>
 
       <div class="mt-4 grid grid-cols-1 gap-2 border-t border-line pt-4 text-[12px] text-slate-500 md:grid-cols-2">

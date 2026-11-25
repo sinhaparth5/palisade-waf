@@ -30,6 +30,8 @@ type Worker struct {
 	csMu sync.Mutex
 	cs   map[int64]map[string]time.Time // CrowdSec source → decision value → expiry
 	now  func() time.Time
+
+	bans chan ban // autobans waiting to be pushed to CrowdSec (push.go)
 }
 
 // New creates a Worker and starts the background sync loop.
@@ -45,8 +47,10 @@ func New(db *storage.DB, reloadIPBL func()) *Worker {
 		stop:       make(chan struct{}),
 		cs:         make(map[int64]map[string]time.Time),
 		now:        time.Now,
+		bans:       make(chan ban, pushQueue),
 	}
 	go w.run()
+	go w.pushLoop()
 	return w
 }
 

@@ -16,20 +16,9 @@ rather than growing this file forever.
 
 - (#324) Optional IP2Proxy database path for the hosting/VPN threat score signal
 
-## [3.4.0] - 2026-11-17
+## [3.4.3] - 2026-11-21
 
-- (#328) Helm chart: single-replica deployment with a persistent /data volume
-- (#329) Keep the database across Kubernetes upgrades, rollbacks and uninstalls
-- (#330) Load the DB key, first admin and TLS files from Kubernetes Secrets
-- (#331) Resolve the real client IP behind Kubernetes Ingress and cloud load balancers
-- (#332) TLS options on Kubernetes: Ingress termination, built-in ACME, cert-manager
-- (#333) Separate admin Service and NetworkPolicy in the Helm chart
-- (#334) Optional Varnish sidecar in the Helm chart
-- (#335) Prometheus ServiceMonitor and Grafana dashboard
-- (#336) Write the access log to stdout for kubectl logs and log shippers
-- (#337) Declarative config for GitOps: import a config file on install
-- (#338) Publish the Helm chart with each release and test it in CI
-- (#339) Kubernetes and Helm documentation
+- (#345) Mobile background tabs get stuck on the bot challenge and autobanned
 
-[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.0...main
-[3.4.0]: https://github.com/sinhaparth5/palisade-waf/compare/v3.3.4...v3.4.0
+[Unreleased]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.3...main
+[3.4.3]: https://github.com/sinhaparth5/palisade-waf/compare/v3.4.2...v3.4.3

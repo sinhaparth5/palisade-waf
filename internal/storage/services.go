@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -78,6 +79,13 @@ type Service struct {
 	// MultipartLimitMB is the service's multipart body limit in MiB (issue
 	// #319); 0 = the WAF default (12.5 MiB).
 	MultipartLimitMB int
+	// MalwareScan sends file uploads to clamd (issue #340): "" (off), "log"
+	// or "block".
+	MalwareScan string
+	// DockerManaged services are created and routed from container labels
+	// (issue #341): name, hosts, prefix and backends come from Docker and
+	// are read-only in the UI and API.
+	DockerManaged bool
 	// Gate is the maintenance mode and waiting room (issue #198), filled
 	// from service_gate by services.Registry.Reload.
 	Gate ServiceGate
@@ -298,6 +306,13 @@ func (db *DB) SetServiceLargeJSUploads(id int, enabled bool) error {
 // (issue #319); 0 restores the default. The caller checks the range.
 func (db *DB) SetServiceMultipartLimit(id, mb int) error {
 	_, err := db.exec(`UPDATE services SET multipart_limit_mb = ? WHERE id = ?`, mb, id)
+	return err
+}
+
+// SetServiceMalwareScan sets a service's upload malware scan mode (issue
+// #340). The caller checks the value.
+func (db *DB) SetServiceMalwareScan(id int, mode string) error {
+	_, err := db.exec(`UPDATE services SET malware_scan = ? WHERE id = ?`, mode, id)
 	return err
 }
 
@@ -626,12 +641,12 @@ func (db *DB) SetServiceCacheTuning(id, ttlFloor, ttlCeiling, grace, keep int, r
 
 // serviceColumns is shared by ListServices/GetService so their SELECT list
 // and Scan args can't drift out of sync as columns are added.
-const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy, breach_action, breach_fields, response_inspect, cache_rules, multipart_limit_mb`
+const serviceColumns = `id, name, host, prefix, backend, created_at, tls_mode, tls_cert_path, tls_key_path, tls_expires_at, rate_limit_rps, rate_limit_burst, bot_mode, cert_id, cache_enabled, cache_by_session, session_cookie_name, cache_ttl_floor, cache_ttl_ceiling, cache_grace, cache_keep, allow_large_js_uploads, request_schema, schema_mode, http3_enabled, compress_enabled, extra_backends, lb_policy, health_path, health_interval, host_aliases, canonical_host, login_paths, ai_crawler_policy, breach_action, breach_fields, response_inspect, cache_rules, multipart_limit_mb, malware_scan, docker_managed`
 
 func (db *DB) scanService(row interface{ Scan(...any) error }) (Service, error) {
 	var s Service
 	var extra, aliases, login, breachFields string
-	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy, &s.BreachAction, &breachFields, &s.ResponseInspect, &s.CacheRules, &s.MultipartLimitMB)
+	err := row.Scan(&s.ID, &s.Name, &s.Host, &s.Prefix, &s.Backend, &s.CreatedAt, &s.TLSMode, &s.TLSCertPath, &s.TLSKeyPath, &s.TLSExpiresAt, &s.RateLimitRPS, &s.RateLimitBurst, &s.BotMode, &s.CertID, &s.CacheEnabled, &s.CacheBySession, &s.SessionCookieName, &s.CacheTTLFloor, &s.CacheTTLCeiling, &s.CacheGrace, &s.CacheKeep, &s.AllowLargeJSUploads, &s.RequestSchema, &s.SchemaMode, &s.HTTP3Enabled, &s.CompressEnabled, &extra, &s.LBPolicy, &s.HealthPath, &s.HealthInterval, &aliases, &s.CanonicalHost, &login, &s.AICrawlerPolicy, &s.BreachAction, &breachFields, &s.ResponseInspect, &s.CacheRules, &s.MultipartLimitMB, &s.MalwareScan, &s.DockerManaged)
 	if extra != "" {
 		s.ExtraBackends = strings.Split(extra, "\n")
 	}
@@ -668,4 +683,55 @@ func (db *DB) ListServices() ([]Service, error) {
 // GetService fetches a single service by ID.
 func (db *DB) GetService(id int) (Service, error) {
 	return db.scanService(db.queryRow(`SELECT `+serviceColumns+` FROM services WHERE id = ?`, id))
+}
+
+// ErrNotDockerManaged is returned by SetDockerService for a service of
+// that name the admin created by hand: labels never take one over.
+var ErrNotDockerManaged = errors.New("a service of that name exists and is not managed by Docker")
+
+// SetDockerService creates or updates the Docker-managed service name
+// (issue #341) with the routing its containers' labels describe: hosts[0]
+// is the host (the rest aliases), backends[0] the primary. No backends
+// leaves the row and its settings in place, serving 502, until a container
+// comes back. changed reports whether anything was written.
+func (db *DB) SetDockerService(name string, hosts []string, prefix string, backends []string) (changed bool, err error) {
+	var host, backend string
+	if len(hosts) > 0 {
+		host = hosts[0]
+	}
+	if len(backends) > 0 {
+		backend = backends[0]
+	}
+	aliases, extra := joinTail(hosts), joinTail(backends)
+	var managed bool
+	var oldHost, oldAliases, oldPrefix, oldBackend, oldExtra, canonical string
+	err = db.queryRow(`SELECT docker_managed, host, host_aliases, prefix, backend, extra_backends, canonical_host FROM services WHERE name = ?`, name).
+		Scan(&managed, &oldHost, &oldAliases, &oldPrefix, &oldBackend, &oldExtra, &canonical)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		_, err = db.exec(`INSERT INTO services (name, host, host_aliases, prefix, backend, extra_backends, docker_managed) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+			name, host, aliases, prefix, backend, extra)
+		return err == nil, err
+	case err != nil:
+		return false, err
+	case !managed:
+		return false, ErrNotDockerManaged
+	case oldHost == host && oldAliases == aliases && oldPrefix == prefix && oldBackend == backend && oldExtra == extra:
+		return false, nil
+	}
+	if canonical != "" && !slices.Contains(hosts, canonical) {
+		canonical = ""
+	}
+	_, err = db.exec(`UPDATE services SET host = ?, host_aliases = ?, prefix = ?, backend = ?, extra_backends = ?, canonical_host = ? WHERE name = ? AND docker_managed = 1`,
+		host, aliases, prefix, backend, extra, canonical, name)
+	return err == nil, err
+}
+
+// joinTail joins all but the first element with newlines, the way the
+// host_aliases and extra_backends columns store them.
+func joinTail(s []string) string {
+	if len(s) < 2 {
+		return ""
+	}
+	return strings.Join(s[1:], "\n")
 }

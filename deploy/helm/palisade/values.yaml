@@ -245,6 +245,36 @@ varnish:
     limits:
       memory: 512Mi
 
+# ClamAV as a sidecar for the per-service malware scan (README.md,
+# "ClamAV"). Palisade gets --clamd pointing at its socket; turn on Malware
+# scan on a service's Uploads tab afterwards.
+clamav:
+  enabled: false
+  image:
+    repository: clamav/clamav
+    tag: "1.4"
+    pullPolicy: IfNotPresent
+  # Signature update checks per day (freshclam --checks).
+  checks: 12
+  # The image's clamav user; the image's own entrypoint needs root, so the
+  # chart starts freshclam and clamd itself.
+  securityContext:
+    runAsUser: 100
+    runAsGroup: 101
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+  # The signatures take about 1.2Gi in memory. Reloads happen in place
+  # (ConcurrentDatabaseReload no), so the peak doesn't double; uploads
+  # pass unscanned for the few seconds a reload takes.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1536Mi
+    limits:
+      memory: 2Gi
+
 # Prometheus Operator and Grafana (README.md, "Metrics"). Prometheus scrapes
 # /admin/api/v1/metrics on the admin port with a read-only API key.
 metrics:

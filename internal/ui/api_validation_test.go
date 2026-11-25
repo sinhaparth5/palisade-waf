@@ -125,16 +125,19 @@ func TestAPIServiceFields(t *testing.T) {
 	path := fmt.Sprintf("/admin/api/v1/services/%d", svcs[0].ID)
 
 	rec = call("PUT", path, `{"host_aliases":["www.lb.example.com"],"canonical_host":"www.lb.example.com",`+
-		`"http3_enabled":true,"compress_enabled":true,"allow_large_js_uploads":true,"multipart_limit_mb":100}`)
+		`"http3_enabled":true,"compress_enabled":true,"allow_large_js_uploads":true,"multipart_limit_mb":100,"malware_scan":"log"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("update = %d %s", rec.Code, rec.Body)
 	}
 	got, _ := h.db.GetService(svcs[0].ID)
-	if len(got.HostAliases) != 1 || got.CanonicalHost != "www.lb.example.com" || !got.HTTP3Enabled || !got.CompressEnabled || !got.AllowLargeJSUploads || got.MultipartLimitMB != 100 {
+	if len(got.HostAliases) != 1 || got.CanonicalHost != "www.lb.example.com" || !got.HTTP3Enabled || !got.CompressEnabled || !got.AllowLargeJSUploads || got.MultipartLimitMB != 100 || got.MalwareScan != "log" {
 		t.Errorf("updated = %+v", got)
 	}
 	if rec := call("PUT", path, `{"multipart_limit_mb":257}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("multipart limit over the cap = %d", rec.Code)
+	}
+	if rec := call("PUT", path, `{"malware_scan":"on"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown malware scan mode = %d", rec.Code)
 	}
 	if h.registry.Match("www.lb.example.com", "/") == nil {
 		t.Error("alias not routed after update")

@@ -289,8 +289,18 @@
     setTimeout(function () { window.location.href = safeRedirectUrl(cfg.redirect); }, 400);
   }
 
+  // The nonce is good for 2 minutes from when the server rendered this page.
+  // A tab the browser suspended in the background, or this page restored
+  // from the back/forward cache, outlives it: load the original URL again
+  // for a fresh challenge instead of failing (issue #345). 100s leaves room
+  // for the verify round trip.
+  var loadedAt = Date.now();
+  function stale() { return Date.now() - loadedAt > 100000; }
+  function restart() { window.location.replace(safeRedirectUrl(cfg.redirect)); }
+
   var fellBack = false;
   function failed(err) {
+    if (stale()) return restart();
     if (cfg.captcha && !fellBack) return captchaFallback();
     widget.hidden = false;
     if (err instanceof Response) {
@@ -332,9 +342,23 @@
     document.head.appendChild(s);
   }
 
-  Promise.all([solve(cfg.nonce), getVisitorId()])
-    .then(function (results) { return verify({ solution: results[0], visitor_id: results[1] }); })
-    .then(passed, failed);
+  // A hidden tab gets its timers throttled (Chrome) or its scripts
+  // suspended (iOS Safari), so the work would outlive the nonce. Start when
+  // the visitor actually looks at the tab.
+  var started = false;
+  function start() {
+    if (started || document.hidden) return;
+    if (stale()) return restart();
+    started = true;
+    Promise.all([solve(cfg.nonce), getVisitorId()])
+      .then(function (results) { return verify({ solution: results[0], visitor_id: results[1] }); })
+      .then(passed, failed);
+  }
+  document.addEventListener('visibilitychange', start);
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted && stale()) restart();
+  });
+  start();
 })();
 </script>
 </body>

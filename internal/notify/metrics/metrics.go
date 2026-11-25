@@ -141,6 +141,20 @@ var _ = promauto.NewCounterFunc(prometheus.CounterOpts{
 	Help: "WAF checks that looked in the verdict cache and ran the rules.",
 }, func() float64 { return float64(waf.VerdictCacheMisses()) })
 
+// ClamdErrors counts upload scans that failed and were let through (clamd
+// down, timeout, size over its limit, unparsable body; issue #340).
+var ClamdErrors = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "palisade_clamd_errors_total",
+	Help: "Upload malware scans that failed open: clamd unreachable, timed out, busy or over its stream limit.",
+})
+
+// CrowdSecPushErrors counts autobans that failed to reach a CrowdSec LAPI
+// (each failed attempt, and each ban dropped from a full queue; issue #342).
+var CrowdSecPushErrors = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "palisade_crowdsec_push_errors_total",
+	Help: "Failed attempts to push autobans to a CrowdSec LAPI, plus bans dropped from a full push queue.",
+})
+
 // ConnsRefused counts connections closed at accept by the per-client cap.
 var ConnsRefused = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "palisade_conns_refused_total",

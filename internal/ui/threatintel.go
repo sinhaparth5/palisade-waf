@@ -80,19 +80,25 @@ func (h *Handler) AddThreatIntelSource(c *echo.Context) error {
 }
 
 // AddCrowdSecSource adds a CrowdSec LAPI source (issue #194). The bouncer
-// key is stored sealed and never rendered back; the worker's next poll
+// key and the optional machine credentials (pushing autobans, issue #342)
+// are stored sealed and never rendered back; the worker's next poll
 // (within 30s) does the initial sync.
 func (h *Handler) AddCrowdSecSource(c *echo.Context) error {
 	label := strings.TrimSpace(c.FormValue("label"))
 	url := strings.TrimSpace(c.FormValue("url"))
 	key := strings.TrimSpace(c.FormValue("api_key"))
+	login := strings.TrimSpace(c.FormValue("machine_login"))
+	password := c.FormValue("machine_password")
 	if label == "" || url == "" || key == "" {
 		return c.String(http.StatusBadRequest, "label, LAPI URL and bouncer key required")
+	}
+	if (login == "") != (password == "") || strings.ContainsAny(login, "\r\n") {
+		return c.String(http.StatusBadRequest, "machine login and password go together")
 	}
 	if err := validateOutboundURL(url); err != nil {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
-	if err := h.db.AddCrowdSecSource(label, url, key); err != nil {
+	if err := h.db.AddCrowdSecSource(label, url, key, login, password); err != nil {
 		return c.String(http.StatusConflict, "source already exists")
 	}
 	return h.renderPartial(c, "threat_intel", "intel-rows", h.threatIntelData())

@@ -155,6 +155,34 @@ func TestChallengeLoopBans(t *testing.T) {
 	}
 }
 
+// TestReturningChallengeNeverScores pins issue #345: challenges of a browser
+// holding a pass cookie (a phone tab after an IP change) don't ban it, while
+// the other challenge reasons still score.
+func TestReturningChallengeNeverScores(t *testing.T) {
+	now := time.Date(2026, 7, 3, 9, 16, 12, 0, time.UTC)
+	for _, tt := range []struct {
+		action string
+		ban    bool
+	}{
+		{"bot_challenge:returning", false},
+		{"bot_challenge:adaptive", true},
+		{"bot_challenge:login", true},
+	} {
+		t.Run(tt.action, func(t *testing.T) {
+			db := newFakeStore()
+			b, _ := testBanner(db, now)
+			for i := range 20 {
+				e := challengedEvent("198.23.130.204", now.Add(time.Duration(i)*time.Second))
+				e.Action = tt.action
+				b.Record(e)
+			}
+			if got := db.rules[":198.23.130.204"] == "block"; got != tt.ban {
+				t.Fatalf("banned = %v, want %v", got, tt.ban)
+			}
+		})
+	}
+}
+
 func TestOtherUnblockedTrafficNeverScores(t *testing.T) {
 	db := newFakeStore()
 	now := time.Date(2026, 7, 3, 9, 0, 0, 0, time.UTC)
@@ -454,6 +482,29 @@ func TestLeakedPasswordScores(t *testing.T) {
 	}
 	if note := db.banNote("203.0.113.40"); !strings.Contains(note, "5 breached passwords") {
 		t.Errorf("note = %q, want breached-password breakdown", note)
+	}
+}
+
+// TestMalwareScores pins issue #340: a flagged upload is a critical hit
+// (5 points), logged or blocked, so two ban at the default threshold.
+func TestMalwareScores(t *testing.T) {
+	db := newFakeStore()
+	now := time.Date(2026, 7, 3, 9, 16, 12, 0, time.UTC)
+	b, _ := testBanner(db, now)
+	b.Record(storage.RequestLog{Timestamp: now, RealIP: "203.0.113.42", Action: "malware_upload:log Eicar", Status: 200})
+	if db.rules[":203.0.113.42"] == "block" {
+		t.Fatal("banned after one hit")
+	}
+	b.Record(storage.RequestLog{Timestamp: now, RealIP: "203.0.113.42", Action: "malware_upload Eicar", Blocked: true, Status: 403})
+	if db.rules[":203.0.113.42"] != "block" {
+		t.Fatal("not banned after two flagged uploads")
+	}
+	// A failed scan isn't evidence of anything.
+	for range 5 {
+		b.Record(storage.RequestLog{Timestamp: now, RealIP: "203.0.113.43", Action: "malware_scan_error", Status: 200})
+	}
+	if db.rules[":203.0.113.43"] == "block" {
+		t.Error("scan errors scored")
 	}
 }
 

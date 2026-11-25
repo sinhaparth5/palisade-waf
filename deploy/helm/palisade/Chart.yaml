@@ -3,8 +3,8 @@ name: palisade
 description: Palisade WAF and reverse proxy (Coraza + OWASP CRS) with an admin UI
 type: application
 # Both follow the Palisade release (make tag sets them).
-version: 3.4.0
-appVersion: "3.4.0"
+version: 3.4.3
+appVersion: "3.4.3"
 home: https://github.com/sinhaparth5/palisade-waf
 sources:
   - https://github.com/sinhaparth5/palisade-waf

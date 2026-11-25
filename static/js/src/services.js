@@ -225,6 +225,12 @@
     htmx.process(nameForm);
     document.getElementById('svc-name').value = d.name;
     document.getElementById('svc-name-error').textContent = '';
+    // Docker-managed (issue #341): routing comes from container labels.
+    var docker = d.docker === '1';
+    document.getElementById('svc-docker-note').classList.toggle('hidden', !docker);
+    ['svc-name-form', 'svc-backends-form', 'svc-hosts-form'].forEach(function (id) {
+      document.getElementById(id).querySelectorAll('input, textarea, select, button').forEach(function (el) { el.disabled = docker; });
+    });
 
     rlIdInput.value = d.id;
     rpsInput.value = parseFloat(d.rps) > 0 ? d.rps : '';
@@ -278,6 +284,7 @@
     htmx.process(uploadsForm);
     largeJSUploadsToggle.checked = d.largeJsUploads === '1';
     document.getElementById('svc-multipart-mb').value = d.multipartMb === '0' ? '' : (d.multipartMb || '');
+    document.getElementById('svc-malware-scan').value = d.malwareScan || '';
 
     http3Form.setAttribute('hx-post', adminPath + '/services/http3/' + d.id);
     htmx.process(http3Form);

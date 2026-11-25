@@ -12,8 +12,8 @@ require (
 	github.com/goccy/go-yaml v1.19.2
 	github.com/ip2location/ip2proxy-go/v4 v4.2.0
 	github.com/kaptinlin/jsonschema v0.9.10
-	github.com/klauspost/compress v1.20.4
-	github.com/labstack/echo/v5 v5.4.5
+	github.com/klauspost/compress v1.20.5
+	github.com/labstack/echo/v5 v5.4.6
 	github.com/oschwald/geoip2-golang v1.13.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3

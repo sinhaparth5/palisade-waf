@@ -189,7 +189,10 @@ func (b *Banner) Record(e storage.RequestLog) {
 	// a scanner, not a browser. Prefix match — issue #16's adaptive
 	// enforcement can also trigger a challenge, logged as
 	// "bot_challenge:adaptive", which must score exactly the same way.
-	challenged := !e.Blocked && strings.HasPrefix(e.Action, "bot_challenge")
+	// "bot_challenge:returning" carries a pass cookie the server issued
+	// earlier (IP changed, or a tab outlived the pass), so it never scores
+	// (issue #345).
+	challenged := !e.Blocked && strings.HasPrefix(e.Action, "bot_challenge") && e.Action != "bot_challenge:returning"
 	// A honeypot hit is logged unblocked too (the backend answered 404),
 	// and nothing legitimate asks for those paths, so it bans outright.
 	honeypot := e.Action == "honeypot"
@@ -201,7 +204,9 @@ func (b *Banner) Record(e storage.RequestLog) {
 	// A backend error status on a request Palisade let through (issue #193);
 	// whether the code counts is decided under the lock from the config.
 	badStatus := !e.Blocked && !e.Exempt && e.Action == "" && e.Status >= 400 && !staticAsset(e.Path)
-	if !e.Blocked && !challenged && !honeypot && !leaked && !jwt && !badStatus {
+	// A file clamd flagged (issue #340) is critical, blocked or only logged.
+	malware := strings.HasPrefix(e.Action, "malware_upload")
+	if !e.Blocked && !challenged && !honeypot && !leaked && !jwt && !malware && !badStatus {
 		return
 	}
 	// Never score traffic that is already blocked by an IP rule or geo rule:
@@ -223,7 +228,7 @@ func (b *Banner) Record(e storage.RequestLog) {
 		ev.pts, ev.leaked = ptsLeaked, true
 	case jwt:
 		ev.pts, ev.jwt = ptsJWT, true
-	case e.RuleID > 0 && criticalRule(e.RuleID):
+	case malware, e.RuleID > 0 && criticalRule(e.RuleID):
 		ev.pts, ev.critical = ptsCritical, true
 	case e.RuleID > 0:
 		ev.pts, ev.waf = ptsWAF, true

@@ -101,6 +101,7 @@ func TestServeHTTP(t *testing.T) {
 		"--db", filepath.Join(dir, "waf.db"), "--db-key-file", key, "--listen", "127.0.0.1:0", "--admin-listen", "127.0.0.1:0",
 		"--access-log", filepath.Join(dir, "access.log"), "--prune-interval", "1h", "--certs", dir,
 		"--trusted-proxies", "10.0.0.0/8", "--admin-allow", "127.0.0.1,::1/128",
+		"--docker-discovery", "unix://" + filepath.Join(dir, "no-docker.sock"), // down: logged, retried
 	}, "http", "admin")
 	c := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
@@ -287,6 +288,13 @@ func TestCheckWritable(t *testing.T) {
 	}
 	if _, err := run([]string{"--db", filepath.Join(dir, "waf.db")}, ""); err == nil {
 		t.Error("serve started on a read-only data dir")
+	}
+}
+
+func TestServeBadDockerAddress(t *testing.T) {
+	_, err := run([]string{"--db", filepath.Join(t.TempDir(), "waf.db"), "--docker-discovery", "/var/run/docker.sock"}, "")
+	if err == nil || !strings.Contains(err.Error(), "docker address") {
+		t.Errorf("bad --docker-discovery: %v", err)
 	}
 }
 
