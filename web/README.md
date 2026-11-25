@@ -90,7 +90,7 @@ What every feature's tests cover:
 Query elements by role and accessible name (`getByRole("button", { name: /save/i })`),
 not by class or test id, so tests also check accessibility. No snapshot tests.
 
-`src/test/csp.test.tsx` fails when a component injects a `<style>` without the
+`src/csp.test.tsx` fails when a component injects a `<style>` without the
 CSP nonce. Add new components that inject styles (overlays, toasts) to it.
 
 ## Role sweep (e2e)

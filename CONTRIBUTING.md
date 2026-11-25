@@ -47,12 +47,21 @@ Run a single package's tests while iterating:
 go test ./internal/proxy/ -run TestName -v
 ```
 
-Tests live alongside the code they cover — `internal/proxy/`,
-`internal/security/ratelimit/`,
-`internal/security/ja4/`, `internal/storage/`, `internal/notify/mailer/`,
-`internal/security/autoban/`, `internal/security/challenge/`,
-`internal/services/`, `internal/ui/`. Every implementation package lives
-under `internal/`, grouped by concern (`internal/security/` for
+Tests are organised by scope, not file type:
+
+- **Go unit tests** sit next to the code as `*_test.go` in the same package,
+  so they reach unexported names. Fixture files go in that package's
+  `testdata/` (e.g. `internal/storage/testdata/`), fuzz crashers in
+  `testdata/fuzz/`. Tests that wire several packages together (servers on
+  port 0, subcommands) live in `internal/app`.
+- **Frontend unit and component tests** sit next to their file in `web/src`
+  (`ServiceForm.tsx` -> `ServiceForm.test.tsx`); a test that spans several
+  components goes at the top of `web/src` (`csp.test.tsx`). `web/src/test/`
+  holds only shared setup and helpers.
+- **Browser end-to-end tests** live in `web/e2e/` (Playwright, `make e2e`).
+
+No `__tests__/` folders and no mirrored test trees. Every implementation
+package lives under `internal/`, grouped by concern (`internal/security/` for
 signal/mitigation packages, `internal/notify/` for outbound reporting) — see
 [`CLAUDE.md`](CLAUDE.md)'s "Layout" section.
 
