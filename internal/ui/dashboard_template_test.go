@@ -9,59 +9,22 @@ import (
 	"palisade/internal/storage"
 )
 
-// TestBaseTemplateCarriesCSRF renders a full page and checks the CSRF token
-// lands where the clients pick it up: hx-headers on <body> (HTMX requests),
-// data-csrf (fetch calls in clipboard.js/notify.js), and the logout form's hidden input.
-func TestBaseTemplateCarriesCSRF(t *testing.T) {
+// TestProPageCarriesCSRF checks the add-on cards page hands htmx the CSRF
+// token: hx-headers on <body>, JSON quotes intact so htmx can parse them.
+func TestProPageCarriesCSRF(t *testing.T) {
 	h := &Handler{}
 	if err := h.parseTemplates(); err != nil {
 		t.Fatalf("parse templates: %v", err)
 	}
-
 	token := csrfToken("some-session")
-	data := map[string]any{
-		"Page":       "settings",
-		"Heading":    "Settings",
-		"AdminPath":  "/admin",
-		"AlertCount": 0,
-		"CSRF":       token,
-		// Minimal card data mirroring SettingsPage's defaults.
-		"AdminEmail":     "admin@example.com",
-		"BotEnabled":     false,
-		"BotThreshold":   5,
-		"BotTTL":         3600,
-		"WebhookURL":     "",
-		"WebhookSecret":  "",
-		"WebhookEnabled": false,
-		"WebhookEvents":  "",
-		"EmailEnabled":   false,
-		"EmailSender":    "alert@example.com",
-		"EmailTo":        "",
-		"EmailTokenSet":  false,
-		"Role":           "owner",
-	}
-
 	var buf bytes.Buffer
-	if err := h.tmpls["settings"].ExecuteTemplate(&buf, "base", data); err != nil {
-		t.Fatalf("execute settings template: %v", err)
+	if err := h.pro.Execute(&buf, map[string]any{"AdminPath": "/admin", "CSRF": token}); err != nil {
+		t.Fatal(err)
 	}
-	page := buf.String()
-
-	// The JSON quotes are template literals (not interpolated), so
-	// html/template leaves them intact inside the single-quoted attribute
-	// and HTMX can JSON-parse the value directly.
-	wantHeaders := `hx-headers='{"X-CSRF-Token":"` + token + `"}'`
-	for _, want := range []string{
-		wantHeaders,
-		`data-csrf="` + token + `"`,
-		`name="_csrf" value="` + token + `"`,
-	} {
-		if !strings.Contains(page, want) {
+	for _, want := range []string{`hx-headers='{"X-CSRF-Token":"` + token + `"}'`, `data-csrf="` + token + `"`, "Nothing here for your role"} {
+		if !strings.Contains(buf.String(), want) {
 			t.Errorf("rendered page missing %q", want)
 		}
-	}
-	if strings.Contains(page, `href="/admin/settings/backup"`) {
-		t.Error("backup is still reachable as a GET link")
 	}
 }
 

@@ -11,7 +11,7 @@ import sys
 
 # Class names that aren't icons: the base classes on every <i>.
 NOT_ICONS = {"hgi-stroke", "hgi-rounded", "hgi-stroke-rounded"}
-SOURCES = ["internal/ui/templates", "static/js/src", "internal/ui", "web/src"]
+SOURCES = ["internal/ui/templates", "internal/ui", "web/src"]
 
 
 def used_names():

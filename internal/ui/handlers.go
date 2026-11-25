@@ -14,7 +14,6 @@ import (
 	"palisade/internal/notify/metrics"
 	"palisade/internal/proxy"
 	"palisade/internal/security/blocklist"
-	"palisade/internal/security/bot"
 	"palisade/internal/security/breach"
 	"palisade/internal/security/challenge"
 	"palisade/internal/security/geo"
@@ -22,7 +21,6 @@ import (
 	"palisade/internal/security/threatscore"
 	"palisade/internal/services"
 	"palisade/internal/storage"
-	"slices"
 	"strings"
 	"time"
 
@@ -33,7 +31,7 @@ import (
 //go:embed templates
 var templateFS embed.FS
 
-// vendorFS holds the third-party admin assets (htmx, fonts, icons,
+// vendorFS holds the third-party admin assets (htmx for the Pro page, fonts, icons,
 // flags), served from the binary so the admin CSP can be 'self' only and the
 // UI works air-gapped (issue #195). See THIRD_PARTY_NOTICES.md.
 //
@@ -55,73 +53,6 @@ func setCSP(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-var funcs = template.FuncMap{
-	// can reports whether role may use routes declared for need, by the
-	// same order requireRole enforces (issue #216): {{if can $.Role "admin"}}.
-	// A missing role (nil) has no rank, so it gets read-only markup.
-	"can": func(role any, need string) bool {
-		r, _ := role.(string)
-		return roleRank[r] >= roleRank[need]
-	},
-	"flagClass":   func(code string) string { return "fi fi-" + strings.ToLower(code) },
-	"fmtTime":     func(t time.Time) string { return t.Format("02 Jan 15:04:05") },
-	"fmtTimeFull": func(t time.Time) string { return t.UTC().Format("2006-01-02 15:04:05 UTC") },
-	"fmtDur":      func(ms int64) string { return fmt.Sprintf("%dms", ms) },
-	"fmtLastUsed": func(t *time.Time) string {
-		if t == nil {
-			return "Never"
-		}
-		return t.Format("02 Jan 15:04:05")
-	},
-	"today": func() string { return time.Now().Format("2 January 2006") },
-	// truncate counts runes, not bytes: slicing bytes could cut a multi-byte
-	// character in half and render U+FFFD.
-	"truncate": func(s string, n int) string {
-		r := []rune(s)
-		if len(r) <= n {
-			return s
-		}
-		return string(r[:n]) + "…"
-	},
-	"shortDate": func(s string) string {
-		if len(s) < 10 {
-			return s
-		}
-		return s[:10]
-	},
-	"add":      func(a, b int) int { return a + b },
-	"sub":      func(a, b int) int { return a - b },
-	"isOdd":    func(i int) bool { return i%2 == 1 },
-	"contains": strings.Contains,
-	"aiPolicy": bot.ParseAIPolicy,
-	"join":     strings.Join,
-	"has":      slices.Contains[[]string, string],
-	"splitComma": func(s string) []string {
-		var out []string
-		for _, p := range strings.Split(s, ",") {
-			p = strings.TrimSpace(p)
-			if p != "" {
-				out = append(out, p)
-			}
-		}
-		return out
-	},
-	"map": func(pairs ...any) (map[string]any, error) {
-		if len(pairs)%2 != 0 {
-			return nil, fmt.Errorf("map: odd number of args")
-		}
-		m := make(map[string]any, len(pairs)/2)
-		for i := 0; i < len(pairs); i += 2 {
-			k, ok := pairs[i].(string)
-			if !ok {
-				return nil, fmt.Errorf("map: key must be string")
-			}
-			m[k] = pairs[i+1]
-		}
-		return m, nil
-	},
-}
-
 // Handler holds all UI dependencies.
 type Handler struct {
 	cfg             *config.Config
@@ -130,7 +61,7 @@ type Handler struct {
 	geoBl           *geo.Blocker
 	registry        *services.Registry
 	broadcaster     *LogBroadcaster
-	tmpls           map[string]*template.Template
+	pro             *template.Template // templates/pro.html, the add-on cards page
 	staticJS        fs.FS
 	staticCSS       fs.FS
 	assetVer        string // cache-busting stamp for the embedded CSS/JS URLs
@@ -165,8 +96,8 @@ type Handler struct {
 	extCards        []ext.Card        // Settings cards from ext.Mounts, filled by Register
 }
 
-// NewHandler builds the UI handler. jsFS must contain the minified JS
-// assets at "js/dist/*" (see package static); it's served under
+// NewHandler builds the UI handler. jsFS must contain the theme script at
+// "js/*.js" (see package static); it's served under
 // /<admin_path>/static/js/. cssFS must contain the compiled Tailwind
 // stylesheet at "css/dist/*" (built by `make css`, committed, embedded — no
 // CDN); it's served under /<admin_path>/static/css/. imgsFS must contain
@@ -176,9 +107,9 @@ type Handler struct {
 // route in internal/app); see hostGuard for why the admin/API routes need to be
 // able to hand a request off to it.
 func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist, geoBl *geo.Blocker, registry *services.Registry, bc *LogBroadcaster, jsFS embed.FS, cssFS embed.FS, imgsFS embed.FS, reloadBot func(*challenge.Challenger), buildChallenger func(bool, int, int) *challenge.Challenger, reloadRateLimit func(), reloadWAF func(), syncThreatIntel func(int64), sendReportNow func() error, sendTestWebhook func() error, sendLoginCode func(string) error, sendInvite func(to, inviter, role, link string) error, reloadAutoban func(), scorer *threatscore.Scorer, reloadAdaptive func(), proxyHandle echo.HandlerFunc) (*Handler, error) {
-	sub, err := fs.Sub(jsFS, "js/dist")
+	sub, err := fs.Sub(jsFS, "js")
 	if err != nil {
-		return nil, fmt.Errorf("sub static/js/dist: %w", err)
+		return nil, fmt.Errorf("sub static/js: %w", err)
 	}
 	cssSub, err := fs.Sub(cssFS, "css/dist")
 	if err != nil {
@@ -200,19 +131,11 @@ func NewHandler(cfg *config.Config, db *storage.DB, ipbl *blocklist.IPBlocklist,
 }
 
 func (h *Handler) parseTemplates() error {
-	h.tmpls = make(map[string]*template.Template, 2)
-	// settings is the add-on cards page (ext.Card), the last base.html page.
-	settings, err := template.New("").Funcs(funcs).ParseFS(templateFS, "templates/components/*.html", "templates/base.html", "templates/settings.html")
+	pro, err := template.ParseFS(templateFS, "templates/pro.html")
 	if err != nil {
-		return fmt.Errorf("parse template settings: %w", err)
+		return fmt.Errorf("parse pro.html: %w", err)
 	}
-	h.tmpls["settings"] = settings
-	// notifications partial used by the bell dropdown
-	notif, err := template.New("notifications-panel").Funcs(funcs).ParseFS(templateFS, "templates/notifications.html")
-	if err != nil {
-		return fmt.Errorf("parse notifications: %w", err)
-	}
-	h.tmpls["notifications"] = notif
+	h.pro = pro
 	return nil
 }
 
@@ -545,68 +468,4 @@ func (h *Handler) Register(e *echo.Echo) {
 			h.extCards = append(h.extCards, f.Card)
 		}
 	}
-}
-
-func (h *Handler) render(c *echo.Context, page string, data map[string]any) error {
-	t, ok := h.tmpls[page]
-	if !ok {
-		return fmt.Errorf("template %q not found", page)
-	}
-	markAuditFailure(c, data)
-	if data == nil {
-		data = map[string]any{}
-	}
-	data["Page"] = page
-	if _, ok := data["AdminPath"]; !ok {
-		data["AdminPath"] = h.cfg.Admin.Path
-	}
-	if _, ok := data["Asset"]; !ok {
-		data["Asset"] = h.assetVer
-	}
-	if _, ok := data["AlertCount"]; !ok {
-		data["AlertCount"] = h.unreadAlertCount()
-	}
-	// The signed-in user, for the sidebar and role-gated cards. Always
-	// set, so templates can compare .Role without a nil check.
-	data["UserEmail"], data["Role"] = "", ""
-	if u := currentUser(c); u != nil {
-		data["UserEmail"], data["Role"] = u.Email, u.Role
-	}
-	// Shell chrome: sidebar status box and bottom status bar.
-	data["Version"], data["WAFOn"] = h.cfg.Version, h.cfg.WAF.Enabled
-	// CSRF token for this session: picked up by hx-headers on <body> for all
-	// HTMX requests and by hidden _csrf inputs in plain HTML forms.
-	if _, ok := data["CSRF"]; !ok {
-		data["CSRF"] = h.csrfFromContext(c)
-	}
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	// no-store keeps these pages out of the browser's back/forward cache.
-	// Without it, navigating away leaves the previous page (and its live
-	// notifications/logs EventSource, see notify.js and logs.html) frozen in
-	// bfcache instead of torn down, so each connection stays open for as long
-	// as that bfcache entry survives. A few quick page navigations can pile
-	// up more open SSE connections than Chrome's ~6-per-origin HTTP/1.1 limit
-	// allows, stalling every other request behind them for as long as it
-	// takes bfcache to evict an old entry. It's also the right call for an
-	// authenticated admin panel anyway: these pages shouldn't be restorable
-	// from cache after logout.
-	c.Response().Header().Set("Cache-Control", "no-store")
-	return t.ExecuteTemplate(c.Response(), "base", data)
-}
-
-// renderPartial executes a named sub-template from a page template (used for HTMX swaps).
-func (h *Handler) renderPartial(c *echo.Context, page, tmplName string, data any) error {
-	t, ok := h.tmpls[page]
-	if !ok {
-		return fmt.Errorf("template %q not found", page)
-	}
-	markAuditFailure(c, data)
-	// Swapped fragments gate their controls with can, like full pages.
-	if m, ok := data.(map[string]any); ok && m["Role"] == nil {
-		if u := currentUser(c); u != nil {
-			m["Role"] = u.Role
-		}
-	}
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return t.ExecuteTemplate(c.Response(), tmplName, data)
 }

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { api } from "@/lib/api";
 
 // Top bar search (issue #225): pages, cards and live records, from the same
-// {admin}/search the HTMX pages use (JSON here). Ctrl/Cmd+K or / opens it.
+// {admin}/search. Ctrl/Cmd+K or / opens it.
 type Group = { label: string; icon: string; hits: { title: string; detail: string; url: string }[] };
 
 export function Search() {

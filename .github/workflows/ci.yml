@@ -35,8 +35,6 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Generate embedded assets
-        run: go generate ./...
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -58,8 +56,6 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Generate embedded assets
-        run: go generate ./...
 
       - name: Run tests
         # -coverpkg credits code to its own package wherever it runs, e.g.
@@ -274,7 +270,7 @@ jobs:
           ## What's inside the binary
 
           Everything is embedded, so no external files are needed at runtime:
-          - Admin UI (HTMX + Tailwind templates + minified JS)
+          - Admin UI (React app, built from web/)
           - Bundled GeoLite2 Country database (geo blocking)
           - Bundled DB-IP ASN Lite database (ISP/org lookup)
           - OWASP Core Rule Set (WAF rules)

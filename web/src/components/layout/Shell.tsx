@@ -152,8 +152,8 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   );
 }
 
-// ThemeToggle shares the HTMX pages' saved theme (static/js/src/theme.js
-// applies it before first paint).
+// ThemeToggle saves cz-theme, which static/js/theme.js applies before first
+// paint on every admin page.
 function ThemeToggle() {
   const root = document.documentElement;
   const [dark, setDark] = useState(root.dataset.theme === "dark");

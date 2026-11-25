@@ -78,7 +78,7 @@ function Section({ title, action, className, children }: { title: string; action
   );
 }
 
-// An HTMX page not moved to the app yet.
+// A plain link, a full page load into the app.
 const Old = ({ href, children }: { href: string; children: ReactNode }) => (
   <a href={boot.admin + href} className={more}>
     {children}

@@ -1,8 +1,8 @@
 # Palisade admin app
 
-The React admin UI, replacing the HTMX pages one area at a time (#358). Built
-with Bun into `static/app/dist` and served by Go at `{admin}/app` behind the
-admin session (`internal/ui/app.go`).
+The React admin UI (#358). Built with Bun into `static/app/dist` and served by
+Go at the admin root behind the admin session (`internal/ui/app.go`); the
+sign-in page is its own build in `dist/login`.
 
 ```bash
 make web               # from the repo root: install + build (make build runs it too)

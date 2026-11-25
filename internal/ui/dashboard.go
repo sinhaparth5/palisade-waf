@@ -259,28 +259,21 @@ func (h *Handler) NotificationsPanel(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if wantsJSON(c) {
-		type block struct {
-			Time    time.Time `json:"time"`
-			IP      string    `json:"ip"`
-			Country string    `json:"country"`
-			Method  string    `json:"method"`
-			Path    string    `json:"path"`
-			App     string    `json:"app"`
-			RuleID  int       `json:"rule_id"`
-			Action  string    `json:"action"`
-		}
-		blocks := make([]block, 0, len(rows))
-		for _, r := range rows {
-			blocks = append(blocks, block{r.Timestamp, r.RealIP, r.Country, r.Method, r.Path, r.AppName, r.RuleID, r.Action})
-		}
-		return c.JSON(http.StatusOK, map[string]any{"unread": h.unreadAlertCount(), "blocks": blocks})
+	type block struct {
+		Time    time.Time `json:"time"`
+		IP      string    `json:"ip"`
+		Country string    `json:"country"`
+		Method  string    `json:"method"`
+		Path    string    `json:"path"`
+		App     string    `json:"app"`
+		RuleID  int       `json:"rule_id"`
+		Action  string    `json:"action"`
 	}
-	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
-	return h.tmpls["notifications"].ExecuteTemplate(c.Response(), "notifications-panel", map[string]any{
-		"Rows":      rows,
-		"AdminPath": h.cfg.Admin.Path,
-	})
+	blocks := make([]block, 0, len(rows))
+	for _, r := range rows {
+		blocks = append(blocks, block{r.Timestamp, r.RealIP, r.Country, r.Method, r.Path, r.AppName, r.RuleID, r.Action})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"unread": h.unreadAlertCount(), "blocks": blocks})
 }
 
 // MarkNotificationsSeen clears the unread notification badge.

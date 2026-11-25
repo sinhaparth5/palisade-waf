@@ -1,8 +1,3 @@
-// Regenerates static/js/dist/*.min.js from static/js/src/*.js before build.
-// `make build` runs this automatically; if running `go build` directly,
-// run `go generate ./...` first after editing any source JS file.
-//go:generate go run ./tools/minify
-
 package main
 
 import (

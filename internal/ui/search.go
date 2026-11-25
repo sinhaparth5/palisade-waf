@@ -87,17 +87,11 @@ func scope(app string) string {
 	return app
 }
 
-// Search renders the top bar search results for ?q=.
+// Search answers the top bar search for ?q= as JSON groups.
 func (h *Handler) Search(c *echo.Context) error {
-	raw := strings.TrimSpace(c.QueryParam("q"))
-	q := strings.ToLower(raw)
-	data := map[string]any{"Q": raw}
-	asJSON := wantsJSON(c)
+	q := strings.ToLower(strings.TrimSpace(c.QueryParam("q")))
 	if q == "" {
-		if asJSON {
-			return c.JSON(http.StatusOK, []searchGroup{})
-		}
-		return h.renderPartial(c, "settings", "search-results", data)
+		return c.JSON(http.StatusOK, []searchGroup{})
 	}
 	role := ""
 	if u := currentUser(c); u != nil {
@@ -183,9 +177,5 @@ func (h *Handler) Search(c *echo.Context) error {
 		return searchHit{title, scope(r.ServiceName), admin + "/waf-rules"}, r.Rule + " " + r.Note + " " + r.ServiceName
 	}))
 
-	if asJSON {
-		return c.JSON(http.StatusOK, groups)
-	}
-	data["Groups"] = groups
-	return h.renderPartial(c, "settings", "search-results", data)
+	return c.JSON(http.StatusOK, groups)
 }

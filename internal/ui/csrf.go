@@ -10,8 +10,9 @@ import (
 )
 
 // csrfHeader / csrfField are where a request may carry its CSRF token.
-// HTMX requests get the header via hx-headers on <body> (base.html); plain
-// HTML forms carry a hidden _csrf input.
+// The React app sends the header (web/src/lib/api.ts), the Pro page's htmx
+// gets it from hx-headers on <body> (pro.html), and plain HTML forms carry a
+// hidden _csrf input.
 const (
 	csrfHeader = "X-CSRF-Token"
 	csrfField  = "_csrf"
@@ -53,9 +54,8 @@ func (h *Handler) csrfProtect(next echo.HandlerFunc) echo.HandlerFunc {
 		expected := h.csrfFromContext(c)
 		got := c.Request().Header.Get(csrfHeader)
 		if got == "" {
-			// Only fall back to the form for non-HTMX submissions; HTMX
-			// always sends the header, so this parse only runs for the few
-			// plain form-encoded posts.
+			// Only plain form posts (login, backup, export) lack the
+			// header, so only they pay for parsing the form.
 			got = c.FormValue(csrfField)
 		}
 		if expected == "" || !hmac.Equal([]byte(expected), []byte(got)) {

@@ -193,7 +193,7 @@ func TestAcceptsEncoding(t *testing.T) {
 	}
 }
 
-// The React app gets JSON from the endpoints the HTMX pages get HTML from.
+// The top bar search and the notifications bell answer the React app in JSON.
 func TestAppJSONViews(t *testing.T) {
 	env := newAdminEnv(t)
 	env.seedService("shop", "shop.example.com")
@@ -202,8 +202,8 @@ func TestAppJSONViews(t *testing.T) {
 	get := func(path string, out any) *httptest.ResponseRecorder {
 		t.Helper()
 		rec := env.doJSON(env.session, http.MethodGet, path, nil, out)
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Vary"), "Accept") {
-			t.Fatalf("%s = %d, Vary %q", path, rec.Code, rec.Header().Get("Vary"))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s = %d", path, rec.Code)
 		}
 		return rec
 	}

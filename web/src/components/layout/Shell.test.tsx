@@ -9,7 +9,7 @@ describe("shell", () => {
     localStorage.clear();
   });
 
-  it("links moved areas inside the app and the rest to their HTMX page", async () => {
+  it("links every area inside the app", async () => {
     await renderRoute("/");
     const sidebar = screen.getByRole("navigation");
     const dash = within(sidebar).getByRole("link", { name: "Dashboard" });
@@ -44,7 +44,7 @@ describe("shell", () => {
     expect(form.querySelector<HTMLInputElement>("input[name=_csrf]")?.value).toBe("test-csrf");
   });
 
-  it("toggles and saves the theme the HTMX pages use", async () => {
+  it("toggles and saves the theme static/js/theme.js applies", async () => {
     const { user } = await renderRoute("/");
     const btn = screen.getByRole("button", { name: "Dark mode" });
     await user.click(btn);
@@ -113,7 +113,7 @@ describe("shell", () => {
     }
   });
 
-  it("formats the clock like the HTMX top bar", () => {
+  it("formats the top bar clock", () => {
     expect(clock(new Date(2026, 0, 5, 7, 8, 9))).toEqual(["05 JAN 2026", " · 07:08:09"]);
   });
 });

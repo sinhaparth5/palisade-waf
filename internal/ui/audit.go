@@ -139,33 +139,11 @@ func auditValue(v string) string {
 	return v
 }
 
-const auditFailedKey = "audit_failed"
-
-// markAuditFailure flags a request whose handler answered 200 with an inline
-// validation error instead of a 4xx, which by this package's convention is a
-// non-empty "...Err"/"...Error" string in the template data. Called from
-// render/renderPartial so new handlers are covered without remembering to.
-// ponytail: a "Saved, but applying failed" message also counts as a failure,
-// so that rare half-applied save goes unrecorded.
-func markAuditFailure(c *echo.Context, data any) {
-	m, ok := data.(map[string]any)
-	if !ok {
-		return
-	}
-	for k, v := range m {
-		if s, ok := v.(string); ok && s != "" && (strings.HasSuffix(k, "Err") || strings.HasSuffix(k, "Error")) {
-			c.Set(auditFailedKey, true)
-			return
-		}
-	}
-}
-
-// auditFailed reports whether the handler rejected the request while still
-// answering 200: flagged by markAuditFailure, or an htmx error box swap
-// (HX-Retarget, the fail() helpers in the service handlers).
+// auditFailed reports whether a handler rejected the request while still
+// answering 200 with an htmx error box swap (HX-Retarget), which add-on
+// cards on the Pro page may do.
 func auditFailed(c *echo.Context) bool {
-	failed, _ := c.Get(auditFailedKey).(bool)
-	return failed || c.Response().Header().Get("HX-Retarget") != ""
+	return c.Response().Header().Get("HX-Retarget") != ""
 }
 
 // auditRowsData fetches one page of the audit log for the audit-rows

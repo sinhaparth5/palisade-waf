@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { api } from "@/lib/api";
 import { boot } from "@/lib/boot";
 
-// The sidebar bell, as on the HTMX pages: unread blocked requests since the
+// The sidebar bell: unread blocked requests since the
 // last "mark all as read", the six latest, and a toast per new block from the
 // same SSE stream.
 type Block = { time: string; ip: string; country: string; method: string; path: string; app: string; rule_id: number; action: string };
@@ -14,7 +14,7 @@ type Live = { action: string; ip: string; country: string; method: string; path:
 
 const key = ["notifications"];
 
-// Same wording as the HTMX toasts (static/js/src/toast.js).
+// Toast titles per blocked action.
 export function blockTitle(action: string) {
   const a = action.toLowerCase();
   if (a.startsWith("rate_limited")) return "Too Many Requests";

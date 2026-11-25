@@ -5,7 +5,7 @@ WORKDIR /src/web
 COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY web/ ./
-# The theme tokens are shared with the HTMX UI.
+# The theme tokens are shared with the Pro page (static/css).
 COPY static/css/ledger.css /src/static/css/ledger.css
 RUN bun run build
 
@@ -17,8 +17,7 @@ RUN go mod download
 COPY . .
 COPY --from=web /src/static/app/dist ./static/app/dist
 ARG VERSION=dev
-RUN CGO_ENABLED=0 go generate ./... && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /palisade .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /palisade .
 # scratch has no shell to mkdir/chown with, so /data is made here.
 RUN mkdir -p /rootfs/data
 

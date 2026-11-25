@@ -41,7 +41,7 @@ describe("dashboard page", () => {
     expect(screen.getByText("POST /services")).toBeInTheDocument();
     expect(screen.getByText("9001")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /requests per hour/i })).toBeInTheDocument();
-    // Links into the app stay in it; areas not moved yet go to their HTMX page.
+    // Links into the app stay in it.
     for (const l of screen.getAllByRole("link", { name: "Live feed" })) expect(l).toHaveAttribute("href", "/admin/logs");
     const blocked = screen.getByRole("heading", { name: "Latest blocked requests" }).parentElement!;
     expect(within(blocked).getByRole("link", { name: "View all" })).toHaveAttribute("href", "/admin/logs?status=blocked");

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- The add-on cards (ext.Card) page, the one admin page Go renders. The
+     cards are server-rendered HTML that may use htmx, so this page loads it;
+     every other page is the React app, which links here (issue #357). -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex, nofollow"/>
+  <title>Palisade · Pro</title>
+  <link rel="icon" type="image/svg+xml" href="{{.AdminPath}}/static/imgs/logo.svg"/>
+  <script src="{{.AdminPath}}/static/js/theme.js?v={{.Asset}}"></script>
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false}'/>
+  <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/fonts/fonts.css?v={{.Asset}}"/>
+  <link rel="stylesheet" href="{{.AdminPath}}/static/css/tailwind.min.css?v={{.Asset}}"/>
+  <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/hugeicons/hgi-stroke-rounded.css?v={{.Asset}}"/>
+  <script src="{{.AdminPath}}/static/vendor/htmx.min.js?v={{.Asset}}" defer></script>
+</head>
+<body class="min-h-dvh bg-canvas text-ink font-sans text-[14px] antialiased" data-admin-path="{{.AdminPath}}" data-csrf="{{.CSRF}}" hx-headers='{"X-CSRF-Token":"{{.CSRF}}"}'>
+<main class="mx-auto flex max-w-[1240px] flex-col gap-6 p-4 sm:p-6 lg:p-8">
+  <a href="{{.AdminPath}}/settings" class="btn-ghost min-h-10 self-start px-4 no-underline">
+    <i class="hgi hgi-stroke hgi-rounded hgi-arrow-left-01 text-sm"></i>
+    Settings
+  </a>
+  <section class="flex flex-col gap-4" aria-labelledby="pro-title">
+    <div>
+      <h1 id="pro-title" class="font-mono text-[16px] font-medium uppercase tracking-[.04em] text-ink">Palisade Pro</h1>
+      <p class="text-[13px] text-slate-500">License and Pro features.</p>
+    </div>
+    {{if .Cards}}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      {{range .Cards}}{{.}}{{end}}
+    </div>
+    {{else}}
+    <p class="card px-6 py-10 text-center text-slate-500">Nothing here for your role.</p>
+    {{end}}
+  </section>
+</main>
+</body>
+</html>

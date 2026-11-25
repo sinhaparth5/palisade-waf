@@ -1,10 +1,10 @@
 /*
- * Tailwind v4 input for the admin UI (base.html and the standalone
- * login.html share the one compiled output). Built by the standalone
+ * Tailwind v4 input for the add-on cards page (internal/ui/templates/pro.html)
+ * and the cards palisade-pro renders into it. Built by the standalone
  * Tailwind CLI — no Node/npm — via `make css`, which writes
  * static/css/dist/tailwind.min.css; that generated file is committed and
  * //go:embed-ed (assets.go), so `make build` never needs the CLI. Re-run
- * `make css` whenever a template, static/js/src file, or Go handler adds a
+ * `make css` whenever a template or Go handler adds a
  * utility class this file's @source globs cover.
  */
 
@@ -17,8 +17,6 @@
    (meter width buckets, enforcement bar colors, glance card classes) never
    appear in template text. Both are under internal/ui. */
 @source "../../internal/ui";
-/* Runtime-toggled classes in frontend JS (classList.add/toggle). */
-@source "../js/src";
 
 @import "./ledger.css";
 

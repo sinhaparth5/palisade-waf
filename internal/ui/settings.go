@@ -34,7 +34,14 @@ func (h *Handler) SettingsPro(c *echo.Context) error {
 			cards = append(cards, html)
 		}
 	}
-	return h.render(c, "settings", map[string]any{"ExtCards": cards})
+	c.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+	c.Response().Header().Set("Cache-Control", "no-store")
+	return h.pro.Execute(c.Response(), map[string]any{
+		"AdminPath": h.cfg.Admin.Path,
+		"Asset":     h.assetVer,
+		"CSRF":      h.csrfFromContext(c),
+		"Cards":     cards,
+	})
 }
 
 func (h *Handler) BackupDB(c *echo.Context) error {

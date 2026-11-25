@@ -5,7 +5,9 @@ package static
 
 import "embed"
 
-//go:embed js/dist/*
+// JS is the theme script every admin page loads before first paint.
+//
+//go:embed js/*.js
 var JS embed.FS
 
 //go:embed css/dist/*
