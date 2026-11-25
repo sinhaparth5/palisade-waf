@@ -14,6 +14,8 @@ rather than growing this file forever.
 
 ## [Unreleased]
 
+- (#361) Add dissolve-style art to the React dashboard
+
 ## [3.5.0] - 2026-11-25
 
 - (#324) Optional IP2Proxy database path for the hosting/VPN threat score signal
