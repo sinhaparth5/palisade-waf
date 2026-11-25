@@ -22,6 +22,9 @@ const card = (title: string) => within(screen.getByRole("heading", { name: title
 const dialogButton = async (name: string) => within(await screen.findByRole("dialog")).getByRole("button", { name });
 
 describe("settings: account & access", () => {
+  // Admins see only this section; the owner-only one has its own tests.
+  beforeEach(() => asRole("admin"));
+
   it("shows loading and error states", async () => {
     mockApi({ ...base, "GET /api/settings/account": pending });
     const r = await renderRoute("/settings");

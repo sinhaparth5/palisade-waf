@@ -293,7 +293,7 @@ func TestSSOSettings(t *testing.T) {
 		want string
 	}{
 		{[]string{"issuer", "http://idp.example", "client_id", "x", "client_secret", "y"}, "https"},
-		{[]string{"issuer", idp.srv.URL, "client_id", "x"}, "required"},
+		{[]string{"issuer", idp.srv.URL, "client_id", "x"}, "client secret"},
 		{[]string{"issuer", idp.srv.URL + "/wrong", "client_id", "x", "client_secret", "y"}, "discovery failed"},
 	} {
 		if rec := env.do("POST", "/admin/settings/sso", form(tc.f...)); !strings.Contains(rec.Body.String(), tc.want) {

@@ -1,15 +1,18 @@
 import type { ReactNode } from "react";
 import { Page, PageHeader, labelMono } from "@/components/layout/Page";
+import { can } from "@/lib/boot";
 import { cn } from "@/lib/utils";
 import { CredentialsCard, DevicesCard, PasskeysCard, TwoFactorCard } from "./Account";
-import { useAccount } from "./api";
+import { useAccount, useTeam } from "./api";
+import { APIKeysCard, SSOCard, UsersCard } from "./Team";
 
 // Settings (issue #355), grouped as the HTMX page was: account & access,
 // protection, infrastructure, alerts, activity. A role sees only the
 // sections it can use; the server enforces the same roles on every route.
 
 export function SettingsPage() {
-  const sections = [{ id: "access", title: "Account & access" }];
+  const owner = can("owner");
+  const sections = [{ id: "access", title: "Account & access" }, ...(owner ? [{ id: "team", title: "Users & API keys" }] : [])];
   return (
     <Page>
       <PageHeader title="Settings" />
@@ -23,6 +26,11 @@ export function SettingsPage() {
       <Section id="access" title="Account & access" copy="Who can sign in, and how.">
         <AccountSection />
       </Section>
+      {owner && (
+        <Section id="team" title="Users & API keys" copy="Who else can sign in, single sign-on, and keys for the REST API. Owners only.">
+          <TeamSection />
+        </Section>
+      )}
     </Page>
   );
 }
@@ -67,6 +75,23 @@ function AccountSection() {
             </div>
           </div>
           <DevicesCard a={a} />
+        </>
+      )}
+    </Loaded>
+  );
+}
+
+function TeamSection() {
+  const q = useTeam();
+  return (
+    <Loaded q={q} what="users and API keys">
+      {(t) => (
+        <>
+          <UsersCard t={t} />
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+            <SSOCard key={`${t.sso.issuer}|${t.sso.client_id}|${t.sso.group}`} t={t} />
+            <APIKeysCard t={t} />
+          </div>
         </>
       )}
     </Loaded>

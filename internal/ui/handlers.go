@@ -549,6 +549,18 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.POST("/settings/email/test", h.TestEmailReport),
 		g.POST("/settings/api-keys", h.CreateAPIKey),
 		g.DELETE("/settings/api-keys/:id", h.DeleteAPIKey),
+		g.GET("/api/settings/team", h.Team),
+		g.POST("/api/settings/users", h.AddUser),
+		g.PUT("/api/settings/users/:id", h.UpdateUserJSON),
+		g.POST("/api/settings/users/:id/invite", h.ResendInvite),
+		g.POST("/api/settings/users/:id/reset-2fa", h.ResetUser2FA),
+		g.DELETE("/api/settings/users/:id", h.RemoveUser),
+		g.POST("/api/settings/sso-invites", h.AddSSOInvite),
+		g.POST("/api/settings/sso-invites/:id/renew", h.RenewSSOInviteJSON),
+		g.DELETE("/api/settings/sso-invites/:id", h.RemoveSSOInvite),
+		g.PUT("/api/settings/sso", h.SetSSO),
+		g.POST("/api/settings/api-keys", h.AddAPIKey),
+		g.DELETE("/api/settings/api-keys/:id", h.RemoveAPIKey),
 		// POST, not GET: this streams the full DB (password hashes,
 		// challenge secret), so it must never be reachable via cross-site
 		// top-level navigation.

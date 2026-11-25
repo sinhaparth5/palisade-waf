@@ -22,5 +22,6 @@ describe("unbrand", () => {
     u.apply("window.__TANSTACK_DEVTOOLS__=1");
     expect(u.dead()).toEqual(["__vite__mapDeps"]); // the optional rule may stay unmatched
     expect(leftovers(["window.__TANSTACK_DEVTOOLS__=1", "ok"])).toEqual(["__TANSTACK_DEVTOOLS__"]);
+    expect(leftovers(["Invite-only: invited users", "__vite_x"])).toEqual(["__vite_x"]);
   });
 });

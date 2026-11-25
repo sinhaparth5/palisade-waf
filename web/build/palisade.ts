@@ -118,7 +118,8 @@ export const localRules: Rule[] = [
   [/\bReact\b/g, "UI"], // remaining error text; last, after the specific rules
 ];
 
-const leak = /\w*(?:react|tanstack|vite|rolldown|radix|sonner|shadcn|cmdk|__TSR|data-slot)[\w-]*/gi;
+// "vite" not after "in": the page says "invite".
+const leak = /\w*(?:react|tanstack|(?<!in)vite|rolldown|radix|sonner|shadcn|cmdk|__TSR|data-slot)[\w-]*/gi;
 
 // unbrander applies rules and counts what each one matched, across calls.
 export function unbrander(rules: Rule[]) {

@@ -317,15 +317,18 @@ func (h *Handler) SaveSSOSettings(c *echo.Context) error {
 func checkIssuer(cfg storage.SSOConfig) error {
 	u, err := url.Parse(cfg.Issuer)
 	if err != nil || u.Host == "" {
-		return errors.New("enter the issuer URL, e.g. https://auth.example.com")
+		return fieldError("issuer", "Enter the issuer URL, e.g. https://auth.example.com.")
 	}
 	ip := net.ParseIP(u.Hostname())
 	loopback := u.Hostname() == "localhost" || ip != nil && ip.IsLoopback()
 	if u.Scheme != "https" && (u.Scheme != "http" || !loopback) {
-		return errors.New("the issuer URL must use https")
+		return fieldError("issuer", "The issuer URL must use https.")
 	}
-	if cfg.ClientID == "" || cfg.ClientSecret == "" {
-		return errors.New("client ID and client secret are required")
+	if cfg.ClientID == "" {
+		return fieldError("client_id", "Enter the client ID.")
+	}
+	if cfg.ClientSecret == "" {
+		return fieldError("client_secret", "Enter the client secret.")
 	}
 	return nil
 }
