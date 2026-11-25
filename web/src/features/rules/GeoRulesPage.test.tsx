@@ -84,7 +84,7 @@ describe("geo rules page", () => {
     await user.click(screen.getByRole("button", { name: "Add" }));
     expect(await screen.findByText('"ZZ" is not a two-letter ISO country code.')).toBeInTheDocument();
     expect(api.calls("POST /api/geo-rules")[0]!.json).toMatchObject({ country_code: ["JP"] });
-  });
+  }, 15_000); // types into a ~250-country list: past 5s under coverage with every file in parallel
 
   it("drops removed rules at once and puts them back if the server refuses", async () => {
     let answer: unknown = reply(500, {});

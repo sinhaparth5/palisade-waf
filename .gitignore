@@ -1,9 +1,7 @@
 /coraza-waf-mod
 /palisade
-/minify
 /dist/
 /certs/
-/static/js/dist/*.min.js
 waf.db
 waf.db-shm
 waf.db-wal

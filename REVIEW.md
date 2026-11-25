@@ -37,7 +37,7 @@ Walk the diff with these questions. Flag anything you can't answer from the code
 
 **Config and UI**
 - New Tailwind class: was `make css` run and the output committed?
-- New JS: edited in `static/js/src/`, built with `make build`, script tag has `?v={{.Asset}}`?
+- New page or write control in `web/`: hidden from roles that can't use its route, with a test, and does `make e2e` pass?
 - Does a changed VCL match the `install.sh` heredoc?
 
 ## Clean code

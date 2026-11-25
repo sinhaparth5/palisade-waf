@@ -13,6 +13,7 @@ bun run test:coverage  # with coverage (what CI runs, via make web-check)
 bun run typecheck
 bun run smoke          # after a build: the real dist/ renders, no library names left
 bun run new:test <component|query|page> src/features/<area>/<Name>.tsx [route]
+bunx playwright test   # role sweep in a real browser (make e2e builds first)
 ```
 
 ## Folder structure
@@ -91,6 +92,17 @@ not by class or test id, so tests also check accessibility. No snapshot tests.
 
 `src/test/csp.test.tsx` fails when a component injects a `<style>` without the
 CSP nonce. Add new components that inject styles (overlays, toasts) to it.
+
+## Role sweep (e2e)
+
+`make e2e` (from the repo root; first run `bunx playwright install chromium`)
+builds the binary, starts it on a temp DB and port 0 with one of each record,
+and signs in a viewer and an admin through real invites (`e2e/setup.ts`).
+`e2e/roles.spec.ts` then opens every page as each role, presses every button,
+menu item and switch one dialog or menu deep, and fails on any 403: a control
+the role can see but whose route it can't use, or a read it can't make.
+Writes the role may use do run, except sign-out, device and credential
+changes and calls to other servers. Add a new page to its `pages` list.
 
 ## No library names in the build
 

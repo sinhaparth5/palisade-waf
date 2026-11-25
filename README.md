@@ -23,7 +23,7 @@
 - **Reverse proxy / multi-app routing:** route by Host header (virtual hosting) or by path prefix, with automatic prefix stripping like nginx `location`, to as many backend apps as you need.
 - **IP & country blocking:** manual IP allow/block rules plus GeoIP2-based country blocking (MaxMind GeoLite2), with Cloudflare-aware real-IP extraction and opt-in trusted proxy CIDRs for `X-Forwarded-For` / `X-Real-IP`.
 - **TLS:** plain HTTP, automatic Let's Encrypt certificates, or your own cert/key, globally or per service. Upload a cert or enable auto-issue for a backend from the dashboard.
-- **Admin dashboard:** HTMX/Tailwind UI for live traffic and threat charts, filterable request logs with live tail, IP/geo rule management, and service management. Changes apply immediately, with no restart.
+- **Admin dashboard:** a React app embedded in the binary, for live traffic and threat charts, filterable request logs with live tail, IP/geo rule management, and service management. Changes apply immediately, with no restart.
 - **Prometheus metrics:** `/admin/metrics` exposes request volume, latency, and per-cause block counters (IP/geo/WAF) alongside Go runtime metrics. For Prometheus, scrape `/admin/api/v1/metrics` with an API key from Settings (a read-only key is enough) via `authorization: { credentials: cwaf_… }`; the `/admin/metrics` path is for a logged-in browser session.
 - **MCP server for AI assistants (read-only):** `/admin/api/v1/mcp` (Streamable HTTP) lets Claude, Cursor and other MCP clients search logs, read one request, see stats, look up an IP, and list services and rules. No tool can change anything, so an attacker's `User-Agent: ignore previous instructions…` has nothing to act on. Use a read-only API key from Settings:
 
@@ -88,12 +88,12 @@ Then drop `--db-driver` and point `--db` at the SQLite file. A MySQL or Postgres
 
 ### Option B: build from source
 
-Requires Go 1.27+.
+Requires Go 1.27+ and [Bun](https://bun.sh) (build-time only, for the admin app in `web/`).
 
 ```bash
 git clone https://github.com/sinhaparth5/palisade-waf.git
 cd palisade-waf
-make build      # go generate (minifies JS) + go build -> ./palisade
+make build      # build the admin app (web/) + go build -> ./palisade
 
 # Seed an admin account (password is read from stdin, not a flag):
 echo "your-password" | ./palisade setup --admin-email you@example.com
@@ -165,9 +165,11 @@ Leave `--geo-db` unset to use the bundled database. GeoLite users must keep the 
 ## Development
 
 ```bash
-make build   # build (runs go generate first — required after editing static/js/src/*.js)
-make test    # go test ./...
-make clean   # remove binary, minified JS, dist/
+make build      # build the admin app + the binary (run after editing web/)
+make test       # go test ./...
+make web-check  # admin app: types, unit tests, build, smoke
+make e2e        # role sweep in a real browser (Playwright, web/e2e)
+make clean      # remove the binary, static/app/dist and dist/
 ```
 
 See `CLAUDE.md` for architecture notes if you're working on the codebase.

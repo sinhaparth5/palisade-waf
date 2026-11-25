@@ -1,3 +1,5 @@
 node_modules/
 *.tsbuildinfo
 coverage/
+test-results/
+playwright-report/

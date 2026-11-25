@@ -238,7 +238,7 @@ func TestAppJSONViews(t *testing.T) {
 
 // The React app gets every failure as {"error", "message"} with a real
 // status (web/src/lib/api.ts), never a login redirect or an HTML/text body;
-// the HTMX pages keep theirs.
+// a browser navigation keeps its own.
 func TestAppJSONErrors(t *testing.T) {
 	env := newDemoEnv(t)
 	demo, _ := env.db.GetAdminUserByEmail(demoEmail)
@@ -283,7 +283,7 @@ func TestAppJSONErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("HTMX unchanged", func(t *testing.T) {
+	t.Run("navigation unchanged", func(t *testing.T) {
 		if rec := env.doWith("GET", "/admin/search?q=x", nil, ""); rec.Code != http.StatusFound {
 			t.Errorf("no session = %d, want the login redirect", rec.Code)
 		}

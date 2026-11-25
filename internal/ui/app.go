@@ -244,7 +244,7 @@ var errorCodes = map[int]string{
 // jsonErrors answers a JSON caller's failed request with a jsonError body:
 // a returned *jsonError as is, a 4xx from Echo (body limit, CSRF) with its
 // status and message, anything else (a DB failure) as a logged 500 that
-// doesn't echo the error text. HTMX callers keep Echo's default handling.
+// doesn't echo the error text. Browser navigations keep Echo's default handling.
 func jsonErrors(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		err := next(c)
@@ -275,8 +275,8 @@ func jsonErrors(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-// denied is a 403: a jsonError for the React app, the plain text the HTMX
-// pages show otherwise.
+// denied is a 403: a jsonError for the React app, plain text for a browser
+// navigation or a Pro card.
 func denied(c *echo.Context, code, msg string) error {
 	if wantsJSON(c) {
 		return &jsonError{Status: http.StatusForbidden, Code: code, Message: msg}

@@ -13,7 +13,7 @@ LDFLAGS  := -s -w -X main.version=$(VERSION)
 # input, so a clean local `make lint` and CI never disagree on results.
 LINT_VERSION := v2.14.0
 
-.PHONY: build web web-check css icons run test bench fuzz lint hooks clean dist checksums tag
+.PHONY: build web web-check e2e css icons run test bench fuzz lint hooks clean dist checksums tag
 
 build: hooks web
 	go build -ldflags "-X main.version=$(VERSION)" -o $(BINARY) .
@@ -29,6 +29,11 @@ web:
 # What CI runs on web/: types, unit tests with coverage, and a production build.
 web-check:
 	cd web && bun install --frozen-lockfile && bun run typecheck && bun run test:coverage && bun run build && bun run smoke
+
+# Role sweep in a real browser (web/e2e): builds and starts Palisade on a
+# temp DB and port 0. First run: cd web && bunx playwright install chromium.
+e2e: web
+	cd web && bunx playwright test
 
 # Recompile the admin UI stylesheet (static/css/tailwind.css ->
 # static/css/dist/tailwind.min.css) with the standalone Tailwind CLI — a
