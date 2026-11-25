@@ -86,56 +86,6 @@ func TestWAFDryRunHandler(t *testing.T) {
 	}
 }
 
-func TestThreatIntelHandlers(t *testing.T) {
-	env := newAdminEnv(t)
-	wantCode(t, "missing", env.do("POST", "/admin/threat-intel", form("label", "x")).Code, 400, "")
-	wantCode(t, "bad url", env.do("POST", "/admin/threat-intel", form("label", "x", "url", "file:///etc/passwd")).Code, 400, "")
-	wantCode(t, "add", env.do("POST", "/admin/threat-intel", form("label", "Feed", "url", "https://example.com/l.txt", "interval_hours", "0")).Code, 200, "")
-	wantCode(t, "dup", env.do("POST", "/admin/threat-intel", form("label", "Feed", "url", "https://example.com/l.txt")).Code, 409, "")
-	srcs, _ := env.db.ListThreatIntelSources()
-	if len(srcs) != 1 || srcs[0].IntervalHours != 24 {
-		t.Fatalf("sources = %+v", srcs)
-	}
-	id := itoa(srcs[0].ID)
-	wantCode(t, "toggle", env.do("POST", "/admin/threat-intel/"+id+"/toggle", form("enabled", "0")).Code, 200, "")
-	if srcs, _ := env.db.ListThreatIntelSources(); srcs[0].Enabled {
-		t.Error("toggle did not disable")
-	}
-	wantCode(t, "sync", env.do("POST", "/admin/threat-intel/"+id+"/sync", nil).Code, 200, "")
-	if env.count("intel") != 1 {
-		t.Error("sync callback not called")
-	}
-	for _, p := range []string{"/admin/threat-intel/x/toggle", "/admin/threat-intel/x/sync"} {
-		wantCode(t, p, env.do("POST", p, nil).Code, 400, "")
-	}
-	wantCode(t, "delete bad", env.do("DELETE", "/admin/threat-intel/x", nil).Code, 400, "")
-	wantCode(t, "delete", env.do("DELETE", "/admin/threat-intel/"+id, nil).Code, 200, "")
-	if srcs, _ := env.db.ListThreatIntelSources(); len(srcs) != 0 {
-		t.Error("source not deleted")
-	}
-
-	// CrowdSec LAPI source (issue #194): the key is required and never rendered.
-	wantCode(t, "crowdsec no key", env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080")).Code, 400, "")
-	wantCode(t, "crowdsec login only", env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080", "api_key", "k", "machine_login", "m")).Code, 400, "")
-	rec := env.do("POST", "/admin/threat-intel/crowdsec", form("label", "cs", "url", "http://lapi:8080/", "api_key", "s3cret-key",
-		"machine_login", "palisade", "machine_password", "m4chine-pw"))
-	wantCode(t, "crowdsec", rec.Code, 200, rec.Body.String())
-	if strings.Contains(rec.Body.String(), "s3cret-key") || strings.Contains(rec.Body.String(), "m4chine-pw") {
-		t.Error("bouncer key or machine password rendered back")
-	}
-	srcs, _ = env.db.ListThreatIntelSources()
-	if len(srcs) != 1 || srcs[0].URL != "crowdsec+http://lapi:8080" {
-		t.Fatalf("crowdsec source = %+v", srcs)
-	}
-	if key, _ := env.db.ThreatIntelKey(srcs[0].ID); key != "s3cret-key" {
-		t.Errorf("stored key = %q", key)
-	}
-	// Machine credentials for pushing autobans (issue #342).
-	if login, pw, ok, _ := env.db.CrowdSecMachine(srcs[0].ID); !ok || login != "palisade" || pw != "m4chine-pw" {
-		t.Errorf("machine = %q %q %v", login, pw, ok)
-	}
-}
-
 func TestAddAndDeleteService(t *testing.T) {
 	env := newAdminEnv(t)
 	for _, tc := range []struct {

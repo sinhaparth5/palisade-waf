@@ -3,7 +3,7 @@
 
     uv run --with numpy --with pillow scripts/art/render.py <out-dir>
 
-Writes <out-dir>/palisade.png, rack.png and vault.png, the inputs for
+Writes <out-dir>/palisade.png, rack.png, vault.png and beacon.png, the inputs for
 dissolve.py. Drawn here rather than downloaded so the art is ours to ship and
 every shape is a plain grey the gradient map can recolour.
 """
@@ -180,9 +180,59 @@ def vault(out):
     sc.render(out)
 
 
+def beacon(out):
+    """Threat intel: a lattice mast pulling in feed packets, a receiver that
+    stacks them into block lists."""
+    sc = Scene(1800, 2000, 30, (900, 1000))
+    sc.box(-1, -1, -1, 18, 17, 1, -10, layer=-1)  # ground slab
+
+    # Lattice mast: four legs tapering by steps, cross braces every few units.
+    for k in range(6):
+        inset, z = k * 0.25, k * 3.0
+        w = 3.0 - 2 * inset
+        for lx, ly in [(0, 0), (w - 0.35, 0), (0, w - 0.35), (w - 0.35, w - 0.35)]:
+            sc.box(1 + inset + lx, 1 + inset + ly, z, 0.35, 0.35, 3.0, -20)
+        o, b = 1 + inset, 0.25  # brace ring: four bars, open in the middle
+        sc.box(o, o, z + 2.8, w, b, b, 15, layer=1)
+        sc.box(o, o, z + 2.8, b, w, b, 15, layer=1)
+        sc.box(o, o + w - b, z + 2.8, w, b, b, 15, layer=1)
+        sc.box(o + w - b, o, z + 2.8, b, w, b, 15, layer=1)
+    sc.box(2.2, 2.2, 18, 0.6, 0.6, 3.5, -30)  # top spike
+    # Three antenna arms at the top, pointing out over the scene.
+    sc.box(2.5, 2.3, 19.5, 5.0, 0.3, 0.3, 10, layer=1)
+    sc.box(2.3, 2.5, 20.5, 0.3, 4.0, 0.3, 10, layer=1)
+    sc.box(2.5, 2.3, 21.3, 3.0, 0.3, 0.3, 10, layer=1)
+
+    # Packets drifting down toward the receiver, getting smaller as they land.
+    for k, (x, y, z) in enumerate([(7.5, 1.5, 17), (9.5, 3.0, 14), (11.0, 4.8, 11), (12.0, 6.6, 8.2), (12.6, 8.2, 5.8)]):
+        s_ = 1.1 - k * 0.1
+        sc.box(x, y, z, s_, s_, s_, 25 if k % 2 else 5)
+
+    # Receiver: a cabinet with a vented front and status lights.
+    def grille(x, y, z, w, d, h):
+        X = x + w
+        for k in range(4):
+            zz = z + 0.8 + k * 0.9
+            sc.line((X, y + 0.6, zz), (X, y + d - 0.6, zz), LINE + 10, 2)
+        for led in range(3):
+            yl = y + 0.7 + led * 0.6
+            sc.line((X, yl, z + h - 0.6), (X, yl + 0.25, z + h - 0.6), 250, 3)
+    sc.box(11, 9, 0, 3.6, 4.2, 4.6, 0, grille)
+
+    # Block lists it has built: three sheets stacked beside it.
+    def lines(x, y, z, w, d, h):
+        for k in range(5):
+            yy = y + 0.6 + k * 0.7
+            sc.line((x + 0.6, yy, z + h), (x + w - (0.6 if k % 2 else 1.6), yy, z + h), LINE + 30, 2)
+    for k in range(3):
+        sc.box(4.5 + k * 0.3, 10 + k * 0.2, k * 0.45, 4.2, 4.0, 0.35, 25 - k * 5, lines)
+    sc.render(out)
+
+
 if __name__ == '__main__':
     out = Path(sys.argv[1] if len(sys.argv) > 1 else '.')
     out.mkdir(parents=True, exist_ok=True)
     palisade(out / 'palisade.png')
     rack(out / 'rack.png')
     vault(out / 'vault.png')
+    beacon(out / 'beacon.png')

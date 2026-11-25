@@ -18,13 +18,12 @@ import (
 // live records. Read-only, so every role can use it.
 
 // adminPages are the base.html pages, in sidebar order.
-var adminPages = []string{"services", "waf_rules", "threat_intel", "settings"}
+var adminPages = []string{"services", "waf_rules", "settings"}
 
 var pageHeadings = map[string]string{
-	"services":     "Services",
-	"waf_rules":    "WAF Rules",
-	"threat_intel": "Threat Intel",
-	"settings":     "Settings",
+	"services":  "Services",
+	"waf_rules": "WAF Rules",
+	"settings":  "Settings",
 }
 
 // appSections are the React app's pages and their cards, listed by hand
@@ -41,6 +40,7 @@ var appSections = func() []section {
 		{"IP Rules", "/app/ip-rules", []string{"Automatic banning", "Adaptive enforcement", "Honeypot paths", "Rules overview", "Active IP Rules"}, []string{"Add IP Rules"}},
 		{"Geo Rules", "/app/geo-rules", []string{"Rules overview", "GeoIP database bundled", "Active Geo Rules"}, []string{"Add Geo Rules"}},
 		{"Certificates", "/app/certificates", []string{"Saved Certificates", "Service TLS"}, []string{"Add Certificate"}},
+		{"Threat Intel", "/app/threat-intel", []string{"Threat Intel Feeds"}, []string{"Add Feed", "CrowdSec LAPI"}},
 	} {
 		out = append(out, section{searchHit{p.heading, "Page", p.url}, storage.RoleViewer})
 		for _, c := range p.cards {
@@ -266,7 +266,7 @@ func (h *Handler) Search(c *echo.Context) error {
 		return err
 	}
 	group("Threat intel", "hgi-database-01", matchHits(q, feeds, func(r storage.ThreatIntelSource) (searchHit, string) {
-		return searchHit{r.Label, r.URL, admin + "/threat-intel"}, r.Label + " " + r.URL
+		return searchHit{r.Label, r.URL, admin + "/app/threat-intel"}, r.Label + " " + r.URL
 	}))
 	rules, err := h.db.ListWAFCustomRules()
 	if err != nil {

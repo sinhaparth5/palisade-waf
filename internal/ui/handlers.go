@@ -433,7 +433,8 @@ func (h *Handler) Register(e *echo.Echo) {
 	g.GET("/certificates", h.toApp("/certificates"))
 	g.GET("/api/certificates", h.ListCertificates)
 	g.GET("/waf-rules", h.WAFRulesPage)
-	g.GET("/threat-intel", h.ThreatIntelPage)
+	g.GET("/threat-intel", h.toApp("/threat-intel"))
+	g.GET("/api/threat-intel", h.ListThreatIntel)
 	g.GET("/settings", h.SettingsPage)
 	g.GET("/settings/audit", h.AuditRows)
 	g.GET("/search", h.Search)
@@ -513,11 +514,11 @@ func (h *Handler) Register(e *echo.Echo) {
 		g.DELETE("/waf-rules/:id", h.EnableWAFRule),
 		g.DELETE("/waf-rules/service/:id", h.EnableWAFRuleForService),
 		g.POST("/waf-rules/feedback-config", h.SaveWAFFeedbackConfig),
-		g.POST("/threat-intel", h.AddThreatIntelSource),
-		g.POST("/threat-intel/crowdsec", h.AddCrowdSecSource),
-		g.DELETE("/threat-intel/:id", h.DeleteThreatIntelSource),
-		g.POST("/threat-intel/:id/toggle", h.ToggleThreatIntelSource),
-		g.POST("/threat-intel/:id/sync", h.SyncThreatIntelSource),
+		g.POST("/api/threat-intel", h.AddThreatIntelSource),
+		g.POST("/api/threat-intel/crowdsec", h.AddCrowdSecSource),
+		g.PUT("/api/threat-intel/:id", h.SetThreatIntelSource),
+		g.DELETE("/api/threat-intel/:id", h.DeleteThreatIntelSource),
+		g.POST("/api/threat-intel/:id/sync", h.SyncThreatIntelSource),
 	)
 
 	// Owner: users, the DB connection, secrets and API keys.

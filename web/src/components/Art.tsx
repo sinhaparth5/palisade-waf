@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import beacon from "@/assets/art/beacon.webp";
+import beaconSm from "@/assets/art/beacon-sm.webp";
 import palisade from "@/assets/art/palisade.webp";
 import palisadeSm from "@/assets/art/palisade-sm.webp";
 import rack from "@/assets/art/rack.webp";
@@ -14,6 +16,7 @@ const scenes = {
   palisade: { full: palisade, sm: palisadeSm, w: 758, h: 959 },
   rack: { full: rack, sm: rackSm, w: 687, h: 1068 },
   vault: { full: vault, sm: vaultSm, w: 753, h: 1010 },
+  beacon: { full: beacon, sm: beaconSm, w: 632, h: 1060 },
 };
 
 // Art is decoration only: empty alt and hidden from assistive tech. Width and

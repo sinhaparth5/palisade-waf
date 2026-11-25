@@ -14,6 +14,7 @@ import { Route as CertificatesRouteImport } from './routes/certificates'
 import { Route as GeoRulesRouteImport } from './routes/geo-rules'
 import { Route as IpRulesRouteImport } from './routes/ip-rules'
 import { Route as LogsRouteImport } from './routes/logs'
+import { Route as ThreatIntelRouteImport } from './routes/threat-intel'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +41,11 @@ const LogsRoute = LogsRouteImport.update({
   path: '/logs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ThreatIntelRoute = ThreatIntelRouteImport.update({
+  id: '/threat-intel',
+  path: '/threat-intel',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/geo-rules': typeof GeoRulesRoute
   '/ip-rules': typeof IpRulesRoute
   '/logs': typeof LogsRoute
+  '/threat-intel': typeof ThreatIntelRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/geo-rules': typeof GeoRulesRoute
   '/ip-rules': typeof IpRulesRoute
   '/logs': typeof LogsRoute
+  '/threat-intel': typeof ThreatIntelRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,33 @@ export interface FileRoutesById {
   '/geo-rules': typeof GeoRulesRoute
   '/ip-rules': typeof IpRulesRoute
   '/logs': typeof LogsRoute
+  '/threat-intel': typeof ThreatIntelRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/certificates' | '/geo-rules' | '/ip-rules' | '/logs'
+  fullPaths:
+    | '/'
+    | '/certificates'
+    | '/geo-rules'
+    | '/ip-rules'
+    | '/logs'
+    | '/threat-intel'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/certificates' | '/geo-rules' | '/ip-rules' | '/logs'
-  id: '__root__' | '/' | '/certificates' | '/geo-rules' | '/ip-rules' | '/logs'
+  to:
+    | '/'
+    | '/certificates'
+    | '/geo-rules'
+    | '/ip-rules'
+    | '/logs'
+    | '/threat-intel'
+  id:
+    | '__root__'
+    | '/'
+    | '/certificates'
+    | '/geo-rules'
+    | '/ip-rules'
+    | '/logs'
+    | '/threat-intel'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +105,7 @@ export interface RootRouteChildren {
   GeoRulesRoute: typeof GeoRulesRoute
   IpRulesRoute: typeof IpRulesRoute
   LogsRoute: typeof LogsRoute
+  ThreatIntelRoute: typeof ThreatIntelRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -116,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LogsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/threat-intel': {
+      id: '/threat-intel'
+      path: '/threat-intel'
+      fullPath: '/threat-intel'
+      preLoaderRoute: typeof ThreatIntelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -125,6 +161,7 @@ const rootRouteChildren: RootRouteChildren = {
   GeoRulesRoute: GeoRulesRoute,
   IpRulesRoute: IpRulesRoute,
   LogsRoute: LogsRoute,
+  ThreatIntelRoute: ThreatIntelRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

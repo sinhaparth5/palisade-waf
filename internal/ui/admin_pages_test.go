@@ -102,17 +102,18 @@ func TestAdminPagesRender(t *testing.T) {
 	}
 
 	pages := map[string]string{
-		"/admin/services":     "Services",
-		"/admin/waf-rules":    "WAF Rules",
-		"/admin/threat-intel": "Threat Intel",
-		"/admin/settings":     "Settings",
+		"/admin/services":  "Services",
+		"/admin/waf-rules": "WAF Rules",
+		"/admin/settings":  "Settings",
 	}
 	// Pages moved to the React app; old links land there.
 	for path, to := range map[string]string{
 		"/admin/ip-rules?page=2": "/admin/app/ip-rules?page=2",
 		"/admin/geo-rules":       "/admin/app/geo-rules",
 		"/admin/certificates":    "/admin/app/certificates",
+		"/admin/threat-intel":    "/admin/app/threat-intel",
 		"/admin":                 "/admin/app/",
+
 		"/admin/logs?status=blocked&mode=history": "/admin/app/logs?status=blocked&mode=history",
 	} {
 		if rec := env.do("GET", path, nil); rec.Code != http.StatusFound || rec.Header().Get("Location") != to {
