@@ -79,3 +79,26 @@ func TestGetReportDetails(t *testing.T) {
 		t.Errorf("rules = %+v", d.TopRules)
 	}
 }
+
+// TestReportForServices: apps limits both report queries to those services.
+func TestReportForServices(t *testing.T) {
+	db := openTestDB(t)
+	day := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	for i, app := range []string{"shop", "shop", "blog", "api"} {
+		if _, err := db.InsertRequest(RequestLog{Timestamp: day.Add(time.Duration(i+1) * time.Hour), AppName: app, RealIP: "9.9.9." + app[:1],
+			Country: "DE", Method: "GET", Path: "/", Status: 403, Blocked: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	end := day.AddDate(0, 0, 1)
+	if rep, _ := db.GetDailyReport(day, end, "shop", "api"); rep.Total != 3 || rep.Blocked != 3 || rep.UniqueBlockedIPs != 2 {
+		t.Errorf("filtered report %+v", rep)
+	}
+	if rep, _ := db.GetDailyReport(day, end); rep.Total != 4 {
+		t.Errorf("unfiltered report %+v", rep)
+	}
+	d, err := db.GetReportDetails(day, end, 5, "blog")
+	if err != nil || len(d.TopIPs) != 1 || d.TopIPs[0].Label != "9.9.9.b" || d.Hourly[3].Total != 1 || d.Hourly[1].Total != 0 {
+		t.Fatalf("filtered details %+v %v", d, err)
+	}
+}

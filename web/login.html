@@ -6,12 +6,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Sign in · Palisade</title>
-    <link rel="icon" type="image/svg+xml" href="{{.AdminPath}}/static/imgs/logo.svg" vite-ignore />
+    <title>Sign in · {{.BrandName}}</title>
+    <link rel="icon" type="image/svg+xml" href="{{.AdminPath}}{{.BrandLogo}}" vite-ignore />
     <script src="{{.AdminPath}}/static/js/theme.js?v={{.Asset}}" vite-ignore></script>
     <link rel="stylesheet" href="{{.AdminPath}}/static/vendor/fonts/fonts.css?v={{.Asset}}" vite-ignore />
+    {{if .BrandCSS}}<link rel="stylesheet" href="{{.AdminPath}}{{.BrandCSS}}" vite-ignore />{{end}}
   </head>
-  <body data-admin="{{.AdminPath}}" data-stage="{{.Stage}}" data-error="{{.Error}}" data-notice="{{.Notice}}" data-sso="{{.SSO}}" data-demo-email="{{.DemoEmail}}" data-demo-pass="{{.DemoPass}}" data-passkeys="{{.Passkeys}}" data-email-code="{{.EmailCode}}" data-invite-email="{{.InviteEmail}}" data-token="{{.Token}}">
+  <body data-admin="{{.AdminPath}}" data-brand="{{.BrandName}}" data-brand-logo="{{.AdminPath}}{{.BrandLogo}}" data-stage="{{.Stage}}" data-error="{{.Error}}" data-notice="{{.Notice}}" data-sso="{{.SSO}}" data-demo-email="{{.DemoEmail}}" data-demo-pass="{{.DemoPass}}" data-passkeys="{{.Passkeys}}" data-email-code="{{.EmailCode}}" data-invite-email="{{.InviteEmail}}" data-token="{{.Token}}" data-ext-login="{{.ExtLogin}}" data-ext-login-path="{{.ExtLoginPath}}">
     <div id="palisade"></div>
     <script type="module" src="/src/login.tsx"></script>
   </body>

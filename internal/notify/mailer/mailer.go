@@ -8,10 +8,14 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"mime"
 	"net"
+	"net/mail"
 	"net/smtp"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -31,22 +35,50 @@ const (
 	// Sender is the fixed From address; its domain must stay onboarded for
 	// Email Sending on the Cloudflare account that owns the API token.
 	Sender = "alert@astrareconslabs.com"
-	// SenderName is the display name mail clients show instead of the bare
-	// address ("Palisade" in the Gmail sender column, not alert@…).
-	SenderName = "Palisade"
 )
 
+// Brand, when set, renames the product in emails (name "" keeps Palisade)
+// and colours their header band (color "#rrggbb", "" keeps Palisade's).
+// Read on every email. Set once at startup.
+var Brand func() (name, color string)
+
+// product is the name emails use, also the display name mail clients show
+// instead of the bare address.
+func product() string {
+	if Brand != nil {
+		if n, _ := Brand(); strings.TrimSpace(n) != "" {
+			return strings.TrimSpace(n)
+		}
+	}
+	return "Palisade"
+}
+
+var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+func validColor(c string) bool { return colorRe.MatchString(c) }
+
 // fromHeader is the RFC 5322 From value; the envelope MAIL FROM stays the
-// bare Sender address.
-func fromHeader() string { return SenderName + " <" + Sender + ">" }
+// bare Sender address. net/mail quotes and encodes the name.
+func fromHeader() string { return (&mail.Address{Name: product(), Address: Sender}).String() }
 
 // sendTimeout bounds the whole SMTP session (dial, auth, data, quit) so a
 // stalled server can never wedge the reporter goroutine or a UI test request.
 const sendTimeout = 45 * time.Second
 
+// Attachment is a file sent with a message.
+type Attachment struct {
+	Name, ContentType string
+	Data              []byte
+}
+
 // Send delivers one multipart (plain + HTML) message using cfg. Recipients
 // are the comma-separated cfg.To list.
 func Send(cfg storage.EmailConfig, subject, textBody, htmlBody string) error {
+	return SendWithAttachments(cfg, subject, textBody, htmlBody)
+}
+
+// SendWithAttachments is Send with files attached.
+func SendWithAttachments(cfg storage.EmailConfig, subject, textBody, htmlBody string, files ...Attachment) error {
 	if cfg.To == "" || cfg.Token == "" {
 		return fmt.Errorf("email is not fully configured (recipient and API token are required)")
 	}
@@ -63,7 +95,7 @@ func Send(cfg storage.EmailConfig, subject, textBody, htmlBody string) error {
 		return fmt.Errorf("smtp dial %s: %w", addr, err)
 	}
 	_ = conn.SetDeadline(time.Now().Add(sendTimeout))
-	return session(conn, cfg.Token, recipients, buildMessage(fromHeader(), recipients, subject, textBody, htmlBody))
+	return session(conn, cfg.Token, recipients, buildMessage(fromHeader(), recipients, subject, textBody, htmlBody, files...))
 }
 
 // session runs one SMTP transaction over an already-established TLS conn.
@@ -102,17 +134,24 @@ func session(conn net.Conn, token string, recipients []string, msg []byte) error
 }
 
 // buildMessage assembles an RFC 5322 multipart/alternative message with CRLF
-// line endings (dot-stuffing is handled by net/smtp's DATA writer).
-func buildMessage(from string, to []string, subject, textBody, htmlBody string) []byte {
+// line endings (dot-stuffing is handled by net/smtp's DATA writer), wrapped
+// in multipart/mixed when files are attached.
+func buildMessage(from string, to []string, subject, textBody, htmlBody string, files ...Attachment) []byte {
 	boundary := randomBoundary()
 	var b strings.Builder
 	writeLine := func(s string) { b.WriteString(s); b.WriteString("\r\n") }
 
 	writeLine("From: " + from)
 	writeLine("To: " + strings.Join(to, ", "))
-	writeLine("Subject: " + subject)
+	writeLine("Subject: " + mime.QEncoding.Encode("utf-8", subject)) // unchanged when plain ASCII
 	writeLine("Date: " + time.Now().Format(time.RFC1123Z))
 	writeLine("MIME-Version: 1.0")
+	mixed := randomBoundary()
+	if len(files) > 0 {
+		writeLine(`Content-Type: multipart/mixed; boundary="` + mixed + `"`)
+		writeLine("")
+		writeLine("--" + mixed)
+	}
 	writeLine(`Content-Type: multipart/alternative; boundary="` + boundary + `"`)
 	writeLine("")
 	writeLine("--" + boundary)
@@ -124,6 +163,29 @@ func buildMessage(from string, to []string, subject, textBody, htmlBody string) 
 	writeLine("")
 	writeLine(crlf(htmlBody))
 	writeLine("--" + boundary + "--")
+	if len(files) == 0 {
+		return []byte(b.String())
+	}
+	for _, f := range files {
+		name := strings.Map(func(r rune) rune {
+			if r < 0x20 || r == '"' || r == '\\' || r > 0x7e {
+				return '_'
+			}
+			return r
+		}, f.Name)
+		writeLine("--" + mixed)
+		writeLine("Content-Type: " + f.ContentType + `; name="` + name + `"`)
+		writeLine("Content-Transfer-Encoding: base64")
+		writeLine(`Content-Disposition: attachment; filename="` + name + `"`)
+		writeLine("")
+		enc := base64.StdEncoding.EncodeToString(f.Data)
+		for len(enc) > 76 {
+			writeLine(enc[:76])
+			enc = enc[76:]
+		}
+		writeLine(enc)
+	}
+	writeLine("--" + mixed + "--")
 	return []byte(b.String())
 }
 

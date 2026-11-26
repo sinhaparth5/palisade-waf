@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"palisade/internal/config"
+	"palisade/internal/ext"
 	"palisade/internal/proxy"
 	"palisade/internal/security/adaptive"
 	"palisade/internal/security/blocklist"
@@ -1461,5 +1462,103 @@ func TestResponseInspection(t *testing.T) {
 	}
 	if healthy, _ := reg.IsHealthy(svc.Name); !healthy {
 		t.Error("blocked response marked the backend down")
+	}
+}
+
+func TestResponseCheck(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("X-Accept-Encoding", r.Header.Get("Accept-Encoding"))
+		_, _ = io.WriteString(w, "secret")
+	}))
+	defer backend.Close()
+	h, db, reg := newTestHandlerDB(t, backend)
+	logs := make(chan storage.RequestLog, 10)
+	db.SetWebhookFn(func(l storage.RequestLog) { logs <- l })
+	_ = db.SetServiceBotMode(reg.List()[0].ID, "off")
+	_ = reg.Reload(db)
+	mode := ""
+	ext.ResponseCheck = func(string) func(*http.Request, *http.Response) (string, bool) {
+		if mode == "" {
+			return nil
+		}
+		return func(_ *http.Request, resp *http.Response) (string, bool) {
+			_ = resp.Body.Close()
+			resp.Body = io.NopCloser(strings.NewReader("******"))
+			return "data_leak:" + mode, mode == "block"
+		}
+	}
+	t.Cleanup(func() { ext.ResponseCheck = nil })
+	do := func(m string) (*httptest.ResponseRecorder, storage.RequestLog) {
+		t.Helper()
+		mode = m
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rec := httptest.NewRecorder()
+		_ = h.Handle(echo.New().NewContext(req, rec))
+		select {
+		case l := <-logs:
+			return rec, l
+		case <-time.After(2 * time.Second):
+			t.Fatal("no request logged")
+		}
+		return rec, storage.RequestLog{}
+	}
+	// No check: the request is untouched.
+	if rec, l := do(""); rec.Body.String() != "secret" || rec.Header().Get("X-Accept-Encoding") != "gzip" || l.Action != "" {
+		t.Fatalf("no check: %q %q %q", rec.Body.String(), rec.Header().Get("X-Accept-Encoding"), l.Action)
+	}
+	if rec, l := do("mask"); rec.Body.String() != "******" || l.Action != "data_leak:mask" || l.Blocked {
+		t.Fatalf("mask: %q %q blocked=%v", rec.Body.String(), l.Action, l.Blocked)
+	}
+	if rec, l := do("block"); rec.Code != http.StatusBadGateway || rec.Header().Get("X-WAF-Block-Reason") != "data_leak" || l.Action != "data_leak:block" || !l.Blocked {
+		t.Fatalf("block: %d %q %q blocked=%v", rec.Code, rec.Header().Get("X-WAF-Block-Reason"), l.Action, l.Blocked)
+	}
+}
+
+func TestOnLogin(t *testing.T) {
+	var hits atomic.Int32
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if b, _ := io.ReadAll(r.Body); string(b) != "user=a&password=x" {
+			t.Errorf("backend body %q", b)
+		}
+	}))
+	defer backend.Close()
+	h, db, reg := newTestHandlerDB(t, backend)
+	svc := reg.List()[0]
+	if err := db.SetServiceBotMode(svc.ID, "off"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetServiceLoginPaths(svc.ID, []string{"/login"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Reload(db); err != nil {
+		t.Fatal(err)
+	}
+	var seen string
+	deceive := false
+	ext.OnLogin = func(r *http.Request, body []byte, _, _ string) *ext.LoginVerdict {
+		seen = string(body)
+		if deceive {
+			return &ext.LoginVerdict{Action: "ato:ip", Status: http.StatusUnauthorized, ContentType: "text/plain", Body: []byte("bad")}
+		}
+		return nil
+	}
+	t.Cleanup(func() { ext.OnLogin = nil })
+	do := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("user=a&password=x"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = "203.0.113.9:1234"
+		rec := httptest.NewRecorder()
+		_ = h.Handle(echo.New().NewContext(req, rec))
+		return rec
+	}
+	if rec := do(); rec.Code != http.StatusOK || hits.Load() != 1 || seen != "user=a&password=x" {
+		t.Fatalf("pass: %d hits=%d seen=%q", rec.Code, hits.Load(), seen)
+	}
+	deceive = true
+	if rec := do(); rec.Code != http.StatusUnauthorized || rec.Body.String() != "bad" || hits.Load() != 1 || rec.Header().Get("X-WAF-Block-Reason") != "" {
+		t.Fatalf("deceive: %d %q hits=%d", rec.Code, rec.Body, hits.Load())
 	}
 }

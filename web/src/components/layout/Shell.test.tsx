@@ -30,6 +30,20 @@ describe("shell", () => {
     expect(screen.queryByText("Read-only")).not.toBeInTheDocument();
   });
 
+  it.each([
+    ["owner on the free build", {}, true],
+    ["admin", { role: "admin" as const }, false],
+    ["Pro build", { pro: true }, false],
+    ["demo", { demo: true }, false],
+  ])("links to Pro pricing: %s", async (_, values, shown) => {
+    setBoot(values);
+    await renderRoute("/");
+    const link = screen.queryByRole("link", { name: /Get Pro/ });
+    if (!shown) return expect(link).not.toBeInTheDocument();
+    expect(link).toHaveAttribute("href", "https://palisade.astrareconslabs.com/pricing");
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
   it("marks a viewer read-only", async () => {
     asRole("viewer");
     await renderRoute("/");

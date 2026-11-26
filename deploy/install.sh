@@ -13,6 +13,10 @@
 # Also install the terminal client (palisade-cli, linux/amd64 only):
 #   curl -fsSL ... | sudo PALISADE_CLI=1 bash
 #
+# Palisade Pro (the same server plus the Pro features; paste the license key
+# under Settings → Pro). Later runs keep Pro; PALISADE_PRO=0 goes back:
+#   curl -fsSL ... | sudo PALISADE_PRO=1 bash
+#
 # Only the terminal client, e.g. on a workstation (no root needed; installs to
 # ~/.local/bin, or /usr/local/bin as root):
 #   curl -fsSL ... | PALISADE_CLI_ONLY=1 bash
@@ -52,6 +56,8 @@ err()    { printf '%s%sERROR:%s %s\n' "$C_BOLD" "$C_RED" "$C_RESET" "$*" >&2; }
 # ── Project config ────────────────────────────────────────────────────────────
 GITHUB_API="https://api.github.com"
 GITHUB_REPO="sinhaparth5/palisade-waf"
+# Pro binaries are attached to the same release by palisade-pro's workflow.
+PRO_WORKFLOW="https://github.com/sinhaparth5/palisade-pro/.github/workflows/release.yml@refs/heads/main"
 # ─────────────────────────────────────────────────────────────────────────────
 
 DRY_RUN="${DRY_RUN:-0}"
@@ -59,6 +65,7 @@ GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 PALISADE_VERSION="${PALISADE_VERSION:-}"
 PALISADE_CLI="${PALISADE_CLI:-0}"
 PALISADE_CLI_ONLY="${PALISADE_CLI_ONLY:-0}"
+PALISADE_PRO="${PALISADE_PRO:-}"
 
 BINARY_NAME="palisade"
 SERVICE_USER="palisade"
@@ -79,6 +86,14 @@ KEY_FILE="${VAR_DIR}/certs/self-signed.key"
 # directory (or a waf.db backup) alone must not also hand over the key that
 # decrypts the secrets stored inside it.
 DB_KEY_FILE="/etc/${BINARY_NAME}/db.key"
+# Present when this server runs Pro, so an upgrade doesn't fall back to free.
+PRO_MARKER="/etc/${BINARY_NAME}/pro"
+if [ -z "$PALISADE_PRO" ]; then
+	PALISADE_PRO=0
+	[ -f "$PRO_MARKER" ] && PALISADE_PRO=1
+fi
+[ "$PALISADE_CLI_ONLY" = "1" ] && PALISADE_PRO=0 # the client is the same for both
+[ "$PALISADE_PRO" = "1" ] && ASSET_NAME="palisade-pro"
 # Extra server flags (--trusted-proxies, --access-log, ...) live here, read
 # by the unit as $PALISADE_FLAGS. Created once and never rewritten, so flags
 # added by hand survive the unit being regenerated on every upgrade (#163).
@@ -117,23 +132,39 @@ curl_get() {
 	fi
 }
 
-# fetch_checksums: download the release's checksums.txt into $WORKDIR and,
-# when cosign is installed, verify its signature. The signature covers
-# checksums.txt, which covers every binary. Optional because cosign is rarely
-# installed, and older releases have no bundle.
-fetch_checksums() {
-	curl_get "${DOWNLOAD_BASE}/checksums.txt" -o "${WORKDIR}/checksums.txt"
+# fetch_sums FILE IDENTITY: download one checksum file into $WORKDIR and,
+# when cosign is installed, verify its signature was made by the workflow
+# IDENTITY. The signature covers the file, which covers every binary in it.
+# Optional because cosign is rarely installed, and older releases have no
+# bundle.
+fetch_sums() {
+	local file="$1" identity="$2"
+	curl_get "${DOWNLOAD_BASE}/${file}" -o "${WORKDIR}/${file}"
 	if command -v cosign >/dev/null 2>&1; then
-		if curl_get "${DOWNLOAD_BASE}/checksums.txt.sigstore.json" -o "${WORKDIR}/checksums.txt.sigstore.json" 2>/dev/null; then
-			step "Verifying checksums.txt signature (cosign)"
-			cosign verify-blob "${WORKDIR}/checksums.txt" \
-				--bundle "${WORKDIR}/checksums.txt.sigstore.json" \
-				--certificate-identity "https://github.com/${GITHUB_REPO}/.github/workflows/ci.yml@refs/tags/${PALISADE_VERSION}" \
+		if curl_get "${DOWNLOAD_BASE}/${file}.sigstore.json" -o "${WORKDIR}/${file}.sigstore.json" 2>/dev/null; then
+			step "Verifying ${file} signature (cosign)"
+			cosign verify-blob "${WORKDIR}/${file}" \
+				--bundle "${WORKDIR}/${file}.sigstore.json" \
+				--certificate-identity "$identity" \
 				--certificate-oidc-issuer https://token.actions.githubusercontent.com ||
-				{ err "checksums.txt signature does not verify, refusing to install"; exit 1; }
+				{ err "${file} signature does not verify, refusing to install"; exit 1; }
 		else
-			warn "${PALISADE_VERSION} has no signature bundle, skipping the cosign check"
+			warn "${PALISADE_VERSION} has no signature bundle for ${file}, skipping the cosign check"
 		fi
+	fi
+}
+
+# fetch_checksums: the release's checksums.txt, plus pro-checksums.txt for Pro,
+# merged into $WORKDIR/checksums.txt for fetch_verified.
+fetch_checksums() {
+	fetch_sums checksums.txt "https://github.com/${GITHUB_REPO}/.github/workflows/ci.yml@refs/tags/${PALISADE_VERSION}"
+	if [ "$PALISADE_PRO" = "1" ]; then
+		if ! curl_get "${DOWNLOAD_BASE}/pro-checksums.txt" -o /dev/null 2>/dev/null; then
+			err "${PALISADE_VERSION} has no Pro build yet. Try again in a few minutes, or pin an older one with PALISADE_VERSION."
+			exit 1
+		fi
+		fetch_sums pro-checksums.txt "$PRO_WORKFLOW"
+		cat "${WORKDIR}/pro-checksums.txt" >>"${WORKDIR}/checksums.txt"
 	fi
 }
 
@@ -273,10 +304,12 @@ if [ "$PALISADE_CLI_ONLY" = "1" ]; then
 	exit 0
 fi
 
+EDITION=""
+[ "$PALISADE_PRO" = "1" ] && EDITION=" Pro"
 if [ "$IS_UPGRADE" = "1" ]; then
-	step "Upgrading ${BINARY_NAME} to ${PALISADE_VERSION} (linux/${ARCH})"
+	step "Upgrading ${BINARY_NAME}${EDITION} to ${PALISADE_VERSION} (linux/${ARCH})"
 else
-	step "Installing ${BINARY_NAME} ${PALISADE_VERSION} (linux/${ARCH})"
+	step "Installing ${BINARY_NAME}${EDITION} ${PALISADE_VERSION} (linux/${ARCH})"
 fi
 echo
 
@@ -379,6 +412,12 @@ else
 
 	step "Installing to ${INSTALL_PATH}"
 	install -m 0755 "${WORKDIR}/${ASSET}" "${INSTALL_PATH}"
+	if [ "$PALISADE_PRO" = "1" ]; then
+		mkdir -p "$(dirname "${PRO_MARKER}")"
+		touch "${PRO_MARKER}"
+	else
+		rm -f "${PRO_MARKER}"
+	fi
 fi
 
 # ── Terminal client (optional) ────────────────────────────────────────────────

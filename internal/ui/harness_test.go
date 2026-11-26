@@ -284,8 +284,8 @@ func serve(env *adminEnv, req *http.Request) *httptest.ResponseRecorder {
 
 // appFS is a built app as Vite lays it out (web/build/palisade.ts).
 var appFS = fstest.MapFS{
-	"app/dist/index.html": {Data: []byte(`<html><head><script type="module" src="{{.Base}}assets/index-x.js"></script></head>` +
-		`<body data-admin="{{.AdminPath}}" data-csrf="{{.CSRF}}" data-role="{{.Role}}" data-email="{{.Email}}" data-demo="{{.Demo}}" data-waf="{{.WAF}}" data-nonce="{{.Nonce}}"></body></html>`)},
+	"app/dist/index.html": {Data: []byte(`<html><head><title>{{.BrandName}}</title><link rel="icon" href="{{.AdminPath}}{{.BrandLogo}}">{{if .BrandCSS}}<link rel="stylesheet" href="{{.AdminPath}}{{.BrandCSS}}">{{end}}<script type="module" src="{{.Base}}assets/index-x.js"></script></head>` +
+		`<body data-admin="{{.AdminPath}}" data-brand="{{.BrandName}}" data-brand-logo="{{.AdminPath}}{{.BrandLogo}}" data-csrf="{{.CSRF}}" data-role="{{.Role}}" data-email="{{.Email}}" data-demo="{{.Demo}}" data-scoped="{{.Scoped}}" data-waf="{{.WAF}}" data-nonce="{{.Nonce}}"></body></html>`)},
 	"app/dist/assets/index-x.js":    {Data: []byte("plain")},
 	"app/dist/assets/index-x.js.br": {Data: []byte("brotli")},
 	"app/dist/assets/index-x.js.gz": {Data: []byte("gzip")},
@@ -293,9 +293,9 @@ var appFS = fstest.MapFS{
 	"app/dist/assets/blob.zzz":      {Data: []byte("blob")},
 	"app/dist/licenses.md":          {Data: []byte("# Licenses")},
 	// The sign-in page's own build (web/login.html): every field it reads.
-	"app/dist/login/login.html": {Data: []byte(`<html><head><script type="module" src="{{.Base}}assets/l.js"></script></head>` +
-		`<body data-admin="{{.AdminPath}}" data-stage="{{.Stage}}" data-error="{{.Error}}" data-notice="{{.Notice}}" data-sso="{{.SSO}}" ` +
+	"app/dist/login/login.html": {Data: []byte(`<html><head><title>Sign in · {{.BrandName}}</title><link rel="icon" href="{{.AdminPath}}{{.BrandLogo}}">{{if .BrandCSS}}<link rel="stylesheet" href="{{.AdminPath}}{{.BrandCSS}}">{{end}}<script type="module" src="{{.Base}}assets/l.js"></script></head>` +
+		`<body data-admin="{{.AdminPath}}" data-brand="{{.BrandName}}" data-brand-logo="{{.AdminPath}}{{.BrandLogo}}" data-stage="{{.Stage}}" data-error="{{.Error}}" data-notice="{{.Notice}}" data-sso="{{.SSO}}" ` +
 		`data-demo-email="{{.DemoEmail}}" data-demo-pass="{{.DemoPass}}" data-passkeys="{{.Passkeys}}" data-email-code="{{.EmailCode}}" ` +
-		`data-invite-email="{{.InviteEmail}}" data-token="{{.Token}}"></body></html>`)},
+		`data-invite-email="{{.InviteEmail}}" data-token="{{.Token}}" data-ext-login="{{.ExtLogin}}" data-ext-login-path="{{.ExtLoginPath}}"></body></html>`)},
 	"app/dist/login/assets/l.js": {Data: []byte("login")},
 }

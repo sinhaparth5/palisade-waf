@@ -161,3 +161,8 @@ tag:
 	git push origin $(VERSION)
 	@echo "==> GitHub Actions release workflow started — watch it at:"
 	@echo "    https://github.com/sinhaparth5/palisade-waf/actions"
+	@# Pro builds in its own private repo and attaches to this release; it
+	@# waits for the release, so it can start now. Needs your gh login.
+	@gh workflow run release.yml -R sinhaparth5/palisade-pro -f tag=$(VERSION) \
+		&& echo "==> Pro release started: https://github.com/sinhaparth5/palisade-pro/actions" \
+		|| echo "==> Pro release not started; run: gh workflow run release.yml -R sinhaparth5/palisade-pro -f tag=$(VERSION)"

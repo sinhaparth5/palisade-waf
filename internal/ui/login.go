@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log"
 	"net/http"
+	"palisade/internal/ext"
 	"palisade/internal/storage"
 	"time"
 
@@ -190,12 +191,25 @@ func (h *Handler) renderLogin(c *echo.Context, errMsg string) error {
 	return h.renderLoginStatus(c, http.StatusOK, errMsg)
 }
 
+// extLogin is an add-on's extra sign-in button (ext.LoginButton).
+func extLogin() (label, path string) {
+	if ext.LoginButton == nil {
+		return "", ""
+	}
+	return ext.LoginButton()
+}
+
+func hasExtLogin() bool { l, _ := extLogin(); return l != "" }
+
 func (h *Handler) renderLoginStatus(c *echo.Context, status int, errMsg string) error {
 	sso, _ := h.db.GetSSOConfig()
+	extName, extPath := extLogin()
 	return h.renderLoginPage(c, status, map[string]any{
-		"Error":     errMsg,
-		"SSO":       ssoProviderName(sso),
-		"DemoEmail": h.cfg.Admin.DemoEmail,
-		"DemoPass":  h.cfg.Admin.DemoPassword,
+		"Error":        errMsg,
+		"ExtLogin":     extName,
+		"ExtLoginPath": extPath,
+		"SSO":          ssoProviderName(sso),
+		"DemoEmail":    h.cfg.Admin.DemoEmail,
+		"DemoPass":     h.cfg.Admin.DemoPassword,
 	})
 }

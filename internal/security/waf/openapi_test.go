@@ -136,6 +136,30 @@ func TestValidateOpenAPI(t *testing.T) {
 	}
 }
 
+func TestOpenAPIDeclares(t *testing.T) {
+	declares, err := OpenAPIDeclares(`{"openapi":"3.0.0","servers":[{"url":"/api"}],"paths":{"/users/{id}":{"get":{"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		method, path string
+		want         bool
+	}{
+		{"GET", "/api/users/7", true},
+		{"GET", "/api/users/x", true}, // declared, just an invalid id
+		{"HEAD", "/api/users/7", true},
+		{"POST", "/api/users/7", false},
+		{"GET", "/api/orders", false},
+	} {
+		if got := declares(tc.method, tc.path); got != tc.want {
+			t.Errorf("%s %s = %v, want %v", tc.method, tc.path, got, tc.want)
+		}
+	}
+	if _, err := OpenAPIDeclares("nope"); err == nil {
+		t.Error("a bad spec compiled")
+	}
+}
+
 // TestCheckOpenAPIModes runs the spec through a full engine: enforce blocks
 // before CRS, log only annotates, opts.Path (prefix stripped) is what gets
 // matched, and a declared operation takes over from the plain JSON Schema.

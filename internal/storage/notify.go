@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -131,9 +132,11 @@ type DailyReport struct {
 
 // GetDailyReport crunches [from, to) in a single pass. Time bounds are plain
 // comparisons against ts — never SQLite date functions, which can't parse the
-// Go time format modernc/sqlite stores (see GetHourlyTraffic).
-func (db *DB) GetDailyReport(from, to time.Time) (DailyReport, error) {
+// Go time format modernc/sqlite stores (see GetHourlyTraffic). apps, if
+// given, limits it to those services.
+func (db *DB) GetDailyReport(from, to time.Time, apps ...string) (DailyReport, error) {
 	var rep DailyReport
+	in, inArgs := appsIn(apps)
 	err := db.queryRow(`
 		SELECT COUNT(*),
 		       COALESCE(SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END), 0),
@@ -144,8 +147,8 @@ func (db *DB) GetDailyReport(from, to time.Time) (DailyReport, error) {
 		       COALESCE(SUM(CASE WHEN blocked = 1 AND action LIKE 'geo_blocked%' THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN blocked = 1 AND action LIKE 'rate_limited%' THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN action LIKE 'bot_challenge%' THEN 1 ELSE 0 END), 0)
-		FROM requests WHERE ts >= ? AND ts < ?`,
-		from.UTC(), to.UTC(),
+		FROM requests WHERE ts >= ? AND ts < ?`+in,
+		append([]any{from.UTC(), to.UTC()}, inArgs...)...,
 	).Scan(&rep.Total, &rep.Blocked, &rep.Status403, &rep.UniqueBlockedIPs,
 		&rep.WAFBlocked, &rep.IPBlocked, &rep.GeoBlocked, &rep.RateLimited, &rep.BotChallenged)
 	return rep, err
@@ -167,15 +170,29 @@ type ReportDetails struct {
 	TopRules     []LabelCount  // blocked requests by WAF rule ID
 }
 
+// appsIn limits a requests query to the named services; none = all.
+func appsIn(apps []string) (string, []any) {
+	if len(apps) == 0 {
+		return "", nil
+	}
+	args := make([]any, len(apps))
+	for i, a := range apps {
+		args[i] = a
+	}
+	return ` AND app_name IN (` + placeholders(len(apps)) + `)`, args
+}
+
 // GetReportDetails buckets [from, to) by hour (in Go, see GetHourlyTraffic)
-// and returns the top `limit` blocked countries, IPs and WAF rules.
-func (db *DB) GetReportDetails(from, to time.Time, limit int) (ReportDetails, error) {
+// and returns the top `limit` blocked countries, IPs and WAF rules. Like
+// GetDailyReport, apps limits it to those services.
+func (db *DB) GetReportDetails(from, to time.Time, limit int, apps ...string) (ReportDetails, error) {
 	var d ReportDetails
+	in, inArgs := appsIn(apps)
 	d.Hourly = make([]HourlyPoint, int(to.Sub(from)/time.Hour))
 	for i := range d.Hourly {
 		d.Hourly[i].Hour = from.Add(time.Duration(i) * time.Hour)
 	}
-	rows, err := db.query(`SELECT ts, blocked FROM requests WHERE ts >= ? AND ts < ?`, from.UTC(), to.UTC())
+	rows, err := db.query(`SELECT ts, blocked FROM requests WHERE ts >= ? AND ts < ?`+in, append([]any{from.UTC(), to.UTC()}, inArgs...)...)
 	if err != nil {
 		return d, err
 	}
@@ -198,8 +215,8 @@ func (db *DB) GetReportDetails(from, to time.Time, limit int) (ReportDetails, er
 	// col is one of three fixed literals below, never caller input.
 	top := func(col, cond string) ([]LabelCount, error) {
 		rows, err := db.query(`SELECT `+col+`, COUNT(*) AS c FROM requests
-			WHERE blocked = 1 AND ts >= ? AND ts < ? AND `+cond+`
-			GROUP BY `+col+` ORDER BY c DESC LIMIT ?`, from.UTC(), to.UTC(), limit)
+			WHERE blocked = 1 AND ts >= ? AND ts < ? AND `+cond+in+`
+			GROUP BY `+col+` ORDER BY c DESC LIMIT ?`, slices.Concat([]any{from.UTC(), to.UTC()}, inArgs, []any{limit})...)
 		if err != nil {
 			return nil, err
 		}

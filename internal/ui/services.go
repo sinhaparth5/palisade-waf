@@ -11,6 +11,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"os"
+	"palisade/internal/ext"
 	"palisade/internal/security/bot"
 	"palisade/internal/security/csp"
 	"palisade/internal/security/jwtauth"
@@ -85,6 +86,32 @@ func (h *Handler) serviceViews() []ServiceView {
 		out[i].CSPRecent = slices.ContainsFunc(out[i].Scripts, func(sc storage.CSPScript) bool { return sc.FirstSeen.After(weekAgo) })
 	}
 	return out
+}
+
+// extBackends is ext.Backends, never nil so the app gets a list.
+func extBackends() []backendSuggestion {
+	out := []backendSuggestion{}
+	if ext.Backends != nil {
+		for _, b := range ext.Backends() {
+			out = append(out, backendSuggestion{b.URL, b.Label})
+		}
+	}
+	return out
+}
+
+// backendSuggestion is one ext.Backends entry in GET /api/services.
+type backendSuggestion struct {
+	URL   string `json:"url"`
+	Label string `json:"label"`
+}
+
+// scopedViews is serviceViews limited to the user's scope.
+func (h *Handler) scopedViews(c *echo.Context) []ServiceView {
+	views := h.serviceViews()
+	if s := scopeOf(c); s != nil {
+		views = slices.DeleteFunc(views, func(v ServiceView) bool { _, ok := s[v.ID]; return !ok })
+	}
+	return views
 }
 
 // sanitizeHost strips any scheme (http://, https://) and trailing slashes
@@ -424,7 +451,7 @@ func (h *Handler) ListServices(c *echo.Context) error {
 	}
 	u := currentUser(c)
 	admin := u != nil && roleRank[u.Role] >= roleRank[storage.RoleAdmin]
-	views := h.serviceViews()
+	views := h.scopedViews(c)
 	out := make([]serviceJSON, len(views))
 	for i, v := range views {
 		out[i] = serviceToJSON(v, admin)
@@ -436,6 +463,7 @@ func (h *Handler) ListServices(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{
 		"services": out, "certificates": pool, "acme_email": email != "",
 		"http3_listener": h.cfg.ListenAddrH3 != "", "varnish": vcfg.Enabled,
+		"suggested_backends": extBackends(), // ext.Backends: offered on the new-service and Backends forms
 	})
 }
 
@@ -633,9 +661,12 @@ func (h *Handler) CacheStats(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	rows := make([]cacheRowJSON, len(results))
-	for i, r := range results {
-		rows[i] = cacheRowJSON{r.App, int64(r.Hits), int64(r.Misses), int64(r.Passes), int64(r.Errors), cacheRatio(uint64(r.Hits), uint64(r.Misses))} //nolint:gosec // G115: counts are never negative
+	s := scopeOf(c)
+	rows := make([]cacheRowJSON, 0, len(results))
+	for _, r := range results {
+		if s.hasName(r.App) {
+			rows = append(rows, cacheRowJSON{r.App, int64(r.Hits), int64(r.Misses), int64(r.Passes), int64(r.Errors), cacheRatio(uint64(r.Hits), uint64(r.Misses))}) //nolint:gosec // G115: counts are never negative
+		}
 	}
 	out["services"] = rows
 	return c.JSON(http.StatusOK, out)

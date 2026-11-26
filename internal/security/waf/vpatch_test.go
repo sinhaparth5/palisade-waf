@@ -181,3 +181,21 @@ func TestVPatchDisabledByID(t *testing.T) {
 		t.Fatalf("disabled patch %s still fired", p.CVE)
 	}
 }
+
+func TestExtraVPatches(t *testing.T) {
+	t.Cleanup(func() { SetExtraVPatches(nil) })
+	p, err := ParseVPatch("x.conf", "# CVE: CVE-2099-1\n# Product: X\n# Reference: https://x\n# Added: 2099-01-01\n"+
+		`SecRule ARGS "@contains pwn2099" "id:2099999,phase:2,deny,status:403,log"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dup := shipped()[0]
+	SetExtraVPatches([]VPatch{p, p, dup})
+	ps := VPatches()
+	if len(ps) != len(shipped())+1 || ps[0].RuleID != 2099999 {
+		t.Fatalf("got %d patches, first %d", len(ps), ps[0].RuleID)
+	}
+	if _, err := New(config.WAFConfig{Enabled: true}, nil); err != nil {
+		t.Fatal(err)
+	}
+}

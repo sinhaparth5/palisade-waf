@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -50,6 +51,14 @@ var secretMetaKeys = []string{
 	"sso_client_secret",
 }
 
+// extSecretPrefix marks meta keys written by SetExtSecret: secrets of add-on
+// features (internal/ext), handled like the keys in secretMetaKeys.
+const extSecretPrefix = "ext:secret:"
+
+func isSecretMetaKey(key string) bool {
+	return slices.Contains(secretMetaKeys, key) || strings.HasPrefix(key, extSecretPrefix)
+}
+
 // EnableSecretEncryption switches the DB into secrets-at-rest mode with a
 // 32-byte AES-256 key, then re-writes any still-plaintext secrets sealed.
 // Call once, right after Open and before anything reads secret config.
@@ -82,6 +91,20 @@ func (db *DB) sealSecret(plain string) (string, error) {
 	}
 	sealed := db.secretGCM.Seal(nonce, nonce, []byte(plain), nil)
 	return secretPrefix + base64.StdEncoding.EncodeToString(sealed), nil
+}
+
+// SealSecret seals plain under the --db-key-file key, for a value that
+// leaves the DB (an add-on sending a file to another node). Without a key it
+// returns plain, so check the DB is sealed before sending anything secret.
+func (db *DB) SealSecret(plain string) (string, error) { return db.sealSecret(plain) }
+
+// OpenSecret reverses SealSecret, and unlike the DB's own reads refuses a
+// value that isn't sealed.
+func (db *DB) OpenSecret(stored string) (string, error) {
+	if !strings.HasPrefix(stored, secretPrefix) {
+		return "", errors.New("value isn't sealed")
+	}
+	return db.openSecret(stored)
 }
 
 // openSecret reverses sealSecret. Unprefixed values pass through verbatim —
@@ -132,12 +155,34 @@ func (db *DB) setSecretMeta(key, value string) error {
 	return db.setMeta(key, sealed)
 }
 
+// extSecretKeys lists the meta keys written by SetExtSecret.
+func (db *DB) extSecretKeys() ([]string, error) {
+	rows, err := db.query(`SELECT key FROM meta WHERE key LIKE ?`, extSecretPrefix+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
+
 // migrateSecrets seals any secret still stored plaintext — the transparent
 // upgrade path for deployments that existed before a key was configured.
 // Already-sealed values are left alone (also what makes running with a
 // *different* key fail at read time rather than corrupting them here).
 func (db *DB) migrateSecrets() error {
-	for _, key := range secretMetaKeys {
+	extKeys, err := db.extSecretKeys()
+	if err != nil {
+		return err
+	}
+	for _, key := range append(slices.Clone(secretMetaKeys), extKeys...) {
 		v, err := db.getMeta(key)
 		if err != nil {
 			return err
@@ -159,7 +204,7 @@ func (db *DB) migrateSecrets() error {
 	}
 
 	var secret string
-	err := db.queryRow(`SELECT secret FROM webhook_config WHERE id = 1`).Scan(&secret)
+	err = db.queryRow(`SELECT secret FROM webhook_config WHERE id = 1`).Scan(&secret)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}

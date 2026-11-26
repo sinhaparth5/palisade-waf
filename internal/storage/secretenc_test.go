@@ -194,4 +194,30 @@ func TestOpenSecretTampered(t *testing.T) {
 	if s, _ := db.sealSecret(""); s != "" {
 		t.Errorf("sealSecret(\"\") = %q, want \"\" (unset)", s)
 	}
+	// The exported pair round-trips but refuses plaintext.
+	if s, _ := db.SealSecret("pem"); s == "pem" {
+		t.Error("SealSecret returned plaintext")
+	} else if got, err := db.OpenSecret(s); got != "pem" || err != nil {
+		t.Errorf("OpenSecret = %q, %v", got, err)
+	}
+	if _, err := db.OpenSecret("not-sealed"); err == nil {
+		t.Error("OpenSecret accepted plaintext")
+	}
+}
+
+// TestExtSecret pins add-on secrets: a plaintext one is sealed when a key
+// is enabled, reads back plain, and an unsealed export leaves it out.
+func TestExtSecret(t *testing.T) {
+	db := openTestDB(t)
+	mustNoErr(t, db.SetExtSecret("siem_token", "plain-token"))
+	if out := exportConfig(t, db); strings.Contains(out, "plain-token") {
+		t.Fatal("unsealed export carries the ext secret")
+	}
+	mustNoErr(t, db.EnableSecretEncryption(bytes.Repeat([]byte{7}, 32)))
+	if raw, _ := db.getMeta(extSecretPrefix + "siem_token"); !strings.HasPrefix(raw, secretPrefix) {
+		t.Fatalf("ext secret stored as %q after enabling a key, want sealed", raw)
+	}
+	if v, err := db.GetExtSecret("siem_token"); err != nil || v != "plain-token" {
+		t.Fatalf("GetExtSecret = %q, %v", v, err)
+	}
 }

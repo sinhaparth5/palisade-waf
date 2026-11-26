@@ -3,6 +3,7 @@ package threatintel
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -133,7 +134,12 @@ func (w *Worker) sync(s storage.ThreatIntelSource) {
 		return
 	}
 	log.Printf("threat-intel: syncing %q (%s)", s.Label, s.URL)
-	ips, err := fetchIPs(w.client, s.URL)
+	key, err := w.db.ThreatIntelKey(s.ID)
+	if err != nil {
+		log.Printf("threat-intel: %q key: %v", s.Label, err)
+		return
+	}
+	ips, err := fetchIPs(w.client, s.URL, key)
 	if err != nil {
 		log.Printf("threat-intel: %q fetch error: %v", s.Label, err)
 		_ = w.db.UpdateThreatIntelSync(s.ID, 0, err.Error())
@@ -153,8 +159,10 @@ func (w *Worker) sync(s storage.ThreatIntelSource) {
 
 // fetchIPs downloads a plain-text IP block list, skipping comment lines
 // (starting with '#' or ';') and returning only valid IP or CIDR tokens.
-// A 10 MiB read limit guards against huge responses.
-func fetchIPs(client *http.Client, url string) ([]string, error) {
+// A 10 MiB read limit guards against huge responses. A key is sent as a
+// Bearer token. A non-2xx answer is an error, so an error page never
+// replaces the list with nothing.
+func fetchIPs(client *http.Client, url, key string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -162,11 +170,17 @@ func fetchIPs(client *http.Client, url string) ([]string, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "palisade/threat-intel")
+	if key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("%s answered %s", req.URL.Host, resp.Status)
+	}
 
 	const maxBytes = 10 << 20 // 10 MiB
 	var ips []string

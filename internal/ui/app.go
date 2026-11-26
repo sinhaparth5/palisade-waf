@@ -16,6 +16,8 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v5"
+
+	"palisade/internal/ext"
 )
 
 // The React admin app (web/, issue #348), served at the admin root behind
@@ -71,6 +73,28 @@ func (h *Handler) LoginAsset(c *echo.Context) error {
 
 // renderLoginPage renders the sign-in page with data (stage, messages, ...),
 // which the page reads from <body data-*> (web/src/features/login).
+// brand is ext.Branding with Palisade's own name and logo filled in.
+func brand() ext.Brand {
+	var b ext.Brand
+	if ext.Branding != nil {
+		b = ext.Branding()
+	}
+	if b.Name == "" {
+		b.Name = "Palisade"
+	}
+	if b.Logo == "" {
+		b.Logo = "/static/imgs/logo.svg"
+	}
+	return b
+}
+
+// withBrand adds the brand fields both page templates read.
+func withBrand(data map[string]any) map[string]any {
+	b := brand()
+	data["BrandName"], data["BrandLogo"], data["BrandCSS"] = b.Name, b.Logo, b.CSS
+	return data
+}
+
 func (h *Handler) renderLoginPage(c *echo.Context, status int, data map[string]any) error {
 	if h.loginIndex == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "admin app not built (make web)")
@@ -79,8 +103,9 @@ func (h *Handler) renderLoginPage(c *echo.Context, status int, data map[string]a
 		"AdminPath": h.cfg.Admin.Path, "Base": h.cfg.Admin.Path + "/login/", "Asset": h.assetVer,
 		"Stage": "", "Error": "", "Notice": "", "SSO": "", "DemoEmail": "", "DemoPass": "",
 		"Passkeys": false, "EmailCode": false, "InviteEmail": "", "Token": "",
+		"ExtLogin": "", "ExtLoginPath": "", // ext.LoginButton: another sign-in method
 	}
-	maps.Copy(page, data)
+	maps.Copy(withBrand(page), data)
 	var buf bytes.Buffer
 	if err := h.loginIndex.Execute(&buf, page); err != nil {
 		return err
@@ -122,12 +147,13 @@ func (h *Handler) appHTML(c *echo.Context) error {
 		"Role":      "",
 		"Email":     "",
 		"Demo":      false,
+		"Scoped":    scopeOf(c) != nil, // ext.Scope: Services, Logs and own account only
 	}
 	if u := currentUser(c); u != nil {
 		data["Role"], data["Email"], data["Demo"] = u.Role, u.Email, h.isDemo(u)
 	}
 	var buf bytes.Buffer
-	if err := h.appIndex.Execute(&buf, data); err != nil {
+	if err := h.appIndex.Execute(&buf, withBrand(data)); err != nil {
 		return err
 	}
 	hd := c.Response().Header()

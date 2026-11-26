@@ -34,6 +34,7 @@ const dropLogInterval = 5 * time.Second
 
 type DB struct {
 	conn          *sql.DB
+	path          string
 	logQueue      chan RequestLog // request path -> runLogWorker (in-memory hooks)
 	writeQueue    chan RequestLog // runLogWorker -> runLogWriter (batched inserts)
 	logDone       chan struct{}
@@ -46,6 +47,7 @@ type DB struct {
 	autobanFn     func(RequestLog)
 	threatScoreFn func(RequestLog)
 	accessLogFn   func(RequestLog)
+	auditFn       func(AuditEntry)
 	secretGCM     cipher.AEAD // non-nil = secrets-at-rest encryption active (see secretenc.go)
 	bg            sync.WaitGroup
 }
@@ -122,6 +124,7 @@ type RequestLog struct {
 	VisitorID   string // FingerprintJS browser fingerprint from the bot-challenge bypass cookie; "" when unchallenged
 	BotScore    int    // anomaly score from bot signal analysis (0 = clean)
 	CacheStatus string // Varnish X-Cache verdict (HIT/MISS/PASS); "" when the request didn't go through Varnish
+	Node        string // the cluster node that served it, for rows sent by another node (InsertRequests); "" = this one
 	// Exempt marks a trusted IP, open path or verified crawler, whose
 	// response status must not count against it (issue #193). Not stored.
 	Exempt bool `json:"-"`
@@ -136,6 +139,7 @@ func Open(path string) (*DB, error) {
 
 	db := &DB{
 		conn:       conn,
+		path:       path,
 		logQueue:   make(chan RequestLog, logQueueSize),
 		writeQueue: make(chan RequestLog, logQueueSize),
 		logDone:    make(chan struct{}),
@@ -147,6 +151,10 @@ func Open(path string) (*DB, error) {
 	go db.runLogWriter()
 	return db, nil
 }
+
+// Path is the SQLite file Open was given, for add-ons that keep files
+// beside it.
+func (db *DB) Path() string { return db.path }
 
 // runLogWorker is stage one of the log pipeline (issue #259). It drains
 // logQueue on one goroutine, runs the hooks that only need memory (autoban,
@@ -372,6 +380,7 @@ var schemaMigrations = []struct{ table, columnDef string }{
 	{"requests", "visitor_id TEXT NOT NULL DEFAULT ''"},
 	{"requests", "bot_score INTEGER NOT NULL DEFAULT 0"},
 	{"requests", "cache_status TEXT NOT NULL DEFAULT ''"},
+	{"requests", "node TEXT NOT NULL DEFAULT ''"},
 	{"services", "tls_mode TEXT NOT NULL DEFAULT 'none'"},
 	{"services", "tls_cert_path TEXT NOT NULL DEFAULT ''"},
 	{"services", "tls_key_path TEXT NOT NULL DEFAULT ''"},

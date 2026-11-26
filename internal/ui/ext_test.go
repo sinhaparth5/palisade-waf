@@ -3,6 +3,8 @@ package ui
 import (
 	"html/template"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -24,11 +26,11 @@ func TestExtFeature(t *testing.T) {
 	withExt(t, ext.Feature{
 		Routes: []ext.Route{{Method: http.MethodPost, Path: "/settings/ext-test", Role: storage.RoleOwner,
 			Handler: func(c *echo.Context) error { return c.String(http.StatusOK, "ok") }}},
-		Card: func(_ *echo.Context, role string) template.HTML {
+		Card: func(c *echo.Context, role string) template.HTML {
 			if role != storage.RoleOwner {
 				return ""
 			}
-			return `<div id="ext-test-card"></div>`
+			return template.HTML(`<div id="ext-test-card" data-csrf="` + ext.CSRF(c) + `"></div>`) //nolint:gosec // hex
 		},
 	})
 	env := newAdminEnv(t)
@@ -48,6 +50,9 @@ func TestExtFeature(t *testing.T) {
 		body := env.doWith(http.MethodGet, "/admin/settings/pro", nil, tok).Body.String()
 		if strings.Contains(body, "ext-test-card") != tc.hasCard {
 			t.Errorf("%s: card shown = %v", tc.role, !tc.hasCard)
+		}
+		if tc.hasCard && !strings.Contains(body, `data-csrf="`+csrfToken(tok)+`"`) {
+			t.Errorf("%s: card has no CSRF token", tc.role)
 		}
 	}
 }
@@ -78,5 +83,117 @@ func TestExtOpenRouteAndReload(t *testing.T) {
 	}
 	if err := reload(); err != nil {
 		t.Errorf("reload: %v", err)
+	}
+}
+
+func TestExtHoldReplay(t *testing.T) {
+	ran := 0
+	withExt(t, ext.Feature{Routes: []ext.Route{{Method: http.MethodPost, Path: "/settings/ext-test", Role: storage.RoleAdmin,
+		Handler: func(c *echo.Context) error { ran++; return c.String(http.StatusOK, "ran "+c.FormValue("v")) }}}})
+	var held *http.Request
+	ext.Hold = func(c *echo.Context, action string) bool {
+		if action != "POST /settings/ext-test" {
+			return false
+		}
+		held = c.Request()
+		return c.String(http.StatusAccepted, "held") == nil
+	}
+	t.Cleanup(func() { ext.Hold = nil })
+	env := newAdminEnv(t)
+	if rec := env.do(http.MethodPost, "/admin/settings/ext-test", url.Values{"v": {"1"}}); rec.Code != http.StatusAccepted || ran != 0 || held == nil {
+		t.Fatalf("not held: %d %q ran=%d", rec.Code, rec.Body, ran)
+	}
+
+	u, _ := env.db.GetAdminUser(env.uid)
+	req := httptest.NewRequest(http.MethodPost, "/admin/settings/ext-test", strings.NewReader("v=2"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if code, body := ext.Replay(req, nil, "x"); code != http.StatusForbidden || ran != 0 {
+		t.Fatalf("replay without a user: %d %s", code, body)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/admin/settings/ext-test", strings.NewReader("v=2"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if code, body := ext.Replay(req, u, "a@x, approved by b@x"); code != http.StatusOK || string(body) != "ran 2" || ran != 1 {
+		t.Fatalf("replay: %d %s", code, body)
+	}
+	if got, _, _ := env.db.ListAudit(1, 0); len(got) != 1 || got[0].Actor != "a@x, approved by b@x" {
+		t.Fatalf("audit %+v", got)
+	}
+}
+
+func TestExtSSOLogin(t *testing.T) {
+	var id *ext.SSOIdentity
+	withExt(t, ext.Feature{Open: []ext.Route{{Method: http.MethodGet, Path: "/login/ext-test",
+		Handler: func(c *echo.Context) error { return ext.SSOLogin(c, id, c.QueryParam("refuse")) }}}})
+	ext.LoginButton = func() (string, string) { return "Corp IdP", "/login/ext-test" }
+	t.Cleanup(func() { ext.LoginButton = nil })
+	env := newAdminEnv(t)
+
+	// The React sign-in page draws the button from these.
+	if body := env.doWith(http.MethodGet, "/admin/login", nil, "").Body.String(); !strings.Contains(body, `data-ext-login="Corp IdP"`) ||
+		!strings.Contains(body, `data-ext-login-path="/login/ext-test"`) {
+		t.Fatal("no login button")
+	}
+	if rec := env.doWith(http.MethodGet, "/admin/login/ext-test?refuse=Nope.", nil, ""); !strings.Contains(rec.Body.String(), "Nope.") {
+		t.Fatal("refusal not shown")
+	}
+	id = &ext.SSOIdentity{Issuer: "https://idp.test", Subject: "s1", Email: "Sam@Example.com", InGroup: true, Method: "saml"}
+	if rec := env.doWith(http.MethodGet, "/admin/login/ext-test", nil, ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "been invited") {
+		t.Fatalf("uninvited: %d", rec.Code)
+	}
+	if err := env.db.CreateSSOInvite("sam@example.com", storage.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	if rec := env.doWith(http.MethodGet, "/admin/login/ext-test", nil, ""); rec.Code != http.StatusFound {
+		t.Fatalf("invited: %d %s", rec.Code, rec.Body)
+	}
+	if got, _, _ := env.db.ListAudit(1, 0); len(got) != 1 || got[0].Action != "SSO login" || got[0].Summary != "via=saml" {
+		t.Fatalf("audit %+v", got)
+	}
+	id.InGroup = false
+	if rec := env.doWith(http.MethodGet, "/admin/login/ext-test", nil, ""); !strings.Contains(rec.Body.String(), "not in the group") {
+		t.Fatal("out of group let in")
+	}
+}
+
+func TestExtBranding(t *testing.T) {
+	env := newAdminEnv(t)
+	if body := env.doWith(http.MethodGet, "/admin/login", nil, "").Body.String(); !strings.Contains(body, "<title>Sign in · Palisade</title>") ||
+		!strings.Contains(body, `/admin/static/imgs/logo.svg`) || strings.Contains(body, "brand.css") {
+		t.Fatal("default brand")
+	}
+	ext.Branding = func() ext.Brand {
+		return ext.Brand{Name: "Acme <Shield>", Logo: "/brand/logo?v=1", CSS: "/brand.css?v=1"}
+	}
+	t.Cleanup(func() { ext.Branding = nil })
+	body := env.doWith(http.MethodGet, "/admin/login", nil, "").Body.String()
+	for _, want := range []string{"<title>Sign in · Acme &lt;Shield&gt;</title>", `data-brand="Acme &lt;Shield&gt;"`, `data-brand-logo="/admin/brand/logo?v=1"`, `href="/admin/brand.css?v=1"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if strings.Contains(body, "Palisade") || strings.Contains(body, "logo.svg") {
+		t.Error("Palisade left on the login page")
+	}
+	if body := env.do(http.MethodGet, "/admin/settings", nil).Body.String(); !strings.Contains(body, "<title>Acme &lt;Shield&gt;</title>") ||
+		!strings.Contains(body, `data-brand="Acme &lt;Shield&gt;"`) || !strings.Contains(body, `href="/admin/brand.css?v=1"`) {
+		t.Error("dashboard not branded")
+	}
+}
+
+// TestExtBackends: suggested backends ride along with the services list.
+func TestExtBackends(t *testing.T) {
+	env := newAdminEnv(t)
+	var out struct {
+		Suggested []backendSuggestion `json:"suggested_backends"`
+	}
+	env.doJSON(env.session, http.MethodGet, "/admin/api/services", nil, &out)
+	if out.Suggested == nil || len(out.Suggested) != 0 {
+		t.Errorf("without ext.Backends = %#v, want []", out.Suggested)
+	}
+	ext.Backends = func() []ext.Backend { return []ext.Backend{{URL: "http://[200::1]:8080", Label: "mesh: <homelab>"}} }
+	defer func() { ext.Backends = nil }()
+	env.doJSON(env.session, http.MethodGet, "/admin/api/services", nil, &out)
+	if len(out.Suggested) != 1 || out.Suggested[0] != (backendSuggestion{"http://[200::1]:8080", "mesh: <homelab>"}) {
+		t.Errorf("suggested = %#v", out.Suggested)
 	}
 }

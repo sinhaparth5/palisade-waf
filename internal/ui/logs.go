@@ -29,12 +29,16 @@ func (h *Handler) LogsStream(c *echo.Context) error {
 	_ = rc.Flush()
 	ping := time.NewTicker(apiStreamPing)
 	defer ping.Stop()
+	s := scopeOf(c)
 
 	for {
 		select {
 		case entry, ok := <-ch:
 			if !ok {
 				return nil
+			}
+			if !s.hasName(entry.AppName) {
+				continue
 			}
 			if b, err := json.Marshal(newStatEvent(entry)); err == nil {
 				fmt.Fprintf(w, "data: %s\n\n", b)
@@ -51,9 +55,12 @@ func (h *Handler) LogsStream(c *echo.Context) error {
 // LogApps lists the service names for the Logs page's app filter. Names
 // only: the full service list carries settings a viewer doesn't get.
 func (h *Handler) LogApps(c *echo.Context) error {
+	scope := scopeOf(c)
 	names := []string{}
 	for _, s := range h.registry.List() {
-		names = append(names, s.Name)
+		if scope.hasName(s.Name) {
+			names = append(names, s.Name)
+		}
 	}
 	return c.JSON(http.StatusOK, names)
 }
@@ -69,6 +76,9 @@ func (h *Handler) LogDetail(c *echo.Context) error {
 	d, err := h.db.GetRequestByID(id)
 	if err != nil {
 		return lookupError(c, err, "not found")
+	}
+	if !scopeOf(c).hasName(d.AppName) {
+		return apiError(c, http.StatusNotFound, "not found")
 	}
 
 	// Parse headers_json into a plain map for the response.
@@ -114,6 +124,7 @@ func (h *Handler) LogDetail(c *echo.Context) error {
 		"visitor_id":       d.VisitorID,
 		"bot_score":        d.BotScore,
 		"cache_status":     d.CacheStatus,
+		"node":             d.Node,
 		"headers":          headers,
 		"has_threat_score": hasThreat,
 		"threat_score":     threat.Total,

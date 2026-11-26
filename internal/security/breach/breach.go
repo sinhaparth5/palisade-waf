@@ -145,8 +145,7 @@ func (c *Checker) warn(err error) {
 
 // Password returns the password a login request carries: HTTP Basic auth
 // first, else the first non-empty field of fields (DefaultFields when empty)
-// in a form or JSON body. JSON is searched at any depth, so
-// {"user":{"password":"…"}} works.
+// in a form or JSON body.
 func Password(r *http.Request, body []byte, fields []string) string {
 	if len(fields) == 0 {
 		fields = DefaultFields
@@ -154,6 +153,13 @@ func Password(r *http.Request, body []byte, fields []string) string {
 	if _, pw, ok := r.BasicAuth(); ok && pw != "" {
 		return pw
 	}
+	return Field(r, body, fields)
+}
+
+// Field returns the first non-empty field of fields in a form or JSON body,
+// matched case-insensitively. JSON is searched at any depth, so
+// {"user":{"password":"…"}} works.
+func Field(r *http.Request, body []byte, fields []string) string {
 	if len(body) == 0 {
 		return ""
 	}
@@ -165,8 +171,8 @@ func Password(r *http.Request, body []byte, fields []string) string {
 			return ""
 		}
 		for _, f := range fields {
-			if pw := v.Get(f); pw != "" {
-				return pw
+			if s := v.Get(f); s != "" {
+				return s
 			}
 		}
 	case mt == "application/json" || strings.HasSuffix(mt, "+json"):
@@ -175,8 +181,8 @@ func Password(r *http.Request, body []byte, fields []string) string {
 			return ""
 		}
 		for _, f := range fields {
-			if pw := findString(v, f, 0); pw != "" {
-				return pw
+			if s := findString(v, f, 0); s != "" {
+				return s
 			}
 		}
 	}
