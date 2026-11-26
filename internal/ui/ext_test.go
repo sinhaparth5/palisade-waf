@@ -26,11 +26,11 @@ func TestExtFeature(t *testing.T) {
 	withExt(t, ext.Feature{
 		Routes: []ext.Route{{Method: http.MethodPost, Path: "/settings/ext-test", Role: storage.RoleOwner,
 			Handler: func(c *echo.Context) error { return c.String(http.StatusOK, "ok") }}},
-		Card: func(_ *echo.Context, role string) template.HTML {
+		Card: func(c *echo.Context, role string) template.HTML {
 			if role != storage.RoleOwner {
 				return ""
 			}
-			return `<div id="ext-test-card"></div>`
+			return template.HTML(`<div id="ext-test-card" data-csrf="` + ext.CSRF(c) + `"></div>`) //nolint:gosec // hex
 		},
 	})
 	env := newAdminEnv(t)
@@ -50,6 +50,9 @@ func TestExtFeature(t *testing.T) {
 		body := env.doWith(http.MethodGet, "/admin/settings/pro", nil, tok).Body.String()
 		if strings.Contains(body, "ext-test-card") != tc.hasCard {
 			t.Errorf("%s: card shown = %v", tc.role, !tc.hasCard)
+		}
+		if tc.hasCard && !strings.Contains(body, `data-csrf="`+csrfToken(tok)+`"`) {
+			t.Errorf("%s: card has no CSRF token", tc.role)
 		}
 	}
 }

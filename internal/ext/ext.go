@@ -75,6 +75,11 @@ var OnAudit []func(storage.AuditEntry)
 // API key). Set by the admin UI before any Mount runs.
 var CurrentUser func(c *echo.Context) *storage.AdminUser
 
+// CSRF returns the CSRF token of a Route's request, for a page a feature
+// renders itself whose script sends X-CSRF-Token. Set by the admin UI
+// before any Mount runs.
+var CSRF func(c *echo.Context) string
+
 // Hold, when set, sees every change the audit log would record (a
 // mutating admin UI or REST API request, not from a read-only API key)
 // after authentication and CSRF, before its handler. Returning true means

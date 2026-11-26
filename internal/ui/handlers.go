@@ -473,6 +473,7 @@ func (h *Handler) Register(e *echo.Echo) {
 	// without a valid role would be open to every user, so refuse to start.
 	h.extCards = nil
 	ext.CurrentUser = currentUser
+	ext.CSRF = h.csrfFromContext
 	ext.SSOLogin = func(c *echo.Context, id *ext.SSOIdentity, refused string) error {
 		if refused != "" || id == nil {
 			return h.renderLogin(c, refused)
