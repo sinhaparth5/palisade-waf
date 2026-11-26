@@ -19,7 +19,9 @@ export const nav = [
   { path: "/settings", icon: "hgi-user-account", label: "Settings" },
 ];
 
-const Icon = ({ name, className }: { name: string; className?: string }) => (
+const proURL = "https://palisade.astrareconslabs.com/pricing";
+
+const Icon =({ name, className }: { name: string; className?: string }) => (
   <i aria-hidden className={cn("hgi hgi-stroke hgi-rounded", name, className)} />
 );
 
@@ -76,6 +78,17 @@ export function Shell({ children }: { children: ReactNode }) {
           <span className="sm:ml-auto">
             Signed in <span className="text-side-ink">{boot.role}</span>
           </span>
+          {/* The free build only: the Pro binary always sets data-pro (its License card). */}
+          {can("owner") && !boot.pro && !boot.demo && (
+            <a
+              href={proURL}
+              target="_blank"
+              rel="noopener"
+              className="text-side-ink underline-offset-2 hover:underline"
+            >
+              Get Pro ↗
+            </a>
+          )}
         </footer>
       </div>
     </div>
